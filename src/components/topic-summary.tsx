@@ -20,6 +20,7 @@ const TopicSummary: FC<TopicSummaryProps> = ({ topic }) => {
           <div className="flex items-center justify-center w-full h-32 bg-gradient-to-b from-red-500 dark:from-red-600 to-red-700 dark:to-red-800">
             {topic?.img?.src && topic.img.alt ? (
               <Image
+                unoptimized
                 src={topic.img.src}
                 alt={topic.img.alt}
                 width={100}

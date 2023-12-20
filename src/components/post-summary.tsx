@@ -19,6 +19,7 @@ const PostSummary: FC<PostSummaryProps> = ({ post }) => {
           {post.img.type === "icon" ? (
             <div className="flex items-center justify-center w-full h-32 bg-gradient-to-b from-red-500 dark:from-red-600 to-red-700 dark:to-red-800">
               <Image
+                unoptimized
                 src={post.img.src}
                 alt={post.img.alt}
                 width={100}
@@ -27,6 +28,7 @@ const PostSummary: FC<PostSummaryProps> = ({ post }) => {
             </div>
           ) : (
             <Image
+              unoptimized
               src={post.img.src}
               alt={post.img.alt}
               width="0"

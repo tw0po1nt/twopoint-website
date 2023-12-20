@@ -91,6 +91,7 @@ export const PostContent: FC = () => {
           <p>Which should look like this:</p>
 
           <Image
+            unoptimized
             src={`${assetsDir}/secrets-view.jpg`}
             alt="SecretsView running in an Xcode Preview"
             width="0"
@@ -132,6 +133,7 @@ export const PostContent: FC = () => {
           <p>We should now have:</p>
 
           <Image
+            unoptimized
             src={`${assetsDir}/password-state-and-secure-field.jpg`}
             alt="ContentView with state for password and a SecureField running in an Xcode Preview"
             width="0"
@@ -217,6 +219,7 @@ export const PostContent: FC = () => {
           <p>But with that, we should have the following:</p>
 
           <Image
+            unoptimized
             src={`${assetsDir}/share-link.jpg`}
             alt="Screenshot of Xcode with share sheet code wired up running in an Xcode Preview"
             width="0"
@@ -232,6 +235,7 @@ export const PostContent: FC = () => {
 
           <div className="w-full flex flex-row justify-center">
             <Image
+              unoptimized
               src={`${assetsDir}/share-link-demo.webp`}
               alt="Screen recording of entering a password (that does nothing yet) and launching a share sheet with the SwiftUI view as a PDF"
               width="0"
@@ -336,6 +340,7 @@ export const PostContent: FC = () => {
 
           <div className="w-full flex flex-row justify-center">
             <Image
+              unoptimized
               src={`${assetsDir}/final-demo.webp`}
               alt="Screen recording of the final demo: entering a password, saving the PDF, and viewing the PDF by entering the password"
               width="0"
@@ -434,6 +439,7 @@ export const PostContent: FC = () => {
           </p>
 
           <Image
+            unoptimized
             src={`${assetsDir}/cgcontext-init-docs.jpg`}
             alt="Screenshot of Apple's documentation for a URL-based CGContext"
             width="0"
@@ -476,6 +482,7 @@ export const PostContent: FC = () => {
           </p>
 
           <Image
+            unoptimized
             src={`${assetsDir}/cgcontext-init-data-consumer-docs.jpg`}
             alt="Screenshot of Apple's documentation for a URL-based CGContext"
             width="0"
