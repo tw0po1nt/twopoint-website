@@ -6,7 +6,7 @@ export const TopicSummary: Topic = {
   className: 'text-yellow-600 border-yellow-600 bg-yellow-100 dark:bg-yellow-800',
   img: {
     type: 'icon',
-    src: '/img/logos/zcash.png',
+    src: 'https://twopointwebsite.blob.core.windows.net/logos/zcash.png',
     alt: 'Zcash logo'
   }
 };

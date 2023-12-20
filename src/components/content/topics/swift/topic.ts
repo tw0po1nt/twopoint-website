@@ -5,7 +5,7 @@ export const TopicSummary: Topic = {
   title: 'Swift',
   img: {
     type: 'icon',
-    src: '/img/logos/swift.png',
+    src: 'https://twopointwebsite.blob.core.windows.net/logos/swift.png',
     alt: 'Swift logo'
   }
 };

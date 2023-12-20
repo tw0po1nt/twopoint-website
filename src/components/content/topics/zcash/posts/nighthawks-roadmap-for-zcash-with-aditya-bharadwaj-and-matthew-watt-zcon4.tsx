@@ -11,7 +11,7 @@ export const PostSummary: Post = {
     "Nighthawk's Roadmap for Zcash with Aditya Bharadwaj and Matthew Watt: Zcon4",
   img: {
     type: "fullsize",
-    src: "/img/thumbnails/nighthawkroadmaptalk.jpg",
+    src: "https://twopointwebsite.blob.core.windows.net/thumbnails/nighthawkroadmaptalk.jpg",
     alt: "Thumbnail of Aditya and Matt's talk at Zcon4",
   },
   date: new Date('2023-08-01T07:55:00'), // Aug 1, 2023 @ 9:55am Barcelona, Spain
