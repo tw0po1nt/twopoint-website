@@ -19,7 +19,7 @@ export const PostSummary: Post = {
   title: "Securely save a SwiftUI view as a password-protected PDF",
   img: {
     type: "icon",
-    src: "/img/logos/swiftui.png",
+    src: "https://twopointwebsite.blob.core.windows.net/logos/swiftui.png",
     alt: "SwiftUI logo",
   },
   date: new Date('2023-12-20T14:00:00'), // Dec 20, 2023 @ 8am local time
