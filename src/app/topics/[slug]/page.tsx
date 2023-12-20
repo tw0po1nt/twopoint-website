@@ -1,8 +1,22 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSmile } from "@fortawesome/free-regular-svg-icons";
-import { ByTopicSlug } from "@/components/content/topics";
+import { AllTopics, ByTopicSlug } from "@/components/content/topics";
 import PostList from "@/components/post-list";
 import Page from "@/components/page";
+
+export async function generateMetadata({ params }: { params: { slug: string } }) {
+  const { summary } = ByTopicSlug[params.slug];
+  return {
+    title: summary.title,
+  }
+}
+
+export async function generateStaticParams() {
+  return AllTopics.map((post) => ({
+    slug: post.slug,
+  }));
+}
+
 
 export default function TopicPage({ params }: { params: { slug: string } }) {
   const { summary, posts } = ByTopicSlug[params.slug];

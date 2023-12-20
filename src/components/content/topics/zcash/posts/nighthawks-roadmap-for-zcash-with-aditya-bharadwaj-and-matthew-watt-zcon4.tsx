@@ -1,12 +1,8 @@
 import { FC } from "react";
-import { format } from "date-fns";
-import { Roboto } from "next/font/google";
 import { Post } from "@/models/post";
 import { TopicSummary } from "../topic";
 import Divider from "@/components/divider";
 import PostContentHeading from "@/components/post-content-heading";
-
-const robotoBold = Roboto({ subsets: ["latin"], weight: "700" });
 
 export const PostSummary: Post = {
   type: "talk",
@@ -18,7 +14,7 @@ export const PostSummary: Post = {
     src: "/img/thumbnails/nighthawkroadmaptalk.jpg",
     alt: "Thumbnail of Aditya and Matt's talk at Zcon4",
   },
-  date: new Date(),
+  date: new Date('2023-08-01T07:55:00'), // Aug 1, 2023 @ 9:55am Barcelona, Spain
   topics: [TopicSummary],
 };
 

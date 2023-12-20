@@ -9,8 +9,8 @@ import "./globals.css";
 const roboto = Roboto({ subsets: ["latin"], weight: "400" });
 
 export const metadata: Metadata = {
-  title: "twopoint",
-  description: "Always moving forward",
+  title: "twopoint.dev",
+  description: "Yet another technical blog",
 };
 
 export const viewport: Viewport = {
