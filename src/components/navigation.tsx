@@ -20,11 +20,11 @@ const Navigation: FC = () => {
   const router = useRouter();
   const [isMobileMenuHidden, setIsMobileMenuHidden] = useState(true);
   const baseMobileMenuClass =
-    "absolute left-0 top-0 right-0 bottom-0 bg-slate-100 dark:bg-zinc-900 transition-transform z-[1]";
+    "absolute left-0 top-0 right-0 bottom-0 bg-slate-100 dark:bg-zinc-900 z-[1]";
   const mobileMenuClass = useMemo(
     () =>
       isMobileMenuHidden
-        ? `${baseMobileMenuClass} translate-x-full`
+        ? `${baseMobileMenuClass} hidden`
         : baseMobileMenuClass,
     [isMobileMenuHidden]
   );
