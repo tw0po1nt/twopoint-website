@@ -2,7 +2,7 @@
 publishDate: 2024-10-29T00:00:00Z
 author: Matthew Watt
 title: 'Fable Reminders - Part 1'
-excerpt: Build a reminders app completely in F#. In part 1, we get our base project setup, as well as scaffolding out the structure of the UI.
+excerpt: Build a reminders app completely in F#. In part 1, we get our base project setup so we're ready to hit the ground running building in F#!
 category: Series
 series:
   slug: fable-reminders
@@ -19,6 +19,10 @@ metadata:
 ---
 
 ## Overview
+
+Now, I know what you're thinking. _Everyone_ builds to-do apps for their tutorial. And in response, dear reader, I say: I embrace the fact that I am clichéd 😎. With that out of the way, let's begin.
+
+### Our toolkit
 
 In this series, we're going to learn how to build a frontend web app in F#. The tools we'll be using are:
 
@@ -51,8 +55,6 @@ The project has two parts:
 
 1. The JavaScript side
 2. The .NET side
-
-The JavaScript side is what will eventually be loaded up and run by the browser
 
 The .NET side consists of a solution and project that will house the F# code we will be writing. The F# code will eventually be compiled to JavaScript that will get run on the JavaScript side.
 
@@ -245,8 +247,6 @@ Next, let's add the dependencies on the .NET side using the .NET CLI.
 Within the `src` directory, run the following:
 
 ```sh
-dotnet add package Fable.Core
-dotnet add package Fable.Elmish
 dotnet add package Fable.Elmish.React
 dotnet add package Feliz
 ```
@@ -369,11 +369,13 @@ See that console log? It's no lie - it came from an F# file! Open up `src/Progra
 printfn "Hello from F#"
 ```
 
-Pretty cool. It will be cooler when we writw our _entire app_ in F#! Speaking of our app, here's our end goal:
+Pretty cool. It will be cooler when we write our _entire app_ in F#! Speaking of our app, here's our end goal:
 
 ![The finished FableReminders running in Google Chrome with several lists and tasks](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-1/end-goal.jpg)
 
 By the end of this series, we'll be able to add lists, add reminders, and mark them as completed or not completed. We'll even source our data from an API! It's pretty simple, but it's enough to give you a taste of what web development using F# looks like!
+
+### Conclusion
 
 In part 2, we'll take a first pass at our implementation, and we'll get our first look at using Feliz and Elmish in the process!
 
