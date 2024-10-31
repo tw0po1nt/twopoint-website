@@ -1,0 +1,32 @@
+---
+import { APP_BLOG } from 'astrowind:config';
+
+import Layout from '~/layouts/PageLayout.astro';
+import SinglePost from '~/components/blog/SinglePost.astro';
+import RelatedPosts from '~/components/blog/RelatedPosts.astro';
+
+import { findLatestPosts } from '~/utils/blog';
+import { getCanonical, getPermalink } from '~/utils/permalinks';
+import { findImage } from '~/utils/images';
+import NavigationLinks from '~/components/blog/NavigationLinks.astro';
+
+export const prerender = true;
+
+const posts = APP_BLOG.isEnabled ? await findLatestPosts({ count: 1 }) : [];
+const post = posts[0];
+const url = getCanonical(getPermalink(post.permalink, 'post'));
+const image = (await findImage(post.image)) as ImageMetadata | string | undefined;
+
+const metadata = {
+  title: 'TwoPoint — A blog about programming, mostly functional',
+  ignoreTitleTemplate: true,
+};
+---
+
+<Layout metadata={metadata}>
+  <SinglePost post={{ ...post, image: image }} url={url}>
+    {post.Content ? <post.Content /> : <Fragment set:html={post.content || ''} />}
+  </SinglePost>
+  <NavigationLinks post={post} />
+  <RelatedPosts post={post} />
+</Layout>
