@@ -1,0 +1,25 @@
+---
+import Headline from '~/components/ui/Headline.astro';
+import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
+import type { Features as Props } from '~/types';
+import CategoryGrid from './CategoryGrid.astro';
+
+const { items = [], id, isDark = false, classes = {}, bg = await Astro.slots.render('bg') } = Astro.props;
+---
+
+<WidgetWrapper id={id} isDark={isDark} containerClass={`${classes?.container ?? ''}`} bg={bg}>
+  <Headline title="Categories" subtitle="Browse by category" classes={classes?.headline as Record<string, string>} />
+
+  <CategoryGrid
+    items={items}
+    columns={2}
+    classes={{
+      container: 'mt-12',
+      panel: 'max-w-full sm:max-w-md',
+      title: 'text-lg font-semibold',
+      description: 'mt-0.5',
+      icon: 'flex-shrink-0 mt-1 text-primary w-6 h-6',
+      ...((classes?.items as object) ?? {}),
+    }}
+  />
+</WidgetWrapper>
