@@ -30,6 +30,21 @@ export default {
           '100%': { opacity: 1, transform: 'translateY(0)' },
         },
       },
+
+      typography: (theme) => {
+        return {
+          DEFAULT: {
+            css: {
+              'code::before': {
+                content: 'none',
+              },
+              'code::after': {
+                content: 'none'
+              },
+            }
+          }
+        }
+      }
     },
   },
   plugins: [
