@@ -10,7 +10,7 @@ metadata:
   title:
     default: TwoPoint Staging
     template: '%s — TwoPoint Staging'
-  description: "\U0001F680 (Staging) A blog about programming, mostly functional"
+  description: "(Staging) A blog about programming, mostly functional"
   robots:
     index: false
     follow: false
