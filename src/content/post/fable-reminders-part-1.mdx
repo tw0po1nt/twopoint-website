@@ -20,7 +20,19 @@ metadata:
 
 ## Overview
 
-Now, I know what you're thinking. _Everyone_ builds to-do apps for their tutorial. And in response, dear reader, I say: I embrace the fact that I am clichéd 😎. With that out of the way, let's begin.
+Now, I know what you're thinking. _Everyone_ builds to-do apps for their tutorial. And in response, dear reader, I say: I embrace the fact that I am clichéd 😎
+
+#### Disclaimer:
+
+Before following this series, you should be fairly comfortable with web technologies such as:
+
+- HTML - Even though we're using F# to generate our markup, being familiar with HTML will make this much easier to follow.
+- CSS - specifically, [Tailwind](https://tailwindcss.com)
+- [npm](https://www.npmjs.com/) - we'll be using it to manage the dependencies on the JavaScript side of this project.
+
+This series also assumes you have some familiarity with F# and its syntax. I will explain some syntax and language features along the way, but this is by no means a "fundamentals of F#" series. For that, I recommend checking out Scott Wlaschin's website [F# for Fun and Profit](https://fsharpforfunandprofit.com/) or a book like [F# in Action](https://www.amazon.com/F-Action-Isaac-Abraham-ebook/dp/B0CTHSHS4J/ref=sr_1_1?dib=eyJ2IjoiMSJ9.oYpKjYyQvkGaVeE1FsfyUg.ilTt3R1mCsLK9H0JyHaWxR58-MmY860yWWzjaDxT_lM&dib_tag=se&keywords=F%23+in+Action&qid=1731032966&sr=8-1) by Isaac Abraham.
+
+With that out of the way, let's begin.
 
 ### Our toolkit
 
@@ -35,6 +47,8 @@ In this series, we're going to learn how to build a frontend web app in F#. The 
 4. [FontAwesome](https://fontawesome.com/) - for nice icons
 
 5. [Vite](https://vite.dev), the so called "Next Generation Frontend Tooling"
+
+6. [vite-plugin-fable](https://github.com/nojaf/vite-plugin-fable) - An alternative approach to integrating the Fable compiler with Vite.
 
 We'll also be using [Feliz](https://zaid-ajaj.github.io/Feliz/) and [Elmish.React](https://elmish.github.io/react/), which are packages that allow you to use a domain-specific language (DSL) for expressing your views which then get rendered using React as a view engine.
 
@@ -58,7 +72,7 @@ The project has two parts:
 
 The .NET side consists of a solution and project that will house the F# code we will be writing. The F# code will eventually be compiled to JavaScript that will get run on the JavaScript side.
 
-The glue that connects the two together is the [vite-plugin-fable](https://github.com/nojaf/vite-plugin-fable). We'll learn more about this in a moment.
+The glue that connects the two together is `vite-plugin-fable`. We'll learn more about this in a moment.
 
 For now, let's start with the JavaScript side.
 
@@ -377,6 +391,6 @@ By the end of this series, we'll be able to add lists, add reminders, and mark t
 
 ### Conclusion
 
-In part 2, we'll take a first pass at our implementation, and we'll get our first look at using Feliz and Elmish in the process! In the meantime, you can find the completed code for this post [here](https://github.com/tw0po1nt/FableReminders/tree/part1-blog-complete).
+In part 2, we'll learn about F#'s type system by modeling our application's domain using algebraic data types! We'll also learn about the main components of an Elmish application by bootstrapping our application. In the meantime, you can find the completed code for this post [here](https://github.com/tw0po1nt/FableReminders/tree/part1-blog-complete).
 
 Happy coding!
