@@ -189,6 +189,8 @@ Sidebar over.
 
 ### Elmish
 
+Now that we have modeled our specific domain -- the domain of reminders and lists of reminders -- as types, we need to model our *entire application* as types. For that, we have Elmish.
+
 Let's allow Elmish to introduce itself by reading its [documentation](https://elmish.github.io/elmish/):
 
 > Elmish implements core abstractions that can be used to build F# applications following the “model view update” style of architecture, as made famous by Elm.
@@ -320,7 +322,7 @@ We also now need to add an `open` statement. Below the `App` module declaration,
 open Feliz
 ```
 
-The `render` function takes the `state` and a `dispatch` function as input and returns a representation of a view. The `dispatch` parameter makes `render` a **higher-order function**, which just means it's a function that takes a function as input or returns a function as output. If you hover over `render`, you'll see:
+The `render` function takes the `state` and a `dispatch` function as input and returns a representation of a view. The `dispatch` parameter makes `render` a **higher-order function** (HOF). A higher-order function is one that takes a function as input or returns a function as output. If you hover over `render`, you'll see:
 
 ```fsharp
 val render:
@@ -400,6 +402,6 @@ With that, we should now have this:
 
 ### Conclusion
 
-In part 3, we'll implement the sidebar for our application. In so doing, we'll see what building entire UIs in F# looks like! We'll see some cool F# language features in action and we'll learn about an important concept in functional programming: functors! In the meantime, you can find the completed code for this post [here](https://github.com/tw0po1nt/FableReminders/tree/part2-blog-complete).
+I hope you are starting to get a taste for how web development works in F# -- and how fun it can be! In part 3, we're off to the races. We'll implement the sidebar for our application and in so doing, we'll see what building entire UIs in F# looks like! We'll see some cool F# language features in action and we'll learn about an important concept in functional programming: functors! In the meantime, you can find the completed code for this post [here](https://github.com/tw0po1nt/FableReminders/tree/part2-blog-complete).
 
 Happy coding!
