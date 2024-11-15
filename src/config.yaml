@@ -11,7 +11,7 @@ metadata:
   title:
     default: TwoPoint
     template: '%s — TwoPoint'
-  description: "\U0001F680 A blog about programming, mostly functional"
+  description: "A blog about programming, mostly functional"
   robots:
     index: true
     follow: true

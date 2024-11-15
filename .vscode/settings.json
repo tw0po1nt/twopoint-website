@@ -11,5 +11,11 @@
   "yaml.schemas": {
     "./.vscode/astrowind/config-schema.json": "/src/config.yaml"
   },
-  "eslint.useFlatConfig": true
+  "eslint.useFlatConfig": true,
+  "FSharp.inlayHints.typeAnnotations": false,
+  "[fsharp]": {
+    "editor.inlayHints.enabled": "off"
+  },
+  "editor.inlayHints.enabled": "offUnlessPressed",
+  "FSharp.inlayHints.disableLongTooltip": true
 }
