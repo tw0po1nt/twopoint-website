@@ -23,6 +23,7 @@ export interface Props {
 
 const { metadata = {} } = Astro.props;
 const { language, textDirection } = I18N;
+const baseUrl = import.meta.env.BASE_URL;
 ---
 
 <!doctype html>
@@ -58,7 +59,7 @@ const { language, textDirection } = I18N;
   <body class="antialiased text-default bg-page tracking-tight">
     <slot />
     
-    <script type="module" src="../scripts/cookieconsent-config.js"></script>
+    <script type="module" src={`${baseUrl}/scripts/cookieconsent-config.js`}></script>
     <BasicScripts />
   </body>
 </html>
