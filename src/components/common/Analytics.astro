@@ -8,7 +8,7 @@ import { ANALYTICS } from 'astrowind:config';
       <script
         is:inline
         type="text/partytown"
-        src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"
+        src={`https://www.googletagmanager.com/gtag/js?id=${ANALYTICS.vendors.googleAnalytics.id}`}
       ></script>
 
       <script is:inline type="text/partytown" define:vars={{ id: ANALYTICS.vendors.googleAnalytics.id }}>
