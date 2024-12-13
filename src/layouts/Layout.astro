@@ -59,7 +59,7 @@ const baseUrl = import.meta.env.BASE_URL;
   <body class="antialiased text-default bg-page tracking-tight">
     <slot />
     
-    <script type="module" src={`${baseUrl}/scripts/cookieconsent-config.js`}></script>
+    <script is:inline type="module" src="/src/scripts/cookieconsent-config.js"></script>
     <BasicScripts />
   </body>
 </html>
