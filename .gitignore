@@ -1,6 +1,7 @@
 # build output
 dist/
 .output/
+src/obj
 
 # dependencies
 node_modules/
