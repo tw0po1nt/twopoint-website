@@ -2,6 +2,7 @@
 dist/
 .output/
 src/obj
+src/bin
 
 # dependencies
 node_modules/
