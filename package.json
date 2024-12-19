@@ -22,7 +22,7 @@
     "fix:prettier": "prettier -w ."
   },
   "dependencies": {
-    "@astrojs/react": "^4.1.1",
+    "@astrojs/react": "^4.0.0",
     "@astrojs/rss": "^4.0.10",
     "@astrojs/sitemap": "^3.2.1",
     "@astrolib/analytics": "^0.6.1",
@@ -34,8 +34,8 @@
     "astro-icon": "^1.1.4",
     "limax": "4.1.0",
     "lodash.merge": "^4.6.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "unpic": "^3.22.0"
   },
   "devDependencies": {

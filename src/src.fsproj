@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="components/widgets/Test.fs" />
+    <Compile Include="components/widgets/Donate.fs" />
   </ItemGroup>
 
   <ItemGroup>
