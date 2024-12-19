@@ -1,13 +1,34 @@
 ---
-import { GoogleAnalytics } from '@astrolib/analytics';
 import { ANALYTICS } from 'astrowind:config';
 ---
 
 {
   ANALYTICS?.vendors?.googleAnalytics?.id ? (
-    <GoogleAnalytics
-      id={String(ANALYTICS.vendors.googleAnalytics.id)}
-      partytown={ANALYTICS?.vendors?.googleAnalytics?.partytown}
-    />
+    <>
+      <script
+        is:inline
+        type="text/partytown"
+        src={`https://www.googletagmanager.com/gtag/js?id=${ANALYTICS.vendors.googleAnalytics.id}`}
+      ></script>
+
+      <script is:inline type="text/partytown" define:vars={{ id: ANALYTICS.vendors.googleAnalytics.id }}>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() {
+          // eslint-disable-next-line prefer-rest-params
+          dataLayer.push(arguments);
+        }
+        gtag("js", new Date());
+
+        // This should ALWAYS be set before the gtag("config", "G-XXXXXXXXXX"); line
+        gtag("consent", "default", {
+          ad_storage: "denied",
+          ad_user_data: "denied",
+          ad_personalization: "denied",
+          analytics_storage: "denied",
+        });
+
+        gtag("config", id);
+      </script>
+    </>
   ) : null
 }

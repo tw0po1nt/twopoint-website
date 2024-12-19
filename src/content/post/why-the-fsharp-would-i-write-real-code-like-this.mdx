@@ -1,0 +1,449 @@
+---
+publishDate: 2024-12-19T00:00:00Z
+author: Matthew Watt
+title: Why the F# would I write real code like this?
+excerpt: Come along for a story of how I grappled with that very question along my own journey of learning functional programming
+image: https://twopointwebsite.blob.core.windows.net/posts/one-offs/why-the-fsharp-would-i-write-real-code-like-this/thumbnail.jpg
+category: 'One-offs'
+tags:
+  - FsAdvent
+  - FSharp
+  - Functional programming
+metadata:
+  canonical: https://twopoint.dev/posts/why-the-fsharp-would-i-write-real-code-like-this
+---
+
+## Once upon a time...
+
+I was a young man, just getting started in my career as a software engineer. I had just left the safety and familiarity of my first job as an iOS developer with Panera Bread. I sought challenge, growth, and a broadening of my skillset. I also needed to face my mortal enemy -- web development -- which I hated because of my experience with it at university.
+
+### The Grid
+
+I set off to [National Grid](https://www.nationalgridus.com), where I applied for a job as a React developer. With only Objective-C, Swift, and the Java I learned at university on my resume, the interviewers were rightly skeptical. I was determined to prove that I could do the job, so I did. Many hours of Codecademy and several rounds of interviews later, I got hired and spent the next 6 months working with and learning from some really intelligent, experienced React developers.
+
+Then came *the call of the butter*.
+
+### Stacks of Butter
+
+Well, not so much a call as it was a LinkedIn message -- *whatever*. I received a message from The Farmer™️, the CEO of [ResultStack](https://resultstack.com) (whose logo vaguely resembles a stack of butter). He informed me that they had a position open for which he thought that I would be a great fit. 
+
+The timing was perfect. The world was still reeling from the 'rona. I was feeling isolated and longing to be closer to my family in the great state of South Dakota. I was ready to be back in a place where real estate wasn't so dang expensive. For a move back home to work, I would need a remote job. ResultStack provided this. I took the job.
+
+I spent the next two and a half years getting more than I had bargained for. I took the job in order to move -- what I got was two years of working with some of the smartest, kindest people I have ever worked with. Seriously -- one of my co-workers *literally built and coded his own automated firework launching system that he uses for the 4th of July with his family*. If you've ever met [Mike Cooper](https://www.linkedin.com/in/michael-cooper-85aa4419), you know what I'm talking about. 
+
+It was at ResultStack that I met Reid Evans.
+
+Reid was the one who initially planted the functional programming seed in my head. I had heard of functional programming before, mainly through snarky memes about a strange language called Haskell. I had also picked up a set of books to advance my knowledge of Swift -- one of them was called [Functional Swift](https://www.objc.io/books/functional-swift/). But it wasn't until I heard Reid talking about functional programming that I considering it something worth learning.
+
+### The Professor
+
+Taking Reid's advice, I turned to the professor for help on my journey. Professor Frisby and his [mostly adequate guide to functional programming](https://github.com/MostlyAdequate/mostly-adequate-guide) became my first exposure to the ideas of functional programming. The results were...mixed.
+
+When I finished reading, I thought to myself, "Ok, I think I understand how the code works. But why in the world would I write actual *code* like this?!" This is the question for which I sought the answer.
+
+### The Winds of Change
+
+It was now late 2023, November or so. I was busily building up my engineer's toolbelt writing C# for a local company called [Omnitech](https://www.omnitech-inc.com). It had probably been a year or more since my last conversation with the professor, with no code to show for it. At this point, I hadn't even really thought about functional programming since then. Then a book landed on my desk.
+
+### The Book
+
+This part of the story is shrouded in a level of mystery, even for me. I don't remember the exact circumstances of its appearance, but I do know its origin: my co-worker [Kevin](https://www.aligneddev.net). He, for reasons I do not remember, placed a copy of Scott Wlaschin's "[Domain Modeling Made Functional](https://fsharpforfunandprofit.com/books/#domain-modeling-made-functional)" on my desk for me to read. Lamentably, it would languish on my desk for a month, maybe more. But what was to come was inevitable.
+
+One day, for reasons I do not remember, I decided to read it. The light turned on.
+
+Embracing immutability as a default, being explicit rather than implicit, domain modeling with algebraic data types, making invalid states unrepresentable, separating effectful code from pure code. As it turns out, understanding these fundamentals made all the weird, scary, mathy things that tend to scare newcomers like me away -- functors, applicatives, monads -- not so scary. I stopped seeing them as stylistic preferences I couldn't see the advantages of. Instead, I saw them for what they really are: tools and approaches that arise naturally when you embrace the fundamentals.
+
+## Key Learnings
+
+The rest of this post is an overview of the concepts that made me realize why functional programming is important and worth learning. I'll also explain why F# is the functional language into which I have decided to invest most of my time and effort.
+
+### Immutability as a default
+
+For those with a "classical" computer science background, this sort of code is likely familiar, even if you are unfamiliar with F#:
+
+```fsharp
+let mutable name = "Matt"
+
+printfn $"Hello, {name}!"
+
+name <- "Watson"
+
+printfn $"Greetings, {name}!"
+```
+
+The generalized formula here is:
+
+1. Declare a variable
+2. Do something with it
+3. Change it
+4. Do something else with it
+
+We're used to solving problems this way -- with state. But this is *complex*.
+
+**"Complex!? You're crazy"** I can hear you yelling to your screens as you read this. Not the "complex" you may be thinking.
+
+When I say "complex", I'm using the proper definition of the word, which Rich Hickey so helpfully reminds us of in his excellent talk "[Simple Made Easy](https://www.youtube.com/watch?v=SxdOUGdseq4)". I cannot commend this talk to you enough. Go watch it.
+
+I'll give a few key points:
+
+- We unhelpfully interchange the words "simple" and "easy"
+- "Simple" means "one fold or braid" -- which really means no fold at all.
+- "Easy" derives from a word meaning "near, at hand"
+- "Simple" is objective -- lack of interleaving is observable.
+- "Easy" is subjective -- Easy *for whom*?
+- We unhelpfully interchange the opposites as well -- "complex" and "hard"
+- "Complex" means "braided or weaved together"
+- "Hard" means "firm or solid"
+- "Complex" is objective -- interleaving is observable.
+- "Hard" is subjective -- Hard *for whom*?
+
+With that in mind, when I say "solving problems with state is complex", what I am really saying is that when we use state, we are "complecting" (to use Hickey's language) -- that is, braiding or weaving -- multiple concepts: value and time.
+
+Think about it: if I know that a value can change throughout my code -- making it a state -- I can no longer think about it as a simple value that is what it is. I also have to think about *when* it is. Adding parallelism and concurrency into the mix, now I *also* have to think about *who* is making my state what it is. Blending all of these together has consequences: there's a *reason* multithreaded code is difficult to get right.
+
+The solution that functional programming proposes is to prefer *immutable values* over *mutable state* wherever possible. But writing computer programs is all about processing and transforming data, right? So if all of our data is immutable, how do we process and transform our data? Functions, like this one:
+
+```fsharp
+// A function taking 2 integers as input and producing an integer as output.
+// int -> int -> int
+let sum a b = a + b
+```
+
+Not just *any* functions, mind you. I mean the ones that we learn about in high scool math: for every input, there is exactly one output. *Pure* functions like this are nice and predictable, making them much easier to test. We'll address functions with side-effects -- anything a function does *beyond* receiving input and producing an output -- later.
+
+### Explicit rather than implicit
+
+No, I'm not condoning profane language in code comments or commit messages!
+
+Here's what I mean, by way of example. Take a look at this function:
+
+```fsharp
+let parseInt (input : string) = System.Int32.Parse(input)
+```
+
+Enter that into F# interactive via your terminal, like so:
+
+```sh
+> dotnet fsi
+
+Microsoft (R) F# Interactive version 12.9.100.0 for F# 9.0
+Copyright (c) Microsoft Corporation. All Rights Reserved.
+
+For help type #help;;
+
+> let parseInt (input : string) = System.Int32.Parse(input);;
+val parseInt: input: string -> int
+```
+
+So the type signature for our parsing function, which just uses .NET's `System.Int32.Parse` function, is `string -> int`.
+
+But is it really? Let's look at the [documentation for `System.Int32.Parse`](https://learn.microsoft.com/en-us/dotnet/api/system.int32.parse?view=net-9.0):
+
+```
+Converts the string representation of a number to its 32-bit signed integer equivalent.
+
+[Parameters]
+s - String
+A string containing a number to convert.
+
+[Returns]
+Int32
+A 32-bit signed integer equivalent to the number contained in s.
+
+[Exceptions]
+ArgumentNullException
+s is null.
+
+FormatException
+s is not in the correct format.
+
+OverflowException
+s represents a number less than Int32.MinValue or greater than Int32.MaxValue.
+```
+
+Ah, exceptions. 
+
+As it turns out, type signatures in F# -- in many languages, in fact -- don't account for exceptions. Our function signature is effectively a lie -- it can return an integer **or** it can throw an exception, and we have no way to indicate this in code to callers. The best we can do is write a documentation comment. We've now placed the burden on callers of needing to either read our code or our generated documentation to find out if they need a `try-catch` when calling our function.
+
+In functional programming, this sort of implicit behavior is not desirable. How could we be more explicit about what our function does?
+
+First, we need to think about what we *want* it to do. As we just discussed, we don't want exceptions. So what? Well, it would be great if we had a way to indicate that our function takes a string and returns the parsed value if it succeeds, or...well, _nothing_ if it fails. Enter `Option`.
+
+In F#, `Option` is a type defined like so:
+
+```fsharp
+type Option<'a> =
+  | Some of 'a
+  | None 
+```
+
+It's a **union** type, meaning values of the type can be one of a defined set of cases and nothing else. Here, you can read this as: `A value of type Option can be Some OR None`. 
+
+A union type is an OR type -- we'll get to what that means a bit later.
+
+It's also a **generic** type, meaning you can't just have a plain `Option`. You have to provide another type, like `Option<string>`. F# also lets you notate that as `string option`.
+
+To create an `Option` value, you can choose `None`, like so:
+
+```fsharp
+let noName : string option = None 
+```
+
+You can also choose the `Some` case. If you do, you also must provide an associated value, like so:
+
+```fsharp
+let optionalName = Some "Matt" // string option
+```
+
+The `Option` type allows us to be explicit about the presence or absence of a value, which is exactly what we want.
+
+Knowing this, we can now implement our `parse` function -- which we'll now call `tryParse` to be even *clearer* that this could fail -- like so:
+
+```fsharp
+let tryParse (value : string) =
+  match System.Int32.TryParse(value) with
+  | true, parsed -> Some parsed
+  | _            -> None
+```
+
+Here, we use `System.Int32.TryParse` which does *not* throw an exception if the string cannot be parsed. We handle each case and return the appropriate value, a `Some` if we succeeded, or a `None` if we did not.
+
+Now, the type signature matches what the function actually does:
+
+```fsharp
+val tryParse: value: string -> int option
+```
+
+It is also extremely common to want to know exactly what went wrong during an operation, and not just that it failed. The `Result` type in F# allows us to be explicit in this way as well. Its definition is similar to `Option`:
+
+```fsharp
+type Result<'T,'TError> = 
+  | Ok of ResultValue:'T 
+  | Error of ErrorValue:'TError
+```
+
+It has a case for `Ok`, a case for `Error`, and a generic type parameter for each.
+
+For our `tryParse` function, if we wanted to return a string describing what went wrong, using `Result`, our type signature would be:
+
+```fsharp
+val tryParse: value: string -> Result<int, string>
+```
+
+### Domain modeling with algebraic data types
+
+Domain modeling is, in my opinion, one of the most important tasks a software engineer performs. This wasn't always my opinion. I used to think it was just keeping up with the latest technologies and frameworks, but my perspective started to change when I started following the guys over at [pointfree.co](https://www.pointfree.co) (the meaning of the name should have been a giveaway, but I didn't know any better back then). I was following along with their series on "[The Composable Architecture](https://www.pointfree.co/collections/composable-architecture)" to learn how to write better SwiftUI apps. They always start with modeling the domain of the application. In the context of SwiftUI, I started training myself to think this way.
+
+Wlaschin's "[Domain Modeling Made Functional](https://fsharpforfunandprofit.com/books/#domain-modeling-made-functional)" expounded beautifully upon what I had been internalizing. I highly recommend you buy and read his book. At the very least, check out his website "[F# for Fun and Profit](https://fsharpforfunandprofit.com/)" where he makes a lot of the material from the book available as free posts.
+
+Since this is an overview, I'll just whet your appetite with a quick glance at algebraic data types (ADTs) in F#.
+
+ADTs come in two flavors: **AND types** (also called **product types**) and **OR types** (also called **sum types**).
+
+We've already seen an F# OR type with `Option` and `Result`:
+
+```fsharp
+type Option<'a> =
+  | Some of 'a
+  | None 
+
+type Result<'T,'TError> = 
+  | Ok of ResultValue:'T 
+  | Error of ErrorValue:'TError
+```
+
+These are known as **discriminated unions** in F#. They are called OR types because a value of such a type can be one case **or** another **or** another...etc.
+
+For AND types, F# has two main choices: tuples and records.
+
+Per the [documentation](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/tuples):
+"A tuple is a grouping of unnamed but ordered values, possibly of different types"
+
+The common example would be representing a Cartesian point as a tuple of two integers representing the x and y coordinates, like so:
+
+```fsharp
+let origin = 0,0 // int * int
+```
+
+This is fine for types of a handful of values, like a point. But for types with more fields, a record is what you want. We could model a user as a record like so:
+
+```fsharp
+type User =
+  { Id : System.Guid
+    FirstName : string
+    MiddleName : string option
+    LastName : string
+    Age : uint }
+```
+
+Records and tuples are called AND types because values of such types are an ANDing together of all of their constituent parts. A Cartesian point is an x value **and** a y value. A user is an identifier **and** a first name **and** a middle name...you get the idea.
+
+And that is really it. With those two simple constructs, you can model a surprisingly large number of domains. Don't let the Haskell or Idris folks scare you - you can accomplish quite a lot without higher-kinded types and dependent types 🙂
+
+### Making invalid states unrepresentable
+
+One thing I find myself saying a lot when investigating a bug is, "Well, the app got into a bad state and that led to this crash". We've got all these fancy type systems with ADTs and type inference...we should use them! Instead of shrugging and giving ourselves to the inevitability of invalid states leading to crashes or other bugs in our software, wouldn't it be great if we could leverage all these great tools we have to prevent nonsensical states in the first place? As it turns out, we can. Let's rage against the dying of the light!
+
+Let's look at an example from my [Fable Reminders series](https://twopoint.dev/series/fable-reminders/):
+
+```fsharp
+type Reminder =
+  { Id : int
+    Task : string
+    IsCompleted : bool }
+
+type ReminderList =
+  { Id : int
+    Name : string
+    Color : string
+    Reminders : Reminder list }
+```
+
+Fable Reminders is, unsurprisingly, a reminders application written in F#. We have a type to model an individual reminder and we have a type to model a list of reminders. Each list has a unique identifier, a name, a color, and a list of individual reminders. Each reminder has a unique identifier, a string describing the task to be completed, and a flag indicating whether the task is complete. Pretty straightforward, but there are some nonsensical states we could get into.
+
+#### Nonsensical state #1: empty name, empty task
+
+We don't want to allow a reminder list to have an empty name and we don't want to allow a reminder to have an empty task. Allowing either of those wouldn't make sense. One option would be to just check that the strings are not empty wherever these values are consumed. The obvious downside to this is that the rule that those strings cannot be empty now has to be spread out wherever the value is consumed. If the rule ever changes or we need to consume such a value in more places, the more code we have to duplicate.
+
+Instead, what we should do is make constructing an empty string impossible using the type system. In F#, we could do the following.
+
+1. Define a type, say `NonEmptyString`:
+
+```fsharp
+type NonEmptyString = private NonEmptyString of string
+```
+
+We define our type as a discriminated union with a single case that is private to the enclosing module or namespace. Consumers of our code won't be able to construct the type themselves.
+
+2. Define a module of the same name and a function that takes a `string` and returns a `Result<NonEmptyString, string>`. We'll call it `create`:
+
+```fsharp
+module NonEmptyString =
+  let create value =
+    match value with
+    | "" -> Error "string must not be empty"
+    | _  -> Ok (NonEmptyString value)
+```
+
+This is a so-called "smart constructor". It is the only way to create a value of type `NonEmptyString`.
+
+If the input is the empty string, the `Error` case of the `Result` type is returned with a string describing the error. Otherwise, the `Ok` case is returned with the validated string wrapped in our `NonEmptyString` type's single case.
+
+This approach effectively makes it impossible to create a `NonEmptyString` type that doesn't follow the rules. Everywhere else in our code no longer needs to check for this invariant.
+
+3. Define a function that gives us access to the underlying string:
+
+```fsharp
+module NonEmptyString =
+  // `create` definition ellided
+  let value (NonEmptyString str) = str
+```
+
+Making the case contructor private prevents pattern matching, so we need a way to extract the wrapped value.
+
+4. Update the `Reminder` and `ReminderList` types to use this new type instead of the built-in `string` type:
+
+```fsharp
+type Reminder =
+  { Id : int
+    Task : NonEmptyString
+    IsCompleted : bool }
+
+type ReminderList =
+  { Id : int
+    Name : NonEmptyString
+    Color : string
+    Reminders : Reminder list }
+```
+
+#### Nonsensical state #2: Invalid colors
+
+The `ReminderList` type has a field called `Color`. It holds a HEX color string for display in the UI. Different UI elements use this color to visually distinguish between lists. But what if we accidentally give it a value that is not a valid HEX color string, like `"Hello, world!"`? The compiler won't stop us from doing that when using a plain `string`, but if we tried to provide such a value to the UI engine, say CSS in the browser, we won't acheive the results we're after. Let's take a similar approach to `NonEmptyString`.
+
+1. Define a type, say `HexColor`:
+
+```fsharp
+type HexColor = private HexColor of string
+```
+
+A single-case discriminated union with a single, private case.
+
+2. Define a module, a smart constructor, and a value function:
+
+```fsharp
+module HexColor =
+  open System.Text.RegularExpressions
+
+  let create (value : string) =
+    if Regex.IsMatch(value, "^#[A-Fa-f0-9]{6}$")
+    then Ok (HexColor value)
+    else Error "must be a valid hex color string (Example: #FF1234)"
+
+  let value (HexColor str) = str
+```
+
+If the input is not a valid HEX color, the `Error` case of the `Result` type is returned with a string describing the error. Otherwise, the `Ok` case is returned with the validated string wrapped in our `HexColor` type's single case.
+
+3. Update the `Reminder` and `ReminderList` types to use this new type instead of the built-in `string` type:
+
+```fsharp
+type ReminderList =
+  { Id : int
+    Name : NonEmptyString
+    Color : HexColor
+    Reminders : Reminder list }
+```
+
+With those two enhancements, our domain model is much more explicit about the rules of what values are allowed.
+
+### Separating effectful code from pure code
+
+Earlier, we discussed pure, mathematical functions. Pure functions are predictable and testable, making them desirable for implementing our important business logic. We wouldn't make important business decisions by shaking a Magic 8-Ball or rolling dice, would we? Given the same input, we'd like our logic to return the same outputs.
+
+While we would prefer all our code be pure, side-effects are inevitable. If our programs couldn't perform side-effects, they would effectively be useless. How do you provide input to a program that can't read from a keyboard or a file? Input is a side-effect. How are you informed about the results of such a program? Output to a screen or a file is a side-effect. 
+
+Modern software needs to read from and write to terminals, screens, databases, web services, and more. Modern programs run on modern hardware and to do anything truly useful, they need to be able to interact with that hardware. The side-effect (huehue) of this is that functions that interact with the outside world are no longer "pure" -- we can't guarantee that multiple invocations of the same function will always return the same outputs for the same inputs. How are we to write robust, testable software if side-effects are inevitable?
+
+#### The pits of success
+
+I think the resource that really helped answer this question for me was Mark Seemann's great NDC talk called ["Functional architecture - The pits of success"](https://www.youtube.com/watch?v=US8QG9I1XW0). I strongly recommend you watch it.
+
+The tl;dr of the talk is that the solution to keeping applications as pure and testable as possible is to keep effectful code -- reading from a database or webservice, writing to a file, etc -- as close to the boundary of your system as possible. The "ports and adapters" software architecture -- sometimes called the "hexagonal" or "onion" architecture -- does just this, and according to Mark, the architecture tends to naturally arise as a result of keeping effects near the boundary.
+
+The overall idea is as follows:
+
+1. At the beginning of some business workflow, fetch all the data needed to make a business decision.
+2. Make the decision
+3. Perform any needed work based on the decisions, like saving any changes to a database or notifying a subscriber that something changed.
+
+Following this general approach helps keep your pure code at the "core" of your application isolated from all of the messiness that comes with side-effects.
+
+### Why F#?
+
+Why have I landed on F# as the language of choice for my software development?
+
+#### Philosophy and language design
+
+I think F# as a language strikes a great balance. It is simple and approachable to the newcomer, and yet in the hands of a seasoned functional programmer, it still packs a powerful punch. I think F# and languages like it (OCaml) demonstrate that functional programming is not a mysterious force only wielded by beardly wizards in an ivory tower who are deemed worthy. It is a toolkit that anyone can learn and benefit from.
+
+#### Jobs
+
+I actually spent most of the summer of this year (2024) learning Haskell. I started with F#, but I found myself falling back to my old ways of thinking because F# _allows_ you to do so by design. I needed to be forced to unlearn non-functional ways of thinking by being forced to do things in a purely functional manner. I chose to learn Haskell to do that.
+
+I don't regret learning Haskell. I think that you can write perfectly good real-life software using Haskell. If someone wants to hire me to write some Haskell for them, I'd gladly do so. But such opportunities are probably slim. F# opportunities are more or less slim, depending on who you ask. .NET opportunities, on the other hand, are abundant, especially where I live. In my mind, where there are .NET opportunities, there are F# opportunities.
+
+I work in a .NET shop writing C#. I have been trying to find ways to apply functional principles to the C# code I write. I have been teaching my co-workers functional concepts. I've invited co-workers to join me in lunch and learns and book clubs to learn functional programming with F#. We just finished a book club on Isaac Abraham's excellent book ["F# In Action"](https://www.manning.com/books/f-sharp-in-action). Folks are starting to see the potential F# has to offer to our organization. It will take time and we will likely never fully commit to F# only, but I believe F# will find its way into our team's standard toolbelt.
+
+#### Ecosystem
+
+F# has a great ecosystem. It is a first-class .NET language, so we get access to all the great software already written on .NET, including lots of packages designed specifically for F#. 
+
+#### Community and opportunities to contribute
+
+I have found that F# developers and OSS contributors are incredibly smart *and* welcoming -- a rare combination. They embrace newcomers and they do everything they can to ensure that F# developers thrive. In short, the F# community is small but mighty, and I very much look forward to continuing to be an active participant.
+
+#### Happy holidays!
+
+Thanks for taking the time to read! I wish you all the best this holiday season.
+
+Happy holidays and happy coding!
