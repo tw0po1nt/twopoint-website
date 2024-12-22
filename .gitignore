@@ -1,6 +1,8 @@
 # build output
 dist/
 .output/
+src/obj
+src/bin
 
 # dependencies
 node_modules/
@@ -22,3 +24,4 @@ pnpm-debug.log*
 pnpm-lock.yaml
 
 .astro
+.fake

@@ -1,9 +1,10 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
 import plugin from 'tailwindcss/plugin';
 import typographyPlugin from '@tailwindcss/typography';
+import formsPlugin from '@tailwindcss/forms';
 
 export default {
-  content: ['./src/**/*.{astro,html,js,jsx,json,md,mdx,svelte,ts,tsx,vue}'],
+  content: ['./src/**/*.{astro,html,js,jsx,json,md,mdx,svelte,ts,tsx,vue,fs}'],
   theme: {
     extend: {
       colors: {
@@ -52,6 +53,7 @@ export default {
     plugin(({ addVariant }) => {
       addVariant('intersect', '&:not([no-intersect])');
     }),
+    formsPlugin
   ],
   darkMode: 'class',
 };
