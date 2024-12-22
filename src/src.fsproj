@@ -7,7 +7,7 @@
   <ItemGroup>
     <Compile Include="components/widgets/QRCodeSvg.fs" />
     <Compile Include="components/widgets/Toast.fs" />
-    <Compile Include="components/widgets/Donate.fs" />
+    <Compile Include="components/widgets/Support.fs" />
   </ItemGroup>
 
   <ItemGroup>

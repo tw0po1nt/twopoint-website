@@ -1,17 +1,16 @@
-module Donate
+module Support
 
 open Browser
 open Fable.ReactHotToast
 open Feliz
 open Feliz.QRCodeSVG
 
-
-let [<Literal>] private sample = "./donation-config.json" 
-type private DonationConfig = Fable.JsonProvider.Generator<sample>
+let [<Literal>] private sample = "./support-config.json" 
+type private SupportConfig = Fable.JsonProvider.Generator<sample>
 
 [<ReactComponent(exportDefault=true)>]
-let Donate (config : string) =
-  let config = DonationConfig(config)
+let Support (config : string) =
+  let config = SupportConfig(config)
 
   let firstCurrency = (config.currencies |> Array.head)
   let (selectedCurrency, setSelectedCurrency) = React.useState(firstCurrency)
