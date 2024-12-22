@@ -9,6 +9,8 @@ import { findLatestPosts } from '~/utils/blog';
 import { getCanonical, getPermalink } from '~/utils/permalinks';
 import { findImage } from '~/utils/images';
 import NavigationLinks from '~/components/blog/NavigationLinks.astro';
+import donationConfig from '~/donation-config.json';
+import Donate from '~/components/widgets/Donate.fs';
 
 export const prerender = true;
 
@@ -28,5 +30,6 @@ const metadata = {
     {post.Content ? <post.Content /> : <Fragment set:html={post.content || ''} />}
   </SinglePost>
   <NavigationLinks post={post} />
+  <Donate client:only="react" config={JSON.stringify(donationConfig)} />
   <RelatedPosts post={post} />
 </Layout>
