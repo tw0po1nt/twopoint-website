@@ -64,6 +64,7 @@ const getNormalizedPost = async (post: CollectionEntry<'post'>): Promise<Post> =
     author,
     draft = false,
     metadata = {},
+    showOnHomepage = true,
   } = data;
 
   const slug = cleanSlug(rawSlug); // cleanSlug(rawSlug.split('/').pop());
@@ -107,6 +108,8 @@ const getNormalizedPost = async (post: CollectionEntry<'post'>): Promise<Post> =
     // or 'content' in case you consume from API
 
     readingTime: remarkPluginFrontmatter?.readingTime,
+
+    showOnHomepage,
   };
 };
 
@@ -178,9 +181,14 @@ export const findPostsByIds = async (ids: Array<string>): Promise<Array<Post>> =
 };
 
 /** */
-export const findLatestPosts = async ({ count }: { count?: number }): Promise<Array<Post>> => {
+export const findLatestPosts = async ({ count, isHomepage }: { count?: number, isHomepage?: boolean }): Promise<Array<Post>> => {
   const _count = count || 4;
-  const posts = await fetchPosts();
+  const _isHomepage = isHomepage || false;
+  let posts = await fetchPosts();
+
+  if (_isHomepage) {
+    posts = posts.filter((post) => post.showOnHomepage);
+  }
 
   return posts ? posts.slice(0, _count) : [];
 };
