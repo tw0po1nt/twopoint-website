@@ -73,6 +73,8 @@ const postCollection = defineCollection({
     author: z.string().optional(),
 
     metadata: metadataDefinition(),
+
+    showOnHomepage: z.boolean().default(true),
   }),
 });
 

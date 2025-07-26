@@ -206,6 +206,10 @@
               },
               "required": ["isEnabled", "pathname", "robots"]
             },
+            "showOnHomepage": {
+              "type": "boolean",
+              "default": true
+            },
             "series": {
               "type": "object",
               "properties": {

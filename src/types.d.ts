@@ -45,6 +45,8 @@ export interface Post {
 
   /**  */
   readingTime?: number;
+
+  showOnHomepage?: boolean;
 }
 
 export interface Taxonomy {
