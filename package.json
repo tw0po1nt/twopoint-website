@@ -38,6 +38,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
+    "react-pdf": "^10.0.1",
     "unpic": "^3.22.0"
   },
   "devDependencies": {
