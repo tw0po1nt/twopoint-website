@@ -107,7 +107,7 @@ export default defineConfig({
   ],
 
   image: {
-    domains: ['cdn.pixabay.com', 'unsplash.com', 'twopointwebsite.blob.core.windows.net'],
+    domains: ['cdn.pixabay.com', 'unsplash.com', 'twopointwebsite.blob.core.windows.net', 'img.youtube.com'],
   },
 
   markdown: {
