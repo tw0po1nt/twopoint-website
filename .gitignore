@@ -1,8 +1,10 @@
 # build output
 dist/
 .output/
-src/obj
-src/bin
+
+# .NET artifacts
+**/obj/
+**/bin/
 
 # dependencies
 node_modules/
