@@ -1,0 +1,77 @@
+site:
+  name: TwoPoint
+  site: 'https://staging.twopoint.dev'
+  base: '/'
+  trailingSlash: false
+  googleSiteVerificationId: Ej-5oQD6F_zuV5I59TTGQwLOdR6h4mpj6Fe-uZlX38k
+
+# Default SEO metadata
+metadata:
+  title:
+    default: TwoPoint Staging
+    template: '%s — TwoPoint Staging'
+  description: "(Staging) A blog about programming, mostly functional"
+  robots:
+    index: false
+    follow: false
+  openGraph:
+    site_name: TwoPoint (Staging)
+    images:
+      - url: '~/assets/images/default.png'
+        width: 1200
+        height: 628
+    type: website
+  twitter:
+    handle: '@tw0po1nt'
+    site: '@tw0po1nt'
+    cardType: summary_large_image
+
+i18n:
+  language: en
+  textDirection: ltr
+
+apps:
+  blog:
+    isEnabled: true
+    postsPerPage: 6
+
+    post:
+      isEnabled: true
+      permalink: '/posts/%slug%' # Variables: %slug%, %year%, %month%, %day%, %hour%, %minute%, %second%, %category%
+      robots:
+        index: false
+
+    list:
+      isEnabled: true
+      pathname: 'posts' # Blog main path, you can change this to "articles" (/articles)
+      robots:
+        index: false
+
+    series:
+      isEnabled: true
+      pathname: 'series' # Series main path
+      robots:
+        index: false
+
+    category:
+      isEnabled: true
+      pathname: 'category' # Category main path /category/some-category, you can change this to "group" (/group/some-category)
+      robots:
+        index: false
+
+    tag:
+      isEnabled: true
+      pathname: 'tag' # Tag main path /tag/some-tag, you can change this to "topics" (/topics/some-category)
+      robots:
+        index: false
+
+    isRelatedPostsEnabled: true
+    relatedPostsCount: 4
+
+analytics:
+  vendors:
+    googleAnalytics:
+      id: "G-FHY2P8DL2S"
+
+ui:
+  theme: 'system' # Values: "system" | "light" | "dark" | "light:only" | "dark:only"
