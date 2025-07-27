@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <RestoreSuccess Condition=" '$(RestoreSuccess)' == '' ">True</RestoreSuccess>
+    <RestoreTool Condition=" '$(RestoreTool)' == '' ">NuGet</RestoreTool>
+    <ProjectAssetsFile Condition=" '$(ProjectAssetsFile)' == '' ">$(MSBuildThisFileDirectory)project.assets.json</ProjectAssetsFile>
+    <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">/home/matt/.nuget/packages/</NuGetPackageRoot>
+    <NuGetPackageFolders Condition=" '$(NuGetPackageFolders)' == '' ">/home/matt/.nuget/packages/</NuGetPackageFolders>
+    <NuGetProjectStyle Condition=" '$(NuGetProjectStyle)' == '' ">PackageReference</NuGetProjectStyle>
+    <NuGetToolVersion Condition=" '$(NuGetToolVersion)' == '' ">6.12.4</NuGetToolVersion>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <SourceRoot Include="/home/matt/.nuget/packages/" />
+  </ItemGroup>
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <PkgFSharp_Core Condition=" '$(PkgFSharp_Core)' == '' ">/home/matt/.nuget/packages/fsharp.core/9.0.101</PkgFSharp_Core>
+    <PkgFeliz Condition=" '$(PkgFeliz)' == '' ">/home/matt/.nuget/packages/feliz/2.9.0</PkgFeliz>
+    <PkgFeliz_UseMediaQuery Condition=" '$(PkgFeliz_UseMediaQuery)' == '' ">/home/matt/.nuget/packages/feliz.usemediaquery/1.5.0</PkgFeliz_UseMediaQuery>
+    <PkgFable_Promise Condition=" '$(PkgFable_Promise)' == '' ">/home/matt/.nuget/packages/fable.promise/3.2.0</PkgFable_Promise>
+    <PkgFable_JsonProvider Condition=" '$(PkgFable_JsonProvider)' == '' ">/home/matt/.nuget/packages/fable.jsonprovider/1.1.1</PkgFable_JsonProvider>
+    <PkgFable_Browser_Navigator Condition=" '$(PkgFable_Browser_Navigator)' == '' ">/home/matt/.nuget/packages/fable.browser.navigator/2.5.0</PkgFable_Browser_Navigator>
+  </PropertyGroup>
+</Project>
