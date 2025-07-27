@@ -13,10 +13,14 @@ metadata:
 showOnHomepage: false
 ---
 
+import { getPermalink } from '../../utils/permalinks';
 import Pdf from '~/components/widgets/Pdf.astro';
 
-#### Slides
+export const blogUri = getPermalink('posts/why-the-fsharp-would-i-write-real-code-like-this');
 
+For the blog post version of this talk, <a href={blogUri}>click here!</a>
+
+#### Slides
 
 <Pdf file="https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf" />
 
