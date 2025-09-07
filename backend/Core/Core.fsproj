@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Util\Operators.fs" />
+    <Compile Include="Util\FsToolkitExtensions.fs" />
+    <Compile Include="Util\Parsing.fs" />
+    <Compile Include="Util\NetExtensions.fs" />
+    <Compile Include="Shared\ConstrainedTypes.fs" />
+    <Compile Include="Shared\LogicTypes.fs" />
+    <Compile Include="Shared\StringTypes.fs" />
+    <Compile Include="Posts\PostTypes.fs" />
+    <Compile Include="Posts\PostLogic.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.1" />
+    <PackageReference Update="FSharp.Core" Version="9.0.300" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+  </ItemGroup>
+
+</Project>
