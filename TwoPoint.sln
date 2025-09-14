@@ -12,6 +12,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Core", "backend\Core\Core.f
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Core.Api", "backend\Core.Api\Core.Api.fsproj", "{8C37085F-95F2-4AB2-AEA5-B31A07C29397}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Http", "backend\Http\Http.fsproj", "{EF7DA714-46FD-4CFC-9D82-33C59F800ADB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,9 +31,14 @@ Global
 		{8C37085F-95F2-4AB2-AEA5-B31A07C29397}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8C37085F-95F2-4AB2-AEA5-B31A07C29397}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8C37085F-95F2-4AB2-AEA5-B31A07C29397}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EF7DA714-46FD-4CFC-9D82-33C59F800ADB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF7DA714-46FD-4CFC-9D82-33C59F800ADB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF7DA714-46FD-4CFC-9D82-33C59F800ADB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF7DA714-46FD-4CFC-9D82-33C59F800ADB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{F67D07CC-C5C8-4F92-B664-05A15441D79B} = {6E49DB4A-8B81-42B2-B12F-0C2DEA1E2DAC}
 		{8C37085F-95F2-4AB2-AEA5-B31A07C29397} = {6E49DB4A-8B81-42B2-B12F-0C2DEA1E2DAC}
+		{EF7DA714-46FD-4CFC-9D82-33C59F800ADB} = {6E49DB4A-8B81-42B2-B12F-0C2DEA1E2DAC}
 	EndGlobalSection
 EndGlobal
