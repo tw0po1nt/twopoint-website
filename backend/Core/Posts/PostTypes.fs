@@ -135,17 +135,41 @@ module Slug =
     let create = Types.unsafeCreate create
 
 
+type PostCommentStats =
+  { New : uint
+    Approved : uint
+    Rejected : uint }
+  
+  member this.Total = this.New + this.Approved + this.Rejected
+  
+  static member Zero = { New = 0u; Approved = 0u; Rejected = 0u }
+  
+  static member (+) (a: PostCommentStats, b: PostCommentStats) =
+    { New = a.New + b.New; Approved = a.Approved + b.Approved; Rejected = a.Rejected + b.Rejected }
+  
+type PostInfo =
+  { Slug : Slug
+    Title : NonEmptyString
+    CreatedDate : DateTime
+    CommentStats : PostCommentStats }
+
+module PostInfo =
+  
+  let create slug title createdDate commentStats = validation {
+    let! slug = Slug.create slug
+    let! title = title |> NonEmptyString.create (Some (nameof title))
+    let! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
+    return { Slug = slug; Title = title;  CreatedDate = createdDate; CommentStats = commentStats }
+  }
+
 type Post =
-  { Title : NonEmptyString
-    Slug : Slug
-    CreatedDate : DateTime }
-    
+  { Id: Slug
+    Info : PostInfo }
 
 module Post =
   
-  let create title slug createdDate = validation {
-    let! title = title |> NonEmptyString.create (Some (nameof title))
-    let! slug = Slug.create slug
-    let! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
-    return { Title = title; Slug = slug; CreatedDate = createdDate }
+  let create slug title createdDate commentStats = validation {
+    let! id = Slug.create slug
+    let! info = PostInfo.create slug title createdDate commentStats
+    return { Id = id; Info = info }
   }

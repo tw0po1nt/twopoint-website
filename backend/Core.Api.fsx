@@ -45,11 +45,18 @@ open TwoPoint.Core.Util
 open IcedTasks
 open System.Threading
 
-let executeApi (api: 'input -> CancellableTask<ApiResult<'event list, 'error>>) input op =  
-  let apiResult = (api input CancellationToken.None).Result
+let executeAction (api: 'input -> CancellableTask<ActionResult<'event, 'error>>) input op =  
+  let actionResult = (api input CancellationToken.None).Result
   
-  match apiResult with
+  match actionResult with
   | Ok events  -> printfn $"{op} succeeded with events: {events}"
+  | Error errs -> printfn $"{op} failed with errors: {errs}"
+  
+let executeQuery (query: 'input -> CancellableTask<QueryResult<'output>>) input op =  
+  let queryResult = (query input CancellationToken.None).Result
+  
+  match queryResult with
+  | Ok output  -> printfn $"{op} succeeded with result: {output}"
   | Error errs -> printfn $"{op} failed with errors: {errs}"
 
 // ========================================================================================
@@ -60,9 +67,19 @@ open TwoPoint.Core.Posts.Api
 
 let postDependencies = PostDependencies.live tableServiceClient logger
 
-let postApi = PostApi.withDependencies postDependencies
+let postActions = PostActions.withDependencies postDependencies
+
+let postQueries = PostQueries.withDependencies postDependencies
+
+
+/// <summary>
+/// Fetch all TwoPoint blog posts
+/// </summary>
+let getAllPosts () = executeQuery postQueries.GetAllPosts () "GetAllPosts"
 
 let existingPost = Slug.Unsafe.create "functional-programming-more-than-just-a-coding-style"
+
+// TODO: Replace these with queries when they are in place
 
 /// <summary>
 /// Fetch a TwoPoint blog post by slug
@@ -83,8 +100,8 @@ let getCommentsForPost post =
   let commentsResult = (postDependencies.GetCommentsForPost post CancellationToken.None).Result
   
   match commentsResult with
-  | Ok []       -> printfn $"No comments found for post: '{post.Title}'"; []
-  | Ok comments -> printfn $"Found {List.length comments} comment(s) for post: '{post.Title}'"; comments
+  | Ok []       -> printfn $"No comments found for post: '{post.Info.Title}'"; []
+  | Ok comments -> printfn $"Found {List.length comments} comment(s) for post: '{post.Info.Title}'"; comments
   | Error err   -> printfn $"Comment lookup failed with error: {err.DebugMessage}"; []
   
 let newPost =
@@ -92,9 +109,9 @@ let newPost =
     Slug = "functional-programming-more-than-just-a-coding-style" }
 
 /// <summary>
-/// Execute the <c>createPost</c> API to create a new TwoPoint blog post
+/// Execute the <c>createPost</c> action to create a new TwoPoint blog post
 /// </summary>
-let createPost newPost = executeApi postApi.CreatePost newPost "CreatePost"
+let createPost newPost = executeAction postActions.CreatePost newPost "CreatePost"
 
 
 let newComment =
@@ -104,9 +121,9 @@ let newComment =
     Comment = "This is a test" }
 
 /// <summary>
-/// Execute the <c>postComment</c> API to create a new comment on a TwoPoint blog post
+/// Execute the <c>postComment</c> action to create a new comment on a TwoPoint blog post
 /// </summary>
-let postComment newComment = executeApi postApi.PostComment newComment "PostComment"
+let postComment newComment = executeAction postActions.PostComment newComment "PostComment"
 
 
 let commentApprovalUpdate =
@@ -114,8 +131,8 @@ let commentApprovalUpdate =
     Approval = CommentApproval.Approved.ToString().ToLower() }
 
 /// <summary>
-/// Execute the <c>postComment</c> API to create a new comment on a TwoPoint blog post
+/// Execute the <c>postComment</c> action to create a new comment on a TwoPoint blog post
 /// </summary>
 let updateCommentApproval commentApprovalUpdate =
-  executeApi postApi.UpdateCommentApproval commentApprovalUpdate "UpdateCommentApproval"
+  executeAction postActions.UpdateCommentApproval commentApprovalUpdate "UpdateCommentApproval"
 

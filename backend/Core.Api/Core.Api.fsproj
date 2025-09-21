@@ -14,7 +14,8 @@
       <Compile Include="Posts\Impl\PostDb.fs" />
       <Compile Include="Posts\PostApiTypes.fs" />
       <Compile Include="Posts\PostApiDependencies.fs" />
-      <Compile Include="Posts\PostApi.fs" />
+      <Compile Include="Posts\PostQueries.fs" />
+      <Compile Include="Posts\PostActions.fs" />
     </ItemGroup>
 
     <ItemGroup>

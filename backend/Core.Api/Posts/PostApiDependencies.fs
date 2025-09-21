@@ -1,5 +1,7 @@
 namespace TwoPoint.Core.Posts.Dependencies
 
+open FSharp.Control
+open IcedTasks
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Shared
@@ -8,6 +10,7 @@ open TwoPoint.Core.Util
 open System
 
 type IPostDependencies =
+  abstract member GetAllPosts: unit -> DependencyResult<PostInfo list>
   abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
   abstract member CreatePost: newPost: NewPost -> DependencyResult<Post>
   
@@ -38,6 +41,15 @@ type IPostDependencies =
 module PostDependencies =
   
   open FsToolkit.ErrorHandling
+  
+  let statsForApproval = function
+    | "new" ->
+      { New = 1u; Approved = 0u; Rejected = 0u }
+    | "approved" ->
+      { New = 0u; Approved = 1u; Rejected = 0u }
+    | "rejected" ->
+      { New = 0u; Approved = 0u; Rejected = 1u }
+    | _ -> PostCommentStats.Zero
 
   let live tableServiceClient logger =
     let postDb = PostDb.live tableServiceClient logger
@@ -45,12 +57,50 @@ module PostDependencies =
     let source = Dependency.Database
     
     { new IPostDependencies with
+      
+      member this.GetAllPosts () = cancellableTaskResult {
+        let! (dbPosts: DbPost list) = postDb.GetAllPosts()
+        let! ct = CancellableTask.getCancellationToken()
+        // TODO: Explore Task.WhenAll()...might work here and benefit from parallelism
+        let dbPostsAndComments = taskSeq {
+          for post in dbPosts do
+            let! dbComments = ct |> postDb.GetCommentsForPost post |> Task.map (Result.defaultValue [])
+            yield post, dbComments
+        }
+        
+        return!
+          ([], dbPostsAndComments)
+          ||> TaskSeq.fold (fun s (post, comments) ->
+            let stats =
+              ({ New = 0u; Approved = 0u; Rejected = 0u }, comments)
+              ||> List.fold (fun stats (_, _, status: DbCommentStatus) ->
+                let updates = statsForApproval status.Approval
+                stats + updates
+              )
+            post.ToPost(stats)
+            |> Result.toOption
+            |> Option.map (fun p -> p.Info :: s)
+            |> Option.defaultValue s
+          )
+      }
+      
       member this.GetPostBySlug slug = cancellableTaskResult {
         let! dbPost = postDb.GetPostBySlug (slug |> Slug.value)
-                
+        let! dbComments =
+          dbPost
+          |> Option.traverseCancellableTaskResult postDb.GetCommentsForPost
+          |> CancellableTaskResult.map (Option.defaultValue [])
+        
+        let commentStats =
+          ({ New = 0u; Approved = 0u; Rejected = 0u }, dbComments)
+          ||> List.fold (fun stats (_, _, status: DbCommentStatus) ->
+            let updates = statsForApproval status.Approval
+            stats + updates
+          )
+        
         return!
           dbPost
-          |> Option.traverseResult (fun (dbo: DbPost) -> dbo.ToPost())
+          |> Option.traverseResult (fun (dbo: DbPost) -> dbo.ToPost(commentStats))
           |> DependencyError.ofValidation source
       }
       
@@ -60,7 +110,7 @@ module PostDependencies =
             Slug = newPost.Slug |> Slug.value
             CreatedDate = DateTime.UtcNow } // todo: model as ISystemDependencies
         let! (dbPost: DbPost) = postDb.CreatePost newPost
-        return! dbPost.ToPost() |> DependencyError.ofValidation source
+        return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
       }
       
       member this.GetCommenterByEmail email = cancellableTaskResult {
@@ -116,7 +166,7 @@ module PostDependencies =
       member this.CreateComment post commenter newComment = cancellableTaskResult {
         let newComment =
           { DbComment.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
-            PostId = post.Slug |> Slug.value
+            PostId = post.Id |> Slug.value
             CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
             Content = newComment.Content |> NonEmptyString.value
             CommenterId = commenter.EmailAddress |> EmailAddress.value }

@@ -7,13 +7,19 @@
   </PropertyGroup>
   
   <ItemGroup>
+    <Compile Include="BindExtensions.fs" />
     <Compile Include="Config.fs" />
-    <Compile Include="Blog\GetCommentsForPost.fs" />
+    <Compile Include="Endpoints\EndpointTypes.fs" />
+    <Compile Include="Endpoints\CoreExtensions.fs" />
+    <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
+    <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
+    <PackageReference Include="Azure.Identity" Version="1.16.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.0.0" />
@@ -23,13 +29,18 @@
   </ItemGroup>
   
   <ItemGroup>
+    
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="local.settings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Core.Api\Core.Api.fsproj" />
   </ItemGroup>
 
 </Project>

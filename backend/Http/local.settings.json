@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
+  },
+  "Azure": {
+    "EntraTenantId": "cdf89f94-8c88-48fc-b11c-dd24af4380b4",
+    "ManagedIdentityClientId": "c976dce7-0db4-494d-aa80-fdb831d49474",
+    "TableStorageUri": "https://twopointwebsite.table.core.windows.net/"
+  }
+}

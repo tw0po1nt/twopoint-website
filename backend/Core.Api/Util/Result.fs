@@ -57,10 +57,11 @@ module DependencyError =
 /// </summary>
 type DependencyResult<'T> = CancellableTaskResult<'T, DependencyError>
 
+
 /// <summary>
-/// An error that occurred during a PorchLight API execution
+/// An error that occurred during a PorchLight action execution
 /// </summary>
-type ApiError<'logicError> =
+type ActionError<'logicError> =
   | Dependency of DependencyError
   | Logic of 'logicError
   | Validation of string list
@@ -72,26 +73,58 @@ type ApiError<'logicError> =
     | Logic logic -> $"{logic}"
 
 /// <summary>
-/// The result of a PorchLight API execution.
+/// The result of a PorchLight action execution.
 /// The <c>Error</c> case indicates that some error occurred interacting with a PorchLight dependency
 /// The <c>Ok</c> case indicates that the business logic successfully executed and produced a result.
 /// </summary>
-type ApiResult<'success, 'logicError> = Result<'success, ApiError<'logicError>>
+type ActionResult<'success, 'logicError> = Result<'success, ActionError<'logicError>>
 
 /// <summary>
 /// This module type aliases useful functions defined in the <c>Validation</c> module for the ApiResult DSL
 /// </summary>
-module ApiResult =
+module ActionResult =
 
-  let inline success (x: 'success) : ApiResult<'success, 'logicError> = Ok x
+  let inline success (x: 'success) : ActionResult<'success, 'logicError> = Ok x
 
-  let inline failure x : ApiResult<'success, 'logicError> = Error x
+  let inline failure x : ActionResult<'success, 'logicError> = Error x
+  
   
 module DependencyResult =
   
-  let toApiResult eventCtor =
-    Result.mapError ApiError.Dependency
+  let toActionResult eventCtor =
+    Result.mapError ActionError.Dependency
     >>
     Result.either
-      (eventCtor >> List.singleton >> ApiResult.success)
-      ApiResult.failure
+      (eventCtor >> ActionResult.success)
+      ActionResult.failure
+
+
+/// <summary>
+/// An error that occurred during a PorchLight query execution
+/// </summary>
+type QueryError =
+  | Dependency of DependencyError
+  | Validation of string list
+  
+  override this.ToString() =
+    match this with
+    | Dependency dep -> dep.Message
+    | Validation validation ->
+      let errors = validation |> String.concat ", "
+      $"One or more validation errors occurred: {errors}"
+
+/// <summary>
+/// The result of a PorchLight query execution.
+/// The <c>Error</c> case indicates that some error occurred interacting with a PorchLight dependency
+/// The <c>Ok</c> case indicates that the query successfully executed and produced a result.
+/// </summary>
+type QueryResult<'success> = Result<'success, QueryError>
+
+/// <summary>
+/// This module type aliases useful functions defined in the <c>Validation</c> module for the QueryResult DSL
+/// </summary>
+module QueryResult =
+
+  let inline success (x: 'success) : QueryResult<'success> = Ok x
+
+  let inline failure x : QueryResult<'success> = Error x

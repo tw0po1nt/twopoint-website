@@ -1,8 +1,14 @@
 namespace TwoPoint.Core.Posts
 
-// =======================================================
-// DTOs
-// =======================================================
+open TwoPoint.Core.Shared
+
+open System
+
+// ====================================================================================================================
+// Actions
+// ====================================================================================================================
+
+// Inputs
 
 type NewPostDto =
   { Title : string
@@ -21,13 +27,14 @@ type CommentApprovalUpdateDto =
 type CommenterStatusUpdateDto =
   { EmailAddress : string
     Status : string }
+  
+// Outputs
+type PostCreatedEvent = PostCreatedEvent of Post
+type CommentPostedEvent = CommentPostedEvent of Post * Comment
+type CommentApprovalUpdatedEvent = CommentApprovalUpdatedEvent of Comment
+type CommenterStatusUpdatedEvent = CommenterStatusUpdatedEvent of Commenter
+  
+// ====================================================================================================================
+// Queries
+// ====================================================================================================================
 
-// =======================================================
-// Events
-// =======================================================
-
-type PostEvent =
-  | PostCreated of Post
-  | CommentPosted of Post * Comment
-  | CommentApprovalUpdated of Comment
-  | CommenterStatusUpdated of Commenter

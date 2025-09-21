@@ -52,15 +52,16 @@ type internal DbPost =
     entity
     
   static member FromPost (post : Post) =
-    { Title = post.Title |> NonEmptyString.value
-      Slug = post.Slug |> Slug.value
-      CreatedDate = post.CreatedDate }
+    { Title = post.Info.Title |> NonEmptyString.value
+      Slug = post.Id |> Slug.value
+      CreatedDate = post.Info.CreatedDate }
     
-  member this.ToPost() =
+  member this.ToPost (commentStats: PostCommentStats) =
     Post.create
-      this.Title
       this.Slug
+      this.Title
       (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
+      commentStats
 
 /// <summary>
 /// Database representation of a commenter
@@ -226,6 +227,7 @@ type internal DbComment =
       
 
 type internal IPostDb =
+  abstract member GetAllPosts: unit -> CancellableTaskResult<DbPost list, DependencyError>
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
   abstract member CreatePost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
   
@@ -267,6 +269,9 @@ module internal PostDb =
     let trySingle table onEntity partition key =
       Db.trySingle tableServiceClient logger db table onEntity partition key
       
+    let toList table onEntity =
+      Db.toList tableServiceClient logger db table onEntity
+      
     let where table onEntity filter =
       Db.where tableServiceClient logger db table onEntity filter
       
@@ -282,6 +287,9 @@ module internal PostDb =
     let commentersTable = "commenters"
     
     { new IPostDb with
+      
+      member this.GetAllPosts () =
+        toList postsTable DbPost.FromEntity
       
       member this.GetPostBySlug slug =
         slug |> trySingle postsTable DbPost.FromEntity (Some slug)

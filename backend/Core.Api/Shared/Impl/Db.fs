@@ -74,6 +74,31 @@ module Db =
     }
     
   /// <summary>
+  /// Query an Azure Table for all entities
+  /// </summary>
+  /// <param name="tableServiceClient">The service client to use to perform the operation</param>
+  /// <param name="logger">A logger for telemetry for the operation</param>
+  /// <param name="db">The name of the database - used for telemetry</param>
+  /// <param name="table">The table being queried</param>
+  /// <param name="onEntity">A function called with the fetched entities if no error occurs</param>
+  let toList tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) =
+    runQuery logger $"{db}.{table}.toList"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let! table = getTable tableServiceClient table
+      let! entities =
+        table.QueryAsync<TableEntity>(
+          "",
+          cancellationToken = ct
+        )
+        |> TaskSeq.toListAsync
+      return!
+        entities
+        |> List.traverseValidationA onEntity
+        |> DependencyError.ofValidation Dependency.Database
+    }
+    
+  /// <summary>
   /// Query an Azure Table for all entities matching the provided filter
   /// </summary>
   /// <param name="tableServiceClient">The service client to use to perform the operation</param>
