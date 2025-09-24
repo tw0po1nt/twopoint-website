@@ -51,13 +51,13 @@ type GetCommentsForPost (logger : ILogger<GetCommentsForPost>, tableServiceClien
     let apiResponse, statusCode =
       match commentsResult with
       | Ok (Some comments) ->
-        { Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
+        { Success = true; Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
       | Ok None ->
-        { Message = Some $"Post '{slug}' not found"; Data = None }, HttpStatusCode.NotFound
+        { Success = false; Message = Some $"Post \'{slug}\' not found"; Data = None }, HttpStatusCode.NotFound
       | Error queryError when queryError.IsValidation ->
-        { Message = Some (queryError.ToString()); Data = None }, HttpStatusCode.BadRequest
+        { Success = false;  Message = Some (queryError.ToString()); Data = None }, HttpStatusCode.BadRequest
       | Error queryError ->
-        { Message = Some (queryError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+        { Success = false; Message = Some (queryError.ToString()); Data = None }, HttpStatusCode.InternalServerError
       
     response.StatusCode <- statusCode
     do! response.WriteAsJsonAsync(apiResponse, ct)

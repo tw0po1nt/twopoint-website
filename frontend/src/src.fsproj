@@ -5,10 +5,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Api.fs" />
+    <Compile Include="DateFormatter.fs" />
+    <Compile Include="Elmish.fs" />
     <Compile Include="components/widgets/QRCodeSvg.fs" />
     <Compile Include="components/widgets/ReactPdf.fs" />
     <Compile Include="components/widgets/Toast.fs" />
     <Compile Include="components/widgets/Support.fs" />
+    <Compile Include="components/widgets/NewComment.fs" />
+    <Compile Include="components/widgets/Comments.fs" />
     <Compile Include="components/widgets/Pdf.fs" />
   </ItemGroup>
 
@@ -16,7 +21,10 @@
     <PackageReference Include="Fable.Browser.Navigator" Version="2.5.0" />
     <PackageReference Include="Fable.JsonProvider" Version="1.1.1" />
     <PackageReference Include="Fable.Promise" Version="3.2.0" />
+    <PackageReference Include="Fable.SimpleHttp" Version="3.6.0" />
+    <PackageReference Include="Feliz.UseElmish" Version="2.5.0" />
     <PackageReference Include="Feliz.UseMediaQuery" Version="1.5.0" />
     <PackageReference Include="Feliz" Version="2.9.0" />
+    <PackageReference Include="Thoth.Json" Version="10.4.1" />
   </ItemGroup>
 </Project>

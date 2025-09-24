@@ -12,11 +12,11 @@ module QueryResult =
     queryResult
     |>
       Result.either
-        (fun success -> { Message = None; Data = Some (onSuccess success) }, HttpStatusCode.OK)
+        (fun success -> { Success = true; Message = None; Data = Some (onSuccess success) }, HttpStatusCode.OK)
         (fun err ->
           match err with
           | Validation _ ->
-            { Message = Some (err.ToString()); Data = None }, HttpStatusCode.BadRequest
+            { Success = false; Message = Some (err.ToString()); Data = None }, HttpStatusCode.BadRequest
           | Dependency _ ->
-            { Message = Some (err.ToString()); Data = None }, HttpStatusCode.InternalServerError
+            { Success = false; Message = Some (err.ToString()); Data = None }, HttpStatusCode.InternalServerError
         )

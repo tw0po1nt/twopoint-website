@@ -4,6 +4,9 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
   },
+  "Host": {
+    "CORS": "http://localhost:4321"
+  },
   "Azure": {
     "EntraTenantId": "cdf89f94-8c88-48fc-b11c-dd24af4380b4",
     "ManagedIdentityClientId": "c976dce7-0db4-494d-aa80-fdb831d49474",
