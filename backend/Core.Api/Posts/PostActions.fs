@@ -21,15 +21,7 @@ module PostActions =
   let withDependencies (postDependencies: IPostDependencies) =
     
     let handleCommentPosted (CommentPosted (post, comment, commenter)) : DependencyResult<Comment> =
-      cancellableTaskResult {
-        let! (commenter: Commenter) = cancellableTaskResult {
-          match commenter with
-          | Some c -> return c
-          | None -> return! postDependencies.CreateCommenter comment.EmailAddress comment.Name CommenterStatus.New
-        }
-          
-        return! postDependencies.CreateComment post commenter comment
-      }
+      postDependencies.CreateComment post commenter comment
       
     let handleCommentApprovalUpdated (CommentApprovalUpdated (comment, approval)) : DependencyResult<Comment> =
       cancellableTaskResult {
@@ -88,8 +80,7 @@ module PostActions =
         let! (newComment: NewComment) =
           NewComment.create
             newComment.Post
-            newComment.EmailAddress
-            newComment.Name
+            newComment.ValidationId
             newComment.Comment
           |> Result.mapError ActionError<PostCommentError>.Validation
             
@@ -98,7 +89,7 @@ module PostActions =
           |> CancellableTaskResult.mapError ActionError<PostCommentError>.Dependency
           
         let! existingCommenter =
-          postDependencies.GetCommenterByEmail newComment.EmailAddress
+          postDependencies.GetCommenterByValidationId newComment.ValidationId
           |> CancellableTaskResult.mapError ActionError<PostCommentError>.Dependency
             
         let decision = Posts.postComment existingPost existingCommenter newComment
@@ -142,7 +133,7 @@ module PostActions =
           |> Result.mapError ActionError<UpdateCommenterStatusError>.Validation
               
         let! existingCommenter =
-          postDependencies.GetCommenterByEmail statusUpdate.EmailAddress
+          postDependencies.GetCommenterByValidationId statusUpdate.ValidationId
           |> CancellableTaskResult.mapError ActionError<UpdateCommenterStatusError>.Dependency
           
         let decision = Posts.updateCommenterStatus existingCommenter statusUpdate

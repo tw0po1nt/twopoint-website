@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="Fable.Browser.Navigator" Version="2.5.0" />
+    <PackageReference Include="Fable.Browser.WebStorage" Version="1.3.0" />
     <PackageReference Include="Fable.JsonProvider" Version="1.1.1" />
     <PackageReference Include="Fable.Promise" Version="3.2.0" />
     <PackageReference Include="Fable.SimpleHttp" Version="3.6.0" />

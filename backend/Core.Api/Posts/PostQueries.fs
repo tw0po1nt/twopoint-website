@@ -9,7 +9,7 @@ open IcedTasks
 type IPostQueries =
   abstract member GetAllPosts: unit -> CancellableTask<QueryResult<PostInfo list>>
   abstract member GetPostBySlug: slug: string -> CancellableTask<QueryResult<Post option>>
-  abstract member GetCommentsForPost: slug: string -> CancellableTask<QueryResult<Comment list option>>
+  abstract member GetCommentsForPost: approvals: string list -> slug: string -> CancellableTask<QueryResult<Comment list option>>
 
 [<RequireQualifiedAccess>]
 module PostQueries =
@@ -41,11 +41,17 @@ module PostQueries =
         return post
       }
       
-      member this.GetCommentsForPost slug = cancellableTaskResult {
+      member this.GetCommentsForPost approvals slug = cancellableTaskResult {
         let! post = this.GetPostBySlug slug
+        let! approvals =
+          approvals
+          |> List.map CommentApproval.create
+          |> List.sequenceValidationA
+          |> Result.mapError QueryError.Validation
+          |> Result.map (List.defaultIfEmpty CommentApproval.all)
         return!
           post
-          |> Option.traverseCancellableTaskResult postDependencies.GetCommentsForPost
+          |> Option.traverseCancellableTaskResult (postDependencies.GetCommentsForPost approvals)
           |> CancellableTaskResult.mapError QueryError.Dependency
       }
     }

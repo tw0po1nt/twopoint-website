@@ -14,7 +14,7 @@ type IPostDependencies =
   abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
   abstract member CreatePost: newPost: NewPost -> DependencyResult<Post>
   
-  abstract member GetCommenterByEmail: emailAddress: EmailAddress -> DependencyResult<Commenter option>
+  abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
   abstract member CreateCommenter:
     emailAddress: EmailAddress
       -> name: NonEmptyString option
@@ -25,7 +25,10 @@ type IPostDependencies =
       -> status: CommenterStatus
       -> DependencyResult<Commenter>
   
-  abstract member GetCommentsForPost: post: Post -> DependencyResult<Comment list>
+  abstract member GetCommentsForPost:
+    approvals: CommentApproval list
+      -> post: Post
+      -> DependencyResult<Comment list>
   abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
   abstract member CreateComment:
     post: Post
@@ -56,6 +59,8 @@ module PostDependencies =
     
     let source = Dependency.Database
     
+    let allApprovals = CommentApproval.all |> List.map _.ToString()
+    
     { new IPostDependencies with
       
       member this.GetAllPosts () = cancellableTaskResult {
@@ -64,7 +69,7 @@ module PostDependencies =
         // TODO: Explore Task.WhenAll()...might work here and benefit from parallelism
         let dbPostsAndComments = taskSeq {
           for post in dbPosts do
-            let! dbComments = ct |> postDb.GetCommentsForPost post |> Task.map (Result.defaultValue [])
+            let! dbComments = (post, ct) ||> postDb.GetCommentsForPost allApprovals |> Task.map (Result.defaultValue [])
             yield post, dbComments
         }
         
@@ -88,7 +93,7 @@ module PostDependencies =
         let! dbPost = postDb.GetPostBySlug (slug |> Slug.value)
         let! dbComments =
           dbPost
-          |> Option.traverseCancellableTaskResult postDb.GetCommentsForPost
+          |> Option.traverseCancellableTaskResult (postDb.GetCommentsForPost allApprovals)
           |> CancellableTaskResult.map (Option.defaultValue [])
         
         let commentStats =
@@ -113,9 +118,9 @@ module PostDependencies =
         return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
       }
       
-      member this.GetCommenterByEmail email = cancellableTaskResult {
-        let! dbCommenter = postDb.GetCommenterByEmailAddress (email |> EmailAddress.value)
-        
+      member this.GetCommenterByValidationId validationId = cancellableTaskResult {
+        let! dbCommenter = postDb.GetCommenterByValidationId (validationId.ToString())
+
         return!
           dbCommenter
           |> Option.traverseResult (fun (dbo: DbCommenter) -> dbo.ToCommenter())
@@ -124,10 +129,11 @@ module PostDependencies =
       
       member this.CreateCommenter emailAddress name status = cancellableTaskResult {
         let newCommenter =
-          { DbCommenter.EmailAddress = emailAddress |> EmailAddress.value
+          { ValidationId = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+            DbCommenter.EmailAddress = emailAddress |> EmailAddress.value
             Name = name |> Option.map NonEmptyString.value
             CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
-            Status = status.ToString().ToLower() }
+            Status = status.ToString().ToLower() } 
         
         let! (dbCommenter: DbCommenter) = postDb.CreateCommenter newCommenter
         return! dbCommenter.ToCommenter() |> DependencyError.ofValidation source
@@ -135,7 +141,8 @@ module PostDependencies =
       
       member this.UpdateCommenterStatus commenter status = cancellableTaskResult {
         let dbCommenter =
-          { DbCommenter.EmailAddress = commenter.EmailAddress |> EmailAddress.value
+          { DbCommenter.ValidationId = commenter.ValidationId.ToString()
+            EmailAddress = commenter.EmailAddress |> EmailAddress.value
             Name = commenter.Name |> Option.map NonEmptyString.value
             CreatedDate = commenter.CreatedDate // todo: model as ISystemDependencies
             Status = commenter.Status.ToString().ToLower() }
@@ -144,8 +151,8 @@ module PostDependencies =
         return! dbCommenter.ToCommenter() |> DependencyError.ofValidation source
       }
       
-      member this.GetCommentsForPost post = cancellableTaskResult {
-        let! dbComments = postDb.GetCommentsForPost (DbPost.FromPost post)
+      member this.GetCommentsForPost approvals post = cancellableTaskResult {
+        let! dbComments = postDb.GetCommentsForPost (approvals |> List.map _.ToString()) (DbPost.FromPost post)
         return!
           dbComments
           |> List.traverseValidationA (
@@ -169,7 +176,7 @@ module PostDependencies =
             PostId = post.Id |> Slug.value
             CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
             Content = newComment.Content |> NonEmptyString.value
-            CommenterId = commenter.EmailAddress |> EmailAddress.value }
+            CommenterId = commenter.ValidationId.ToString() }
         let newStatus =
           { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
             CommentId = newComment.Id

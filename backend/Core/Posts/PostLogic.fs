@@ -49,25 +49,24 @@ type CreatePost =
 // Inputs
 type NewComment =
   { Post : Slug
-    EmailAddress : EmailAddress
-    Name : NonEmptyString option
+    ValidationId : CommenterValidationId
     Content : NonEmptyString }
   
 module NewComment =
-  let create post emailAddress name content = validation {
+  let create post validationId content = validation {
     let! post = Slug.create post
-    let! emailAddress = EmailAddress.create emailAddress
-    let! name = NonEmptyString.createMaybe (Some (nameof name)) name
+    let! validationId = CommenterValidationId.create validationId
     let! content = NonEmptyString.create (Some (nameof content)) content
-    return { Post = post; EmailAddress = emailAddress; Name = name; Content = content }
+    return { Post = post; ValidationId = validationId; Content = content }
   }
   
 // Outputs
 type PostCommentError =
   | PostNotFound of Slug
+  | CommenterNotFound of CommenterValidationId
   | CommenterBanned of Commenter
 
-type CommentPosted = CommentPosted of post: Post * comment: NewComment * commenter: Commenter option
+type CommentPosted = CommentPosted of post: Post * comment: NewComment * commenter: Commenter
 
 type PostCommentDecision = Decision<CommentPosted, PostCommentError>
 
@@ -117,18 +116,18 @@ type UpdateCommentApproval =
 
 // Inputs
 type CommenterStatusUpdate =
-  { EmailAddress : EmailAddress
+  { ValidationId : CommenterValidationId
     Status : CommenterStatus }
   
 module CommenterStatusUpdate =
-  let create emailAddress status = validation {
-    let! emailAddress = EmailAddress.create emailAddress
+  let create validationId status = validation {
+    let! validationId = CommenterValidationId.create validationId
     let! status = CommenterStatus.create status
-    return { EmailAddress = emailAddress; Status = status }
+    return { ValidationId = validationId; Status = status }
   }
   
 // Outputs
-type UpdateCommenterStatusError = CommenterNotFound of EmailAddress
+type UpdateCommenterStatusError = CommenterNotFound of CommenterValidationId
 
 type CommenterStatusUpdated = CommenterStatusUpdated of commenter: Commenter * status: CommenterStatus
 
@@ -154,16 +153,10 @@ module Posts =
   let postComment : PostComment =
     fun existingPost existingCommenter newComment -> result {
       let! post = existingPost |> Result.requireSome (PostNotFound newComment.Post)
+      let! commenter = existingCommenter |> Result.requireSome (PostCommentError.CommenterNotFound newComment.ValidationId)
+      do! commenter.Status.IsBanned |> Result.requireFalse (CommenterBanned existingCommenter.Value)
       
-      do! result {
-        match existingCommenter with
-        | Some commenter ->
-          return! commenter.Status.IsBanned |> Result.requireFalse (CommenterBanned existingCommenter.Value)
-        | None ->
-          return ()
-      }
-      
-      return CommentPosted (post, newComment, existingCommenter)
+      return CommentPosted (post, newComment, commenter)
     }
     
   let updateCommentApproval : UpdateCommentApproval =
@@ -174,6 +167,6 @@ module Posts =
     
   let updateCommenterStatus : UpdateCommenterStatus =
     fun existingCommenter statusUpdate -> result {
-      let! commenter = existingCommenter |> Result.requireSome (CommenterNotFound statusUpdate.EmailAddress)
+      let! commenter = existingCommenter |> Result.requireSome (CommenterNotFound statusUpdate.ValidationId)
       return CommenterStatusUpdated (commenter, statusUpdate.Status)
     }

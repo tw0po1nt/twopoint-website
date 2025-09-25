@@ -69,7 +69,12 @@ type ActionError<'logicError> =
   override this.ToString() =
     match this with
     | Dependency dep -> dep.Message
-    | Validation validation -> $"{validation}"
+    | Validation validation ->
+      match validation with
+      | [err] -> err
+      | errors ->
+        let errorsList = String.Join(", ", errors)
+        $"The following validation errors occurred: {errorsList}"
     | Logic logic -> $"{logic}"
 
 /// <summary>

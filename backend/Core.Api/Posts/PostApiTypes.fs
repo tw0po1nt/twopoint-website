@@ -1,9 +1,5 @@
 namespace TwoPoint.Core.Posts
 
-open TwoPoint.Core.Shared
-
-open System
-
 // ====================================================================================================================
 // Actions
 // ====================================================================================================================
@@ -16,8 +12,7 @@ type NewPostDto =
   
 type NewCommentDto =
   { Post : string
-    EmailAddress : string
-    Name : string option
+    ValidationId : string
     Comment : string }
   
 type CommentApprovalUpdateDto =
@@ -33,8 +28,3 @@ type PostCreatedEvent = PostCreatedEvent of Post
 type CommentPostedEvent = CommentPostedEvent of Post * Comment
 type CommentApprovalUpdatedEvent = CommentApprovalUpdatedEvent of Comment
 type CommenterStatusUpdatedEvent = CommenterStatusUpdatedEvent of Commenter
-  
-// ====================================================================================================================
-// Queries
-// ====================================================================================================================
-

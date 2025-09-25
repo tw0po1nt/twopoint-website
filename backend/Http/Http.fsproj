@@ -12,6 +12,7 @@
     <Compile Include="Endpoints\EndpointTypes.fs" />
     <Compile Include="Endpoints\CoreExtensions.fs" />
     <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
+    <Compile Include="Endpoints\Blog\PostComment.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

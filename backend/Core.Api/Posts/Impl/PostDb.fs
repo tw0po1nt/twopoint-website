@@ -70,9 +70,10 @@ type internal DbPost =
 /// The <c>Commenter</c> entity has the following structure: <br/>
 /// <c>
 /// {
-///    "PartitionKey": "&lt;email&gt;",
-///    "RowKey": "&lt;email&gt;",
+///    "PartitionKey": "&lt;validationId&gt;",
+///    "RowKey": "&lt;validationId&gt;",
 ///    "Timestamp": "&lt;date&gt;",
+///    "EmailAddress" : "&lt;email&gt;"
 ///    "CreatedDate": "&lt;date&gt;",
 ///    "Name": "&lt;string&gt;" | null,
 ///    "Status": "&lt;new | trusted | banned&gt;"
@@ -80,13 +81,15 @@ type internal DbPost =
 /// </c>
 /// </remarks>
 type internal DbCommenter =
-  { EmailAddress : string
+  { ValidationId : string
+    EmailAddress : string
     Name : string option
     CreatedDate : DateTime
     Status : string }
   
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbCommenter
+    let! emailAddress = "EmailAddress" |> entity.RequireString entityName
     let! createdDate =
       "CreatedDate"
       |> entity.RequireString entityName
@@ -95,14 +98,16 @@ type internal DbCommenter =
     let! status = "Status" |> entity.RequireString entityName
 
     return
-      { EmailAddress = entity.RowKey
+      { ValidationId = entity.RowKey
+        EmailAddress = emailAddress
         Name = name
         CreatedDate = createdDate
         Status = status }
   }
   
   member this.ToEntity() =
-    let entity = TableEntity(partitionKey = this.EmailAddress, rowKey = this.EmailAddress)
+    let entity = TableEntity(partitionKey = this.ValidationId, rowKey = this.ValidationId)
+    entity["EmailAddress"] <- this.EmailAddress
     entity["CreatedDate"] <- this.CreatedDate.ToString("o", CultureInfo.InvariantCulture)
     entity["Name"] <- this.Name |> Option.toObj
     entity["Status"] <- this.Status
@@ -110,6 +115,7 @@ type internal DbCommenter =
     
   member this.ToCommenter() =
     Commenter.create
+      this.ValidationId
       this.EmailAddress
       this.Name
       (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
@@ -222,7 +228,8 @@ type internal DbComment =
       {| CreatedDate = commenter.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)
          EmailAddress = commenter.EmailAddress
          Name = commenter.Name
-         Status = commenter.Status |}
+         Status = commenter.Status
+         ValidationId = commenter.ValidationId |}
       this.Content
       
 
@@ -231,14 +238,17 @@ type internal IPostDb =
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
   abstract member CreatePost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
   
-  abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
+  abstract member GetCommenterByValidationId: validationId: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member CreateCommenter: commenter: DbCommenter -> CancellableTaskResult<DbCommenter, DependencyError>
   abstract member UpdateCommenterStatus:
     commenter: DbCommenter
       -> status: string
       -> CancellableTaskResult<DbCommenter, DependencyError>
   
-  abstract member GetCommentsForPost: post: DbPost -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+  abstract member GetCommentsForPost:
+    approvals: string list
+      -> post: DbPost
+      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
     comment: DbComment
@@ -297,8 +307,8 @@ module internal PostDb =
       member this.CreatePost post =
         post.ToEntity() |> add postsTable PostDbError.validation DbPost.FromEntity
 
-      member this.GetCommenterByEmailAddress emailAddress =
-        emailAddress |> trySingle commentersTable DbCommenter.FromEntity (Some emailAddress)
+      member this.GetCommenterByValidationId validationId =
+        validationId |> trySingle commentersTable DbCommenter.FromEntity (Some validationId)
 
       member this.CreateCommenter commenter =
         commenter.ToEntity() |> add commentersTable PostDbError.validation DbCommenter.FromEntity
@@ -309,7 +319,7 @@ module internal PostDb =
           entity["Status"] <- status
           entity
         
-      member this.GetCommentsForPost post = cancellableTaskResult {
+      member this.GetCommentsForPost approvals post = cancellableTaskResult {
         // Get comments
         let! dbComments = (eq "PartitionKey" post.Slug) |> where commentsTable DbComment.FromEntity
         let dbComments = dbComments |> List.toArray
@@ -341,16 +351,20 @@ module internal PostDb =
             let! comments = comments
             let! commenter =
               commenters
-              |> Array.tryFind (fun ctr -> ctr.EmailAddress = comment.CommenterId)
+              |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId)
               |> Validation.requireSome $"No commenter with Id '{comment.CommenterId}' found for comment with Id '{comment.Id}'"
             let! latestStat =
               statuses
               |> Array.filter (fun st -> st.CommentId = comment.Id)
               |> Array.tryHead
-              |> Result.requireSome $"No status found for comment with Id '{comment.Id}'"            
-            return [|(comment, commenter, latestStat)|] |> Array.append comments
+              |> Result.requireSome $"No status found for comment with Id '{comment.Id}'"
+              
+            if approvals |> List.contains latestStat.Approval
+            then return [|(comment, commenter, latestStat)|] |> Array.append comments
+            else return comments 
           })
           |> DependencyError.ofValidation Dependency.Database
+          |> Result.map (fun comments -> comments |> Array.sortBy (fun (comment, _, _) -> comment.CreatedDate))
           |> Result.map Array.toList
       }
       
@@ -359,7 +373,7 @@ module internal PostDb =
         let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None
         let! dbCommenter =
           dbComment
-          |> Option.traverseCancellableTaskResult (fun dbComment -> this.GetCommenterByEmailAddress dbComment.CommenterId)
+          |> Option.traverseCancellableTaskResult (fun dbComment -> this.GetCommenterByValidationId dbComment.CommenterId)
           |> CancellableTaskResult.map Option.flatten
 
         let! statuses =
@@ -392,7 +406,7 @@ module internal PostDb =
       member this.CreateComment comment status = cancellableTaskResult {
         let! dbComment = comment.ToEntity() |> add commentsTable PostDbError.validation DbComment.FromEntity
         let! dbCommentStatus = status.ToEntity() |> add commentStatusesTable PostDbError.validation DbCommentStatus.FromEntity
-        let! (dbCommenter: DbCommenter option) = this.GetCommenterByEmailAddress comment.CommenterId
+        let! (dbCommenter: DbCommenter option) = this.GetCommenterByValidationId comment.CommenterId
         let! dbCommenter = dbCommenter |> Result.requireSome (
           PostDbError.validation $"Failed to fetch commenter for newly created comment with Id '{dbComment.Id}'"
         )

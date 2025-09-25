@@ -12,7 +12,7 @@ type NewCommentData =
 let private whitespace = [| ' '; '\t'; '\n' |]
 
 [<ReactComponent>]
-let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
+let NewComment (disabled: bool, onComment: NewCommentData * (unit -> unit) -> unit) =
 
   let emailIsFocused, setEmailIsFocused = React.useState false
   let emailIsDirty, setEmailIsDirty = React.useState false
@@ -52,7 +52,10 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
   )
 
   Html.div [
-    prop.className "flex flex-col text-left backdrop-blur bg-white border dark:bg-zinc-900 rounded-lg border-gray-200 dark:border-gray-700 lg:p-8 max-w-3xl mx-auto p-4 shadow sm:p-6 w-full"
+    prop.className [
+      "flex flex-col text-left backdrop-blur bg-white border dark:bg-zinc-900 rounded-lg border-gray-200 dark:border-gray-700 lg:p-8 max-w-3xl mx-auto p-4 shadow sm:p-6 w-full";
+      if disabled then "opacity-50"
+    ]
     prop.children [
       Html.form [
         prop.children [
@@ -60,13 +63,13 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
             prop.className "mb-6"
             prop.children [
               Html.label [
-                prop.className "block font-medium text-sm"
+                prop.className "block font-medium text-sm mb-2"
                 prop.htmlFor "email"
                 prop.text "Email (required)"
               ]
 
               Html.input [
-                prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full"
+                prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full mb-2"
                 prop.id "email"
                 prop.name "Email"
                 prop.type' "text"
@@ -79,6 +82,7 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
                   setEmailIsDirty true
                   setEmail text
                 )
+                prop.disabled disabled
               ]
 
               if not isEmailValid && emailIsDirty && not emailIsFocused
@@ -94,13 +98,13 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
             prop.className "mb-6"
             prop.children [
               Html.label [
-                prop.className "block font-medium text-sm"
+                prop.className "block font-medium text-sm mb-2"
                 prop.htmlFor "name"
                 prop.text "Name (optional)"
               ]
 
               Html.input [
-                prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full"
+                prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full mb-2"
                 prop.id "name"
                 prop.name "name"
                 prop.type' "text"
@@ -109,6 +113,7 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
                 prop.value name
                 prop.onTextChange setName
                 prop.maxLength 256
+                prop.disabled disabled
               ]
             ]
           ]
@@ -117,13 +122,13 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
             prop.className "mb-6"
             prop.children [
               Html.label [
-                prop.className "block font-medium text-sm"
+                prop.className "block font-medium text-sm mb-2"
                 prop.htmlFor "name"
                 prop.text "Comment"
               ]
 
               Html.textarea [
-                prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full"
+                prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full mb-2"
                 prop.id "textarea"
                 prop.name "comment"
                 prop.rows 4
@@ -135,6 +140,7 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
                   setCommentIsDirty true
                   setComment text
                 )
+                prop.disabled disabled
               ]
 
               if not isCommentValid && commentIsDirty && not commentIsFocused
@@ -165,6 +171,7 @@ let NewComment (onComment: NewCommentData * (unit -> unit) -> unit) =
                       | n -> Some n
                     onComment ({ Email = email; Name = name; Comment = comment.Trim whitespace }, resetForm)
                 )
+                prop.disabled disabled
               ]
             ]
           ]

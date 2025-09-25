@@ -10,6 +10,7 @@
     <Compile Include="Util\FsToolkitExtensions.fs" />
     <Compile Include="Util\Parsing.fs" />
     <Compile Include="Util\NetExtensions.fs" />
+    <Compile Include="Util\ListExtensions.fs" />
     <Compile Include="Shared\ConstrainedTypes.fs" />
     <Compile Include="Shared\LogicTypes.fs" />
     <Compile Include="Shared\StringTypes.fs" />

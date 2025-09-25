@@ -92,17 +92,17 @@ let getPostBySlug slug =
   | Ok None        -> printfn "Post not found"; None
   | Error err      -> printfn $"Post lookup failed with error: {err.DebugMessage}"; None
   
-  
 /// <summary>
 /// Fetch comments for a blog post
 /// </summary>
 let getCommentsForPost post =
-  let commentsResult = (postDependencies.GetCommentsForPost post CancellationToken.None).Result
+  let commentsResult = ((post, CancellationToken.None) ||> postQueries.GetCommentsForPost []).Result
   
   match commentsResult with
-  | Ok []       -> printfn $"No comments found for post: '{post.Info.Title}'"; []
-  | Ok comments -> printfn $"Found {List.length comments} comment(s) for post: '{post.Info.Title}'"; comments
-  | Error err   -> printfn $"Comment lookup failed with error: {err.DebugMessage}"; []
+  | Ok None            -> printfn $"Post '{post}' not found" ; []
+  | Ok (Some [])       -> printfn $"No comments found for post: '{post}'"; []
+  | Ok (Some comments) -> printfn $"Found {List.length comments} comment(s) for post: '{post}'"; comments
+  | Error err          -> printfn $"Comment lookup failed with error: {err.ToString()}"; []
   
 let newPost =
   { NewPostDto.Title = "Functional programming: more than just a coding style"
@@ -113,12 +113,10 @@ let newPost =
 /// </summary>
 let createPost newPost = executeAction postActions.CreatePost newPost "CreatePost"
 
-
 let newComment =
   { NewCommentDto.Post = "functional-programming-more-than-just-a-coding-style"
-    EmailAddress = "matt@twopoint.dev"
-    Name = Some "Matt"
-    Comment = "This is a test" }
+    ValidationId = "008142e5-1551-462a-b71d-5b4fc7b4b389"
+    Comment = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum." }
 
 /// <summary>
 /// Execute the <c>postComment</c> action to create a new comment on a TwoPoint blog post

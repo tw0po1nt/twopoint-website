@@ -4,6 +4,7 @@ open TwoPoint.Api
 open DateFormatter
 open NewComment
 
+open Browser.WebStorage
 open Fable.Core
 open Feliz
 open Feliz.UseElmish
@@ -13,12 +14,16 @@ open System
 
 type Email = string
 
+type ClearFormFn = unit -> unit
+
 type Msg =
   | LoadComments
   | CommentsLoaded of Comment list
   | VerifyEmail of Email
   | EmailVerificationSent of Email
   | EmailVerificationComplete of Guid
+  | PostComment of NewCommentData * ClearFormFn
+  | CommentPosted of string option
 
 type CommentsState =
   | Loading
@@ -30,14 +35,41 @@ type CommenterState =
   | Verified of Guid
   | VerificationPending of Email
 
+type PostCommentState =
+  | NotStarted
+  | Posting
+  | Posted
+  | PostFailed of string
+
 type State =
   { Uri : string
     Slug : string
     Comments : CommentsState
-    Commenter : CommenterState }
+    Commenter : CommenterState
+    PostComment : PostCommentState
+    ClearForm : unit -> unit }
 
 let init uri slug () = 
-  { Uri = uri; Slug = slug; Comments = Loading; Commenter = Unverified }, Cmd.ofMsg LoadComments
+  let initialCommenterState = 
+    let validationId =
+      "commenterValidationId" 
+      |> localStorage.getItem 
+      |> Option.ofObj
+    match validationId with
+    | Some vid ->
+      match System.Guid.TryParse vid with
+      | true, parsed -> Verified parsed
+      | _ -> Unverified
+    | None -> 
+      Unverified
+
+  { Uri = uri
+    Slug = slug
+    Comments = Loading
+    Commenter = initialCommenterState
+    PostComment = NotStarted
+    ClearForm = ignore }, 
+  Cmd.ofMsg LoadComments
 
 let update msg state =
   match msg with
@@ -61,11 +93,43 @@ let update msg state =
     { state with Commenter = VerificationPending pendingEmail }, Cmd.none
   | EmailVerificationComplete commenterId ->
     { state with Commenter = Verified commenterId }, Cmd.none
+  | PostComment (newComment, clearForm) ->
+    let postComment newComment = async {
+      let! result = 
+        (state.Slug, newComment)
+        ||> Comments.postComment state.Uri
+        |> Async.AwaitPromise
+      
+      return CommentPosted result.Message
+    }
+
+    match state.Commenter with
+    | Unverified | VerificationPending _ ->
+      { state with Commenter = VerificationPending newComment.Email },
+      Cmd.none
+    | Verified validationId ->
+      let newComment =
+        { NewComment.ValidationId = validationId.ToString()
+          Comment = newComment.Comment }
+
+      { state with PostComment = Posting; ClearForm = clearForm }, 
+      Cmd.fromAsync (postComment newComment)
+
+  | CommentPosted error ->
+    let updatedState =
+      match error with
+      | Some msg ->
+        { state with PostComment = PostFailed msg }
+      | None ->
+        state.ClearForm()
+        { state with PostComment = Posted }
+
+    updatedState, Cmd.none
 
 [<ReactComponent(exportDefault=true)>]
 let Comments (uri: string, slug: string) =
 
-  let state, _ = React.useElmish(init uri slug, update, [| box uri; box slug |])
+  let state, dispatch = React.useElmish(init uri slug, update, [| box uri; box slug |])
 
   let loading = Html.div [
     prop.className "flex flex-row w-full justify-center animate-pulse mb-8"
@@ -78,7 +142,7 @@ let Comments (uri: string, slug: string) =
   ]
 
   let noComments = Html.h2 [
-    prop.className "leading-tighter tracking-tighter text-muted text-lg md:text-xl mb-8"
+    prop.className "text-muted text-lg md:text-xl mb-8"
     prop.text "No comments yet. Be the first one!"
   ]
 
@@ -138,6 +202,13 @@ let Comments (uri: string, slug: string) =
     ]
   ]
 
+  let commentPosted = Html.p [
+    prop.className "bg-green-100 text-green-900 rounded-lg border border-green-900 p-4 mt-4"
+    prop.children [
+      Html.text "Your comment has been posted! It will appear here once I have have reviewed and approved it."
+    ]
+  ]
+
   Html.section [
     prop.className "relative not-prose scroll-mt-[72px]"
     prop.children [
@@ -148,7 +219,7 @@ let Comments (uri: string, slug: string) =
             prop.className "md:mx-auto max-w-3xl"
             prop.children [
               Html.p [
-                prop.className "font-bold font-heading leading-tighter tracking-tighter text-muted text-xl md:text-2xl mb-8"
+                prop.className "font-bold font-heading text-xl md:text-2xl mb-8"
                 prop.text "Comments"
               ]
 
@@ -166,28 +237,31 @@ let Comments (uri: string, slug: string) =
               ]
 
               Html.h2 [
-                prop.className "font-bold font-heading leading-tighter tracking-tighter text-muted text-xl md:text-2xl mb-8"
+                prop.className "font-bold font-heading text-xl md:text-2xl mb-8"
                 prop.text "Leave a comment"
               ]
 
               Html.p [
+                prop.className "mb-8"
                 prop.text "I want to hear what you think! If you have thoughts, opinions, or questions, please post them here!*"
               ]
 
-              Html.br []
-
-              NewComment ignore
-
-              Html.br []
+              NewComment(
+                state.PostComment.IsPosting, 
+                fun (data, clearForm) -> PostComment(data, clearForm) |> dispatch
+              )
 
               Html.p [
-                prop.className "text-sm text-muted"
+                prop.className "text-sm text-muted mt-8"
                 prop.text "* To prevent spam, you'll be asked to verify your email address. I also personally approve all comments posted."
               ]
               
               match state.Commenter with
               | Unverified | Verified _ -> Html.none
               | VerificationPending pendingEmail -> verifyEmail pendingEmail
+
+              if state.PostComment.IsPosted then
+                commentPosted
             ]
           ]
         ]

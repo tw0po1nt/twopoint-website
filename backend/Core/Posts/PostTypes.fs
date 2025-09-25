@@ -20,20 +20,42 @@ module CommenterStatus =
     | "banned" -> Ok Banned
     | _ -> Error $"'{nameof CommenterStatus}' must be one of 'new', 'trusted', or 'banned'"
     
+type CommenterValidationId =
+  private | CommenterValidationId of Guid
+  
+  override this.ToString() =
+    let (CommenterValidationId cvid) = this
+    cvid.ToString()
+
+module CommenterValidationId =
+  let create =
+    Constrained.String.tryParse
+      Guid.TryParseOption
+      $"'{nameof CommenterValidationId}' must be a valid guid"
+      CommenterValidationId
+      
+  let createMaybe = Option.traverseResult create
 
 type Commenter =
-  { EmailAddress : EmailAddress
+  { ValidationId : CommenterValidationId
+    EmailAddress : EmailAddress
     Name : NonEmptyString option
     CreatedDate : DateTime
     Status : CommenterStatus }
   
 module Commenter =
-  let create emailAddress name createdDate status = validation {
+  let create validationId emailAddress name createdDate status = validation {
+    let! validationId = CommenterValidationId.create validationId
     let! emailAddress = EmailAddress.create emailAddress
     let! name = NonEmptyString.createMaybe (Some (nameof name)) name
     let! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
     let! status = CommenterStatus.create status
-    return { Name = name; EmailAddress = emailAddress; CreatedDate = createdDate; Status = status }
+    return
+      { ValidationId = validationId
+        Name = name
+        EmailAddress = emailAddress
+        CreatedDate = createdDate
+        Status = status }
   }
   
   
@@ -57,13 +79,21 @@ type CommentApproval =
   | Approved
   | Rejected
   
+  override this.ToString() =
+    match this with
+    | New -> "new"
+    | Approved -> "approved"
+    | Rejected -> "rejected"
+  
 module CommentApproval =
   let create (value : string) =
     match value.ToLower() with
-    | "new" -> Ok New
-    | "approved" -> Ok Approved
-    | "rejected" -> Ok Rejected
-    | _ -> Error $"'{nameof CommentApproval}' must be one of 'new', 'approved', or 'rejected'"
+    | "new" -> Validation.ok New
+    | "approved" -> Validation.ok Approved
+    | "rejected" -> Validation.ok Rejected
+    | _ -> Validation.error $"'{nameof CommentApproval}' must be one of 'new', 'approved', or 'rejected'"
+    
+  let all = [New; Approved; Rejected]
 
 
 type CommentStatus =
@@ -95,7 +125,8 @@ module Comment =
       |}
     )
     (commenter:
-      {| EmailAddress : string
+      {| ValidationId : string
+         EmailAddress : string
          Name : string option
          CreatedDate : string
          Status : string
@@ -106,7 +137,8 @@ module Comment =
         let! id = CommentId.create id
         let! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
         let! status = CommentStatus.create status.Approval status.CreatedDate
-        let! commenter = Commenter.create commenter.EmailAddress commenter.Name commenter.CreatedDate commenter.Status
+        let! commenter =
+          Commenter.create commenter.ValidationId commenter.EmailAddress commenter.Name commenter.CreatedDate commenter.Status
         let! content = NonEmptyString.create (Some (nameof content)) content
         return { Id = id; CreatedDate = createdDate; Status = status; Commenter = commenter; Content = content }
       }
