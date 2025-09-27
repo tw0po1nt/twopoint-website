@@ -74,6 +74,39 @@ module Db =
     }
     
   /// <summary>
+  /// Query an Azure Table for a single entity by predicate
+  /// </summary>
+  /// <param name="tableServiceClient">The service client to use to perform the operation</param>
+  /// <param name="logger">A logger for telemetry for the operation</param>
+  /// <param name="db">The name of the database - used for telemetry</param>
+  /// <param name="table">The table being queried</param>
+  /// <param name="onEntity">A function called with the fetched entity if no error occurs and the entity is found</param>
+  /// <param name="partition">The partition key of the desired entity</param>
+  /// <param name="query">The query used to select the desired entity</param>
+  let trySingleQuery tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) partition query =
+    runQuery logger $"{db}.{table}.trySingle"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let! table = getTable tableServiceClient table
+      
+      let query =
+        partition
+        |> Option.map (fun p -> (eq "PartitionKey" p + query))
+        |> Option.defaultValue query
+      let! entities =
+        table.QueryAsync<TableEntity>(
+          query,
+          cancellationToken = ct
+        )
+        |> TaskSeq.toListAsync
+      return!
+        entities
+        |> List.traverseValidationA onEntity
+        |> DependencyError.ofValidation Dependency.Database
+        |> Result.map List.tryExactlyOne
+    }
+    
+  /// <summary>
   /// Query an Azure Table for all entities
   /// </summary>
   /// <param name="tableServiceClient">The service client to use to perform the operation</param>

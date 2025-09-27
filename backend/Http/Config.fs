@@ -1,33 +1,51 @@
 namespace TwoPoint.Http
 
 open System
+open TwoPoint.Core.Shared
 
 type AzureConfig =
-  { EntraTenantId : Guid
+  { CommsResourceEndpoint : Uri
+    EmailSender : EmailAddress
+    EntraTenantId : Guid
     ManagedIdentityClientId : Guid
     TableStorageUri : Uri }
 
+type ValidRedirectUri =
+  { Uri : Uri }
+
 type Config =
-  { Azure : AzureConfig }
+  { Azure : AzureConfig
+    ValidRedirectUris : ValidRedirectUri list }
   
 module Config =
   
-  open TwoPoint.Http.Extensions
-    
+  open TwoPoint.Http.Extensions    
+  
   open Symbolica.Extensions.Configuration.FSharp
   
   let bind config =
     bind {
       let! azure = Bind.section "Azure" <| bind {
+        let! commsResourceEndpoint = Bind.valueAt "CommsResourceEndpoint" (Bind.uri UriKind.Absolute)
+        let! emailSender = Bind.valueAt "EmailSender" Bind.emailAddress
         let! entraTenantId = Bind.valueAt "EntraTenantId" Bind.guid
         let! managedIdentityClientId = Bind.valueAt "ManagedIdentityClientId" Bind.guid
         let! tableStorageUri = Bind.valueAt "TableStorageUri" (Bind.uri UriKind.Absolute)
         return
-          { EntraTenantId = entraTenantId
+          { CommsResourceEndpoint = commsResourceEndpoint
+            EmailSender = emailSender
+            EntraTenantId = entraTenantId
             ManagedIdentityClientId = managedIdentityClientId
             TableStorageUri = tableStorageUri }
       }
       
-      return { Azure = azure }
+      let bindValidRedirectUri =  bind {
+        let! uri = Bind.valueAt "Uri" (Bind.uri UriKind.Absolute)
+        return { Uri = uri }
+      }
+      
+      let! validRedirectUris = Bind.section "ValidRedirectUris" (Bind.list bindValidRedirectUri)
+      
+      return { Azure = azure; ValidRedirectUris = validRedirectUris }
     }
     |> Binder.eval config

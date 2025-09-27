@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Posts.Dependencies
 
+open System.Web
 open FSharp.Control
 open IcedTasks
 open TwoPoint.Core.Posts
@@ -14,12 +15,17 @@ type IPostDependencies =
   abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
   abstract member CreatePost: newPost: NewPost -> DependencyResult<Post>
   
+  abstract member GetCommenterByEmailAddress: emailAddress: EmailAddress -> DependencyResult<Commenter option>
   abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
   abstract member CreateCommenter:
     emailAddress: EmailAddress
       -> name: NonEmptyString option
       -> status: CommenterStatus
       -> DependencyResult<Commenter>
+  abstract member SendCommenterValidationEmail:
+    commenter: Commenter
+      -> redirectUri: Uri
+      -> DependencyResult<OperationId>
   abstract member UpdateCommenterStatus:
     commenter: Commenter
       -> status: CommenterStatus
@@ -39,9 +45,13 @@ type IPostDependencies =
     comment: Comment
       -> approval: CommentApproval
       -> DependencyResult<Comment>
+      
+  abstract member GetValidRedirectUris: unit -> DependencyResult<Uri list>
   
 [<RequireQualifiedAccess>]
 module PostDependencies =
+  
+  open TwoPoint.Core.Shared.Impl
   
   open FsToolkit.ErrorHandling
   
@@ -54,8 +64,9 @@ module PostDependencies =
       { New = 0u; Approved = 0u; Rejected = 1u }
     | _ -> PostCommentStats.Zero
 
-  let live tableServiceClient logger =
+  let live validRedirectUris emailClient emailSender tableServiceClient logger =
     let postDb = PostDb.live tableServiceClient logger
+    let commsService = CommsService.live emailClient tableServiceClient logger emailSender
     
     let source = Dependency.Database
     
@@ -118,6 +129,15 @@ module PostDependencies =
         return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
       }
       
+      member this.GetCommenterByEmailAddress emailAddress = cancellableTaskResult {
+        let! dbCommenter = postDb.GetCommenterByEmailAddress (emailAddress.ToString())
+
+        return!
+          dbCommenter
+          |> Option.traverseResult (fun (dbo: DbCommenter) -> dbo.ToCommenter())
+          |> DependencyError.ofValidation source
+      }
+      
       member this.GetCommenterByValidationId validationId = cancellableTaskResult {
         let! dbCommenter = postDb.GetCommenterByValidationId (validationId.ToString())
 
@@ -137,6 +157,30 @@ module PostDependencies =
         
         let! (dbCommenter: DbCommenter) = postDb.CreateCommenter newCommenter
         return! dbCommenter.ToCommenter() |> DependencyError.ofValidation source
+      }
+      
+      member this.SendCommenterValidationEmail commenter redirectUri = cancellableTaskResult {
+        let builder = UriBuilder redirectUri
+        let query = HttpUtility.ParseQueryString builder.Query
+        query["commenterValidationId"] <- commenter.ValidationId.ToString()
+        builder.Query <- query.ToString()
+        let redirectUri = builder.Uri;
+        
+        let subject, message =
+          commenter.Name
+          |> Option.map _.ToString()
+          |> Option.defaultValue "there"
+          |> PostEmails.verifyEmail redirectUri
+        let recipient = commenter.EmailAddress.ToString()
+        
+        let! (message: EmailMessage) =
+          EmailMessage.create
+            subject
+            message
+            recipient
+          |> DependencyError.ofValidation source
+        
+        return! commsService.SendEmail message  
       }
       
       member this.UpdateCommenterStatus commenter status = cancellableTaskResult {
@@ -202,4 +246,6 @@ module PostDependencies =
         let! status = dbCommentStatus.ToCommentStatus() |> DependencyError.ofValidation source
         return { comment with Status = status }
       }
+      
+      member this.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris
     }

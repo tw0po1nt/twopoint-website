@@ -9,6 +9,7 @@ open System
 type Dependency =
   | Database = 1
   | KeyVault = 2
+  | Communications = 3
 
 type DependencyErrorType =
   | Validation of message: string

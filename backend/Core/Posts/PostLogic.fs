@@ -5,6 +5,8 @@ open FsToolkit.ErrorHandling
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 
+open System
+
 // ========================================================================================
 // TYPES
 // ========================================================================================
@@ -41,6 +43,42 @@ type CreatePost =
   Post option
     -> NewPost
     -> CreatePostDecision
+    
+// ----------------------------------------------------------------------------------------
+// Validate commenter
+// ----------------------------------------------------------------------------------------
+
+// Inputs
+type CommenterValidation =
+  { EmailAddress : EmailAddress
+    Name : NonEmptyString option
+    RedirectUri : Uri }
+  
+module CommenterValidation =
+  let create emailAddress name redirectUri = validation {
+    let! email = EmailAddress.create emailAddress
+    let! name = NonEmptyString.createMaybe (Some (nameof name)) name
+    let! redirectUri = Uri.TryValidate(redirectUri, nameof redirectUri)
+    return { EmailAddress = email; Name = name; RedirectUri = redirectUri }
+  }
+  
+// Outputs
+type ValidateCommenterError =
+  | CommenterBanned of Commenter
+  | InvalidRedirect of Uri
+
+type CommenterValidated = CommenterValidated of commenter: Commenter option * validation: CommenterValidation
+
+type ValidateCommenterDecision = Decision<CommenterValidated, ValidateCommenterError>
+
+/// <summary>
+/// Logic for validating a TwoPoint blog commenter
+/// </summary>
+type ValidateCommenter =
+  Commenter option
+    -> Uri list
+    -> CommenterValidation
+    -> ValidateCommenterDecision
 
 // ----------------------------------------------------------------------------------------
 // Post comment
@@ -148,6 +186,25 @@ module Posts =
     fun existingPost newPost -> result {
       do! existingPost |> Result.requireNoneWith PostAlreadyExists
       return PostCreated newPost
+    }
+    
+  let validateCommenter : ValidateCommenter =
+    fun existingCommenter validRedirectUris commenterValidation -> result {
+      do! result {
+        match existingCommenter with
+        | Some commenter ->
+          return! commenter.Status.IsBanned |> Result.requireFalse (ValidateCommenterError.CommenterBanned existingCommenter.Value)
+        | None ->
+          return ()
+      }
+      
+      do!
+        validRedirectUris
+        |> List.tryFind (fun uri -> uri.Host = commenterValidation.RedirectUri.Host)
+        |> Result.requireSome (InvalidRedirect commenterValidation.RedirectUri)
+        |> Result.ignore
+      
+      return CommenterValidated (existingCommenter, commenterValidation)
     }
   
   let postComment : PostComment =

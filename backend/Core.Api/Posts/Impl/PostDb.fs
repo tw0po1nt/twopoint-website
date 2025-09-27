@@ -238,6 +238,7 @@ type internal IPostDb =
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
   abstract member CreatePost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
   
+  abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member GetCommenterByValidationId: validationId: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member CreateCommenter: commenter: DbCommenter -> CancellableTaskResult<DbCommenter, DependencyError>
   abstract member UpdateCommenterStatus:
@@ -279,6 +280,9 @@ module internal PostDb =
     let trySingle table onEntity partition key =
       Db.trySingle tableServiceClient logger db table onEntity partition key
       
+    let trySingleQuery table onEntity partition query =
+      Db.trySingleQuery tableServiceClient logger db table onEntity partition query
+      
     let toList table onEntity =
       Db.toList tableServiceClient logger db table onEntity
       
@@ -307,6 +311,9 @@ module internal PostDb =
       member this.CreatePost post =
         post.ToEntity() |> add postsTable PostDbError.validation DbPost.FromEntity
 
+      member this.GetCommenterByEmailAddress emailAddress =
+        (eq "EmailAddress" emailAddress) |> trySingleQuery commentersTable DbCommenter.FromEntity None
+      
       member this.GetCommenterByValidationId validationId =
         validationId |> trySingle commentersTable DbCommenter.FromEntity (Some validationId)
 

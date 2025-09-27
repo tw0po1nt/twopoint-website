@@ -9,9 +9,12 @@
       <Compile Include="Util\Result.fs" />
       <Compile Include="Util\Logging.fs" />
       <Compile Include="Util\FsToolkitExtensions.fs" />
+      <Compile Include="Shared\SharedTypes.fs" />
       <Compile Include="Shared\Impl\Db.fs" />
-      <Compile Include="Shared\FsToolkitExtensions.fs" />
+      <Compile Include="Shared\Impl\Comms\CommsDb.fs" />
+      <Compile Include="Shared\Impl\Comms\Comms.fs" />
       <Compile Include="Posts\Impl\PostDb.fs" />
+      <Compile Include="Posts\Impl\PostEmails.fs" />
       <Compile Include="Posts\PostApiTypes.fs" />
       <Compile Include="Posts\PostApiDependencies.fs" />
       <Compile Include="Posts\PostQueries.fs" />
@@ -19,6 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="Azure.Communication.Email" Version="1.0.2" />
       <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
       <PackageReference Include="FSharp.Control.TaskSeq" Version="0.4.0" />
       <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.1" />

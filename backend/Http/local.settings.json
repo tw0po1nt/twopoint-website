@@ -8,8 +8,21 @@
     "CORS": "http://localhost:4321"
   },
   "Azure": {
+    "CommsResourceEndpoint": "https://acs-twopoint-website.unitedstates.communication.azure.com/",
+    "EmailSender": "DoNotReply@f2b2d97f-bb0b-4083-9d4a-c1f3c6e39c00.azurecomm.net",
     "EntraTenantId": "cdf89f94-8c88-48fc-b11c-dd24af4380b4",
     "ManagedIdentityClientId": "c976dce7-0db4-494d-aa80-fdb831d49474",
     "TableStorageUri": "https://twopointwebsite.table.core.windows.net/"
-  }
+  },
+  "ValidRedirectUris": [
+    {
+      "Uri": "http://localhost:4321"
+    },
+    {
+      "Uri": "https://staging.twopoint.dev"
+    },
+    {
+      "Uri": "https://twopoint.dev"
+    }
+  ]
 }

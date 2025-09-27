@@ -3,8 +3,10 @@ namespace TwoPoint.Http.Endpoints.Blog
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Api
 open TwoPoint.Core.Posts.Dependencies
+open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
+open Azure.Communication.Email
 open Azure.Data.Tables
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -31,7 +33,12 @@ module PostTypesExt =
         Content = this.Content.ToString() }
 
 
-type GetCommentsForPost (logger : ILogger<GetCommentsForPost>, tableServiceClient: TableServiceClient) =
+type GetCommentsForPost (
+  config: Config,
+  emailClient: EmailClient,
+  logger : ILogger<GetCommentsForPost>,
+  tableServiceClient: TableServiceClient
+) =
   
   [<Function("Blog-Posts-GetComments")>]
   member _.Run (
@@ -42,8 +49,10 @@ type GetCommentsForPost (logger : ILogger<GetCommentsForPost>, tableServiceClien
     let response = req.CreateResponse HttpStatusCode.OK
     logger.LogInformation("Processing 'Blog.Posts.GetComments' request with slug '{slug}'", slug)
     
+    let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
+    
     // Dependencies
-    let postDependencies = PostDependencies.live tableServiceClient logger
+    let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
     let postQueries = PostQueries.withDependencies postDependencies
     
     let onlyApproved = [CommentApproval.Approved.ToString()]

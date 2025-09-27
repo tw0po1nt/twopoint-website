@@ -40,6 +40,11 @@ module EmailAddress =
       EmailAddress
       
   let createMaybe = Option.traverseResult create
+  
+  let tryParse str =
+    match create str with
+    | Ok parsed -> true, parsed
+    | _ -> false, EmailAddress ""
     
   let value (EmailAddress ea) = ea
   

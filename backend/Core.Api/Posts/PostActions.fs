@@ -7,8 +7,41 @@ open TwoPoint.Core.Util
 
 open IcedTasks
 
+// Inputs
+type NewPostDto =
+  { Title : string
+    Slug : string }
+  
+type CommenterValidationDto =
+  { EmailAddress : string
+    Name : string option
+    RedirectUri : string }
+  
+type NewCommentDto =
+  { Post : string
+    ValidationId : string
+    Comment : string }
+  
+type CommentApprovalUpdateDto =
+  { CommentId : string
+    Approval : string }
+  
+type CommenterStatusUpdateDto =
+  { EmailAddress : string
+    Status : string }
+  
+// Outputs
+type PostCreatedEvent = PostCreatedEvent of Post
+type CommenterValidatedEvent = CommenterValidatedEvent of Commenter
+type CommentPostedEvent = CommentPostedEvent of Post * Comment
+type CommentApprovalUpdatedEvent = CommentApprovalUpdatedEvent of Comment
+type CommenterStatusUpdatedEvent = CommenterStatusUpdatedEvent of Commenter
+
+// Actions
+
 type IPostActions =
   abstract member CreatePost: newPost: NewPostDto -> CancellableTask<ActionResult<PostCreatedEvent, CreatePostError>>
+  abstract member ValidateCommenter: commenterValidation: CommenterValidationDto -> CancellableTask<ActionResult<CommenterValidatedEvent, ValidateCommenterError>>
   abstract member PostComment: newComment: NewCommentDto -> CancellableTask<ActionResult<CommentPostedEvent, PostCommentError>>
   abstract member UpdateCommentApproval: CommentApprovalUpdateDto -> CancellableTask<ActionResult<CommentApprovalUpdatedEvent, UpdateCommentApprovalError>>
   abstract member UpdateCommenterStatus: CommenterStatusUpdateDto -> CancellableTask<ActionResult<CommenterStatusUpdatedEvent, UpdateCommenterStatusError>>
@@ -19,6 +52,21 @@ module PostActions =
   open FsToolkit.ErrorHandling
   
   let withDependencies (postDependencies: IPostDependencies) =
+    
+    let handleCommenterValidated (CommenterValidated (commenter, commenterValidation)) : DependencyResult<Commenter> =
+      cancellableTaskResult {
+        let! (commenter: Commenter) = cancellableTaskResult {
+          match commenter with
+          | Some c -> return c
+          | None -> return! postDependencies.CreateCommenter commenterValidation.EmailAddress commenterValidation.Name CommenterStatus.New
+        }
+        
+        do!
+          postDependencies.SendCommenterValidationEmail commenter commenterValidation.RedirectUri
+          |> CancellableTaskResult.ignore
+      
+        return commenter
+      }
     
     let handleCommentPosted (CommentPosted (post, comment, commenter)) : DependencyResult<Comment> =
       postDependencies.CreateComment post commenter comment
@@ -73,6 +121,32 @@ module PostActions =
           |> Result.traverseCancellableTask postDependencies.CreatePost
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult PostCreatedEvent)
+            (ActionError.Logic >> ActionResult.failure)
+      }
+      
+      member this.ValidateCommenter commenterValidation = cancellableTaskResult {
+        let! (commenterValidation: CommenterValidation) =
+          CommenterValidation.create
+            commenterValidation.EmailAddress
+            commenterValidation.Name
+            commenterValidation.RedirectUri
+          |> Result.mapError ActionError<ValidateCommenterError>.Validation
+            
+        let! existingCommenter =
+          postDependencies.GetCommenterByEmailAddress commenterValidation.EmailAddress
+          |> CancellableTaskResult.mapError ActionError<ValidateCommenterError>.Dependency
+          
+        let! validRedirectUris =
+          postDependencies.GetValidRedirectUris()
+          |> CancellableTaskResult.mapError ActionError<ValidateCommenterError>.Dependency
+            
+        let decision = Posts.validateCommenter existingCommenter validRedirectUris commenterValidation
+                
+        return!
+          decision
+          |> Result.traverseCancellableTask handleCommenterValidated
+          |> CancellableTaskResult.foldResult
+            (DependencyResult.toActionResult CommenterValidatedEvent)
             (ActionError.Logic >> ActionResult.failure)
       }
         

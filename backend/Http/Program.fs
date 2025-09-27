@@ -1,3 +1,4 @@
+open Azure.Communication.Email
 open TwoPoint.Http
 
 open Azure.Data.Tables
@@ -48,6 +49,12 @@ let main args =
   // Azure Table Storage
   let tableServiceClient = TableServiceClient(config.Azure.TableStorageUri, credential)
   
+  // Email client
+  let resourceEndpoint = config.Azure.CommsResourceEndpoint
+  let emailClient = EmailClient(resourceEndpoint,  credential)
+
+  builder.Services.AddScoped<Config>(fun _ -> config) |> ignore
+  builder.Services.AddScoped<EmailClient>(fun _ -> emailClient) |> ignore
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore
     
   builder.Build().Run()

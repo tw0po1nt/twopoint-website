@@ -16,50 +16,45 @@ open Microsoft.Extensions.Logging
 open System.Net
 open System.Threading
 
-type NewCommentJson =
-  { ValidationId : string option
-    Comment : string option }
+type CommenterValidationJson =
+  { EmailAddress : string option
+    Name : string option
+    RedirectUri : string option }
 
-type PostComment (
+type ValidateCommenter (
   config: Config,
   emailClient: EmailClient,
   logger: ILogger<PostComment>,
   tableServiceClient: TableServiceClient
 ) =
   
-  [<Function("Blog-Posts-PostComment")>]
+  [<Function("Blog-ValidateCommenter")>]
   member _.Run (
-    [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "blog/posts/{slug}/comments")>] req : HttpRequestData,
-    slug : string,
+    [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "blog/commenters")>] req : HttpRequestData,
     ct : CancellationToken
   ) = task {
     let response = req.CreateResponse HttpStatusCode.OK
-    logger.LogInformation("Processing 'Blog.Posts.PostComment' request with slug '{slug}'", slug)
+    logger.LogInformation("Processing 'Blog.ValidateCommenter' request")
     let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
     
-    let! json = req.ReadFromJsonAsync<NewCommentJson>(ct)
+    let! json = req.ReadFromJsonAsync<CommenterValidationJson>(ct)
     
     // Dependencies
     let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
     let postActions = PostActions.withDependencies postDependencies
     
-    let newComment =
-      { NewCommentDto.Post = slug
-        ValidationId = json.ValidationId |> Option.defaultValue ""
-        Comment = json.Comment |> Option.defaultValue "" }
+    let commenterValidation =
+      { CommenterValidationDto.EmailAddress = json.EmailAddress |> Option.defaultValue ""
+        Name = json.Name
+        RedirectUri = json.RedirectUri |> Option.defaultValue "" }
 
-    let! postCommentResult = ct |> postActions.PostComment newComment    
+    let! validateCommenterResult = ct |> postActions.ValidateCommenter commenterValidation    
     let apiResponse, statusCode =
-      match postCommentResult with
-      | Ok _ | Error (Logic (CommenterBanned _)) ->
+      match validateCommenterResult with
+      | Ok _ | Error (Logic (ValidateCommenterError.CommenterBanned _)) ->
         { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-      | Error (Logic postCommentError) ->
-        let errorMessage =
-          match postCommentError with
-          | PostNotFound slug -> $"Post '{slug.ToString()}' not found"
-          | PostCommentError.CommenterNotFound validationId -> $"Commenter '{validationId.ToString()}' not found"
-          | _ -> "Not found"
-        { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
+      | Error (Logic (InvalidRedirect uri)) ->
+        { Success = false; Message = Some $"Redirect uri '{uri}' is invalid"; Data = None }, HttpStatusCode.BadRequest
       | Error actionError when actionError.IsValidation ->
         { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
       | Error actionError ->

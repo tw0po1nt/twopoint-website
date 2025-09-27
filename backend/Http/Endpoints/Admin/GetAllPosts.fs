@@ -1,5 +1,6 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
+open Azure.Communication.Email
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Api
 open TwoPoint.Core.Posts.Dependencies
@@ -13,6 +14,7 @@ open Microsoft.Extensions.Logging
 open System
 open System.Net
 open System.Threading
+open TwoPoint.Http
 
 type PostCommentStatsDto =
   { New : uint
@@ -41,7 +43,12 @@ module PostTypesExt =
         CreatedDate = this.CreatedDate
         CommentStats = this.CommentStats.ToDto() }
 
-type GetAllPosts (logger : ILogger<GetAllPosts>, tableServiceClient: TableServiceClient) =
+type GetAllPosts (
+  config: Config,
+  emailClient: EmailClient,
+  logger : ILogger<GetAllPosts>,
+  tableServiceClient: TableServiceClient
+) =
   
   [<Function("Admin-Posts-GetAll")>]
   member _.Run (
@@ -50,9 +57,10 @@ type GetAllPosts (logger : ILogger<GetAllPosts>, tableServiceClient: TableServic
   ) = task {
     let response = req.CreateResponse HttpStatusCode.OK
     logger.LogInformation("Processing 'Admin.Posts.GetAll' request")
+    let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
     
     // Dependencies
-    let postDependencies = PostDependencies.live tableServiceClient logger
+    let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
     let postQueries = PostQueries.withDependencies postDependencies
     
     let! postsResult = ct |> postQueries.GetAllPosts()
