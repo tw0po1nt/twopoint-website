@@ -4,13 +4,19 @@ open TwoPoint.Api
 open DateFormatter
 open NewComment
 
+open Browser.Dom
 open Browser.WebStorage
+open Browser.Url
+
 open Fable.Core
 open Feliz
 open Feliz.UseElmish
 open Elmish
+open FsToolkit.ErrorHandling
 
 open System
+
+// Types
 
 type Email = string
 
@@ -19,11 +25,12 @@ type ClearFormFn = unit -> unit
 type Msg =
   | LoadComments
   | CommentsLoaded of Comment list
-  | VerifyEmail of Email
-  | EmailVerificationSent of Email
-  | EmailVerificationComplete of Guid
+  | CommenterValidationSent of CommenterValidation
+  | CommenterValidationFailed of string
+  | CommenterValidationComplete of string
   | PostComment of NewCommentData * ClearFormFn
-  | CommentPosted of string option
+  | CommentPosted
+  | CommentPostFailed of string
 
 type CommentsState =
   | Loading
@@ -32,8 +39,10 @@ type CommentsState =
 
 type CommenterState =
   | Unverified
-  | Verified of Guid
+  | Verified of string
+  | VerificationLoading
   | VerificationPending of Email
+  | VerificationFailed of string
 
 type PostCommentState =
   | NotStarted
@@ -46,29 +55,69 @@ type State =
     Slug : string
     Comments : CommentsState
     Commenter : CommenterState
+    InitialCommentData : NewCommentData option
     PostComment : PostCommentState
     ClearForm : unit -> unit }
 
-let init uri slug () = 
-  let initialCommenterState = 
-    let validationId =
-      "commenterValidationId" 
-      |> localStorage.getItem 
-      |> Option.ofObj
-    match validationId with
-    | Some vid ->
-      match System.Guid.TryParse vid with
-      | true, parsed -> Verified parsed
-      | _ -> Unverified
-    | None -> 
-      Unverified
+// Helpers
+let appendQuery kvps (uri: Uri) =
+  let search = URLSearchParams.Create uri.Query
+  for k, v in kvps do
+    search.append(k, v)
+  Uri $"{uri}?{search}"
+
+let appendFragment (fragment: string) (uri: Uri) =
+  if not (String.IsNullOrEmpty uri.Fragment) then
+    uri
+  else
+    let baseUri =
+      uri.AbsoluteUri.Split '#'
+      |> Array.head
+    let frag =
+      if fragment.StartsWith "#" 
+      then fragment
+      else "#" + fragment
+
+    Uri(baseUri + frag)
+
+// Elmish
+
+let init uri slug () =
+
+  let currentUri = Uri window.location.href
+  let search = URLSearchParams.Create currentUri.Query
+
+  let initialCommentData = option {
+    let! email = search.get "email"
+    let name = search.get "name" |> Option.defaultValue ""
+    let! comment = search.get "comment"
+    return
+      { Email = email
+        Name = name
+        Comment = comment }
+  }
+
+  let validationIdKey = "commenterValidationId"
+  let initialCommenterState =
+    validationIdKey 
+    |> search.get 
+    |> Option.orElse (validationIdKey |> localStorage.getItem |> Option.ofObj)
+    |> Option.map Verified
+    |> Option.defaultValue Unverified
+
+  // todo: we really shouldn'tbe doing a side-effect in init. Rework this to not do that.
+  match initialCommenterState with
+  | Verified id ->
+    localStorage.setItem(validationIdKey, id)
+  | _ -> ()
 
   { Uri = uri
     Slug = slug
     Comments = Loading
     Commenter = initialCommenterState
+    InitialCommentData = initialCommentData
     PostComment = NotStarted
-    ClearForm = ignore }, 
+    ClearForm = ignore },
   Cmd.ofMsg LoadComments
 
 let update msg state =
@@ -86,27 +135,64 @@ let update msg state =
     Cmd.fromAsync getComments
   | CommentsLoaded [] -> { state with Comments = NoComments }, Cmd.none
   | CommentsLoaded comments -> { state with Comments = Comments comments }, Cmd.none
-  | VerifyEmail email ->
-    // todo: call api to send email verification
-    state, Cmd.none
-  | EmailVerificationSent pendingEmail ->
-    { state with Commenter = VerificationPending pendingEmail }, Cmd.none
-  | EmailVerificationComplete commenterId ->
+  | CommenterValidationSent validation ->
+    { state with Commenter = VerificationPending validation.EmailAddress }, Cmd.none
+  | CommenterValidationFailed error ->
+    { state with Commenter = VerificationFailed error }, Cmd.none
+  | CommenterValidationComplete commenterId ->
     { state with Commenter = Verified commenterId }, Cmd.none
   | PostComment (newComment, clearForm) ->
     let postComment newComment = async {
-      let! result = 
+      let! result =
         (state.Slug, newComment)
         ||> Comments.postComment state.Uri
         |> Async.AwaitPromise
       
-      return CommentPosted result.Message
+      if result.Success 
+      then
+        return CommentPosted 
+      else
+        return CommentPostFailed (result.Message |> Option.defaultValue "Unable to validate your information. Please try again later.")
+    }
+
+    let validateCommenter commenterValidation = async {
+      let! result = 
+        commenterValidation
+        |> Comments.validateCommenter state.Uri
+        |> Async.AwaitPromise
+      
+      if result.Success 
+      then
+        return CommenterValidationSent commenterValidation
+      else
+        return CommenterValidationFailed (result.Message |> Option.defaultValue "Unable to validate your information. Please try again later.")
     }
 
     match state.Commenter with
-    | Unverified | VerificationPending _ ->
+    | Unverified | VerificationFailed _ ->
+      let name =
+        match newComment.Name with
+        | "" -> None
+        | n -> Some n
+
+      let currentUri = Uri window.location.href
+      let redirectUri =
+        currentUri
+        |> appendQuery [
+          yield "email", newComment.Email
+          yield "comment", newComment.Comment
+          match name with
+          | Some name -> yield "name", name
+          | _ -> ()
+        ]
+        |> appendFragment "leave-a-comment"
+      let validation =
+        { CommenterValidation.EmailAddress = newComment.Email
+          Name = name
+          RedirectUri = redirectUri.ToString() }
+      
       { state with Commenter = VerificationPending newComment.Email },
-      Cmd.none
+      Cmd.fromAsync (validateCommenter validation)
     | Verified validationId ->
       let newComment =
         { NewComment.ValidationId = validationId.ToString()
@@ -114,17 +200,18 @@ let update msg state =
 
       { state with PostComment = Posting; ClearForm = clearForm }, 
       Cmd.fromAsync (postComment newComment)
-
-  | CommentPosted error ->
-    let updatedState =
-      match error with
-      | Some msg ->
-        { state with PostComment = PostFailed msg }
-      | None ->
-        state.ClearForm()
-        { state with PostComment = Posted }
-
-    updatedState, Cmd.none
+    | VerificationPending _ | VerificationLoading ->
+      state, Cmd.none
+  | CommentPosted  ->
+    state.ClearForm()
+    { state with 
+        PostComment = Posted
+        InitialCommentData = None },
+    Cmd.none
+  
+  | CommentPostFailed error ->
+    { state with PostComment = PostFailed error },
+    Cmd.none
 
 [<ReactComponent(exportDefault=true)>]
 let Comments (uri: string, slug: string) =
@@ -202,6 +289,13 @@ let Comments (uri: string, slug: string) =
     ]
   ]
 
+  let errorMessage (msg: string) = Html.p [
+    prop.className "bg-red-100 text-red-900 rounded-lg border border-red-900 p-4 mt-4"
+    prop.children [
+      Html.text msg
+    ]
+  ]
+
   let commentPosted = Html.p [
     prop.className "bg-green-100 text-green-900 rounded-lg border border-green-900 p-4 mt-4"
     prop.children [
@@ -237,6 +331,7 @@ let Comments (uri: string, slug: string) =
               ]
 
               Html.h2 [
+                prop.id "leave-a-comment"
                 prop.className "font-bold font-heading text-xl md:text-2xl mb-8"
                 prop.text "Leave a comment"
               ]
@@ -247,7 +342,8 @@ let Comments (uri: string, slug: string) =
               ]
 
               NewComment(
-                state.PostComment.IsPosting, 
+                state.PostComment.IsPosting || state.Commenter.IsVerificationPending, 
+                state.InitialCommentData,
                 fun (data, clearForm) -> PostComment(data, clearForm) |> dispatch
               )
 
@@ -257,11 +353,14 @@ let Comments (uri: string, slug: string) =
               ]
               
               match state.Commenter with
-              | Unverified | Verified _ -> Html.none
+              | Unverified | Verified _ | VerificationLoading -> Html.none
               | VerificationPending pendingEmail -> verifyEmail pendingEmail
+              | VerificationFailed error -> errorMessage error
 
-              if state.PostComment.IsPosted then
-                commentPosted
+              match state.PostComment with
+              | NotStarted | Posting -> Html.none
+              | Posted -> commentPosted
+              | PostFailed error -> errorMessage error
             ]
           ]
         ]

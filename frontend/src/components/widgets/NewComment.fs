@@ -6,23 +6,23 @@ open System.Text.RegularExpressions
 
 type NewCommentData =
   { Email : string
-    Name : string option
+    Name : string
     Comment : string }
 
 let private whitespace = [| ' '; '\t'; '\n' |]
 
 [<ReactComponent>]
-let NewComment (disabled: bool, onComment: NewCommentData * (unit -> unit) -> unit) =
+let NewComment (disabled: bool, initial: NewCommentData option, onComment: NewCommentData * (unit -> unit) -> unit) =
 
   let emailIsFocused, setEmailIsFocused = React.useState false
   let emailIsDirty, setEmailIsDirty = React.useState false
-  let email, setEmail = React.useState ""
+  let email, setEmail = React.useState (initial |> Option.map _.Email |> Option.defaultValue "")
 
-  let name, setName = React.useState ""
+  let name, setName = React.useState (initial |> Option.map _.Name |> Option.defaultValue "")
 
   let commentIsFocused, setCommentIsFocused = React.useState false
   let commentIsDirty, setCommentIsDirty = React.useState false
-  let comment, setComment = React.useState ""
+  let comment, setComment = React.useState (initial |> Option.map _.Comment |> Option.defaultValue "")
 
   let resetForm () =
     setEmail ""
@@ -165,10 +165,6 @@ let NewComment (disabled: bool, onComment: NewCommentData * (unit -> unit) -> un
                     setEmailIsDirty true
                     setCommentIsDirty true
                   else
-                    let name = 
-                      match name.Trim whitespace with
-                      | "" -> None
-                      | n -> Some n
                     onComment ({ Email = email; Name = name; Comment = comment.Trim whitespace }, resetForm)
                 )
                 prop.disabled disabled
