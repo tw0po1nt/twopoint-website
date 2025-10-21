@@ -7,6 +7,7 @@ open IcedTasks
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
+open System
 open System.Net
 
 let runIfAuthorized
@@ -17,7 +18,7 @@ let runIfAuthorized
   (fn: CancellableTask<HttpResponseData>) =
     cancellableTask {
       let! ct = CancellableTask.getCancellationToken()
-      let isRunningInAzure = config.Values.AzureFunctionsEnvironment <> "Development"
+      let isRunningInAzure = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT") <> "Development"
       
       logger.LogInformation("Checking auth for '{op}'. Running in Azure: {azure}, Identity count: {count}",
         op, isRunningInAzure, req.Identities |> Seq.length)
