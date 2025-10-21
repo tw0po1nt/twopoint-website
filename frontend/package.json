@@ -10,7 +10,7 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "PUBLIC_API_URI=http://localhost:7265 astro build",
-    "build:staging": "PUBLIC_STAGE=staging PUBLIC_API_URI=http://localhost:7265 astro build",
+    "build:staging": "PUBLIC_STAGE=staging PUBLIC_API_URI=https://func-twopoint-website-api.azurewebsites.net astro build",
     "preview": "astro preview",
     "astro": "astro",
     "check": "npm run check:astro && npm run check:eslint && npm run check:prettier",
