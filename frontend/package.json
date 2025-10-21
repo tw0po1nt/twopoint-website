@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
-    "build:staging": "PUBLIC_STAGE=staging astro build",
+    "build": "PUBLIC_API_URI=http://localhost:7265 astro build",
+    "build:staging": "PUBLIC_STAGE=staging PUBLIC_API_URI=https://func-twopoint-website-api.azurewebsites.net astro build",
     "preview": "astro preview",
     "astro": "astro",
     "check": "npm run check:astro && npm run check:eslint && npm run check:prettier",
@@ -39,7 +39,8 @@
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
     "react-pdf": "^10.0.1",
-    "unpic": "^3.22.0"
+    "unpic": "^3.22.0",
+    "use-sync-external-store": "^1.5.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",

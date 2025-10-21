@@ -10,10 +10,12 @@ import { getCanonical, getPermalink } from '~/utils/permalinks';
 import { findImage } from '~/utils/images';
 import NavigationLinks from '~/components/blog/NavigationLinks.astro';
 import supportConfig from '~/support-config.json';
+import Comments from '~/components/widgets/Comments.fs';
 import Support from '~/components/widgets/Support.fs';
 
 export const prerender = true;
 
+const apiUri = process.env.PUBLIC_API_URI || 'http://localhost:7265';
 const posts = APP_BLOG.isEnabled ? await findLatestPosts({ count: 1, isHomepage: true }) : [];
 const post = posts[0];
 const url = getCanonical(getPermalink(post.permalink, 'post'));
@@ -29,6 +31,7 @@ const metadata = {
   <SinglePost post={{ ...post, image: image }} url={url}>
     {post.Content ? <post.Content /> : <Fragment set:html={post.content || ''} />}
   </SinglePost>
+  <Comments client:only="react" uri={apiUri} slug={post.slug} />
   <NavigationLinks post={post} />
   <Support client:only="react" config={JSON.stringify(supportConfig)} />
   <RelatedPosts post={post} />
