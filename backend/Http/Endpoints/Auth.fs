@@ -19,6 +19,14 @@ let runIfAuthorized
       let! ct = CancellableTask.getCancellationToken()
       let isRunningInAzure = config.Values.AzureFunctionsEnvironment <> "Development"
       
+      logger.LogInformation("Checking auth for '{op}'. Running in Azure: {azure}, Identity count: {count}",
+        op, isRunningInAzure, req.Identities |> Seq.length)
+      
+      req.Identities
+      |> Seq.iter (fun identity ->
+        logger.LogInformation("Identity: {name}, IsAuthenticated: {auth}, Type: {type}",
+          identity.Name, identity.IsAuthenticated, identity.AuthenticationType))
+      
       let isAuthenticated = not isRunningInAzure || req.Identities |> Seq.exists _.IsAuthenticated
       if not isAuthenticated then
         logger.LogWarning("Unauthenticated request to '{op}'", op)
