@@ -1,12 +1,15 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open Azure.Communication.Email
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Api
 open TwoPoint.Core.Posts.Dependencies
 open TwoPoint.Core.Util
 
+open Azure.Communication.Email
 open Azure.Data.Tables
+open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
@@ -14,7 +17,6 @@ open Microsoft.Extensions.Logging
 open System
 open System.Net
 open System.Threading
-open TwoPoint.Http
 
 type PostCommentStatsDto =
   { New : uint
@@ -54,21 +56,27 @@ type GetAllPosts (
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "internal/posts")>] req : HttpRequestData,
     ct : CancellationToken
-  ) = task {
-    let response = req.CreateResponse HttpStatusCode.OK
-    logger.LogInformation("Processing 'Admin.Posts.GetAll' request")
-    let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
-    
-    // Dependencies
-    let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
-    let postQueries = PostQueries.withDependencies postDependencies
-    
-    let! postsResult = ct |> postQueries.GetAllPosts()
-    let apiResponse, statusCode =
-      postsResult
-      |> QueryResult.toApiResponse (List.map _.ToDto())
-      
-    response.StatusCode <- statusCode
-    do! response.WriteAsJsonAsync(apiResponse, ct)
-    return response
-  }
+  ) =
+    let op = "Admin.Posts.GetAll"
+    ct |> (
+      Auth.runIfAuthorized config logger req op
+      <| cancellableTask {
+        let! ct = CancellableTask.getCancellationToken()
+        logger.LogInformation("Processing '{op}' request", op)
+        let response = req.CreateResponse HttpStatusCode.OK
+
+        let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
+        
+        // Dependencies
+        let postDependencies =
+          PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
+        let postQueries = PostQueries.withDependencies postDependencies
+        
+        let! postsResult = postQueries.GetAllPosts()
+        let apiResponse, statusCode = postsResult |> QueryResult.toApiResponse (List.map _.ToDto())
+          
+        response.StatusCode <- statusCode
+        do! response.WriteAsJsonAsync(apiResponse, ct)
+        return response
+      }
+    )

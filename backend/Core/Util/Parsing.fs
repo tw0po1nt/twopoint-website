@@ -50,6 +50,6 @@ module Parsing =
   /// An active pattern for parsing UTC timestamps as <see cref="System.DateTime"/> values
   /// </summary>
   let (|DateTime|_|) (str: string) =
-    match System.DateTime.TryParseExact(str, "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture, DateTimeStyles.None) with
+    match System.DateTime.TryParseExact(str, "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal ||| DateTimeStyles.AdjustToUniversal) with
     | true, parsed -> Some parsed
     | _ -> None

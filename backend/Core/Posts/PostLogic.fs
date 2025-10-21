@@ -147,6 +147,35 @@ type UpdateCommentApproval =
   Comment option
     -> CommentApprovalUpdate
     -> UpdateCommentApprovalDecision
+    
+// ----------------------------------------------------------------------------------------
+// Delete comment
+// ----------------------------------------------------------------------------------------
+
+// Inputs
+type CommentDeletion =
+  { CommentId : CommentId }
+  
+module CommentDeletion =
+  let create commentId = validation {
+    let! commentId = CommentId.create commentId
+    return { CommentId = commentId }
+  }
+  
+// Outputs
+type DeleteCommentError = CommentNotFound of CommentId
+
+type CommentDeleted = CommentDeleted of comment: Comment
+
+type DeleteCommentDecision = Decision<CommentDeleted, DeleteCommentError>
+
+/// <summary>
+/// Logic for deleting a TwoPoint blog post comment
+/// </summary>
+type DeleteComment =
+  Comment option
+    -> CommentDeletion
+    -> DeleteCommentDecision
   
 // ----------------------------------------------------------------------------------------
 // Update commenter status
@@ -218,8 +247,14 @@ module Posts =
     
   let updateCommentApproval : UpdateCommentApproval =
     fun existingComment approvalUpdate -> result {
-      let! comment = existingComment |> Result.requireSome (CommentNotFound approvalUpdate.CommentId)
+      let! comment = existingComment |> Result.requireSome (UpdateCommentApprovalError.CommentNotFound approvalUpdate.CommentId)
       return CommentApprovalUpdated (comment, approvalUpdate.Approval)
+    }
+    
+  let deleteComment : DeleteComment =
+    fun existingComment deletion -> result {
+      let! comment = existingComment |> Result.requireSome (DeleteCommentError.CommentNotFound deletion.CommentId)
+      return CommentDeleted comment
     }
     
   let updateCommenterStatus : UpdateCommenterStatus =

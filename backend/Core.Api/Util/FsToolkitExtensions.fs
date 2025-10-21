@@ -90,3 +90,31 @@ module CancellableTaskResult =
     : CancellableTaskResult<unit, 'error> =
     CancellableTask.map Result.ignore input
     
+module TaskSeq =
+  open FSharp.Control
+  
+  open System.Threading.Tasks
+  
+  let inline traverseValidationA
+    ([<InlineIfLambda>] f: 'a -> Validation<'b, 'error>)
+    (xs: TaskSeq<'a>)
+    : Task<Validation<'b list, 'error>> =
+    task {
+      let mutable state = Ok []
+      
+      for x in xs do
+        let fR = f x
+        
+        state <-
+          match state, fR with
+          | Ok ys, Ok y -> Ok(y :: ys)
+          | Error errs1, Error errs2 -> Error(errs2 @ errs1)
+          | Ok _, Error errs -> Error errs
+          | Error errs, Ok _ -> Error errs
+      
+      return state |> Result.eitherMap List.rev List.rev
+    }
+
+  let inline sequenceValidationA (xs: TaskSeq<Validation<'a, 'error>>)
+    : Task<Validation<'a list, 'error>> =
+    traverseValidationA id xs

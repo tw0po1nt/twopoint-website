@@ -45,6 +45,7 @@ type IPostDependencies =
     comment: Comment
       -> approval: CommentApproval
       -> DependencyResult<Comment>
+  abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
       
   abstract member GetValidRedirectUris: unit -> DependencyResult<Uri list>
   
@@ -246,6 +247,8 @@ module PostDependencies =
         let! status = dbCommentStatus.ToCommentStatus() |> DependencyError.ofValidation source
         return { comment with Status = status }
       }
+      
+      member this.DeleteComment comment = comment.Id.ToString() |> postDb.DeleteComment
       
       member this.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris
     }

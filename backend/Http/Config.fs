@@ -12,9 +12,12 @@ type AzureConfig =
 
 type ValidRedirectUri =
   { Uri : Uri }
+  
+type Values = { AzureFunctionsEnvironment : string }
 
 type Config =
-  { Azure : AzureConfig
+  { Values : Values
+    Azure : AzureConfig
     ValidRedirectUris : ValidRedirectUri list }
   
 module Config =
@@ -25,6 +28,11 @@ module Config =
   
   let bind config =
     bind {
+      let! values = Bind.section "Values" <| bind {
+        let! azureFunctionsEnvironment = Bind.valueAt "AZURE_FUNCTIONS_ENVIRONMENT" Bind.string
+        return { AzureFunctionsEnvironment = azureFunctionsEnvironment }
+      }
+      
       let! azure = Bind.section "Azure" <| bind {
         let! commsResourceEndpoint = Bind.valueAt "CommsResourceEndpoint" (Bind.uri UriKind.Absolute)
         let! emailSender = Bind.valueAt "EmailSender" Bind.emailAddress
@@ -46,6 +54,6 @@ module Config =
       
       let! validRedirectUris = Bind.section "ValidRedirectUris" (Bind.list bindValidRedirectUri)
       
-      return { Azure = azure; ValidRedirectUris = validRedirectUris }
+      return { Values = values; Azure = azure; ValidRedirectUris = validRedirectUris }
     }
     |> Binder.eval config

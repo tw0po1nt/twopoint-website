@@ -26,6 +26,9 @@ type CommentApprovalUpdateDto =
   { CommentId : string
     Approval : string }
   
+type CommentDeletionDto =
+  { CommentId : string }
+  
 type CommenterStatusUpdateDto =
   { EmailAddress : string
     Status : string }
@@ -35,6 +38,7 @@ type PostCreatedEvent = PostCreatedEvent of Post
 type CommenterValidatedEvent = CommenterValidatedEvent of Commenter
 type CommentPostedEvent = CommentPostedEvent of Post * Comment
 type CommentApprovalUpdatedEvent = CommentApprovalUpdatedEvent of Comment
+type CommentDeletedEvent = CommentDeletedEvent of CommentId
 type CommenterStatusUpdatedEvent = CommenterStatusUpdatedEvent of Commenter
 
 // Actions
@@ -44,6 +48,7 @@ type IPostActions =
   abstract member ValidateCommenter: commenterValidation: CommenterValidationDto -> CancellableTask<ActionResult<CommenterValidatedEvent, ValidateCommenterError>>
   abstract member PostComment: newComment: NewCommentDto -> CancellableTask<ActionResult<CommentPostedEvent, PostCommentError>>
   abstract member UpdateCommentApproval: CommentApprovalUpdateDto -> CancellableTask<ActionResult<CommentApprovalUpdatedEvent, UpdateCommentApprovalError>>
+  abstract member DeleteComment: CommentDeletionDto -> CancellableTask<ActionResult<CommentDeletedEvent, DeleteCommentError>>
   abstract member UpdateCommenterStatus: CommenterStatusUpdateDto -> CancellableTask<ActionResult<CommenterStatusUpdatedEvent, UpdateCommenterStatusError>>
 
 [<RequireQualifiedAccess>]
@@ -91,6 +96,12 @@ module PostActions =
             | Approved -> { comment with Comment.Commenter.Status = CommenterStatus.Trusted }
             | _ -> comment
           )
+      }
+      
+    let handleCommentDeleted (CommentDeleted comment) : DependencyResult<CommentId> =
+      cancellableTaskResult {
+        do! postDependencies.DeleteComment comment
+        return comment.Id
       }
       
     let handleCommenterStatusUpdated (CommenterStatusUpdated (commenter, status)) : DependencyResult<Commenter> =
@@ -196,6 +207,25 @@ module PostActions =
           |> Result.traverseCancellableTask handleCommentApprovalUpdated
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult CommentApprovalUpdatedEvent)
+            (ActionError.Logic >> ActionResult.failure)
+      }
+      
+      member this.DeleteComment commentDeletion = cancellableTaskResult {
+        let! (commentDeletion: CommentDeletion) =
+          CommentDeletion.create commentDeletion.CommentId
+          |> Result.mapError ActionError<DeleteCommentError>.Validation
+              
+        let! existingComment =
+          postDependencies.GetCommentById commentDeletion.CommentId
+          |> CancellableTaskResult.mapError ActionError<DeleteCommentError>.Dependency
+          
+        let decision = Posts.deleteComment existingComment commentDeletion
+        
+        return!
+          decision
+          |> Result.traverseCancellableTask handleCommentDeleted
+          |> CancellableTaskResult.foldResult
+            (DependencyResult.toActionResult CommentDeletedEvent)
             (ActionError.Logic >> ActionResult.failure)
       }
       

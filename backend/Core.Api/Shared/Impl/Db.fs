@@ -29,6 +29,7 @@ module Db =
   open IcedTasks
   open Microsoft.Extensions.Logging
   
+  open System
   open System.Net
   
   let private runQuery logger op fn =
@@ -249,4 +250,53 @@ module Db =
       | None ->
         logger.LogError("{op} failed", operation)
         return! onError "Unable to fetch updated entity" |> Error
+    }
+    
+  /// <summary>
+  /// Delete entities in an Azure Table
+  /// </summary>
+  /// <param name="tableServiceClient">The service client to use to perform the operation</param>
+  /// <param name="logger">A logger for telemetry for the operation</param>
+  /// <param name="db">The name of the database - used for telemetry</param>
+  /// <param name="table">The table where the entities to be deleted exist</param>
+  /// <param name="onError">A function called with an error message if an error occurs</param>
+  /// <param name="filter">The filter used to select the desired entities</param>
+  let delete
+    tableServiceClient
+    (logger : ILogger)
+    db
+    table
+    (onError: string -> DependencyError)
+    (filter: Filter) =
+      
+    let operation = $"{db}.{table}.delete"
+    runQuery logger operation
+    <| cancellableTask {
+      let! ct = CancellableTask.getCancellationToken()
+      let! tableClient = getTable tableServiceClient table
+      
+      let entities = tableClient.QueryAsync<TableEntity>(
+        filter,
+        cancellationToken = ct
+      )
+      
+      let res =
+        taskSeq {
+          for entity in entities do
+            try
+              do! tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey, cancellationToken = ct) |> Task.ignore
+              yield Ok ()
+            with
+              | :? RequestFailedException as ex ->
+                yield ex |> Validation.error
+        }
+        |> TaskSeq.sequenceValidationA
+        |> Task.map Result.ignore
+        
+      match! res with
+      | Ok () ->
+        return Ok()
+      | Error errors ->
+        errors |> List.iter (fun ex -> logger.LogError(message = "{op}: An error occurred when deleting an entity", ``exception`` = ex, args = [| operation |]))
+        return onError "One or more errors occurred when deleting entities" |> Error
     }

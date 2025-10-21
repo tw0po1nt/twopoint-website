@@ -256,6 +256,7 @@ type internal IPostDb =
       -> status: DbCommentStatus
       -> CancellableTaskResult<DbComment * DbCommenter * DbCommentStatus, DependencyError>
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
+  abstract member DeleteComment: commentId: string -> CancellableTaskResult<unit, DependencyError>
 
 
 module internal PostDbError =
@@ -294,6 +295,9 @@ module internal PostDb =
       
     let update table onError onEntity entity updateEntity =
       Db.update tableServiceClient logger db table onError onEntity entity updateEntity
+      
+    let delete table onError filter =
+      Db.delete tableServiceClient logger db table onError filter
       
     let postsTable = "posts"
     let commentsTable = "comments"
@@ -422,5 +426,10 @@ module internal PostDb =
       
       member this.UpdateCommentStatus status =
         status.ToEntity() |> add commentStatusesTable PostDbError.validation DbCommentStatus.FromEntity
+      
+      member this.DeleteComment commentId = cancellableTaskResult {
+        do! (eq "PartitionKey" commentId) |> delete commentStatusesTable PostDbError.validation
+        do! (eq "RowKey" commentId) |> delete commentsTable PostDbError.validation
+      }
     }
   
