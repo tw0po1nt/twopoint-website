@@ -15,6 +15,7 @@ open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
 open System.Net
+open System.Security.Claims
 open System.Threading
 
 type DeleteComment(
@@ -27,13 +28,15 @@ type DeleteComment(
   [<Function("Admin-Posts-Comments-Delete")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "internal/posts/{slug}/comments/{commentId}")>] req : HttpRequestData,
+    claimsPrincipal : ClaimsPrincipal | null,
     slug : string,
     commentId : string,
     ct : CancellationToken
   ) =
     let op = "Admin.Posts.Comments.Delete"
+    let claimsPrincipal = claimsPrincipal |> Option.ofObj
     ct |> (
-      Auth.runIfAuthorized config logger req op
+      Auth.runIfAuthorized config logger req claimsPrincipal op
       <| cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing 'Admin.Posts.Comments.Delete' request with slug '{slug}' and comment id '{commentId}'", slug, commentId)

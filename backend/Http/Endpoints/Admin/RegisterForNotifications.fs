@@ -12,6 +12,7 @@ open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
 open System.Net
+open System.Security.Claims
 open System.Threading
 
 type RegisterForNotificationsJson =
@@ -27,11 +28,13 @@ type RegisterForNotifications(
   [<Function("Admin-Notifications-Register")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "internal/notifications")>] req : HttpRequestData,
+    claimsPrincipal : ClaimsPrincipal | null,
     ct : CancellationToken
   ) =
     let op = "Admin.Notifications.Register"
+    let claimsPrincipal = claimsPrincipal |> Option.ofObj
     ct |> (
-      Auth.runIfAuthorized config logger req op
+      Auth.runIfAuthorized config logger req claimsPrincipal op
       <| cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing '{op}' request", op)
