@@ -7,6 +7,11 @@
   "Host": {
     "CORS": "http://localhost:4321"
   },
+  "AzureAd": {
+    "Instance": "https://sts.windows.net/",
+    "TenantId": "cdf89f94-8c88-48fc-b11c-dd24af4380b4",
+    "ClientId": "e8d3bb42-823a-43c6-902d-8920aafdbca7"
+  },
   "Azure": {
     "CommsResourceEndpoint": "https://acs-twopoint-website.unitedstates.communication.azure.com/",
     "EmailSender": "DoNotReply@f2b2d97f-bb0b-4083-9d4a-c1f3c6e39c00.azurecomm.net",

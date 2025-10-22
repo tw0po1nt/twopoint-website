@@ -1,6 +1,7 @@
-open Azure.Communication.Email
 open TwoPoint.Http
+open TwoPoint.Http.Endpoints.Auth
 
+open Azure.Communication.Email
 open Azure.Data.Tables
 open Azure.Identity
 open Microsoft.Azure.Functions.Worker
@@ -8,6 +9,7 @@ open Microsoft.Azure.Functions.Worker.Builder
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
+open Microsoft.Identity.Web
 open Symbolica.Extensions.Configuration.FSharp
 
 open System
@@ -20,6 +22,11 @@ let main args =
   builder.ConfigureFunctionsWebApplication() |> ignore
   
   builder.Configuration.AddJsonFile("local.settings.json") |> ignore
+  
+  builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration) |> ignore
+  builder.Services.AddAuthorization() |> ignore
+  
+  builder.UseMiddleware<AuthenticationMiddleware>() |> ignore
   
   builder.Services.AddHttpClient() |> ignore
   builder.Services.Configure<JsonSerializerOptions>(
