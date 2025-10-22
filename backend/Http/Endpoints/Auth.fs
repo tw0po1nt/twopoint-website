@@ -20,6 +20,13 @@ let runIfAuthorized
       let! ct = CancellableTask.getCancellationToken()
       let isRunningInAzure = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT") <> "Development"
       
+      // Log authorization header
+      let authHeader =
+        match req.Headers.TryGetValues("Authorization") with
+        | true, values -> String.Join(", ", values)
+        | false, _ -> "missing"
+      logger.LogInformation("Authorization header: {auth}", authHeader)
+      
       logger.LogInformation("Checking auth for '{op}'. Running in Azure: {azure}, Identity count: {count}",
         op, isRunningInAzure, req.Identities |> Seq.length)
       

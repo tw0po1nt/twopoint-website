@@ -7,10 +7,10 @@
     "node": "^18.17.1 || ^20.3.0 || >= 21.0.0"
   },
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "PUBLIC_API_URI=http://localhost:7265 astro build",
-    "build:staging": "PUBLIC_STAGE=staging PUBLIC_API_URI=https://func-twopoint-website-api.azurewebsites.net astro build",
+    "dev": "PUBLIC_STAGE=local astro dev",
+    "start": "PUBLIC_STAGE=local astro dev",
+    "build": "PUBLIC_STAGE=prod astro build",
+    "build:staging": "PUBLIC_STAGE=staging astro build",
     "preview": "astro preview",
     "astro": "astro",
     "check": "npm run check:astro && npm run check:eslint && npm run check:prettier",

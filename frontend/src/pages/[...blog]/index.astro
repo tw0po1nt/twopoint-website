@@ -9,6 +9,7 @@ import SinglePost from '~/components/blog/SinglePost.astro';
 import { getCanonical, getPermalink } from '~/utils/permalinks';
 import { getStaticPathsBlogPost, blogPostRobots } from '~/utils/blog';
 import { findImage } from '~/utils/images';
+import { getApiUri } from '~/utils/api';
 import type { MetaData } from '~/types';
 import RelatedPosts from '~/components/blog/RelatedPosts.astro';
 import NavigationLinks from '~/components/blog/NavigationLinks.astro';
@@ -24,7 +25,7 @@ export const getStaticPaths = (async () => {
 
 type Props = InferGetStaticPropsType<typeof getStaticPaths>;
 
-const apiUri = process.env.PUBLIC_API_URI || 'http://localhost:7265';
+const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
 const { post } = Astro.props as Props;
 
 const url = getCanonical(getPermalink(post.permalink, 'post'));
