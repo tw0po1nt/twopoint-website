@@ -33,9 +33,8 @@ jobs:
         shell: bash
         run: |
           pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          dotnet build --runtime linux-x64 --configuration Release --output ./output
+          dotnet build --runtime linux-x64 ./backend/Http/Http.fsproj --configuration Release --output ./output
           popd
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
