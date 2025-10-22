@@ -36,7 +36,19 @@ let runIfAuthorized
           identity.Name, identity.IsAuthenticated, identity.AuthenticationType))
       
       let isAuthenticated = not isRunningInAzure || req.Identities |> Seq.exists _.IsAuthenticated
-      if not isAuthenticated then
+      let allowedUserIds = ["ad1209ae-c4cc-4360-953a-ccbab9d68c83"]
+      let userId = 
+        req.Identities 
+        |> Seq.tryPick (fun id -> 
+            id.Claims 
+            |> Seq.tryFind (fun c -> c.Type = "http://schemas.microsoft.com/identity/claims/objectidentifier")
+            |> Option.map _.Value)
+      let isAllowedUser =
+        userId
+        |> Option.map (fun id -> allowedUserIds |> List.contains id)
+        |> Option.defaultValue false
+      
+      if not (isAuthenticated && isAllowedUser) then
         logger.LogWarning("Unauthenticated request to '{op}'", op)
         let response = req.CreateResponse HttpStatusCode.Unauthorized
         do! response.WriteAsJsonAsync({| error = "Authentication required" |}, ct)
