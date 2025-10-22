@@ -1,5 +1,6 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
+open System.Security.Claims
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
@@ -55,11 +56,13 @@ type GetAllPosts (
   [<Function("Admin-Posts-GetAll")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "internal/posts")>] req : HttpRequestData,
+    claimsPrincipal : ClaimsPrincipal | null,
     ct : CancellationToken
   ) =
     let op = "Admin.Posts.GetAll"
+    let claimsPrincipal = claimsPrincipal |> Option.ofObj
     ct |> (
-      Auth.runIfAuthorized config logger req op
+      Auth.runIfAuthorized config logger req claimsPrincipal op
       <| cancellableTask {
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request", op)
