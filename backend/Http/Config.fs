@@ -8,13 +8,19 @@ type AzureConfig =
     EmailSender : EmailAddress
     EntraTenantId : Guid
     ManagedIdentityClientId : Guid
-    TableStorageUri : Uri }
+    TableStorageUri : Uri
+    KeyVaultUri : Uri option }
+
+type FirebaseConfig =
+  { ServiceAccountJsonPath : string option
+    ServiceAccountJsonFromKeyVault : string option }
 
 type ValidRedirectUri =
   { Uri : Uri }
 
 type Config =
   { Azure : AzureConfig
+    Firebase : FirebaseConfig
     ValidRedirectUris : ValidRedirectUri list }
   
 module Config =
@@ -31,12 +37,22 @@ module Config =
         let! entraTenantId = Bind.valueAt "EntraTenantId" Bind.guid
         let! managedIdentityClientId = Bind.valueAt "ManagedIdentityClientId" Bind.guid
         let! tableStorageUri = Bind.valueAt "TableStorageUri" (Bind.uri UriKind.Absolute)
+        let! keyVaultUri = Bind.optValueAt "KeyVaultUri" (Bind.uri UriKind.Absolute)
         return
           { CommsResourceEndpoint = commsResourceEndpoint
             EmailSender = emailSender
             EntraTenantId = entraTenantId
             ManagedIdentityClientId = managedIdentityClientId
-            TableStorageUri = tableStorageUri }
+            TableStorageUri = tableStorageUri
+            KeyVaultUri = keyVaultUri }
+      }
+      
+      let! firebase = Bind.section "Firebase" <| bind {
+        let! serviceAccountJsonPath = Bind.optValueAt "ServiceAccountJsonPath" Bind.string
+        let! serviceAccountJsonFromKeyVault = Bind.optValueAt "ServiceAccountJsonFromKeyVault" Bind.string
+        return
+          { ServiceAccountJsonPath = serviceAccountJsonPath
+            ServiceAccountJsonFromKeyVault = serviceAccountJsonFromKeyVault }
       }
       
       let bindValidRedirectUri =  bind {
@@ -46,6 +62,6 @@ module Config =
       
       let! validRedirectUris = Bind.section "ValidRedirectUris" (Bind.list bindValidRedirectUri)
       
-      return { Azure = azure; ValidRedirectUris = validRedirectUris }
+      return { Azure = azure; Firebase = firebase; ValidRedirectUris = validRedirectUris }
     }
     |> Binder.eval config

@@ -6,6 +6,7 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "backend", "backend", "{6E49DB4A-8B81-42B2-B12F-0C2DEA1E2DAC}"
 	ProjectSection(SolutionItems) = preProject
 		backend\Core.Api.fsx = backend\Core.Api.fsx
+		backend\FIREBASE_SETUP.md = backend\FIREBASE_SETUP.md
 	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Core", "backend\Core\Core.fsproj", "{F67D07CC-C5C8-4F92-B664-05A15441D79B}"

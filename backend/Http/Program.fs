@@ -1,9 +1,11 @@
+open FirebaseAdmin
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints.Auth
 
 open Azure.Communication.Email
 open Azure.Data.Tables
 open Azure.Identity
+open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Builder
 open Microsoft.Extensions.Configuration
@@ -59,10 +61,17 @@ let main args =
   // Email client
   let resourceEndpoint = config.Azure.CommsResourceEndpoint
   let emailClient = EmailClient(resourceEndpoint,  credential)
+  
+  // Firebase Admin SDK
+  FirebaseInitializer.initialize config (Some credential)
+  |> Async.AwaitTask
+  |> Async.RunSynchronously
+  |> ignore
 
   builder.Services.AddScoped<Config>(fun _ -> config) |> ignore
   builder.Services.AddScoped<EmailClient>(fun _ -> emailClient) |> ignore
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore
+  builder.Services.AddSingleton<FirebaseMessaging>(fun _ -> FirebaseMessaging.DefaultInstance) |> ignore
     
   builder.Build().Run()
   
