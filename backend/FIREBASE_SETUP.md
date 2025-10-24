@@ -82,7 +82,7 @@ Add these application settings to your Azure Function App via Azure Portal:
     "KeyVaultUri": "https://your-keyvault-name.vault.azure.net/"
   },
   "Firebase": {
-    "ServiceAccountJsonFromKeyVault": "firebase-service-account"
+    "ServiceAccountJsonFromKeyVault": "firebase-service-account-key"
   }
 }
 ```
@@ -107,7 +107,7 @@ Add these application settings to your Azure Function App via Azure Portal:
 
 **Error: Secret not found**
 - Verify the secret name matches what's configured in `Firebase__ServiceAccountJsonFromKeyVault`
-- Check that the secret exists in Key Vault: `az keyvault secret show --vault-name $KEY_VAULT_NAME --name firebase-service-account`
+- Check that the secret exists in Key Vault: `az keyvault secret show --vault-name $KEY_VAULT_NAME --name firebase-service-account-key`
 
 ## Security Best Practices
 
