@@ -108,7 +108,7 @@ module internal CommsService =
           
           // Track the operation
           let push =
-            { DbPush.Id = Guid.NewGuid.ToString() // todo: model as ISystemDependencies
+            { DbPush.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
               OperationId = operationId
               CreatedDate =  DateTime.UtcNow // todo: model as ISystemDependencies
               Recipient = recipient }
@@ -117,5 +117,3 @@ module internal CommsService =
           return dbPush.OperationId
         }
     }
-    
-    
