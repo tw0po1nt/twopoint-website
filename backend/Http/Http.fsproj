@@ -41,8 +41,8 @@
   </ItemGroup>
   
   <ItemGroup>
-    <None Include="service-account-key.json" />
-    <None Update="service-account-key.json">
+    <None Include="service-account-key.json" Condition="Exists('service-account-key.json')" />
+    <None Update="service-account-key.json" Condition="Exists('service-account-key.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
