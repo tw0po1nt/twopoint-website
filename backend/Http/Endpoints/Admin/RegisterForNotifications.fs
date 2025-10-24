@@ -1,10 +1,10 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
+open TwoPoint.Core.Notifications.Api
+open TwoPoint.Core.Notifications.Dependencies
 open TwoPoint.Core.Posts.Logic
-open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
-open Azure.Communication.Email
 open Azure.Data.Tables
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
@@ -14,12 +14,9 @@ open Microsoft.Extensions.Logging
 open System.Net
 open System.Threading
 
-type RegisterForNotificationsJson =
-  { Token: string }
+type RegisterForNotificationsJson = { Token: string }
 
 type RegisterForNotifications(
-  config: Config,
-  emailClient: EmailClient,
   logger: ILogger<UpdateCommentApproval>,
   tableServiceClient: TableServiceClient
 ) =
@@ -35,38 +32,35 @@ type RegisterForNotifications(
     let claimsPrincipal = httpContext |> Option.map _.User
     ct |> (
       Auth.runIfAuthorized logger req claimsPrincipal op
-      <| cancellableTask {
+      <| fun authInfo -> cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing '{op}' request", op)
         
         let! json = req.ReadFromJsonAsync<RegisterForNotificationsJson>(ct)
-        logger.LogWarning("Token: {token}", json.Token)
     
         // Dependencies
-        // let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
-        // let postActions = PostActions.withDependencies postDependencies
-        //
-        // let approvalUpdate =
-        //   { CommentApprovalUpdateDto.CommentId = commentId
-        //     Approval = json.Approval |> Option.defaultValue "" }
-        //
-        // let! approvalUpdateResult = ct |> postActions.UpdateCommentApproval approvalUpdate    
-        // let apiResponse, statusCode =
-        //   match approvalUpdateResult with
-        //   | Ok _ ->
-        //     { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-        //   | Error (Logic updateCommentApprovalError) ->
-        //     let errorMessage =
-        //       match updateCommentApprovalError with
-        //       | UpdateCommentApprovalError.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
-        //     { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
-        //   | Error actionError when actionError.IsValidation ->
-        //     { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-        //   | Error actionError ->
-        //     { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+        let notificationDependencies = NotificationDependencies.live tableServiceClient logger
+        let notificationActions = NotificationActions.withDependencies notificationDependencies
+        
+        // Inputs
+       
+        let newDeviceRegistration =
+          { NewDeviceRegistrationDto.UserExternalId = authInfo.UserExternalId
+            Client = authInfo.Client
+            Token = json.Token }
+        
+        let! registrationResult = ct |> notificationActions.RegisterDevice newDeviceRegistration    
+        let apiResponse, statusCode =
+          match registrationResult with
+          | Ok _ ->
+            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
+          | Error actionError when actionError.IsValidation ->
+            { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
+          | Error actionError ->
+            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
           
-        // response.StatusCode <- statusCode
-        // do! response.WriteAsJsonAsync(apiResponse, ct)
+        response.StatusCode <- statusCode
+        do! response.WriteAsJsonAsync(apiResponse, ct)
         return response
       }
     )

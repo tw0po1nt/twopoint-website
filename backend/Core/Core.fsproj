@@ -14,6 +14,8 @@
     <Compile Include="Shared\ConstrainedTypes.fs" />
     <Compile Include="Shared\LogicTypes.fs" />
     <Compile Include="Shared\StringTypes.fs" />
+    <Compile Include="Notifications\NotificationTypes.fs" />
+    <Compile Include="Notifications\NotificationLogic.fs" />
     <Compile Include="Posts\PostTypes.fs" />
     <Compile Include="Posts\PostLogic.fs" />
   </ItemGroup>

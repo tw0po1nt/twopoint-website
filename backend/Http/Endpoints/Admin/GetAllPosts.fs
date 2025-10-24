@@ -64,7 +64,7 @@ type GetAllPosts (
     
     ct |> (
       Auth.runIfAuthorized logger req claimsPrincipal op
-      <| cancellableTask {
+      <| fun _ -> cancellableTask {
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request", op)
         let response = req.CreateResponse HttpStatusCode.OK
