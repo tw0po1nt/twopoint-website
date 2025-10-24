@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="BindExtensions.fs" />
     <Compile Include="Config.fs" />
+    <Compile Include="FirebaseInitializer.fs" />
     <Compile Include="Endpoints\EndpointTypes.fs" />
     <Compile Include="Endpoints\Auth.fs" />
     <Compile Include="Endpoints\CoreExtensions.fs" />
@@ -28,6 +29,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
     <PackageReference Include="Azure.Identity" Version="1.16.0" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.8.0" />
+    <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.0.0" />
@@ -38,7 +41,12 @@
   </ItemGroup>
   
   <ItemGroup>
-    
+    <None Include="service-account-key.json" />
+    <None Update="service-account-key.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+    <None Include="service-account-key.json.template" />
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

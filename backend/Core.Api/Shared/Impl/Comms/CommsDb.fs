@@ -63,6 +63,51 @@ type internal DbEmail =
     entity["Status"] <- this.Status
     entity["StatusReason"] <- this.StatusReason |> Option.toObj
     entity
+    
+/// <summary>
+/// Database representation of a push notification
+/// </summary>
+/// <remarks>
+/// The <c>Post</c> entity has the following structure: <br/>
+/// <c>
+/// {
+///    "PartitionKey": "&lt;guid&gt;",
+///    "RowKey": "&lt;messageId&gt;",
+///    "Timestamp": "&lt;date&gt;",
+///    "OperationId": "&lt;string&gt;",
+///    "CreatedDate": "&lt;date&gt;",
+///    "Recipient": "&lt;token&gt;",
+///  }
+/// </c>
+/// </remarks>
+type internal DbPush =
+  { Id : string
+    OperationId : string
+    CreatedDate : DateTime
+    Recipient : string }
+  
+  static member FromEntity (entity : TableEntity) = validation {
+    let entityName = nameof DbPush
+    let! operationId = "OperationId" |> entity.RequireString entityName
+    let! createdDate =
+      "CreatedDate"
+      |> entity.RequireString entityName
+      |> Validation.bind DateTime.TryValidateUtc
+    let! recipient = "Recipient" |> entity.RequireString entityName
+
+    return
+      { Id = entity.RowKey
+        OperationId = operationId
+        CreatedDate =  createdDate
+        Recipient = recipient }
+  }
+  
+  member this.ToEntity() =
+    let entity = TableEntity(partitionKey = this.Id, rowKey = this.Id)
+    entity["OperationId"] <- this.OperationId
+    entity["CreatedDate"] <- this.CreatedDate.ToString("o", CultureInfo.InvariantCulture)
+    entity["Recipient"] <- this.Recipient
+    entity
 
 type internal ICommsDb =
   abstract member GetEmailByOperationId: operationId: string -> CancellableTaskResult<DbEmail option, DependencyError>
@@ -72,6 +117,7 @@ type internal ICommsDb =
       -> status: string
       -> statusReason: string option
       -> CancellableTaskResult<DbEmail, DependencyError>
+  abstract member CreatePush: post: DbPush -> CancellableTaskResult<DbPush, DependencyError>
 
 
 module internal CommsDbError =
@@ -102,6 +148,7 @@ module internal CommsDb =
       Db.update tableServiceClient logger db table onError onEntity entity updateEntity
       
     let emailsTable = "emails"
+    let pushesTable = "pushes"
     
     { new ICommsDb with
       
@@ -117,5 +164,8 @@ module internal CommsDb =
           entity["Status"] <- status
           entity["StatusReason"] <- statusReason |> Option.toObj
           entity
+          
+      member this.CreatePush push =
+        push.ToEntity() |> add pushesTable CommsDbError.validation DbPush.FromEntity
     }
   

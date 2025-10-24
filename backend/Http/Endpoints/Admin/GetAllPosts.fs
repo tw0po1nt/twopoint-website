@@ -9,6 +9,7 @@ open TwoPoint.Core.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
+open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -48,6 +49,7 @@ module PostTypesExt =
 type GetAllPosts (
   config: Config,
   emailClient: EmailClient,
+  messaging : FirebaseMessaging,
   logger : ILogger<GetAllPosts>,
   tableServiceClient: TableServiceClient
 ) =
@@ -72,7 +74,13 @@ type GetAllPosts (
         
         // Dependencies
         let postDependencies =
-          PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
+          PostDependencies.live
+            validRedirectUris
+            emailClient
+            config.Azure.EmailSender
+            messaging
+            tableServiceClient
+            logger
         let postQueries = PostQueries.withDependencies postDependencies
         
         let! postsResult = postQueries.GetAllPosts()

@@ -1,14 +1,17 @@
 namespace TwoPoint.Core.Posts.Dependencies
 
-open System.Web
-open FSharp.Control
-open IcedTasks
+open TwoPoint.Core.Notifications.Dependencies
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
+open FirebaseAdmin.Messaging
+open FSharp.Control
+open IcedTasks
+
 open System
+open System.Web
 
 type IPostDependencies =
   abstract member GetAllPosts: unit -> DependencyResult<PostInfo list>
@@ -65,9 +68,10 @@ module PostDependencies =
       { New = 0u; Approved = 0u; Rejected = 1u }
     | _ -> PostCommentStats.Zero
 
-  let live validRedirectUris emailClient emailSender tableServiceClient logger =
+  let live validRedirectUris emailClient emailSender messaging tableServiceClient logger =
     let postDb = PostDb.live tableServiceClient logger
-    let commsService = CommsService.live emailClient tableServiceClient logger emailSender
+    let notificationDb = NotificationDb.live tableServiceClient logger
+    let commsService = CommsService.live emailClient messaging tableServiceClient logger emailSender
     
     let source = Dependency.Database
     
@@ -216,20 +220,46 @@ module PostDependencies =
       }
       
       member this.CreateComment post commenter newComment = cancellableTaskResult {
-        let newComment =
+        let newDbComment =
           { DbComment.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
             PostId = post.Id |> Slug.value
             CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
             Content = newComment.Content |> NonEmptyString.value
             CommenterId = commenter.ValidationId.ToString() }
-        let newStatus =
+        let newDbStatus =
           { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
-            CommentId = newComment.Id
-            CreatedDate = newComment.CreatedDate
+            CommentId = newDbComment.Id
+            CreatedDate = newDbComment.CreatedDate
             Approval = CommentApproval.New.ToString().ToLower() }
         
         let! (dbComment: DbComment, dbCommenter, dbCommentStatus) =
-          postDb.CreateComment newComment newStatus
+          postDb.CreateComment newDbComment newDbStatus
+        
+        // Notify admin
+        do! cancellableTask {
+          // todo: probably good to eventually not hardcode this admin/client lookup
+          //       maybe would even be good to have this post an event and have the dispatching be handled separately
+          //       this'll do for now
+          let! notification =
+            notificationDb.GetDeviceRegistrationByUserAndClient "ad1209ae-c4cc-4360-953a-ccbab9d68c83" "android"
+            |> CancellableTaskResult.map (
+              fun registration -> option {
+                let! registration = registration
+                let commenterName =
+                  commenter.Name |> Option.map _.ToString() |> Option.defaultValue (commenter.EmailAddress.ToString())
+                return
+                  { Title = NonEmptyString.Unsafe.create None "Someone posted a new comment!"
+                    Body = NonEmptyString.Unsafe.create None $"{commenterName} left a comment on the post '{post.Info.Title}'"
+                    Recipient = NonEmptyString.Unsafe.create None registration.Token }
+              }
+            )
+            |> CancellableTask.map (Result.defaultValue None)
+            
+          return!
+            notification
+            |> Option.traverseCancellableTaskResult commsService.SendPushNotification
+            |> CancellableTaskResult.ignore
+        }
         
         return!
           dbComment.ToComment(dbCommentStatus, dbCommenter)

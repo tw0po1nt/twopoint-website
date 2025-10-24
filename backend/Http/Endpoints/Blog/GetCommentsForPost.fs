@@ -8,6 +8,7 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
+open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
@@ -36,6 +37,7 @@ module PostTypesExt =
 type GetCommentsForPost (
   config: Config,
   emailClient: EmailClient,
+  messaging : FirebaseMessaging,
   logger : ILogger<GetCommentsForPost>,
   tableServiceClient: TableServiceClient
 ) =
@@ -52,7 +54,14 @@ type GetCommentsForPost (
     let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
     
     // Dependencies
-    let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
+    let postDependencies =
+      PostDependencies.live
+        validRedirectUris
+        emailClient
+        config.Azure.EmailSender
+        messaging
+        tableServiceClient
+        logger
     let postQueries = PostQueries.withDependencies postDependencies
     
     let onlyApproved = [CommentApproval.Approved.ToString()]

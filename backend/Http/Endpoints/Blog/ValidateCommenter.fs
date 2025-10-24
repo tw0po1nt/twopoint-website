@@ -9,6 +9,7 @@ open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
 open Azure.Data.Tables
+open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
@@ -24,6 +25,7 @@ type CommenterValidationJson =
 type ValidateCommenter (
   config: Config,
   emailClient: EmailClient,
+  messaging : FirebaseMessaging,
   logger: ILogger<PostComment>,
   tableServiceClient: TableServiceClient
 ) =
@@ -40,7 +42,14 @@ type ValidateCommenter (
     let! json = req.ReadFromJsonAsync<CommenterValidationJson>(ct)
     
     // Dependencies
-    let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
+    let postDependencies =
+      PostDependencies.live
+        validRedirectUris
+        emailClient
+        config.Azure.EmailSender
+        messaging
+        tableServiceClient
+        logger
     let postActions = PostActions.withDependencies postDependencies
     
     let commenterValidation =

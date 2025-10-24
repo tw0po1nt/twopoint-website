@@ -9,6 +9,7 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
+open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -23,6 +24,7 @@ type UpdateCommentApprovalJson =
 type UpdateCommentApproval(
   config: Config,
   emailClient: EmailClient,
+  messaging : FirebaseMessaging,
   logger: ILogger<UpdateCommentApproval>,
   tableServiceClient: TableServiceClient
 ) =
@@ -48,7 +50,14 @@ type UpdateCommentApproval(
         let! json = req.ReadFromJsonAsync<UpdateCommentApprovalJson>(ct)
         
         // Dependencies
-        let postDependencies = PostDependencies.live validRedirectUris emailClient config.Azure.EmailSender tableServiceClient logger
+        let postDependencies =
+          PostDependencies.live
+            validRedirectUris
+            emailClient
+            config.Azure.EmailSender
+            messaging
+            tableServiceClient
+            logger
         let postActions = PostActions.withDependencies postDependencies
         
         let approvalUpdate =
