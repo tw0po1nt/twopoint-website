@@ -65,7 +65,7 @@ type AdminGetCommentsForPost (
     let claimsPrincipal = httpContext |> Option.map _.User
     ct |> (
       Auth.runIfAuthorized logger req claimsPrincipal op
-      <| cancellableTask {
+      <| fun _ -> cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing 'Admin.Posts.GetComments' request with slug '{slug}'", slug)
         

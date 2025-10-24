@@ -37,7 +37,7 @@ type DeleteComment(
     let claimsPrincipal = httpContext |> Option.map _.User
     ct |> (
       Auth.runIfAuthorized logger req claimsPrincipal op
-      <| cancellableTask {
+      <| fun _ -> cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing 'Admin.Posts.Comments.Delete' request with slug '{slug}' and comment id '{commentId}'", slug, commentId)
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri

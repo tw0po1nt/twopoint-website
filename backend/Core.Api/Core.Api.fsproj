@@ -13,9 +13,11 @@
       <Compile Include="Shared\Impl\Db.fs" />
       <Compile Include="Shared\Impl\Comms\CommsDb.fs" />
       <Compile Include="Shared\Impl\Comms\Comms.fs" />
+      <Compile Include="Notifications\Impl\NotificationDb.fs" />
+      <Compile Include="Notifications\NotificationApiDependencies.fs" />
+      <Compile Include="Notifications\NotificationActions.fs" />
       <Compile Include="Posts\Impl\PostDb.fs" />
       <Compile Include="Posts\Impl\PostEmails.fs" />
-      <Compile Include="Posts\PostApiTypes.fs" />
       <Compile Include="Posts\PostApiDependencies.fs" />
       <Compile Include="Posts\PostQueries.fs" />
       <Compile Include="Posts\PostActions.fs" />

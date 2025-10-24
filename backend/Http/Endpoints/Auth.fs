@@ -4,6 +4,7 @@ open IcedTasks
 
 open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Authentication.JwtBearer
+open Microsoft.AspNetCore.Http
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Azure.Functions.Worker.Middleware
@@ -14,12 +15,16 @@ open System.Security.Claims
 open System.Threading.Tasks
 open Microsoft.IdentityModel.Tokens
 
+type AuthInfo =
+  { Client : string
+    UserExternalId : string }
+
 let runIfAuthorized
   (logger : ILogger<'T>)
   (req : HttpRequestData)
   (claimsPrincipal : ClaimsPrincipal option)
   (op : string)
-  (fn: CancellableTask<HttpResponseData>) =
+  (fn: AuthInfo -> CancellableTask<HttpResponseData>) =
     cancellableTask {
       let! ct = CancellableTask.getCancellationToken()      
       let identities =
@@ -60,6 +65,24 @@ let runIfAuthorized
         |> Option.defaultValue false
       )
       
+      let androidAppId = "e0505a28-fb17-42d3-8bbd-e98bf44f089e"
+      let appId = 
+        claims 
+        |> Array.tryFind (fun c -> c.Type = "appid")
+        |> Option.map _.Value
+        
+      let client =
+        match appId with
+        | Some id when id = androidAppId -> "android"
+        | _ -> "unknown"
+        
+      let isKnownClient = client = "android"
+          
+      let client =
+        match appId with
+        | Some id when id = androidAppId -> "android"
+        | _ -> "unknown"
+      
       if not isAuthenticated then
         logger.LogWarning("Unauthenticated request to '{op}'", op)
         let response = req.CreateResponse HttpStatusCode.Unauthorized
@@ -70,8 +93,19 @@ let runIfAuthorized
         let response = req.CreateResponse HttpStatusCode.Forbidden
         do! response.WriteAsJsonAsync({| error = "You are not allowed to perform this action" |}, ct)
         return response
+      elif not isKnownClient then
+        logger.LogWarning("Authenticated request with an unrecognized client to '{op}'", op)
+        let response = req.CreateResponse HttpStatusCode.Forbidden
+        do! response.WriteAsJsonAsync({| error = "Unrecognized client" |}, ct)
+        return response
       else
-        return! fn
+        let authInfo =
+          { UserExternalId = userId |> Option.get
+            Client = client }
+
+        let scopeDict = dict [ "UserExternalId", box authInfo.UserExternalId; "Client", box authInfo.Client ]
+        use _ = logger.BeginScope(scopeDict)
+        return! fn authInfo
     }
 
 type AuthenticationMiddleware() =
@@ -85,20 +119,25 @@ type AuthenticationMiddleware() =
       then next.Invoke(context)
       else
         let httpContext = context.GetHttpContext()
-        task {
-          try
-            let! result = httpContext.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme)
-            if result.Succeeded then
-              httpContext.User <- result.Principal
-              do! next.Invoke(context)
-            else
-              raise result.Failure
-          with
-            | :? SecurityTokenInvalidAudienceException
-            | :? SecurityTokenInvalidIssuerException ->
-              httpContext.Response.StatusCode <- int HttpStatusCode.Forbidden
-              do! httpContext.Response.CompleteAsync()
-            | _ ->
-              httpContext.Response.StatusCode <- int HttpStatusCode.Unauthorized
-              do! httpContext.Response.CompleteAsync()
-        } :> Task
+        let protectedSegments = PathString("/api/internal")
+        let isProtectedEndpoint = httpContext.Request.Path.StartsWithSegments(protectedSegments)
+        if not isProtectedEndpoint
+        then next.Invoke(context)
+        else
+          task {
+            try
+              let! result = httpContext.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme)
+              if result.Succeeded then
+                httpContext.User <- result.Principal
+                do! next.Invoke(context)
+              else
+                raise result.Failure
+            with
+              | :? SecurityTokenInvalidAudienceException
+              | :? SecurityTokenInvalidIssuerException ->
+                httpContext.Response.StatusCode <- int HttpStatusCode.Forbidden
+                do! httpContext.Response.CompleteAsync()
+              | _ ->
+                httpContext.Response.StatusCode <- int HttpStatusCode.Unauthorized
+                do! httpContext.Response.CompleteAsync()
+          } :> Task
