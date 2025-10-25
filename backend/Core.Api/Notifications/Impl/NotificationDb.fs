@@ -84,6 +84,8 @@ type internal INotificationDb =
     registration: DbDeviceRegistration
       -> token: string
       -> CancellableTaskResult<DbDeviceRegistration, DependencyError>
+  abstract member RemoveDeviceRegistrationByToken:
+    token: string -> CancellableTaskResult<unit, DependencyError>
 
 
 module internal NotificationDbError =
@@ -114,6 +116,9 @@ module internal NotificationDb =
     let update table onError onEntity entity updateEntity =
       Db.update tableServiceClient logger db table onError onEntity entity updateEntity
       
+    let delete table onError filter =
+      Db.delete tableServiceClient logger db table onError filter
+      
     let deviceRegistrationsTable = "deviceRegistrations"
     
     { new INotificationDb with
@@ -129,5 +134,8 @@ module internal NotificationDb =
         <| fun entity ->
           entity["Token"] <- token
           entity
+          
+      member this.RemoveDeviceRegistrationByToken token = 
+        (eq "Token" token) |> delete deviceRegistrationsTable NotificationDbError.validation
     }
   
