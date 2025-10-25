@@ -60,6 +60,37 @@ type State =
     ClearForm : unit -> unit }
 
 // Helpers
+let validationStorageKey = "commenterValidations"
+
+let getValidationId (email: string) : string option =
+  validationStorageKey
+  |> localStorage.getItem
+  |> Option.ofObj
+  |> Option.bind (fun json ->
+    try
+      let parsed = JS.JSON.parse json
+      let value = JsInterop.(?) parsed email
+      value |> Option.ofObj |> Option.map string
+    with
+    | _ -> None
+  )
+
+let setValidationId (email: string) (validationId: string) =
+  let existingData =
+    validationStorageKey
+    |> localStorage.getItem
+    |> Option.ofObj
+    |> Option.bind (fun json ->
+      try
+        Some (JS.JSON.parse json)
+      with
+      | _ -> None
+    )
+    |> Option.defaultValue (JsInterop.createObj [])
+  
+  JsInterop.(?<-) existingData email validationId
+  localStorage.setItem(validationStorageKey, JS.JSON.stringify existingData)
+
 let appendQuery kvps (uri: Uri) =
   let search = URLSearchParams.Create uri.Query
   for k, v in kvps do
@@ -70,15 +101,27 @@ let appendFragment (fragment: string) (uri: Uri) =
   if not (String.IsNullOrEmpty uri.Fragment) then
     uri
   else
-    let baseUri =
-      uri.AbsoluteUri.Split '#'
-      |> Array.head
     let frag =
       if fragment.StartsWith "#" 
       then fragment
       else "#" + fragment
+    
+    // Build URL as: scheme://host/path?query#fragment
+    // Use AbsoluteUri and just append the fragment since query is already there
+    let uriString = uri.AbsoluteUri + frag
+    Uri(uriString)
 
-    Uri(baseUri + frag)
+let clearQueryParams () =
+  let currentUri = Uri window.location.href
+  let fragment = if String.IsNullOrEmpty currentUri.Fragment then "" else currentUri.Fragment
+  let pathWithFragment = currentUri.PathAndQuery.Split('?').[0] + fragment
+  window.history.replaceState(null, "", pathWithFragment)
+
+let getCleanUri () =
+  // Get current URI without query params or fragment
+  // Use window.location directly to ensure we get the correct host:port
+  let cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname
+  Uri cleanUrl
 
 // Elmish
 
@@ -97,19 +140,30 @@ let init uri slug () =
         Comment = comment }
   }
 
-  let validationIdKey = "commenterValidationId"
   let initialCommenterState =
-    validationIdKey 
-    |> search.get 
-    |> Option.orElse (validationIdKey |> localStorage.getItem |> Option.ofObj)
-    |> Option.map Verified
+    // First check if there's a validation ID in the URL query params
+    search.get "commenterValidationId"
+    |> Option.bind (fun validationId ->
+      // If there is, we need the email to store it properly
+      initialCommentData
+      |> Option.map (fun data ->
+        setValidationId data.Email validationId
+        Verified validationId
+      )
+    )
+    // Otherwise, check if we have a validation ID stored for the email
+    |> Option.orElse (
+      initialCommentData
+      |> Option.bind (fun data ->
+        getValidationId data.Email
+        |> Option.map Verified
+      )
+    )
     |> Option.defaultValue Unverified
 
-  // todo: we really shouldn'tbe doing a side-effect in init. Rework this to not do that.
-  match initialCommenterState with
-  | Verified id ->
-    localStorage.setItem(validationIdKey, id)
-  | _ -> ()
+  // Clear query params from URL if we found any comment-related data
+  if initialCommentData.IsSome || (search.get "commenterValidationId").IsSome then
+    clearQueryParams()
 
   { Uri = uri
     Slug = slug
@@ -175,9 +229,8 @@ let update msg state =
         | "" -> None
         | n -> Some n
 
-      let currentUri = Uri window.location.href
       let redirectUri =
-        currentUri
+        getCleanUri()
         |> appendQuery [
           yield "email", newComment.Email
           yield "comment", newComment.Comment
@@ -193,13 +246,40 @@ let update msg state =
       
       { state with Commenter = VerificationPending newComment.Email },
       Cmd.fromAsync (validateCommenter validation)
-    | Verified validationId ->
-      let newComment =
-        { NewComment.ValidationId = validationId.ToString()
-          Comment = newComment.Comment }
+    | Verified _ ->
+      // Look up the validation ID for this specific email
+      match getValidationId newComment.Email with
+      | Some validationId ->
+        let newCommentData =
+          { NewComment.ValidationId = validationId
+            Comment = newComment.Comment }
 
-      { state with PostComment = Posting; ClearForm = clearForm }, 
-      Cmd.fromAsync (postComment newComment)
+        { state with PostComment = Posting; ClearForm = clearForm }, 
+        Cmd.fromAsync (postComment newCommentData)
+      | None ->
+        // If no validation ID exists for this email, treat as unverified
+        let name =
+          match newComment.Name with
+          | "" -> None
+          | n -> Some n
+
+        let redirectUri =
+          getCleanUri()
+          |> appendQuery [
+            yield "email", newComment.Email
+            yield "comment", newComment.Comment
+            match name with
+            | Some name -> yield "name", name
+            | _ -> ()
+          ]
+          |> appendFragment "leave-a-comment"
+        let validation =
+          { CommenterValidation.EmailAddress = newComment.Email
+            Name = name
+            RedirectUri = redirectUri.ToString() }
+        
+        { state with Commenter = VerificationPending newComment.Email },
+        Cmd.fromAsync (validateCommenter validation)
     | VerificationPending _ | VerificationLoading ->
       state, Cmd.none
   | CommentPosted  ->
