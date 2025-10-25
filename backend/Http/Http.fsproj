@@ -22,6 +22,7 @@
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
     <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
+    <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
     <Compile Include="Endpoints\Health.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -36,6 +37,7 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.0.2" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Queues" Version="5.5.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
     <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
     <PackageReference Include="Symbolica.Extensions.Configuration.FSharp" Version="0.4.0" />
@@ -51,7 +53,8 @@
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="local.settings.json">
+    <None Include="local.settings.json.template" />
+    <None Update="local.settings.json" Condition="Exists('local.settings.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>

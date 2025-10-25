@@ -9,6 +9,7 @@ type AzureConfig =
     EntraTenantId : Guid
     ManagedIdentityClientId : Guid
     TableStorageUri : Uri
+    QueueStorageUri : Uri
     KeyVaultUri : Uri option }
 
 type FirebaseConfig =
@@ -37,6 +38,7 @@ module Config =
         let! entraTenantId = Bind.valueAt "EntraTenantId" Bind.guid
         let! managedIdentityClientId = Bind.valueAt "ManagedIdentityClientId" Bind.guid
         let! tableStorageUri = Bind.valueAt "TableStorageUri" (Bind.uri UriKind.Absolute)
+        let! queueStorageUri = Bind.valueAt "QueueStorageUri" (Bind.uri UriKind.Absolute)
         let! keyVaultUri = Bind.optValueAt "KeyVaultUri" (Bind.uri UriKind.Absolute)
         return
           { CommsResourceEndpoint = commsResourceEndpoint
@@ -44,6 +46,7 @@ module Config =
             EntraTenantId = entraTenantId
             ManagedIdentityClientId = managedIdentityClientId
             TableStorageUri = tableStorageUri
+            QueueStorageUri = queueStorageUri
             KeyVaultUri = keyVaultUri }
       }
       
