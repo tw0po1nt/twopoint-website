@@ -1,4 +1,3 @@
-open FirebaseAdmin
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints.Auth
 
