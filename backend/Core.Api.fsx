@@ -106,7 +106,8 @@ let getCommentsForPost post =
   
 let newPost =
   { NewPostDto.Title = "Functional programming: more than just a coding style"
-    Slug = "functional-programming-more-than-just-a-coding-style" }
+    Slug = "functional-programming-more-than-just-a-coding-style"
+    CreatedDate = "2025-07-24T21:51:00.9970022Z" }
 
 /// <summary>
 /// Execute the <c>createPost</c> action to create a new TwoPoint blog post
