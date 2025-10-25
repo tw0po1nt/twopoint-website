@@ -128,7 +128,7 @@ module PostDependencies =
         let newPost =
           { DbPost.Title = newPost.Title |> NonEmptyString.value
             Slug = newPost.Slug |> Slug.value
-            CreatedDate = DateTime.UtcNow } // todo: model as ISystemDependencies
+            CreatedDate = newPost.CreatedDate }
         let! (dbPost: DbPost) = postDb.CreatePost newPost
         return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
       }

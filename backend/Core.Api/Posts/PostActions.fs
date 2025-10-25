@@ -10,7 +10,8 @@ open IcedTasks
 // Inputs
 type NewPostDto =
   { Title : string
-    Slug : string }
+    Slug : string
+    CreatedDate : string }
   
 type CommenterValidationDto =
   { EmailAddress : string
@@ -118,6 +119,7 @@ module PostActions =
           NewPost.create
             newPost.Title
             newPost.Slug
+            newPost.CreatedDate
           |> Result.mapError ActionError<CreatePostError>.Validation
                       
         let! existingPost =

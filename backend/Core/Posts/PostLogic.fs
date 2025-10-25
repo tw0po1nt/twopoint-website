@@ -19,13 +19,15 @@ open System
 
 type NewPost =
   { Title : NonEmptyString
-    Slug : Slug }
+    Slug : Slug
+    CreatedDate : DateTime }
 
 module NewPost =
-  let create title slug = validation {
+  let create title slug createdDate = validation {
     let! title = title |> NonEmptyString.create (Some (nameof title))
-    let! slug = Slug.create slug
-    return { Title = title; Slug = slug }
+    and! slug = Slug.create slug
+    and! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
+    return { Title = title; Slug = slug; CreatedDate = createdDate }
   }
 
 // Outputs
