@@ -23,7 +23,8 @@ let main args =
     
   builder.ConfigureFunctionsWebApplication() |> ignore
   
-  builder.Configuration.AddJsonFile("local.settings.json") |> ignore
+  if builder.Environment.IsDevelopment() then
+    builder.Configuration.AddJsonFile("local.settings.json") |> ignore
   
   builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration) |> ignore
   builder.Services.AddAuthorization() |> ignore
