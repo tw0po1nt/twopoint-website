@@ -1,6 +1,7 @@
 namespace TwoPoint.Core.Shared.Impl
 
-
+open FirebaseAdmin
+open TwoPoint.Core.Notifications.Dependencies
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
@@ -38,7 +39,7 @@ module PushNotification =
 
 type ICommsService =
   abstract member SendEmail: message: EmailMessage -> CancellableTaskResult<OperationId, DependencyError>
-  abstract member SendPushNotification: message: PushNotification -> CancellableTaskResult<OperationId, DependencyError>
+  abstract member SendPushNotification: message: PushNotification -> CancellableTaskResult<OperationId option, DependencyError>
 
 [<RequireQualifiedAccess>]
 module internal CommsService =
@@ -54,6 +55,7 @@ module internal CommsService =
   let live (emailClient: EmailClient) (messaging : FirebaseMessaging) tableServiceClient logger (sender: TwoPoint.Core.Shared.EmailAddress) =
     
     let commsDb = CommsDb.live tableServiceClient logger
+    let notificationDb = NotificationDb.live tableServiceClient logger
     
     { new ICommsService with
       
@@ -104,16 +106,27 @@ module internal CommsService =
             )
           )
           
-          let! operationId = messaging.SendAsync(message, ct)
-          
-          // Track the operation
-          let push =
-            { DbPush.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
-              OperationId = operationId
-              CreatedDate =  DateTime.UtcNow // todo: model as ISystemDependencies
-              Recipient = recipient }
-            
-          let! dbPush = commsDb.CreatePush push
-          return dbPush.OperationId
+          try
+            let! operationId = messaging.SendAsync(message, ct)
+            // Track the operation
+            let push =
+              { DbPush.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+                OperationId = operationId
+                CreatedDate =  DateTime.UtcNow // todo: model as ISystemDependencies
+                Recipient = recipient }
+              
+            let! dbPush = commsDb.CreatePush push
+            return Some dbPush.OperationId
+          with
+            | :? FirebaseMessagingException as ex ->
+              if ex.ErrorCode = ErrorCode.NotFound
+              then
+                do!
+                  notificationDb.RemoveDeviceRegistrationByToken recipient
+                  |> CancellableTask.map Result.ignoreError
+                return None
+              else
+                raise ex
+                return None
         }
     }
