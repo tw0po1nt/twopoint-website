@@ -6,7 +6,6 @@ open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
-open FirebaseAdmin.Messaging
 open FSharp.Control
 open IcedTasks
 
@@ -282,3 +281,6 @@ module PostDependencies =
       
       member this.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris
     }
+
+
+
