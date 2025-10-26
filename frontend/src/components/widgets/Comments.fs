@@ -329,7 +329,7 @@ let Comments (uri: string, slug: string) =
                       Html.time [
                         prop.className "inline-block"
                         prop.dateTime comment.CreatedDate
-                        prop.text (formatDate comment.CreatedDate)
+                        prop.text (formatRelativeDate comment.CreatedDate)
                       ]
 
                       Html.text " · "
