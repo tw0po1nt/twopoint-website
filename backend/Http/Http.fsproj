@@ -1,0 +1,70 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <Compile Include="BindExtensions.fs" />
+    <Compile Include="Config.fs" />
+    <Compile Include="FirebaseInitializer.fs" />
+    <Compile Include="Endpoints\EndpointTypes.fs" />
+    <Compile Include="Endpoints\Auth.fs" />
+    <Compile Include="Endpoints\CoreExtensions.fs" />
+    <Compile Include="Endpoints\JsonExtensions.fs" />
+    <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
+    <Compile Include="Endpoints\Blog\PostComment.fs" />
+    <Compile Include="Endpoints\Blog\ValidateCommenter.fs" />
+    <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
+    <Compile Include="Endpoints\Admin\SyncPosts.fs" />
+    <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />
+    <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
+    <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
+    <Compile Include="Endpoints\Admin\DeleteComment.fs" />
+    <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
+    <Compile Include="Endpoints\Health.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
+    <PackageReference Include="Azure.Identity" Version="1.16.0" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.8.0" />
+    <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
+    <PackageReference Include="FSharp.Data" Version="6.6.0" />
+    <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.0.2" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.ServiceBus" Version="5.22.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
+    <PackageReference Include="Symbolica.Extensions.Configuration.FSharp" Version="0.4.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <None Include="service-account-key.json" Condition="Exists('service-account-key.json')" />
+    <None Update="service-account-key.json" Condition="Exists('service-account-key.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+    <None Include="service-account-key.json.template" />
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="local.settings.json.template" />
+    <None Update="local.settings.json" Condition="Exists('local.settings.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Core.Api\Core.Api.fsproj" />
+  </ItemGroup>
+
+</Project>

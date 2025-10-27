@@ -1,0 +1,85 @@
+---
+import type { ImageMetadata } from 'astro';
+import { APP_BLOG } from 'astrowind:config';
+
+import Layout from '~/layouts/PageLayout.astro';
+import SinglePost from '~/components/blog/SinglePost.astro';
+import RelatedPosts from '~/components/blog/RelatedPosts.astro';
+import Header from '~/components/widgets/Header.astro';
+
+import { findLatestPosts, findUpcomingPost } from '~/utils/blog';
+import { getCanonical, getPermalink } from '~/utils/permalinks';
+import { findImage } from '~/utils/images';
+import { getApiUri } from '~/utils/api';
+import NavigationLinks from '~/components/blog/NavigationLinks.astro';
+import supportConfig from '~/support-config.json';
+import Comments from '~/components/widgets/Comments.fs';
+import Support from '~/components/widgets/Support.fs';
+import { headerData } from '~/navigation';
+
+export const prerender = true;
+
+const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
+const posts = APP_BLOG.isEnabled ? await findLatestPosts({ count: 1, isHomepage: true }) : [];
+const post = posts[0];
+const url = getCanonical(getPermalink(post.permalink, 'post'));
+const image = (await findImage(post.image)) as ImageMetadata | string | undefined;
+
+const upcomingPost = await findUpcomingPost();
+
+const metadata = {
+  title: 'TwoPoint — A blog about programming, mostly functional',
+  ignoreTitleTemplate: true,
+};
+---
+
+<Layout metadata={metadata}>
+  <Header 
+    slot="header"
+    {...headerData} 
+    isSticky 
+    announcement={upcomingPost ? {
+      title: upcomingPost.title,
+      href: getPermalink(upcomingPost.permalink, 'post'),
+      publishDate: upcomingPost.publishDate
+    } : undefined}
+  />
+  <SinglePost post={{ ...post, image: image }} url={url}>
+    {post.Content ? <post.Content /> : <Fragment set:html={post.content || ''} />}
+  </SinglePost>
+  <div id="comments-section" data-publish-date={post.publishDate.toISOString()}>
+    <Comments client:only="react" uri={apiUri} slug={post.slug} />
+  </div>
+  <NavigationLinks post={post} />
+  <Support client:only="react" config={JSON.stringify(supportConfig)} />
+  <RelatedPosts post={post} />
+</Layout>
+
+<script>
+  // Check if the post has been published and hide comments if not
+  function checkCommentsVisibility() {
+    const commentsSection = document.getElementById('comments-section');
+    if (!commentsSection) return;
+
+    const publishDateStr = commentsSection.getAttribute('data-publish-date');
+    if (!publishDateStr) return;
+
+    const publishDate = new Date(publishDateStr);
+    const now = new Date();
+
+    // If the publish date is in the future, hide comments
+    if (publishDate > now) {
+      commentsSection.style.display = 'none';
+    }
+  }
+
+  // Run on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkCommentsVisibility);
+  } else {
+    checkCommentsVisibility();
+  }
+
+  // Re-run after Astro page transitions
+  document.addEventListener('astro:page-load', checkCommentsVisibility);
+</script>

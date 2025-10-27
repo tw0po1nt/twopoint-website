@@ -1,8 +1,10 @@
 # build output
 dist/
 .output/
-src/obj
-src/bin
+
+# .NET artifacts
+**/obj/
+**/bin/
 
 # dependencies
 node_modules/
@@ -17,6 +19,11 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+local.settings.json
+
+# Firebase service account credentials
+**/service-account-key.json
+**/firebase-*.json
 
 # macOS-specific files
 .DS_Store
@@ -25,3 +32,6 @@ pnpm-lock.yaml
 
 .astro
 .fake
+.idea
+
+*.DotSettings.user

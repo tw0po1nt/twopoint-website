@@ -1,0 +1,46 @@
+---
+export interface Props {
+  title: string;
+  href: string;
+  publishDate: Date;
+}
+
+const { title, href, publishDate } = Astro.props;
+const publishDateISO = publishDate.toISOString();
+---
+
+<div
+  id="announcement-banner"
+  data-publish-date={publishDateISO}
+  class="relative z-10 bg-primary dark:bg-primary text-white md:flex gap-1 overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-sm"
+>
+  <span
+    class="bg-white/20 dark:bg-white/15 text-white font-bold px-2 py-0.5 text-xs mr-0.5 rtl:mr-0 rtl:ml-0.5 inline-block uppercase tracking-wide"
+    >UPCOMING</span
+  >
+  <a href={href} class="text-white hover:text-white/80 dark:hover:text-white/70 font-medium transition-colors"
+    >{title} »</a
+  >
+</div>
+
+<script>
+  // Check if the upcoming post's publish date has passed
+  function checkAnnouncementVisibility() {
+    const banner = document.getElementById('announcement-banner');
+    if (!banner) return;
+
+    const publishDateStr = banner.getAttribute('data-publish-date');
+    if (!publishDateStr) return;
+
+    const publishDate = new Date(publishDateStr);
+    const now = new Date();
+
+    // If the publish date has passed, hide the banner
+    if (now >= publishDate) {
+      banner.style.display = 'none';
+    }
+  }
+
+  // Run on page load
+  checkAnnouncementVisibility();
+</script>

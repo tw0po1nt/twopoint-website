@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "Http": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7265",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

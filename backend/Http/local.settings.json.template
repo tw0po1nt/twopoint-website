@@ -1,0 +1,32 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "TwoPointWebsiteServiceBus": ""
+  },
+  "Host": {
+    "CORS": "http://localhost:4321"
+  },
+  "AzureAd": {
+    "Instance": "https://sts.windows.net/",
+    "TenantId": "<tenant_id>",
+    "ClientId": "<client_id>"
+  },
+  "Azure": {
+    "CommsResourceEndpoint": "https://<acs_resource_name>.<region>.communication.azure.com/",
+    "EmailSender": "DoNotReply@test.com",
+    "EntraTenantId": "<entra_tenant_id>",
+    "ManagedIdentityClientId": "<managed_identity_client_id>",
+    "TableStorageUri": "https://<storage_account_name>.table.core.windows.net/",
+    "ServiceBusUri": "https://<service_bus_namespace>.servicebus.windows.net/"
+  },
+  "Firebase": {
+    "ServiceAccountJsonPath": "./service-account-key.json"
+  },
+  "ValidRedirectUris": [
+    {
+      "Uri": "http://localhost:4321"
+    }
+  ]
+}
