@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "PUBLIC_STAGE=local astro dev",
     "start": "PUBLIC_STAGE=local astro dev",
-    "build": "PUBLIC_STAGE=prod astro build",
+    "build": "PUBLIC_STAGE=production astro build",
     "build:staging": "PUBLIC_STAGE=staging astro build",
     "preview": "astro preview",
     "astro": "astro",
