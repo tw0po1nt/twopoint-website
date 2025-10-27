@@ -27,7 +27,6 @@ type Msg =
   | CommentsLoaded of Comment list
   | CommenterValidationSent of CommenterValidation
   | CommenterValidationFailed of string
-  | CommenterValidationComplete of string
   | PostComment of NewCommentData * ClearFormFn
   | CommentPosted
   | CommentPostFailed of string
@@ -38,9 +37,7 @@ type CommentsState =
   | Comments of Comment list
 
 type CommenterState =
-  | Unverified
-  | Verified of string
-  | VerificationLoading
+  | VerificationNotLoading
   | VerificationPending of Email
   | VerificationFailed of string
 
@@ -109,13 +106,13 @@ let appendFragment (fragment: string) (uri: Uri) =
     // Build URL as: scheme://host/path?query#fragment
     // Use AbsoluteUri and just append the fragment since query is already there
     let uriString = uri.AbsoluteUri + frag
-    Uri(uriString)
+    Uri uriString
 
 let clearQueryParams () =
   let currentUri = Uri window.location.href
   let fragment = if String.IsNullOrEmpty currentUri.Fragment then "" else currentUri.Fragment
   let pathWithFragment = currentUri.PathAndQuery.Split('?').[0] + fragment
-  window.history.replaceState(null, "", pathWithFragment)
+  history.replaceState(null, "", pathWithFragment)
 
 let getCleanUri () =
   // Get current URI without query params or fragment
@@ -134,44 +131,32 @@ let init uri slug () =
     let! email = search.get "email"
     let name = search.get "name" |> Option.defaultValue ""
     let! comment = search.get "comment"
+    let! validationId = search.get "commenterValidationId"
     return
       { Email = email
         Name = name
-        Comment = comment }
+        Comment = comment }, validationId
   }
 
-  let initialCommenterState =
-    // First check if there's a validation ID in the URL query params
-    search.get "commenterValidationId"
-    |> Option.bind (fun validationId ->
-      // If there is, we need the email to store it properly
-      initialCommentData
-      |> Option.map (fun data ->
-        setValidationId data.Email validationId
-        Verified validationId
-      )
-    )
-    // Otherwise, check if we have a validation ID stored for the email
-    |> Option.orElse (
-      initialCommentData
-      |> Option.bind (fun data ->
-        getValidationId data.Email
-        |> Option.map Verified
-      )
-    )
-    |> Option.defaultValue Unverified
+  let initialState =
+    { Uri = uri
+      Slug = slug
+      Comments = Loading
+      Commenter = VerificationNotLoading
+      InitialCommentData = None
+      PostComment = NotStarted
+      ClearForm = ignore }
 
   // Clear query params from URL if we found any comment-related data
-  if initialCommentData.IsSome || (search.get "commenterValidationId").IsSome then
-    clearQueryParams()
+  let initialState =
+    match initialCommentData with
+    | Some (initialCommentData, commenterValidationId) ->
+      clearQueryParams()
+      setValidationId initialCommentData.Email commenterValidationId
+      { initialState with InitialCommentData = Some initialCommentData }
+    | None -> initialState
 
-  { Uri = uri
-    Slug = slug
-    Comments = Loading
-    Commenter = initialCommenterState
-    InitialCommentData = initialCommentData
-    PostComment = NotStarted
-    ClearForm = ignore },
+  initialState,
   Cmd.ofMsg LoadComments
 
 let update msg state =
@@ -193,9 +178,7 @@ let update msg state =
     { state with Commenter = VerificationPending validation.EmailAddress }, Cmd.none
   | CommenterValidationFailed error ->
     { state with Commenter = VerificationFailed error }, Cmd.none
-  | CommenterValidationComplete commenterId ->
-    { state with Commenter = Verified commenterId }, Cmd.none
-  | PostComment (newComment, clearForm) ->
+  | PostComment (newCommentData, clearForm) ->
     let postComment newComment = async {
       let! result =
         (state.Slug, newComment)
@@ -222,66 +205,39 @@ let update msg state =
         return CommenterValidationFailed (result.Message |> Option.defaultValue "Unable to validate your information. Please try again later.")
     }
 
-    match state.Commenter with
-    | Unverified | VerificationFailed _ ->
+    // Look up the validation ID for this specific email
+    match getValidationId newCommentData.Email with
+    | Some validationId ->
+      let newCommentData =
+        { NewComment.ValidationId = validationId
+          Comment = newCommentData.Comment }
+
+      { state with PostComment = Posting; ClearForm = clearForm }, 
+      Cmd.fromAsync (postComment newCommentData)
+    | None ->
+      // If no validation ID exists for this email, treat as unverified
       let name =
-        match newComment.Name with
+        match newCommentData.Name with
         | "" -> None
         | n -> Some n
 
       let redirectUri =
         getCleanUri()
         |> appendQuery [
-          yield "email", newComment.Email
-          yield "comment", newComment.Comment
+          yield "email", newCommentData.Email
+          yield "comment", newCommentData.Comment
           match name with
           | Some name -> yield "name", name
           | _ -> ()
         ]
         |> appendFragment "leave-a-comment"
       let validation =
-        { CommenterValidation.EmailAddress = newComment.Email
+        { CommenterValidation.EmailAddress = newCommentData.Email
           Name = name
           RedirectUri = redirectUri.ToString() }
-      
-      { state with Commenter = VerificationPending newComment.Email },
+
+      { state with Commenter = VerificationPending newCommentData.Email },
       Cmd.fromAsync (validateCommenter validation)
-    | Verified _ ->
-      // Look up the validation ID for this specific email
-      match getValidationId newComment.Email with
-      | Some validationId ->
-        let newCommentData =
-          { NewComment.ValidationId = validationId
-            Comment = newComment.Comment }
-
-        { state with PostComment = Posting; ClearForm = clearForm }, 
-        Cmd.fromAsync (postComment newCommentData)
-      | None ->
-        // If no validation ID exists for this email, treat as unverified
-        let name =
-          match newComment.Name with
-          | "" -> None
-          | n -> Some n
-
-        let redirectUri =
-          getCleanUri()
-          |> appendQuery [
-            yield "email", newComment.Email
-            yield "comment", newComment.Comment
-            match name with
-            | Some name -> yield "name", name
-            | _ -> ()
-          ]
-          |> appendFragment "leave-a-comment"
-        let validation =
-          { CommenterValidation.EmailAddress = newComment.Email
-            Name = name
-            RedirectUri = redirectUri.ToString() }
-        
-        { state with Commenter = VerificationPending newComment.Email },
-        Cmd.fromAsync (validateCommenter validation)
-    | VerificationPending _ | VerificationLoading ->
-      state, Cmd.none
   | CommentPosted  ->
     state.ClearForm()
     { state with 
@@ -433,7 +389,7 @@ let Comments (uri: string, slug: string) =
               ]
               
               match state.Commenter with
-              | Unverified | Verified _ | VerificationLoading -> Html.none
+              | VerificationNotLoading -> Html.none
               | VerificationPending pendingEmail -> verifyEmail pendingEmail
               | VerificationFailed error -> errorMessage error
 
