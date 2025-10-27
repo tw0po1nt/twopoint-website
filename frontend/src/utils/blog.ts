@@ -193,6 +193,28 @@ export const findLatestPosts = async ({ count, isHomepage }: { count?: number, i
   return posts ? posts.slice(0, _count) : [];
 };
 
+/** */
+export const findUpcomingPost = async (): Promise<Post | null> => {
+  const posts = await getCollection('post');
+  const now = new Date();
+  
+  const upcomingPosts = posts.filter((post) => {
+    const publishDate = new Date(post.data.publishDate || new Date());
+    return publishDate > now && !post.data.draft;
+  });
+
+  if (upcomingPosts.length === 0) return null;
+
+  // Sort by publish date and get the earliest upcoming post
+  upcomingPosts.sort((a, b) => {
+    const dateA = new Date(a.data.publishDate || new Date());
+    const dateB = new Date(b.data.publishDate || new Date());
+    return dateA.valueOf() - dateB.valueOf();
+  });
+
+  return await getNormalizedPost(upcomingPosts[0]);
+};
+
 export const findSeries = async () => {
   if (!isBlogEnabled || !isBlogSeriesRouteEnabled) return [];
   const posts = await fetchPosts();
