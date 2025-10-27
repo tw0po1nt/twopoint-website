@@ -69,10 +69,12 @@ module internal PostEmails =
             <table style="width: 100%" cellpadding="0" cellspacing="0" role="none">
               <tr>
                 <td class="sm-p-6" style="border-radius: 8px; background-color: #fffffe; padding: 24px 36px; border: 1px solid #e2e8f0">
-                  <a href="https://maizzle.com" style="color: #000001; text-decoration: none">
-                    <span class="dark-text-white" style="display: flex; flex-direction: row; align-items: center; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; font-weight: 700">Two&nbsp;<svg class="dark-text-red-500" height="1em" width="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="color: #dc2626">
-                      <path d="m7 8l-4 4l4 4m10-8l4 4l-4 4M14 4l-4 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-                    </svg> &nbsp;Point</span>
+                  <a href="https://twopoint.dev" style="color: #000001; text-decoration: none">
+                    <span class="dark-text-white" style="display: flex; flex-direction: row; align-items: center; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; font-weight: 700">
+                      Two&nbsp;
+                      <svg class="dark-text-red-500" height="1em" width="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="color: #dc2626"><path d="m7 8l-4 4l4 4m10-8l4 4l-4 4M14 4l-4 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                      &nbsp;Point
+                    </span>
                   </a>
                   <div role="separator" style="line-height: 24px">&zwj;</div>
                   <h1 style="margin: 0 0 24px; font-size: 24px; line-height: 32px; font-weight: 600; color: #0f172a">
