@@ -5,6 +5,7 @@ import { APP_BLOG } from 'astrowind:config';
 import Layout from '~/layouts/PageLayout.astro';
 import SinglePost from '~/components/blog/SinglePost.astro';
 import RelatedPosts from '~/components/blog/RelatedPosts.astro';
+import Header from '~/components/widgets/Header.astro';
 
 import { findLatestPosts, findUpcomingPost } from '~/utils/blog';
 import { getCanonical, getPermalink } from '~/utils/permalinks';
@@ -14,7 +15,7 @@ import NavigationLinks from '~/components/blog/NavigationLinks.astro';
 import supportConfig from '~/support-config.json';
 import Comments from '~/components/widgets/Comments.fs';
 import Support from '~/components/widgets/Support.fs';
-import Announcement from '~/components/widgets/Announcement.astro';
+import { headerData } from '~/navigation';
 
 export const prerender = true;
 
@@ -33,18 +34,52 @@ const metadata = {
 ---
 
 <Layout metadata={metadata}>
-  {upcomingPost && (
-    <Announcement 
-      title={upcomingPost.title} 
-      href={getPermalink(upcomingPost.permalink, 'post')}
-      publishDate={upcomingPost.publishDate}
-    />
-  )}
+  <Header 
+    slot="header"
+    {...headerData} 
+    isSticky 
+    announcement={upcomingPost ? {
+      title: upcomingPost.title,
+      href: getPermalink(upcomingPost.permalink, 'post'),
+      publishDate: upcomingPost.publishDate
+    } : undefined}
+  />
   <SinglePost post={{ ...post, image: image }} url={url}>
     {post.Content ? <post.Content /> : <Fragment set:html={post.content || ''} />}
   </SinglePost>
-  <Comments client:only="react" uri={apiUri} slug={post.slug} />
+  <div id="comments-section" data-publish-date={post.publishDate.toISOString()}>
+    <Comments client:only="react" uri={apiUri} slug={post.slug} />
+  </div>
   <NavigationLinks post={post} />
   <Support client:only="react" config={JSON.stringify(supportConfig)} />
   <RelatedPosts post={post} />
 </Layout>
+
+<script>
+  // Check if the post has been published and hide comments if not
+  function checkCommentsVisibility() {
+    const commentsSection = document.getElementById('comments-section');
+    if (!commentsSection) return;
+
+    const publishDateStr = commentsSection.getAttribute('data-publish-date');
+    if (!publishDateStr) return;
+
+    const publishDate = new Date(publishDateStr);
+    const now = new Date();
+
+    // If the publish date is in the future, hide comments
+    if (publishDate > now) {
+      commentsSection.style.display = 'none';
+    }
+  }
+
+  // Run on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkCommentsVisibility);
+  } else {
+    checkCommentsVisibility();
+  }
+
+  // Re-run after Astro page transitions
+  document.addEventListener('astro:page-load', checkCommentsVisibility);
+</script>

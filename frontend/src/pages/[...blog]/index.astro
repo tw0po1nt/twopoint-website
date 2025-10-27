@@ -54,8 +54,39 @@ const metadata = merge(
   <SinglePost post={{ ...post, image: image }} url={url}>
     {post.Content ? <post.Content /> : <Fragment set:html={post.content || ''} />}
   </SinglePost>
-  <Comments client:only="react" uri={apiUri} slug={post.slug} />
+  <div id="comments-section" data-publish-date={post.publishDate.toISOString()}>
+    <Comments client:only="react" uri={apiUri} slug={post.slug} />
+  </div>
   <NavigationLinks post={post} />
   <Support client:only="react" config={JSON.stringify(supportConfig)} />
   <RelatedPosts post={post} />
 </Layout>
+
+<script>
+  // Check if the post has been published and hide comments if not
+  function checkCommentsVisibility() {
+    const commentsSection = document.getElementById('comments-section');
+    if (!commentsSection) return;
+
+    const publishDateStr = commentsSection.getAttribute('data-publish-date');
+    if (!publishDateStr) return;
+
+    const publishDate = new Date(publishDateStr);
+    const now = new Date();
+
+    // If the publish date is in the future, hide comments
+    if (publishDate > now) {
+      commentsSection.style.display = 'none';
+    }
+  }
+
+  // Run on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkCommentsVisibility);
+  } else {
+    checkCommentsVisibility();
+  }
+
+  // Re-run after Astro page transitions
+  document.addEventListener('astro:page-load', checkCommentsVisibility);
+</script>

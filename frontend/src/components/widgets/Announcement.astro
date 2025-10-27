@@ -12,13 +12,13 @@ const publishDateISO = publishDate.toISOString();
 <div
   id="announcement-banner"
   data-publish-date={publishDateISO}
-  class="dark text-muted text-sm bg-black dark:bg-transparent dark:border-b dark:border-slate-800 dark:text-slate-400 hidden md:flex gap-1 overflow-hidden px-3 py-2 relative text-ellipsis whitespace-nowrap"
+  class="relative z-10 bg-primary dark:bg-primary text-white md:flex gap-1 overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-sm"
 >
   <span
-    class="dark:bg-slate-700 bg-white/40 dark:text-slate-300 font-semibold px-1 py-0.5 text-xs mr-0.5 rtl:mr-0 rtl:ml-0.5 inline-block"
+    class="bg-white/20 dark:bg-white/15 text-white font-bold px-2 py-0.5 text-xs mr-0.5 rtl:mr-0 rtl:ml-0.5 inline-block uppercase tracking-wide"
     >UPCOMING</span
   >
-  <a href={href} class="text-muted hover:underline dark:text-slate-400 font-medium"
+  <a href={href} class="text-white hover:text-white/80 dark:hover:text-white/70 font-medium transition-colors"
     >{title} »</a
   >
 </div>
