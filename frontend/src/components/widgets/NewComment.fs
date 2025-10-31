@@ -53,7 +53,7 @@ let NewComment (disabled: bool, initial: NewCommentData option, onComment: NewCo
 
   Html.div [
     prop.className [
-      "flex flex-col text-left backdrop-blur bg-white border dark:bg-zinc-900 rounded-lg border-gray-200 dark:border-gray-700 lg:p-8 max-w-3xl mx-auto p-4 shadow sm:p-6 w-full";
+      "flex flex-col text-left backdrop-blur bg-white border dark:bg-zinc-900 rounded-lg border-gray-200 dark:border-gray-700 lg:p-8 max-w-5xl mx-auto p-4 shadow sm:p-6 w-full";
       if disabled then "opacity-50"
     ]
     prop.children [
