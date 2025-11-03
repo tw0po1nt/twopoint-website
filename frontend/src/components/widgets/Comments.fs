@@ -277,7 +277,7 @@ let Comments (uri: string, slug: string) =
           Html.header [
             prop.children [
               Html.div [
-                prop.className "flex justify-between flex-row max-w-3xl mx-auto mt-0 mb-2"
+                prop.className "flex justify-between flex-row max-w-5xl mx-auto mt-0 mb-2"
                 prop.children [
                   Html.p [
                     prop.className "text-sm md:text-base text-muted dark:text-slate-400"
@@ -297,7 +297,7 @@ let Comments (uri: string, slug: string) =
               ]
 
               Html.p [
-                prop.className "max-w-3xl mx-auto mt-4 mb-8 text-base md:text-lg text-black dark:text-white text-justify"
+                prop.className "max-w-5xl mx-auto mt-4 mb-8 text-base md:text-lg text-black dark:text-white text-justify"
                 prop.text comment.Content
               ]
             ]
@@ -343,10 +343,10 @@ let Comments (uri: string, slug: string) =
     prop.className "relative not-prose scroll-mt-[72px]"
     prop.children [
       Html.div [
-        prop.className "intersect-once motion-safe:md:intersect:animate-fade motion-safe:md:opacity-0 intersect-quarter mx-auto intercept-no-queue px-4 relative lg:pb-20 md:px-6 md:pb-16 pb-12 text-default max-w-7xl"
+        prop.className "intersect-once motion-safe:md:intersect:animate-fade motion-safe:md:opacity-0 intersect-quarter mx-auto intercept-no-queue relative lg:pb-20 md:pb-16 pb-12 text-default max-w-7xl"
         prop.children [
           Html.div [
-            prop.className "md:mx-auto max-w-3xl"
+            prop.className "md:mx-auto max-w-5xl px-6"
             prop.children [
               Html.p [
                 prop.className "font-bold font-heading text-xl md:text-2xl mb-8"

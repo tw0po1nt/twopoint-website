@@ -1,0 +1,781 @@
+---
+publishDate: 2025-11-03T14:00:00.0000000Z
+author: Matthew Watt
+title: "Functional architecture in C#: a case study"
+excerpt: As part of my .NET Conf 2025 talk, I wanted to address C# developers as well as C# developers who would rather be writing F#. This post is for that crowd.
+image: https://twopointwebsite.blob.core.windows.net/posts/functional-architecture-in-csharp-a-case-study/thumbnail.jpg
+category: 'One-offs'
+tags:
+  - CSharp
+  - Functional programming
+  - Domain-driven design
+  - ".NET Conf"
+  - "2025"
+metadata:
+  canonical: https://twopoint.dev/posts/functional-architecture-in-csharp-a-case-study
+showOnHomepage: true
+---
+
+In this post, we'll look at a case study in functional architecture using C#. We'll take a glimpse at how we have leveraged functional programming, domain-driven design, and C# to develop a critical project for one of my current clients. My hope for C# developers is that they will see that writing "functional C#" goes beyond just the handful of features C# borrows from functional languages like F#. My hope for F# developers in a C# world is that they will see that they can scratch the functional itch and write solid code, even if it isn't exactly what they had in mind.
+
+## Background
+
+First, a little background on the project. My team and I have been building an eCommerce platform for our client for the last 2 years. In the beginning, it was always going to be a C# project, since the company I work for is a C# shop through and through (note I did _not_ say ".NET shop", F# enthusiast that I am. All you VB devs out there, I see you too 👀). I was just starting out at the company and I had taken the job because I wanted to add C# and .NET development to my skillset. It was also before I had my ["aha" moment with functional programming](/posts/why-the-fsharp-would-i-write-real-code-like-this), so my initial focus was on absorbing and learning everything C# and .NET, not on spearheading architecture. And so the project initially adopted the "standard" architecture for most new projects, a "Clean Architecture"-based boilerplate.
+
+Things were going well when I finally _did_ have my "aha" moment with functional programming. Feeling a rush of motivation to learn, I started reading as much as I could. I finally picked up the copy of Scott Wlaschin's "[Domain Modeling Made Functional](https://fsharpforfunandprofit.com/books/#domain-modeling-made-functional)" that [my co-worker](https://aligneddev.net/blog/2024/journey-towards-functional-programming/) had left on my desk and read the whole thing. All the while, I started trying to find ways to apply what I was learning to the project, since I learn best by doing. This started the project on the domain-driven design + functional programming path that it is on to this day.
+
+## Architecture
+
+There have been a few iterations of the architecture over the last 2 years - you don't go from a very object-oriented, "Clean architecture"-style architecture to a functional, domain-driven design architecture overnight (although there was one very large PR that made a lot of significant structural changes all at once that got me some concerned side-eye from my co-worker). Informed by a combination of learning by reading, learning by doing, learning by earlier ideas not working so well, and a nefariously evil plan to eventually start writing new features of the system in F#, we have landed on a stable architecture that has adapted well to the rapidly changing priorities and requirements of our client.
+
+### Atoms
+
+#### Atom 1: A functional microlibrary
+
+Our codebase is built upon a microlibrary of functional primitives that I have slowly been developing over the life of the project. Its core components are:
+
+- An `Option<T>` type
+- A `Result<TSuccess, TError>` type
+- Functional operators (like `Match()`, `Map()`, `Bind()` etc) for composing computations of these types
+- Interop with `Task` and C#'s built-in nullability
+
+I can already hear some objections, so I'll address them right away.
+
+##### "But that's not idiomatic C#"
+
+I've seen this objection online a handful of times.
+
+The core of this complaint is that C# provides built-in faculties for these things, particularly `Nullable<T>`, and that we should use that instead. Using functional libraries with `Option` and `Result` results in "foreign looking" C# code that isn't idiomatic and is scary to newcomers.
+
+Don't get me wrong - I'm not _opposed_ to using C#'s built-ins. I actively encourage it, as you'll see shortly. I just think optionality and error handling (using exceptions) leaves something to be desired.
+
+That said, I have two rebuttals to this objection:
+
+1. "Idiomatic" is in the eye of the beholder.
+
+"Idiomatic" is subjective. As developers we often mindlessly seek out the "idiomatic" approach for no other reason than that it makes us feel safe because we can write code in a prescribed style or fashion and not have to actually think about our current problem or context. Blindly chasing "idiomatic" is just a thinly veiled symptom of ["silver-bullet syndrome"](https://duckduckgo.com/?q=silver+bullet+syndrome) and should be avoided.
+
+2. It's difficult to break years of bad habits
+
+I'll give the C# team credit - the language's handling of ["the billion dollar mistake"](https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/) in recent iterations has been very good. You should definitely be reaching for `<Nullable>enable</Nullable>` as a default if you haven't already.
+
+Even so, great `null` handling in newer versions doesn't just wipe out the last several decades of bad developer habits overnight. It's still far too easy for us to implicitly let `null`s and `Exceptions` wreak havoc on our codebases. I've said it before: [it is better to be explicit than implicit](/posts/why-the-fsharp-would-i-write-real-code-like-this#explicit-rather-than-implicit). Using dedicated `Option` and `Result` types forces us to explicitly handle missing values or calculations that can fail.
+
+##### "Libraries for this already exist. Why re-invent the wheel?"
+
+It's a fair point. Why re-invent the wheel?
+
+1. Depending on 3rd party software is risk
+
+In this world of "there's a framework for that" or "just use something on NuGet", it's easy to take a hard dependency on a 3rd party. So easy, in fact, it almost feels like we can take these hard dependencies with no risks - but that's just not the case.
+
+Any hard dependency on something you don't control is a risk. There's a risk that the project might take a new direction that doesn't meet you or your project's needs anymore. There's a risk that eventually you will have to pay for a license to continue to get updates, even if initial versions were free. The .NET community knows this pain well (see [Fluent Assertions](https://fluentassertions.com/releases/#800), [AutoMapper, and MediatR](https://www.jimmybogard.com/automapper-and-mediatr-licensing-update/))
+
+2. The functional abstractions we use are simple
+
+Rolling your own cryptography is difficult and error prone. The consequences of getting it wrong are steep. It's why, we are told, "never roll your own cryptography". `Option` and `Result` aren't cryptography. They are simple abstractions that are easy to implement and test yourself.
+
+Why take on the risk of 3rd party libraries when the implementation is straightfoward? This is why I decided we would hand-roll.
+
+#### Atom 2: C#'s standard functional toolkit 
+
+Mads Torgerson, the C# language's current design lead is [outspokenly proud to have borrowed or outright taken ideas for C# from F# and other functional programming languages](https://www.infoq.com/presentations/c-sharp-functional-features/). This is a good thing, because it means that C# developers have access to some of the most important tools for writing code in a functional style:
+
+- First-class functions with [delegates and lambdas](https://learn.microsoft.com/en-us/dotnet/standard/delegates-lambdas)
+- Immutable data:
+  - [Records](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/record)
+  - [Immutable collections (available as part of the core .NET libraries)](https://learn.microsoft.com/en-us/dotnet/api/system.collections.immutable?view=net-9.0#remarks)
+
+And the honorable mention: [LINQ](https://learn.microsoft.com/en-us/dotnet/csharp/linq/)
+
+I might get some raised eyebrows for this one, but in my mind the honorable mention is LINQ. It isn't _strictly_ necessary for writing C# in a functional style, but it _does_ make doing so much more ergonomic and natural, and I love using it.
+
+The biggest points it gets, in my opinion, is its powerful use of [expression trees](https://learn.microsoft.com/en-us/dotnet/csharp/advanced-topics/expression-trees/). It's only disappointing that this "expression-orientedness" didn't spread to more of the language, since expression-based languages make writing value-oriented (think: immutability-oriented) code a snap. Hence honorable mention.
+
+### Molecules: functional core
+
+I have written about the ["functional core, imperative shell"](/posts/why-the-fsharp-would-i-write-real-code-like-this#the-pits-of-success) concept before. I consider it to be one of the most important tools that functional programming gives us for writing robust and maintainable code.
+
+In our system, the functional core is:
+
+- Immutable data expressed in types
+- Business rules expressed as pure functions
+- All glued together with composition using the functional microlibrary
+
+Let's see how this looks with our case study, something most modern systems need: a registration flow. 
+
+**A quick note**: This isn't how registration works within my client's application. This is a generalized example that captures requirements common of many systems.
+
+#### Inputs
+
+First, let's start with the types needed for modeling the input.
+
+```csharp
+using FpCs; // the functional atoms
+using ValidationError = string;
+
+namespace TwoPoint.Registration;
+
+// Full implementation for NonEmptyString provided as an example
+// The rest are elided for brevity
+public sealed record NonEmptyString 
+{
+  public string Value { get; }
+  private NonEmptyString(string value) => Value = value;
+
+  public Result<EmailAddress, ValidationError> Create(
+    string value, 
+    string fieldName = nameof(NonEmptyString)
+  ) 
+  { 
+    if (string.IsNullOrWhiteSpace(value))
+    {
+      return Result.Error($"'{fieldName}' must not be empty");
+    }
+
+    return Result.Ok(new NonEmptyString(value));
+  }
+
+  public Result<EmailAddress, ValidationError> CreateOption(
+    string? value, 
+    string fieldName = nameof(NonEmptyString)
+  ) => Option
+      .Of(value)
+      .Map(v => Create(v, fieldName))
+      .SequenceResult();
+}
+
+public sealed record EmailAddress { }
+
+public sealed record NewPassword { }
+
+public sealed record Registration
+{
+  public required EmailAddress EmailAddress { get; init; }
+  public Option<NonEmptyString> Name { get; init; } = Option.None;
+  public required NewPassword Password { get; init; }
+}
+
+// A DTO type for making passing in unvalidated data more ergonomic
+// DTOs use built-in .NET types and nullability
+public sealed record RegistrationDto
+{
+  public required string EmailAddress { get; init; }
+  public string? Name { get; init; }
+  public required string Password { get; init; }
+
+  public Result<Registration, ValidationError> Validate()
+  {
+    var emailAddressResult = Registration.EmailAddress.Create(EmailAddress);
+    var nameResult = NonEmptyString.CreateOption(Name, nameof(Name));
+    var passwordResult = NewPassword.Create(Password, nameof(Password));
+    return emailAddressResult
+      .Bind(emailAddress => nameResult.Map(name => (emailAddress, name)))
+      .Bind(t => passwordResult.Map(password => (t.emailAddress, t.name, password)))
+      .Map(
+        t => new Registration
+        {
+          EmailAddress = t.emailAddress,
+          Name = t.name,
+          Password = t.password
+        }
+      );
+  }
+}
+```
+
+Our main input type is `Registration`. It's a record where each of the properties is defined with an [`init`-only setter](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/init), which makes it immutable. It is composed of other types - `NonEmptyString`, `EmailAddress`, and `NewPassword`. These are types that represent constraints on the data that is acceptable as input to this workflow. This is an example of "making invalid states unrepresentable", which [I've written about before](https://twopoint.dev/posts/why-the-fsharp-would-i-write-real-code-like-this#making-invalid-states-unrepresentable). For registration, a user is required to provide an email address, a password, and optionally their name.
+
+We also define a `RegistrationDto` record. This allows code from "outside" our core domain code to more ergonomically pass in unvalidated values. Then, on that record we define a `Validate()` method which gives us our first glimpse of what using our functional primitives looks like. I'll briefly explain how this code works, but I won't go in depth on how all of the "functional primitives" work. If you want a deep dive into functions like `Map()`, `Bind()`, `Traverse()`, `Sequence()`, etc, I highly recommend checking out [Scott Wlaschin's post series on the topic](https://fsharpforfunandprofit.com/series/map-and-bind-and-apply-oh-my/).
+
+Let's break it into two sections:
+
+```csharp
+public Result<Registration, ValidationError> Validate()
+{
+  // Section 1
+  var emailAddressResult = Registration.EmailAddress.Create(EmailAddress);
+  var nameResult = NonEmptyString.CreateOption(Name, nameof(Name));
+  var passwordResult = NewPassword.Create(Password, nameof(Password));
+}
+```
+
+First, we validate each of the individual fields of our record. Each of the constrained types, like `NonEmptyString`, has two static functions: `Create()` and `CreateOption()`. These allow creation of the types from unvalidated `string`s. `Create()` requires the value to be `non-null` and returns `Result<T, ValidationError>`. `CreateOption()` allows nullable values and returns `Result<Option<T>, ValidationError>`.
+
+And section 2 is as follows:
+
+```csharp
+public Result<Registration, ValidationError> Validate()
+{
+  // Section 1
+  var emailAddressResult = Registration.EmailAddress.Create(EmailAddress);
+  var nameResult = NonEmptyString.CreateOption(Name, nameof(Name));
+  var passwordResult = NewPassword.Create(Password, nameof(Password));
+  // Section 2
+  return emailAddressResult
+    .Bind(emailAddress => nameResult.Map(name => (emailAddress, name)))
+    .Bind(t => passwordResult.Map(password => (t.emailAddress, t.name, password)))
+    .Map(
+      t => new Registration
+      {
+        EmailAddress = t.emailAddress,
+        Name = t.name,
+        Password = t.password
+      }
+    );
+}
+```
+
+Here, we are composing the three computations from the first section using `Map()` and `Bind()`. Briefly, here's what `Map()` and `Bind()` do:
+
+`Map()` allows us to apply functions to values that are in a context, like `Option` or `Result`, while leaving the context itself alone. You'll sometimes hear `Map()` referred to as a "structure-preserving map". The particulars of how `Map()` works depends on the specific context. For `Option`, if the value is `None`, you'll get `None` right back. If the value is `Some`, `Map()` will apply the function provided to the value within, wrap it right back up in a `Some` and return the whole thing. The behavior is similar for `Result`, only that `Result` has its `Error` case instead of `None`.
+
+`Bind()` works _similarly_ to `Map()`, but its superpower is the removal of the "structure-preserving" restriction of `Map()`. Often, the function we provide to `Map()` will produce more of whatever context we're working within. For example, you may have some `Option<T>` value and you want to apply a function to the value within it, but that function returns `Option<T>` as well. If you try using `Map()`, all of that structure will nest everytime you call `Map()`, and you'll end up with something like `Option<Option<Option<T>>>`. Yuck.
+
+`Bind()`, like `Map()`, works slightly differently depending on the context. For `Option`, if the value is `None`, you get `None` back, just like `Map()`. If the value is `Some`, `Bind()` executes the provided function and returns its result _as is_. This is where `Bind()` differs from `Map()` - `Map()` would have wrapped the result of the function application into a `Some` to preserve the original structure.
+
+That's the nitty gritty, but you can think of it like this: `Map()` allows you to thread computations through a context, and `Bind()` allows you to chain computations together, which is exactly what we're doing in our example here. If any of the fields - email, name, or password - is invalid, the whole computation will fail and produce an error message describing what went wrong.
+
+##### A quick note about the nesting of `Map()` within `Bind()`:
+
+```csharp
+return emailAddressResult
+  .Bind(emailAddress => nameResult.Map(name => (emailAddress, name)))
+  .Bind(t => passwordResult.Map(password => (t.emailAddress, t.name, password)))
+  .Map(
+    t => new Registration
+    {
+      EmailAddress = t.emailAddress,
+      Name = t.name,
+      Password = t.password
+    }
+  );
+```
+
+When chaining computations like this, you often want to aggregate the results as you go along so that, at the end, you can do something with all the results. This is exactly what we're doing in this case - we're validating each of the fields, pulling the results forward as the computation goes along, and then at the end if everything else succeeded, we use one last `Map()` to wrap the results in the `Registration` type.
+
+In F#, you have [computation expressions](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/computation-expressions) to elegantly accomplish this. In C#, we don't have this sort of generalized computation syntax, so here, I'm leveraging tuples to aggregate the results throughout the computation. Not as elegant, but it does the trick.
+
+**One last note**: C# **does** have a sort of computation expression syntax for one specific type - `Task`. `Task` can be thought of along the same lines as `Option` or `Result`, where the context it defines is "an asynchronous operation producing a value". It has no `Map()` function built-in (though you could easily define one yourself). It _does_, however, have a `Bind()` function, called `ContinueWith()`. You could write `Task` computations using chained method calls just like we did above, but it would look just as clunky - so we use `async-await` instead. Neat, right?
+
+#### Outputs
+
+Next, we need types to model the output of our workflow.
+
+```csharp
+using FpCs;
+using ValidationError = string;
+
+namespace TwoPoint.Registration;
+
+// Input types elided
+
+// `AccountId` type modeling a unique identifier for an existing account. 
+// Would probably be defined elsewhere, maybe a file called `AccountTypes.cs`?
+public sealed record AccountId { }
+
+public abstract record RegistrationError
+{
+  public sealed record AccountAlreadyExists(AccountId Id) : RegistrationError;
+  public sealed record NameIsMatt : RegistrationError;
+}
+
+public sealed record Registered(Registration Registration);
+```
+
+Business decisions are most often binary choice - either we allow some operation or we don't. So, we need a type to represent each case.
+
+`RegistrationError` is a union type representing what could go wrong with this operation. Registration fails if the account already exists or if someone named "Matt" decides to register. While silly, I added this contrived case to avoid rehashing the argument about [the usefulness of single case unions](https://github.com/fsharp/fslang-suggestions/issues/1394).
+
+C# doesn't [yet](https://github.com/dotnet/csharplang/blob/main/meetings/working-groups/discriminated-unions/TypeUnions.md) support proper discriminated unions, but they can be simulated using inheritance, as is the case with `RegistrationError`. This isn't as good as built-in support for discriminated unions because you don't get exhaustive checking in the compiler that code which pattern matches on such values handles all cases, but it gets the job done.
+
+`Registered` is a simple record type that represents the success case of registration. It has one field that holds on to the input data.
+
+#### Composing purely functional business logic
+
+Now, we need to actually implement the pure function that calculates the business decision for the registration flow.
+
+```csharp
+using FpCs;
+using ValidationError = string;
+using RegistrationDecision = FpCs.Result<
+  TwoPoint.Registration.Registered,
+  TwoPoint.Registration.RegistrationError
+>; // define an alias representing the "decision" of our business logic
+
+// Static import simplifies construction of and pattern matching on this error type
+using static TwoPoint.Registration.RegistrationError;
+
+namespace TwoPoint.Registration;
+
+// Input types elided
+
+// Output types elided
+
+// `Account` type modeling an existing account. 
+// Would also go in `AccountTypes.cs`
+public sealed record Account
+{
+  public required AccountId Id { get; init; }
+  public required EmailAddress EmailAddress { get; init; }
+  public Option<NonEmptyString> Name { get; init; }
+}
+
+public static class AccountLogic
+{
+  public static RegistrationDecision Register(
+    Option<Account> existingAccount,
+    Registration registration
+  )
+  {
+    var accountMustNotExist = existingAccount.RequireNoneWith(
+      RegistrationError (existing) => new AccountAlreadyExists(existing.Id)
+    );
+
+    var mustNotBeMatt = registration.Name.TraverseResult(
+      name => name
+        .Equals("Matt", StringComparison.InvariantCultureIgnoreCase)
+        .RequireFalseWith(
+          RegistrationError () => new NameIsMatt()
+        )
+    );
+
+    return accountMustNotExist
+      .Bind(_ => mustNotBeMatt)
+      .Map(_ => new Registered(registration));
+  }
+}
+```
+
+First things first: this is a **pure function**, so we can't do any side-effects, like looking up data in a database. Any data that we need to make this calculation must therefore be passed in. For `Register`, all we need is an existing account if there is one - modeled with `Option<Account>` - and the inputs provided by the caller.
+
+The overall structure of this function should look similar to the `Validate()` function we stepped through earlier. First, we represent each individual rule as a `Result` computation, using some helper functions modeled after ones found in [FsToolkit.ErrorHandling](https://github.com/demystifyfp/FsToolkit.ErrorHandling). Go check out that library. It's a great way to learn about some fundamental functional programming techniques.
+
+Then, we compose those computations into the overall business decision using `Map()` and `Bind()`, just like before. If all of the validations succeed, we end up with a `Result.Ok` containing a value of the `Registered` type with the registration details.
+
+#### Too simple?
+
+If you're seeing this way of writing business logic for the first time and you're anything at all like me, you're probably thinking: **It can't _really_ be that simple, right?**
+
+Answer: **It really is**.
+
+I think it seems surprising because it makes the core, important stuff about our systems - the decision making - seem almost _trivial_. For some reason, as software developers we feel like if we're writing **serious** software, it has to be **inherently** complicated and difficult to understand. As it turns out, this sense arises from years of writing systems riddled with **incidental** complexity - complexity that is _our own fault_, the result of the tools or frameworks we thoughtlessly decide to adopt, rather than limiting ourselves to the complexity inherent to the problems we are trying to solve and keeping the rest of it simple.
+
+But as much as we would love to stay in the clean, simple world of pure logic and functions, for any system to be useful, we must have side-effects.
+
+### Cells (or sandwiches, depending on your metaphor): imperative shell
+
+It is time to make a sandwich. This sandwich is not edible, but it will be no less delicious than an edible one. It is: the ["impuriem sandwich"](https://blog.ploeh.dk/2020/03/02/impureim-sandwich/)
+
+Apologies for the mixed metaphors (or if I made you hungry). I started with atoms and molecules, so it made sense for the bigger structure to be "cell", but I _also_ needed to mention the _impuriem sandwich_, a term coined by Mark Seemann, since I use it to model many of the systems I build these days, including our case study.
+
+Let's build the impuriem sandwich for our registration flow.
+
+```csharp
+using FpCs;
+using ValidationError = string;
+using RegistrationDecision = FpCs.Result<
+  TwoPoint.Registration.Registered,
+  TwoPoint.Registration.RegistrationError
+>;
+
+using static TwoPoint.Registration.RegistrationError;
+
+namespace TwoPoint.Registration;
+
+// Logic implementation elided
+public static class AccountLogic { }
+
+// Error types. Would likely be defined elsewhere in a real project.
+public sealed record DependencyError { }
+
+// Generic API error. Models any API error within the system
+public sealed record ApiError<TLogicError>
+{
+  public sealed record Dependency(DependencyError Error) : ApiError<TLogicError>;
+  public sealed record Logic(TLogicError Error) : ApiError<TLogicError>;
+  public sealed record Validation(ValidationError Error) : ApiError<TLogicError>;
+}
+
+// Generic API result type. Models the result of any API within the system
+public sealed record ApiResult<TSuccess, TLogicError>(Result<TSuccess, ApiError<TLogicError>> Result);
+
+// A type representing the output of the successful execution of the registration API
+public sealed record AccountRegisteredEvent(Account Account);
+
+public static class AccountApi
+{
+  public static class Register
+  {
+    public static Func<
+      RegistrationDto, 
+      Task<ApiResult<AccountRegisteredEvent, RegistrationError>>
+    > WithDependencies(
+      Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail,
+      Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount
+    ) => registration =>
+    {
+      var apiResult = await registration
+        // Validation
+        .Validate()
+        .MapError(ApiError<RegistrationError> (err) => new Validation(err))
+        // I/O
+        .Bind(
+          validatedRegistration => getAccountByEmail(validationRegistration.EmailAddress)
+            .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
+            .Map(existingAccount => (registration: validatedRegistration, existingAccount))
+        )
+        // Pure logic
+        .Bind(
+          t => AccountLogic
+            .Register(t.existingAccount, t.registration)
+            .MapError(ApiError<RegistrationError> (err) => new Logic(err))
+        )
+        // I/O
+        .Bind(
+          registered => saveRegisteredAccount(registered)
+            .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
+            .Map(account => new AccountRegisteredEvent(account))
+        );
+
+      return new ApiResult<AccountRegisteredEvent, RegistrationError>(apiResult);
+    };
+  }
+}
+```
+
+There's quite a bit there, so let's take it in sections.
+
+#### Types
+
+Let's start with the types.
+
+```csharp
+public sealed record DependencyError { }
+
+// Generic API error. Models any API error within the system
+public sealed record ApiError<TLogicError>
+{
+  public sealed record Dependency(DependencyError Error) : ApiError<TLogicError>;
+  public sealed record Logic(TLogicError Error) : ApiError<TLogicError>;
+  public sealed record Validation(ValidationError Error) : ApiError<TLogicError>;
+}
+
+// Generic API result type. Models the result of any API within the system
+public sealed record ApiResult<TSuccess, TLogicError>(Result<TSuccess, ApiError<TLogicError>> Result);
+
+// A type representing the output of the successful execution of the registration API
+public sealed record AccountRegisteredEvent(Account Account);
+```
+
+First, `DependencyError`. I use the term "dependency" for any side-effect-producing function. A database lookup is a dependency. An external API call is a dependency. Putting a message on a queue is a dependency. So, a `DependencyError` is any error that occurs during the execution of such a function. The specifics of the implementation can vary based on the needs of the application, so I've left it as a placeholder, which is sufficient for our case study.
+
+Next, `ApiError<TLogicError>`. I use the term "API" for the "impuriem sandwich". It's the composition of the pure core and impure dependencies. It's the entry point into the system, so "API" seems appropriate, though you could just as easily refer to them as workflows or use-cases. Pick your favorite term. Whatever is meaningful and makes sense in your context.
+
+`ApiError<TLogicError>` is a union type with three cases, which represent what I consider to be the three main categories of errors that can occur in most systems. Let's take a look at each:
+
+1. `Dependency(DependencyError Error)`: this case indicates that there was a failure in one of the API's dependencies. This is useful for modeling transient, system failures, like timeouts or connection issues.
+
+2. `Logic(TLogicError Error)`: this case indicates a **logic error** - some business rule was violated or requirement not met. This case uses the single generic type parameter `TLogicError`, which allows us to use this type for all of the APIs in our system.
+
+3. `Validation(ValidationError Error)`: this case indicates that something about the input provided was unexpected or incorrect.
+
+Recently, I've seen discussions on the [F# Discord](https://discord.com/invite/fsharp-196693847965696000) from people much smarter than me about how, even after years of experience writing systems, it is still difficult to model errors. Error handling is indeed a challenge. Often, it ends up accounting for a large portion of the code we write. This makes sense, because we want our code to be resilient to the various things that can and do go wrong during the execution of our code.
+
+With `ApiError<TLogicError>`, I don't claim to have the silver-bullet for modeling errors, but it has been a fairly effective way for me to model 99% of the errors in the systems I'm currently working on, and so it has been my personal go-to.
+
+Next, let's talk about that gnarly looking `ApiResult<TSuccess, TLogicError>` type. This type is intended to be a simple type alias for `Result<TSuccess, ApiError<TLogicError>>`. Unfortunately, the only way to define type aliases in C# is with [`using` directives](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/using-directive) which can only be scoped globally or to the current file and don't support generics, which is very limiting. Ideally, we'd have something like [F# type abbreviations](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/type-abbreviations), but since we don't, this was the approach I had to take: I defined the type structure I wanted as a record that wraps the type I am aliasing. The result:
+
+```csharp
+public sealed record ApiResult<TSuccess, TLogicError>(Result<TSuccess, ApiError<TLogicError>> Result);
+```
+
+`ApiResult<TSuccess, TLogicError>` models the overall result of a call to an API in the system. Its success case is a generic type parameter `TSuccess`, meaning it can be anything. Its error case is an `ApiError<TLogicError>`.
+
+Lastly, we have the `AccountRegisteredEvent` type. This type is the only one among the ones I've discussed so far that relates specifically to the registration API we are implementing. This type represents that something _happened_ (past-tense) in our system. It is similar to the `Registered` type found in our core logic in how it represents a decision that was made, but it differs in that it is produced _after_ any side-effect-producing functions have been run. Because of this, it can and often does contain data representing changes made to the system as a result of executing this API, which is useful for sending responses to clients or for posting messages that external systems can listen for.
+
+#### Domain-driven design: a quick primer
+
+Before we break down the implementation, we should take a quick detour into domain-driven design. The concepts most important for understanding how domain-driven design is applied in our case study are **aggregates, entities, and values**.
+
+**Aggregate** is the most important concept, as it is a composition (or _aggregation_, hence the name) of all the others. An aggregate is an entity (a thing with distinct, persistent identity) which is composed of values (data) and other entities. Aggregates define a "consistency boundary" within which everything must make sense and follow the rules. Because of this, aggregates represent the entry-point into the system. They are the primary "thing" being manipulated when we execute APIs - it must be so in order to properly enforce the rules. If we could tool around with the internals of an aggregate, we could leave the aggregate in a nonsensical state which, [as we've learned before](/posts/why-the-fsharp-would-i-write-real-code-like-this#making-invalid-states-unrepresentable
+), is something to be avoided.
+
+##### An example
+
+The best way to learn about aggregates, entities, and values (sometimes called value objects) is by example. Let's take a look at my favorite example for explaining it: a car configuration app.
+
+Imagine you want to buy a brand new car. You don't just want any car, either - you want a [bespoke](https://adventuretime.fandom.com/wiki/Bespoken_For/Transcript?sh=00i0V0dbD___5107) car, where you decide on every detail. Fortunately, the manufacturer you've chosen to buy from has an online car configuration app.
+
+First, you need to decide on the wheels. You can give each wheel a different style, if you want, so why not? Let's do it. The **front-driver wheel** will be blue, the **front-passenger wheel** will be red, the **rear-passenger wheel** will be green, and the **rear-driver wheel** will be gold. Each of the wheels is an **entity**. Each has a distinct, persistent identity based on its position on the car. You can change the color of it, but it remains the same positional wheel.
+
+Next, you need to choose lug nuts (you're customizing _everything_, remember?). The wheels you chose have specifications as to the size of the lug nuts, but the style is up to you. You decide to get ones that color match the wheels, and you also decide to buy some spares in case the color starts to fade over time. The lug nuts are **values**. They have no distinct identity in and of themselves. They have some useful properties, like size and color, but they can be swapped out and they are still just lug nuts.
+
+Next, let's say you wanted to be crazy and drive a 3-wheeled car, so you go into the app, remove a wheel, and try to save your configuration - but you get an error. "A car must have 4 wheels!" it tells you. Harumph. No fun at all. In this case, the "car" is an **aggregate**, in a number of ways. For one, remember that our definition of aggregate said that an **aggregate is also an entity**. We can see how this is so - the car is _your specific car_. You can change the wheels, the paint-color, the lug nuts, the window tint, etc, and it remains _your car_. Its identity (its VIN) belongs to you. It acts as an **aggregate** by enforcing the rule that a car must have 4 wheels, no exceptions. The concept of "car" serves as a consistency boundary, so that everything on the car makes sense.
+
+#### The sandwich (implementation)
+
+Back to the implementation.
+
+```csharp
+public static class AccountApi
+{
+  public static class Register
+  {
+    public static Func<
+      RegistrationDto, 
+      Task<ApiResult<AccountRegisteredEvent, RegistrationError>>
+    > WithDependencies(
+      Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail,
+      Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount
+    ) => registration =>
+    {
+      var apiResult = await registration
+        // Validation
+        .Validate()
+        .MapError(ApiError<RegistrationError> (err) => new Validation(err))
+        // I/O
+        .Bind(
+          validatedRegistration => getAccountByEmail(validationRegistration.EmailAddress)
+            .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
+            .Map(existingAccount => (registration: validatedRegistration, existingAccount))
+        )
+        // Pure logic
+        .Bind(
+          t => AccountLogic
+            .Register(t.existingAccount, t.registration)
+            .MapError(ApiError<RegistrationError> (err) => new Logic(err))
+        )
+        // I/O
+        .Bind(
+          registered => saveRegisteredAccount(registered)
+            .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
+            .Map(account => new AccountRegisteredEvent(account))
+        );
+
+      return new ApiResult<AccountRegisteredEvent, RegistrationError>(apiResult);
+    };
+  }
+}
+```
+
+First, we define everything in a static class called `AccountApi`. `Account` is an **aggregate** within our system. Every operation, defined as an API, operates at the aggregate level.
+
+Within `AccountApi`, we define another static class, `Register`, which contains the entire implementation of this specific API.
+
+Within `Register`, we define a static function called `WithDependencies()` with a strange looking type signature:
+
+```csharp
+public static Func<
+  RegistrationDto, 
+  Task<ApiResult<AccountRegisteredEvent, RegistrationError>>
+> WithDependencies(
+  Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail,
+  Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount
+)
+```
+
+`WithDependencies` is a function that takes functions as parameters and returns a function. This makes it a **higher-order function**, and is a great example of first-class functions in action.
+
+Let's look at those parameters first:
+
+1. `Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail`
+
+Our core logic requires an `Option<Account>` in order to make its decision. This **dependency function** fulfills that requirement, and it does so in a way that leaves the specific implementation up to whomever provides this function. If we wanted to use [Entity Framework](https://learn.microsoft.com/en-us/ef/core/) to query a database, we could. If we wanted to use an in-memory database for running tests, we could. As it turns out, you can have abstraction without interfaces - just use functions!
+
+2. `Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount`
+
+A registration flow wouldn't be very useful if the system didn't rember us after registering, now would it? This **dependency function** gives our API a way to save a registered account, assuming the core business logic allows it.
+
+Next, the return type:
+
+`Func<RegistrationDto,  Task<ApiResult<AccountRegisteredEvent, RegistrationError>>`
+
+`WithDependencies` returns a function which takes a `RegistrationDto` as input and returns a `Task<ApiResult<AccountRegisteredEvent, RegistrationError>>` as output. In other words, `WithDependencies` returns the implementation of our API as a callable function, with the dependency functions "baked in". In F#, this is commonly accomplished using [currying and partial function application](https://fsharpforfunandprofit.com/posts/partial-application/). It's cool to know that this can be accomplished in C# as well!
+
+Finally, the body of our implementation:
+
+```csharp
+registration =>
+{
+  var apiResult = await registration
+    // Validation
+    .Validate()
+    .MapError(ApiError<RegistrationError> (err) => new Validation(err))
+    // I/O
+    .Bind(
+      validatedRegistration => getAccountByEmail(validationRegistration.EmailAddress)
+        .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
+        .Map(existingAccount => (registration: validatedRegistration, existingAccount))
+    )
+    // Pure logic
+    .Bind(
+      t => AccountLogic
+        .Register(t.existingAccount, t.registration)
+        .MapError(ApiError<RegistrationError> (err) => new Logic(err))
+    )
+    // I/O
+    .Bind(
+      registered => saveRegisteredAccount(registered)
+        .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
+        .Map(account => new AccountRegisteredEvent(account))
+    );
+
+  return new ApiResult<AccountRegisteredEvent, RegistrationError>(apiResult);
+};
+```
+
+You don't even have to squint to see the sandwich.
+
+For the top piece of bread, we:
+
+1. Validate the inputs with a call to `Validate()`
+2. Call the `getAccountByEmail` dependency function to pull in the data our logic needs
+
+For the "meat and cheese", we call `AccountLogic.Register()` with the validated inputs and the results of `getAccountByEmail`.
+
+For the bottom piece of bread, we:
+
+1. Call the `saveRegisteredAccount` dependency function to persist the result of the registration logic if it succeeded, and wrap the result in an `AccountRegisteredEvent`
+2. Wrap up the whole result in an `ApiResult` and return it to the caller
+
+And that's it. Two pieces of bread, some meat and cheese, all held together by functional atoms.
+
+### Organism (or...a three-course meal?)
+
+These metaphors are all mixed up now. Oh well 🤷‍♂️
+
+All that's left is to call these APIs to do the work. We could call it from an ASP.NET Web controller, like so:
+
+```csharp
+using TwoPoint.Registration;
+using Microsoft.AspNetCore.Mvc;
+
+namespace TwoPoint.WebAPI;
+
+public sealed record RegistrationRequest
+{
+  public string? EmailAddress { get; set; }
+  public string? Name { get; set; }
+  public string? Password { get; set; }
+}
+
+[Route("api/account")]
+[ApiController]
+public class AccountController : ControllerBase
+{
+  // Imagining we implement our data access with Entity Framework
+  private readonly TwoPointDbContext _dbContext;
+
+  public AccountController(TwoPointDbContext dbContext)
+  {
+    _dbContext = dbContext;
+  }
+
+  [HttpPost("register")]
+  public async Task<IActionResult> Register([FromBody] RegistrationRequest request)
+  {
+    // Dependencies
+    // Imagine some EF-based implementations
+    var getAccountByEmail = AccountDependencies
+      .GetAccountByEmail
+      .WithDependencies(_dbContext);
+    var saveRegisteredAccount = AccountDependencies
+      .SaveRegisteredAccount
+      .WithDependencies(_dbContext);
+
+    // Inputs
+    var registration = new RegistrationDto
+    {
+      EmailAddress = request.EmailAddress ?? "",
+      Name = request.Name,
+      Password = request.Password ?? ""
+    };
+
+    // Api
+    var register = AccountApi.Register.WithDependencies(
+      getAccountByEmail, 
+      saveRegisteredAccount
+    );
+
+    // Execute
+    var apiResult = (await register(registration)).Result;
+
+    // You'd want to process the result and send it to the client. 
+    // Returning `Ok` here for simplicity
+    return Ok();
+  }
+}
+```
+
+Or maybe we want to execute it from a queue-triggered function app:
+
+```csharp
+using TwoPoint.Registration;
+using Microsoft.Azure.Functions.Worker;
+
+namespace TwoPoint.Queues;
+
+public sealed record RegistrationMessage
+{
+  public string? EmailAddress { get; set; }
+  public string? Name { get; set; }
+  public string? Password { get; set; }
+}
+
+public class RegistrationQueueProcessor
+{
+  // Imagining we implement our data access with Entity Framework
+  private readonly TwoPointDbContext _dbContext;
+
+  public RegistrationQueueProcessor(TwoPointDbContext dbContext)
+  {
+    _dbContext = dbContext;
+  }
+
+  [HttpPost("register")]
+  public async Task Run(
+    [ServiceBusTrigger(
+      "registration",
+      Connection = "TwoPointServiceBus")] 
+      ServiceBusReceivedMessage message
+  )
+  {
+    var registrationMessage = message.Body.FromJson<RegistrationMessage>();
+
+    // Dependencies
+    // Imagine some EF-based implementations
+    var getAccountByEmail = AccountDependencies
+      .GetAccountByEmail
+      .WithDependencies(_dbContext);
+    var saveRegisteredAccount = AccountDependencies
+      .SaveRegisteredAccount
+      .WithDependencies(_dbContext);
+
+    // Inputs
+    var registration = new RegistrationDto
+    {
+      EmailAddress = request.EmailAddress ?? "",
+      Name = request.Name,
+      Password = request.Password ?? ""
+    };
+
+    // Api
+    var register = AccountApi.Register.WithDependencies(
+      getAccountByEmail, 
+      saveRegisteredAccount
+    );
+
+    // Execute
+    var apiResult = (await register(registration)).Result;
+  }
+}
+```
+
+The entry point is really up to you - it all depends on your application!
+
+## Conclusion
+
+I hope that this post has given you a glimpse of what an architecture built with functional programming and domain-driven design principles can look like in C#. If you are a C# developer reading this, I hope that I've piqued your interest and that you will join me on the journey of learning what functional programming can do for us and our systems. If you're an F# developer in a world of C#, I hope I have encouraged you - there are always ways you can write solid, functional-first code, even if it isn't in your favorite language. 
+
+Thanks for reading! Happy coding!

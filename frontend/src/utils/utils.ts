@@ -1,7 +1,9 @@
 import { I18N } from 'astrowind:config';
 
 export const formatOddballs = (str: string): string => {
-  return str.replace(/fsharp/gi, 'F#');
+  return str
+    .replace(/fsharp/gi, 'F#')
+    .replace(/csharp/gi, 'C#');
 };
 
 export const formatter: Intl.DateTimeFormat = new Intl.DateTimeFormat(I18N?.language, {
