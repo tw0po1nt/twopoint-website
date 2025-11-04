@@ -256,7 +256,7 @@ When chaining computations like this, you often want to aggregate the results as
 
 In F#, you have [computation expressions](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/computation-expressions) to elegantly accomplish this. In C#, we don't have this sort of generalized computation syntax, so here, I'm leveraging tuples to aggregate the results throughout the computation. Not as elegant, but it does the trick.
 
-**One last note**: C# **does** have a sort of computation expression syntax for one specific type - `Task`. `Task` can be thought of along the same lines as `Option` or `Result`, where the context it defines is "an asynchronous operation producing a value". It has no `Map()` function built-in (though you could easily define one yourself). It _does_, however, have a `Bind()` function, called `ContinueWith()`. You could write `Task` computations using chained method calls just like we did above, but it would look just as clunky - so we use `async-await` instead. Neat, right?
+**One last note**: C# **does** have a sort of computation expression syntax for one specific type - `Task`. `Task` can be thought of along the same lines as `Option` or `Result`, where the context it defines is "an asynchronous operation producing a value". [This blog post by Stephen Toub](https://devblogs.microsoft.com/dotnet/tasks-monads-and-linq/) explains this property of `Task` beautifully. I recommend giving it a read.
 
 #### Outputs
 
