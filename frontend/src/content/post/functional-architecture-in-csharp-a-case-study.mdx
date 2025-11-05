@@ -123,7 +123,7 @@ public sealed record NonEmptyString
   public string Value { get; }
   private NonEmptyString(string value) => Value = value;
 
-  public Result<EmailAddress, ValidationError> Create(
+  public Result<NonEmptyString, ValidationError> Create(
     string value, 
     string fieldName = nameof(NonEmptyString)
   ) 
@@ -136,7 +136,7 @@ public sealed record NonEmptyString
     return Result.Ok(new NonEmptyString(value));
   }
 
-  public Result<EmailAddress, ValidationError> CreateOption(
+  public Result<Option<NonEmptyString>, ValidationError> CreateOption(
     string? value, 
     string fieldName = nameof(NonEmptyString)
   ) => Option
