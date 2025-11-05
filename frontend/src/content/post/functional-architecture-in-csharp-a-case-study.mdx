@@ -334,7 +334,7 @@ public static class AccountLogic
 
     var mustNotBeMatt = registration.Name.TraverseResult(
       name => name
-        .Equals("Matt", StringComparison.InvariantCultureIgnoreCase)
+        .Value.Equals("Matt", StringComparison.InvariantCultureIgnoreCase)
         .RequireFalseWith(
           RegistrationError () => new NameIsMatt()
         )
