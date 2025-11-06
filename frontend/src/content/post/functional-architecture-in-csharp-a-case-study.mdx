@@ -390,7 +390,7 @@ public static class AccountLogic { }
 public sealed record DependencyError { }
 
 // Generic API error. Models any API error within the system
-public sealed record ApiError<TLogicError>
+public abstract record ApiError<TLogicError>
 {
   public sealed record Dependency(DependencyError Error) : ApiError<TLogicError>;
   public sealed record Logic(TLogicError Error) : ApiError<TLogicError>;
