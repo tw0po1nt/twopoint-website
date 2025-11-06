@@ -413,7 +413,7 @@ public static class AccountApi
     > WithDependencies(
       Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail,
       Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount
-    ) => registration =>
+    ) => async registration =>
     {
       var apiResult = await registration
         // Validation
@@ -421,7 +421,7 @@ public static class AccountApi
         .MapError(ApiError<RegistrationError> (err) => new Validation(err))
         // I/O
         .Bind(
-          validatedRegistration => getAccountByEmail(validationRegistration.EmailAddress)
+          validatedRegistration => getAccountByEmail(validatedRegistration.EmailAddress)
             .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
             .Map(existingAccount => (registration: validatedRegistration, existingAccount))
         )
@@ -454,7 +454,7 @@ Let's start with the types.
 public sealed record DependencyError { }
 
 // Generic API error. Models any API error within the system
-public sealed record ApiError<TLogicError>
+public abstract record ApiError<TLogicError>
 {
   public sealed record Dependency(DependencyError Error) : ApiError<TLogicError>;
   public sealed record Logic(TLogicError Error) : ApiError<TLogicError>;
@@ -528,7 +528,7 @@ public static class AccountApi
     > WithDependencies(
       Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail,
       Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount
-    ) => registration =>
+    ) => async registration =>
     {
       var apiResult = await registration
         // Validation
@@ -536,7 +536,7 @@ public static class AccountApi
         .MapError(ApiError<RegistrationError> (err) => new Validation(err))
         // I/O
         .Bind(
-          validatedRegistration => getAccountByEmail(validationRegistration.EmailAddress)
+          validatedRegistration => getAccountByEmail(validatedRegistration.EmailAddress)
             .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
             .Map(existingAccount => (registration: validatedRegistration, existingAccount))
         )
@@ -596,7 +596,7 @@ Next, the return type:
 Finally, the body of our implementation:
 
 ```csharp
-registration =>
+async registration =>
 {
   var apiResult = await registration
     // Validation
@@ -604,7 +604,7 @@ registration =>
     .MapError(ApiError<RegistrationError> (err) => new Validation(err))
     // I/O
     .Bind(
-      validatedRegistration => getAccountByEmail(validationRegistration.EmailAddress)
+      validatedRegistration => getAccountByEmail(validatedRegistration.EmailAddress)
         .MapError(ApiError<RegistrationError> (err) => new Dependency(err))
         .Map(existingAccount => (registration: validatedRegistration, existingAccount))
     )
