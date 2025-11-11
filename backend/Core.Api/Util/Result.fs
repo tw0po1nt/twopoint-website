@@ -60,7 +60,7 @@ type DependencyResult<'T> = CancellableTaskResult<'T, DependencyError>
 
 
 /// <summary>
-/// An error that occurred during a PorchLight action execution
+/// An error that occurred during an action execution
 /// </summary>
 type ActionError<'logicError> =
   | Dependency of DependencyError
@@ -79,8 +79,8 @@ type ActionError<'logicError> =
     | Logic logic -> $"{logic}"
 
 /// <summary>
-/// The result of a PorchLight action execution.
-/// The <c>Error</c> case indicates that some error occurred interacting with a PorchLight dependency
+/// The result of an action execution.
+/// The <c>Error</c> case indicates that some error occurred interacting with a dependency
 /// The <c>Ok</c> case indicates that the business logic successfully executed and produced a result.
 /// </summary>
 type ActionResult<'success, 'logicError> = Result<'success, ActionError<'logicError>>
@@ -106,7 +106,7 @@ module DependencyResult =
 
 
 /// <summary>
-/// An error that occurred during a PorchLight query execution
+/// An error that occurred during a query execution
 /// </summary>
 type QueryError =
   | Dependency of DependencyError
@@ -120,8 +120,8 @@ type QueryError =
       $"One or more validation errors occurred: {errors}"
 
 /// <summary>
-/// The result of a PorchLight query execution.
-/// The <c>Error</c> case indicates that some error occurred interacting with a PorchLight dependency
+/// The result of a query execution.
+/// The <c>Error</c> case indicates that some error occurred interacting with a dependency
 /// The <c>Ok</c> case indicates that the query successfully executed and produced a result.
 /// </summary>
 type QueryResult<'success> = Result<'success, QueryError>
