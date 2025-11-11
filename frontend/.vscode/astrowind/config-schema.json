@@ -210,6 +210,10 @@
               "type": "boolean",
               "default": true
             },
+            "showHeroImage": {
+              "type": "boolean",
+              "default": true
+            },
             "series": {
               "type": "object",
               "properties": {
