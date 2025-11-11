@@ -66,6 +66,7 @@ const postCollection = defineCollection({
     title: z.string(),
     excerpt: z.string().optional(),
     image: z.string().optional(),
+    showHeroImage: z.boolean().default(true),
 
     category: z.string().optional(),
     series: seriesDefinition(),
