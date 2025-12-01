@@ -3,6 +3,7 @@
     "logging": {
         "logLevel": {
           "default": "Warning",
+          "Microsoft": "Error",
           "Host.Results": "Error",
           "Host.Aggregator": "Error",
           "Function": "Warning",
