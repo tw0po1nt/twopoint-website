@@ -3,12 +3,18 @@
     "logging": {
         "logLevel": {
           "default": "Warning",
-          "microsoft": "Warning"
+          "Microsoft": "Error",
+          "Host.Results": "Error",
+          "Host.Aggregator": "Error",
+          "Function": "Warning",
+          "Host.Triggers.Warmup": "Error",
+          "Azure": "Error"
         },
         "applicationInsights": {
             "samplingSettings": {
                 "isEnabled": true,
-                "excludedTypes": "Request"
+                "maxTelemetryItemsPerSecond": 5,
+                "excludedTypes": "Request;Event"
             },
             "enableLiveMetricsFilters": true
         }
