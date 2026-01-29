@@ -260,14 +260,24 @@ let Comments (uri: string, slug: string) =
   React.useEffect((fun () ->
     match containerRef.current with
     | Some element ->
+      let observerRef = ref None
+      
       let callback : obj -> obj -> unit = fun entries _ ->
         let entriesArr : obj array = unbox entries
         entriesArr
         |> Array.iter (fun entry ->
           let isIntersecting : bool = JsInterop.(?) entry "isIntersecting"
-          // Only load comments if they haven't been loaded yet and element is intersecting
-          if isIntersecting && state.Comments = NotLoaded then
+          // Only load comments if element is intersecting and observer hasn't been disconnected
+          if isIntersecting then
+            // Dispatch load command
             LoadComments |> dispatch
+            // Immediately disconnect observer to prevent multiple loads
+            match !observerRef with
+            | Some observer ->
+              JsInterop.emitJsExpr (observer, element) "$0.unobserve($1)"
+              JsInterop.emitJsExpr observer "$0.disconnect()"
+              observerRef := None
+            | None -> ()
         )
       
       // Create IntersectionObserver with options
@@ -276,15 +286,20 @@ let Comments (uri: string, slug: string) =
       ]
       
       let observer : obj = JsInterop.emitJsExpr (callback, options) "new IntersectionObserver($0, $1)"
+      observerRef := Some observer
       JsInterop.emitJsExpr (observer, element) "$0.observe($1)"
       
       // Cleanup function
       React.createDisposable(fun () -> 
-        JsInterop.emitJsExpr observer "$0.disconnect()"
+        match !observerRef with
+        | Some observer ->
+          JsInterop.emitJsExpr (observer, element) "$0.unobserve($1)"
+          JsInterop.emitJsExpr observer "$0.disconnect()"
+        | None -> ()
       )
     | None -> 
       React.createDisposable(fun () -> ())
-  ), [| box state.Comments |])
+  ), [| |])
 
   let loading = Html.div [
     prop.className "flex flex-row w-full justify-center animate-pulse mb-8"
