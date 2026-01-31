@@ -23,13 +23,13 @@ type Config =
   { Azure : AzureConfig
     Firebase : FirebaseConfig
     ValidRedirectUris : ValidRedirectUri list }
-  
+
 module Config =
-  
-  open TwoPoint.Http.Extensions    
-  
+
+  open TwoPoint.Http.Extensions
+
   open Symbolica.Extensions.Configuration.FSharp
-  
+
   let bind config =
     bind {
       let! azure = Bind.section "Azure" <| bind {
@@ -49,7 +49,7 @@ module Config =
             ServiceBusUri = serviceBusUri
             KeyVaultUri = keyVaultUri }
       }
-      
+
       let! firebase = Bind.section "Firebase" <| bind {
         let! serviceAccountJsonPath = Bind.optValueAt "ServiceAccountJsonPath" Bind.string
         let! serviceAccountJsonFromKeyVault = Bind.optValueAt "ServiceAccountJsonFromKeyVault" Bind.string
@@ -57,14 +57,14 @@ module Config =
           { ServiceAccountJsonPath = serviceAccountJsonPath
             ServiceAccountJsonFromKeyVault = serviceAccountJsonFromKeyVault }
       }
-      
+
       let bindValidRedirectUri =  bind {
         let! uri = Bind.valueAt "Uri" (Bind.uri UriKind.Absolute)
         return { Uri = uri }
       }
-      
+
       let! validRedirectUris = Bind.section "ValidRedirectUris" (Bind.list bindValidRedirectUri)
-      
+
       return { Azure = azure; Firebase = firebase; ValidRedirectUris = validRedirectUris }
     }
     |> Binder.eval config

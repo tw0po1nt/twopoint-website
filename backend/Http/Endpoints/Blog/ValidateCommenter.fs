@@ -29,18 +29,18 @@ type ValidateCommenter (
   logger: ILogger<PostComment>,
   tableServiceClient: TableServiceClient
 ) =
-  
+
   [<Function("Blog-ValidateCommenter")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "blog/commenters")>] req : HttpRequestData,
     ct : CancellationToken
   ) = task {
     let response = req.CreateResponse HttpStatusCode.OK
-    logger.LogInformation("Processing 'Blog.ValidateCommenter' request")
+    logger.LogInformation "Processing 'Blog.ValidateCommenter' request"
     let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
-    
-    let! json = req.ReadFromJsonAsync<CommenterValidationJson>(ct)
-    
+
+    let! json = req.ReadFromJsonAsync<CommenterValidationJson> ct
+
     // Dependencies
     let postDependencies =
       PostDependencies.live
@@ -51,13 +51,13 @@ type ValidateCommenter (
         tableServiceClient
         logger
     let postActions = PostActions.withDependencies postDependencies
-    
+
     let commenterValidation =
       { CommenterValidationDto.EmailAddress = json.EmailAddress |> Option.defaultValue ""
         Name = json.Name
         RedirectUri = json.RedirectUri |> Option.defaultValue "" }
 
-    let! validateCommenterResult = ct |> postActions.ValidateCommenter commenterValidation    
+    let! validateCommenterResult = ct |> postActions.ValidateCommenter commenterValidation
     let apiResponse, statusCode =
       match validateCommenterResult with
       | Ok _ | Error (Logic (ValidateCommenterError.CommenterBanned _)) ->
@@ -68,7 +68,7 @@ type ValidateCommenter (
         { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
       | Error actionError ->
         { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
-      
+
     response.StatusCode <- statusCode
     do! response.WriteAsJsonAsync(apiResponse, ct)
     return response

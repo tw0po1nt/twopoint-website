@@ -17,7 +17,7 @@ open TwoPoint.Core.Posts.Dependencies
 let entraTenantId = "cdf89f94-8c88-48fc-b11c-dd24af4380b4"
 let opts = DefaultAzureCredentialOptions()
 opts.TenantId <- entraTenantId
-let credential = DefaultAzureCredential(opts)
+let credential = DefaultAzureCredential opts
 
 // Azure Table
 open Azure.Data.Tables
@@ -35,7 +35,7 @@ let logger =
     .Create(fun builder ->
       builder
         .AddConsole()
-        .SetMinimumLevel(logLevel)
+        .SetMinimumLevel logLevel
         |> ignore
     )
     .CreateLogger(Path.GetFileName __SOURCE_FILE__)
@@ -45,16 +45,16 @@ open TwoPoint.Core.Util
 open IcedTasks
 open System.Threading
 
-let executeAction (api: 'input -> CancellableTask<ActionResult<'event, 'error>>) input op =  
+let executeAction (api: 'input -> CancellableTask<ActionResult<'event, 'error>>) input op =
   let actionResult = (api input CancellationToken.None).Result
-  
+
   match actionResult with
   | Ok events  -> printfn $"{op} succeeded with events: {events}"
   | Error errs -> printfn $"{op} failed with errors: {errs}"
-  
-let executeQuery (query: 'input -> CancellableTask<QueryResult<'output>>) input op =  
+
+let executeQuery (query: 'input -> CancellableTask<QueryResult<'output>>) input op =
   let queryResult = (query input CancellationToken.None).Result
-  
+
   match queryResult with
   | Ok output  -> printfn $"{op} succeeded with result: {output}"
   | Error errs -> printfn $"{op} failed with errors: {errs}"
@@ -86,24 +86,24 @@ let existingPost = Slug.Unsafe.create "functional-programming-more-than-just-a-c
 /// </summary>
 let getPostBySlug slug =
   let postResult = (postDependencies.GetPostBySlug slug CancellationToken.None).Result
-  
+
   match postResult with
   | Ok (Some post) -> printfn $"Post found: %A{post}"; Some post
   | Ok None        -> printfn "Post not found"; None
   | Error err      -> printfn $"Post lookup failed with error: {err.DebugMessage}"; None
-  
+
 /// <summary>
 /// Fetch comments for a blog post
 /// </summary>
 let getCommentsForPost post =
   let commentsResult = ((post, CancellationToken.None) ||> postQueries.GetCommentsForPost []).Result
-  
+
   match commentsResult with
   | Ok None            -> printfn $"Post '{post}' not found" ; []
   | Ok (Some [])       -> printfn $"No comments found for post: '{post}'"; []
   | Ok (Some comments) -> printfn $"Found {List.length comments} comment(s) for post: '{post}'"; comments
   | Error err          -> printfn $"Comment lookup failed with error: {err.ToString()}"; []
-  
+
 let newPost =
   { NewPostDto.Title = "Functional programming: more than just a coding style"
     Slug = "functional-programming-more-than-just-a-coding-style"
@@ -134,4 +134,3 @@ let commentApprovalUpdate =
 /// </summary>
 let updateCommentApproval commentApprovalUpdate =
   executeAction postActions.UpdateCommentApproval commentApprovalUpdate "UpdateCommentApproval"
-
