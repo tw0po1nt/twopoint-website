@@ -1,31 +1,31 @@
 {
-    "version": "2.0",
-    "logging": {
-        "logLevel": {
-          "default": "Warning",
-          "Microsoft": "Error",
-          "Host.Results": "Error",
-          "Host.Aggregator": "Error",
-          "Function": "Warning",
-          "Host.Triggers.Warmup": "Error",
-          "Azure": "Error"
-        },
-        "applicationInsights": {
-            "samplingSettings": {
-                "isEnabled": true,
-                "maxTelemetryItemsPerSecond": 5,
-                "excludedTypes": "Request;Event"
-            },
-            "enableLiveMetricsFilters": true
-        }
+  "version": "2.0",
+  "logging": {
+    "logLevel": {
+      "default": "Warning",
+      "Microsoft": "Error",
+      "Host.Results": "Error",
+      "Host.Aggregator": "Error",
+      "Function": "Warning",
+      "Host.Triggers.Warmup": "Error",
+      "Azure": "Error"
     },
-    "extensions": {
-        "queues": {
-            "maxPollingInterval": "00:00:02",
-            "visibilityTimeout": "00:00:30",
-            "batchSize": 16,
-            "maxDequeueCount": 5,
-            "newBatchThreshold": 8
-        }
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "maxTelemetryItemsPerSecond": 5,
+        "excludedTypes": "Request;Event"
+      },
+      "enableLiveMetricsFilters": true
     }
+  },
+  "extensions": {
+    "queues": {
+      "maxPollingInterval": "00:00:02",
+      "visibilityTimeout": "00:00:30",
+      "batchSize": 16,
+      "maxDequeueCount": 5,
+      "newBatchThreshold": 8
+    }
+  }
 }

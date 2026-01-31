@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -6,7 +6,7 @@
     <OutputType>Exe</OutputType>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
-  
+
   <ItemGroup>
     <Compile Include="BindExtensions.fs" />
     <Compile Include="Config.fs" />
@@ -45,7 +45,7 @@
     <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
     <PackageReference Include="Symbolica.Extensions.Configuration.FSharp" Version="0.4.0" />
   </ItemGroup>
-  
+
   <ItemGroup>
     <None Include="service-account-key.json" Condition="Exists('service-account-key.json')" />
     <None Update="service-account-key.json" Condition="Exists('service-account-key.json')">
@@ -62,7 +62,7 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
-  
+
   <ItemGroup>
     <ProjectReference Include="..\Core.Api\Core.Api.fsproj" />
   </ItemGroup>
