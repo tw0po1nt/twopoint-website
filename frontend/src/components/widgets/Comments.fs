@@ -272,11 +272,11 @@ let Comments (uri: string, slug: string) =
             // Dispatch load command
             LoadComments |> dispatch
             // Immediately disconnect observer to prevent multiple loads
-            match !observerRef with
+            match observerRef.Value with
             | Some observer ->
               JsInterop.emitJsExpr (observer, element) "$0.unobserve($1)"
               JsInterop.emitJsExpr observer "$0.disconnect()"
-              observerRef := None
+              observerRef.Value <- None
             | None -> ()
         )
       
@@ -286,12 +286,12 @@ let Comments (uri: string, slug: string) =
       ]
       
       let observer : obj = JsInterop.emitJsExpr (callback, options) "new IntersectionObserver($0, $1)"
-      observerRef := Some observer
+      observerRef.Value <- Some observer
       JsInterop.emitJsExpr (observer, element) "$0.observe($1)"
       
       // Cleanup function
       React.createDisposable(fun () -> 
-        match !observerRef with
+        match observerRef.Value with
         | Some observer ->
           JsInterop.emitJsExpr (observer, element) "$0.unobserve($1)"
           JsInterop.emitJsExpr observer "$0.disconnect()"
