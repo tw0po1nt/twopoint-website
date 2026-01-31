@@ -32,6 +32,7 @@ type Msg =
   | CommentPostFailed of string
 
 type CommentsState =
+  | NotLoaded
   | Loading
   | NoComments
   | Comments of Comment list
@@ -141,7 +142,7 @@ let init uri slug () =
   let initialState =
     { Uri = uri
       Slug = slug
-      Comments = Loading
+      Comments = NotLoaded
       Commenter = VerificationNotLoading
       InitialCommentData = None
       PostComment = NotStarted
@@ -157,7 +158,7 @@ let init uri slug () =
     | None -> initialState
 
   initialState,
-  Cmd.ofMsg LoadComments
+  Cmd.none
 
 let update msg state =
   match msg with
@@ -253,6 +254,52 @@ let update msg state =
 let Comments (uri: string, slug: string) =
 
   let state, dispatch = React.useElmish(init uri slug, update, [| box uri; box slug |])
+  let containerRef = React.useRef<Browser.Types.HTMLElement option>(None)
+
+  // Set up IntersectionObserver to load comments when section becomes visible
+  React.useEffect((fun () ->
+    match containerRef.current with
+    | Some element ->
+      let observerRef = ref None
+      
+      let callback : obj -> obj -> unit = fun entries _ ->
+        let entriesArr : obj array = unbox entries
+        entriesArr
+        |> Array.iter (fun entry ->
+          let isIntersecting : bool = JsInterop.(?) entry "isIntersecting"
+          // Only load comments if element is intersecting and observer hasn't been disconnected
+          if isIntersecting then
+            // Dispatch load command
+            LoadComments |> dispatch
+            // Immediately disconnect observer to prevent multiple loads
+            match observerRef.Value with
+            | Some observer ->
+              JsInterop.emitJsExpr (observer, element) "$0.unobserve($1)"
+              JsInterop.emitJsExpr observer "$0.disconnect()"
+              observerRef.Value <- None
+            | None -> ()
+        )
+      
+      // Create IntersectionObserver with options
+      let options = JsInterop.createObj [
+        "threshold", box 0.1  // Trigger when 10% of the element is visible
+      ]
+      
+      let observer : obj = JsInterop.emitJsExpr (callback, options) "new IntersectionObserver($0, $1)"
+      observerRef.Value <- Some observer
+      JsInterop.emitJsExpr (observer, element) "$0.observe($1)"
+      
+      // Cleanup function
+      React.createDisposable(fun () -> 
+        match observerRef.Value with
+        | Some observer ->
+          JsInterop.emitJsExpr (observer, element) "$0.unobserve($1)"
+          JsInterop.emitJsExpr observer "$0.disconnect()"
+        | None -> ()
+      )
+    | None -> 
+      React.createDisposable(fun () -> ())
+  ), [| |])
 
   let loading = Html.div [
     prop.className "flex flex-row w-full justify-center animate-pulse mb-8"
@@ -341,6 +388,7 @@ let Comments (uri: string, slug: string) =
 
   Html.section [
     prop.className "relative not-prose scroll-mt-[72px]"
+    prop.ref containerRef
     prop.children [
       Html.div [
         prop.className "intersect-once motion-safe:md:intersect:animate-fade motion-safe:md:opacity-0 intersect-quarter mx-auto intercept-no-queue relative lg:pb-20 md:pb-16 pb-12 text-default max-w-7xl"
@@ -358,7 +406,7 @@ let Comments (uri: string, slug: string) =
               ]
 
               match state.Comments with
-              | Loading -> loading
+              | NotLoaded | Loading -> loading
               | NoComments -> noComments
               | Comments cs -> comments cs
 

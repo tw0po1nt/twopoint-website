@@ -7,6 +7,5 @@ module Bind =
   open System
 
   let guid = Bind.tryParseable Guid.TryParse
-  
-  let emailAddress = Bind.tryParseable EmailAddress.tryParse
 
+  let emailAddress = Bind.tryParseable EmailAddress.tryParse

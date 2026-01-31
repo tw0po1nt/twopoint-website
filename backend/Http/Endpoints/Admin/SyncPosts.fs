@@ -33,7 +33,7 @@ type SyncPosts (
   logger : ILogger<GetAllPosts>,
   tableServiceClient: TableServiceClient
 ) =
-  
+
   [<Function("Admin-Posts-Sync")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "internal/posts")>] req : HttpRequestData,
@@ -43,28 +43,28 @@ type SyncPosts (
     let op = "Admin.Posts.Sync"
     let httpContext = context.GetHttpContext() |> Option.ofObj
     let claimsPrincipal = httpContext |> Option.map _.User
-    
+
     ct |> (
       Auth.runIfAuthorized logger req claimsPrincipal op
       <| fun _ -> cancellableTask {
         logger.LogInformation("Processing '{op}' request", op)
         let response = req.CreateResponse HttpStatusCode.OK
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
-        
+
         let! feed = TwoPointRss.AsyncGetSample()
-        
-        let feedPosts = 
+
+        let feedPosts =
           feed.Channel.Items
-          |> Array.map (fun item -> 
-            let uri = Uri(item.Link)
-            let slug = uri.AbsolutePath.TrimEnd('/').Split('/') |> Array.last
+          |> Array.map (fun item ->
+            let uri = Uri item.Link
+            let slug = uri.AbsolutePath.TrimEnd('/').Split '/' |> Array.last
             let createdDate = item.PubDate.UtcDateTime.ToString("o", CultureInfo.InvariantCulture)
             {| Title = item.Title; Slug = slug; CreatedDate = createdDate |}
           )
           |> Array.toList
-        
+
         logger.LogInformation("Found {count} posts in RSS feed", feedPosts.Length)
-        
+
         let postDependencies =
           PostDependencies.live
             validRedirectUris
@@ -74,7 +74,7 @@ type SyncPosts (
             tableServiceClient
             logger
         let postQueries = PostQueries.withDependencies postDependencies
-        
+
         let! newPosts = cancellableTask {
           let! existingSlugs =
             postQueries.GetAllPosts()
@@ -82,12 +82,12 @@ type SyncPosts (
             |> CancellableTask.map (List.map (_.Slug >> Slug.value) >> Set.ofList)
           return feedPosts |> List.filter (fun post -> not (existingSlugs.Contains post.Slug))
         }
-        
+
         logger.LogInformation("Found {newCount} new posts out of {totalCount} feed posts", newPosts.Length, feedPosts.Length)
-        
+
         if newPosts.Length > 0
         then do! cancellableTask {
-          use sender = serviceBus.CreateSender("new_post")
+          use sender = serviceBus.CreateSender "new_post"
           try
             let messages = newPosts |> List.map (fun post ->
               let json = JsonSerializer.Serialize({|
@@ -95,9 +95,9 @@ type SyncPosts (
                 slug = post.Slug
                 createdDate = post.CreatedDate
               |})
-              ServiceBusMessage(json)
+              ServiceBusMessage json
             )
-            
+
             let batch = messages |> List.toArray
             do! sender.SendMessagesAsync(batch, ct)
             logger.LogInformation("Sent {count} messages to 'new_post' queue", batch.Length)
@@ -105,13 +105,13 @@ type SyncPosts (
             | ex ->
               logger.LogError(message = "{op}: An error occurred when deleting an entity", ``exception`` = ex, args = [| op |])
         }
-        else logger.LogInformation("No new posts to sync")
-        
+        else logger.LogInformation "No new posts to sync"
+
         let apiResponse : ApiResponse<unit> =
           { Success = true
             Message = Some (if newPosts.Length > 0 then "Sync started" else "Up to date")
-            Data = None }  
-        
+            Data = None }
+
         do! response.WriteAsJsonAsync(apiResponse, ct)
         return response
       }
