@@ -92,7 +92,7 @@ const link = APP_BLOG?.post?.isEnabled ? getPermalink(post.permalink, 'post') : 
       </div>
       {
         post.series && (
-          <p class=" bg-gray-100 dark:bg-slate-700 rounded-md inline-block mr-2 rtl:mr-0 rtl:ml-2 my-2 py-0.5 px-2 font-medium">
+          <p class="bg-gray-100 dark:bg-slate-700 rounded-md inline-block mr-2 rtl:mr-0 rtl:ml-2 my-2 py-0.5 px-2 font-medium">
           <a
             href={getPermalink(post.series.slug, 'series')}
             class="text-muted dark:text-slate-300 hover:text-primary dark:hover:text-gray-200"
