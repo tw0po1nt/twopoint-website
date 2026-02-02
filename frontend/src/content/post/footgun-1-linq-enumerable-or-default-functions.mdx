@@ -331,8 +331,8 @@ public static class EnumerableExtensions
   public static Maybe<T> TrySingleValue<T>(this IEnumerable<T> xs) where T : struct
   {
     if (xs.Count() > 1) return Maybe.Nothing;
-      var x = xs.SingleOrDefault();
-      return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x); 
+    var x = xs.SingleOrDefault();
+    return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x); 
   }
 
   public static Maybe<T> TrySingleValue<T>(this IEnumerable<T> xs, Func<T, bool> predicate) where T : struct
