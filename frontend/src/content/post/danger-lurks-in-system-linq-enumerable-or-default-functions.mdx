@@ -1,8 +1,8 @@
 ---
-publishDate: 2026-02-02T13:00:00.0000000Z
+publishDate: 2026-02-04T13:00:00.0000000Z
 author: Matthew Watt
-title: 'Footgun #1 - LINQ''s Enumerable "OrDefault" functions'
-excerpt: In this post, we'll look at my misunderstanding of LINQ's Enumerable "OrDefault" functions.
+title: 'Danger lurks in System.Linq.Enumerable''s "OrDefault" functions'
+excerpt: In this post, we'll look at how my misunderstanding of a very important concept in .NET nearly led to disastrous results in our codebase.
 category: Series
 series:
   slug: matts-footgun-collection
@@ -17,7 +17,7 @@ tags:
   - Functional programming
   - "2026"
 metadata:
-  canonical: https://twopoint.dev/posts/footgun-1-linq-enumerable-or-default-functions
+  canonical: https://twopoint.dev/posts/footgun-danger-lurks-in-system-linq-enumerable-or-default-functions
 ---
 
 ## LINQ 
@@ -47,31 +47,35 @@ What these "OrDefault" functions allow us to do is say:
 
 Very useful! But danger lurks.
 
-## Combining Maybe and System.Linq.Enumerable 
+## The symptoms
+
+Before they go off and wreak havoc, every footgun has symptoms. Fortunately for me, I caught the symptoms early. Let's take a look.
+
+#### Combining Maybe and System.Linq.Enumerable 
 
 I wrote briefly about [Tony Hoare's "billion dollar mistake"](https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/) in my post about [functional architecture in C#](/posts/functional-architecture-in-csharp-a-case-study). In that post, I praised the C# team for how they have greatly improved the C# language's handling of nullability in recent releases, and yet I still advocated for the use of `Maybe` (or `Option`) types, arguing that years of bad developer habits still makes this explicit handling of optionality the better choice.
 
-In the codebase that I've been working on for almost 3 years now, we use `Maybe<T>` to explicitly model optionality. We quickly discovered some useful extension functions to allow `Maybe<T>` and `IEnumerable<T>` to interoperate seamlessly:
+In the codebase that I've been working on for almost 3 years now, we use `Maybe<T>` to explicitly model optionality. We quickly discovered some useful extension functions to allow `Maybe<T>` and `IEnumerable<T>` to interoperate seamlessly, leveraging some "OrDefault" functions to do it:
 
 ```csharp
 public static class MaybeEnumerableExtensions
 {
   // Maybe.Of()'s type is: T? -> Maybe<T>. It's the bridge between `Maybe` and C#'s built in nullability
-  public static Maybe<T> TryFirst(this IEnumerable<T> xs)   
+  public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs)   
     => Maybe.Of(xs.FirstOrDefault());
 
-  public static Maybe<T> TryFirst(this IEnumerable<T> xs, Func<T, bool> predicate)
+  public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs, Func<T, bool> predicate)
     => Maybe.Of(xs.FirstOrDefault(predicate));
 
-  public static Maybe<T> TrySingle(this IEnumerable<T> xs) 
+  public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs) 
     => xs.Count() > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault()); 
 
-  public static Maybe<T> TrySingle(this IEnumerable<T> xs, Func<T, bool> predicate)
+  public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs, Func<T, bool> predicate)
     => xs.Count(predicate) > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault(predicate));
 }
 ```
 
-Let's see some examples of how these should work. Obviously, `TryFirst()` should be first:
+How are these functions useful? Let's see some examples of how these should work. Obviously, `TryFirst()` should be first:
 
 ```csharp
 IEnumerable<string> noStrings = [];
@@ -94,7 +98,7 @@ Console.WriteLine(manyStrings.TryFirst());
 Console.WriteLine(manyStrings.TryFirst(str => str == "Paul"));
 ```
 
-This all seems sensible. We've taken `FirstOrDefault()` and interpreted "default" to mean `Nothing`.
+This all seems sensible. We've taken `FirstOrDefault()` and interpreted "default" to mean `Nothing`. 
 
 `TrySingle()` is similarly sensible:
 
@@ -124,9 +128,9 @@ Console.WriteLine(manyStrings.TrySingle(str => str == "Paul"));
 
 This is largely the same as `TryFirst()` with one small difference. The `SingleOrDefault()` functions throw an exception when more than one element matches. Since exceptions are implicit behavior and I prefer to be [explicit rather than implicit](/posts/why-the-fsharp-would-i-write-real-code-like-this#explicit-rather-than-implicit), we first check for that case and map it to `Nothing`. The empty list case and the case where no match is found remain the same as `TryFirst()`, mapping to `Nothing`.
 
-"Ok, so what's the problem here? Where's the footgun?"
+Now you might be asking "Ok, so what's the problem here? Where's the footgun?"
 
-Let's try these functions out with some `struct`s. How about `DateTime`?
+Let's try these functions out with some `DateTime`s.
 
 ```csharp
 IEnumerable<DateTime> noDateTimes = [];
@@ -156,7 +160,7 @@ Console.WriteLine(manyDateTimes.TryFirst(dt => dt == new DateTime(1995, 08, 24))
 
 Wait, what? These calls are all returning `Just`, when we would expect `Nothing` for some of them.
 
-Ok, benefit of the doubt: maybe it's just our `TryFirst()` implementations are bad somehow.
+Ok, benefit of the doubt: maybe it's just that our `TryFirst()` implementations are bad somehow.
 
 Let's check our `TrySingle()` implementations:
 
@@ -190,9 +194,11 @@ Hmm, the situation is _a little_ better. Those last two calls are correct. Looks
 
 What's going on here?
 
-## Value types and reference types
+Go and <a href="https://dotnetfiddle.net/2WjQeR" target="_blank" rel="noopener noreferrer">play around with the code</a> to get a feel for it. See if you can figure out the problem for yourself. Then come back here and I'll walk you through it.
 
-If you've been doing .NET development for any significant amount of time, you likely already see the issue. It's like my dad used to say whenever I'd go looking for something in the house (usually the fridge): 
+## The Footgun: nullable value types and nullable reference types are overloaded
+
+If you've been doing .NET development for any significant amount of time, you likely saw the issue right away. It's like my dad used to say whenever I'd go looking for something in the house (usually in the fridge): 
 
 > If it were a snake, it'd have bit you in the face
 
@@ -290,107 +296,51 @@ string? possiblyNullString = null; // a null reference to something potentially 
 DateTime? possiblyNullDateTime = null; // an instance of Nullable<DateTime>
 ```
 
-The `?` **and** `null` are **both overloaded**. Ugh. This is complecting made difficult, _not_ [simple made easy](https://www.infoq.com/presentations/Simple-Made-Easy/)
+The `?` **and** `null` are **both overloaded**.
+
+**This is the footgun.** 
+
+- C# overloads nullability syntax for reference and value types
+- We _mostly_ use reference types, and so my mental model for "OrDefault" became "OrNull", which works...
+- ...except for when it doesn't - with value types
+
+Ugh.
+
+This is complecting made difficult, _not_ [simple made easy.](https://www.infoq.com/presentations/Simple-Made-Easy/)
 
 ## The solution
 
 Is it my fault for not understanding the difference between nullable reference types and nullable value types thoroughly enough? Absolutely.
 
+Do I accept responsibility for keeping an accurate mental model? Yes.
+
 Is it bad language design that these two disparate (granted: _adjacent_) concepts share the exact same syntax? 1000%.
 
-So what's the solution? Here it is:
-
-```csharp
-public static class EnumerableExtensions
-{
-  public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs) where T : class
-    => Maybe.Of(xs.FirstOrDefault());
-
-  public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs, Func<T, bool> predicate) where T : class
-    => Maybe.Of(xs.FirstOrDefault(predicate));
-
-  public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs) where T : struct
-  {
-    var x = xs.FirstOrDefault();
-    return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x);
-  }
-
-  public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs, Func<T, bool> predicate) where T : struct
-  {
-    var x = xs.FirstOrDefault(predicate);
-    return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x);
-  }
-
-  public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs) where T : class
-    => xs.Count() > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault());
-
-  public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs, Func<T, bool> predicate) where T : class
-    => xs.Count(predicate) > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault(predicate));
-
-  public static Maybe<T> TrySingleValue<T>(this IEnumerable<T> xs) where T : struct
-  {
-    if (xs.Count() > 1) return Maybe.Nothing;
-    var x = xs.SingleOrDefault();
-    return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x); 
-  }
-
-  public static Maybe<T> TrySingleValue<T>(this IEnumerable<T> xs, Func<T, bool> predicate) where T : struct
-  {
-    if (xs.Count(predicate) > 1) return Maybe.Nothing;
-    var x = xs.SingleOrDefault(predicate);
-    return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x); 
-  }
-}
-```
-
-Here's the breakdown:
+So what's the solution? Let's break it down:
 
 - Add variants of each of the functions we defined earlier specially designed to work with value types
 - Add type constraints to each method so that it is impossible to call the wrong one
 
-With this change, our `DateTime` examples actually produce the expected output:
+Here's `TryFirst()`, implemented specifically to deal with value types. Let's call it `TryFirstValue()`:
 
 ```csharp
-IEnumerable<DateTime> noDateTimes = [];
-IEnumerable<DateTime> oneDateTime = [new DateTime(1969, 07, 20)];
-IEnumerable<DateTime> manyDateTimes = [
-  new DateTime(1969, 07, 20),
-  new DateTime(1995, 08, 24),
-  new DateTime(2007, 06, 29),
-  new DateTime(1995, 08, 24)
-];
-
-// TryFirst
-// Output: Nothing
-Console.WriteLine(noDateTimes.TryFirst());
-
-// Output: Just "7/20/1969 12:00:00 AM"
-Console.WriteLine(oneDateTime.TryFirst());
-
-// Output: Nothing
-Console.WriteLine(oneDateTime.TryFirst(dt => dt == new DateTime(2026, 12, 31))); 
-
-// Output: Just "7/20/1969 12:00:00 AM"
-Console.WriteLine(manyDateTimes.TryFirst());
-
-// Output: Just "8/24/1995 12:00:00 AM"
-Console.WriteLine(manyDateTimes.TryFirst(dt => dt == new DateTime(1995, 08, 24)));
-
-// TrySingle
-// Output: Nothing
-Console.WriteLine(noDateTimes.TrySingle());
-
-// Output: Just "7/20/1969 12:00:00 AM"
-Console.WriteLine(oneDateTime.TrySingle());
-
-// Output: Nothing
-Console.WriteLine(oneDateTime.TrySingle(dt => dt == new DateTime(2026, 12, 31))); 
-
-// Output: Nothing 
-Console.WriteLine(manyDateTimes.TrySingle());
-
-// Output: Nothing 
-Console.WriteLine(manyDateTimes.TrySingle(dt => dt == new DateTime(1995, 08, 24)));
+public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs) where T : struct
+{
+  var x = xs.FirstOrDefault();
+  return x.Equals(default(T)) ? Maybe.Nothing : Maybe.Just(x);
+}
 ```
+
+We first call `FirstOrDefault()`. Then, we check if the value returned is equal to the default value for the type we're working with. If it is, we return `Nothing`. Otherwise, we wrap the value in a `Just` and return it. Note the `where T : struct`: this guarantees that this function can only be called with `IEnumerable`s containing value types.
+
+Finally, we have to add a type constraint on the original function to guarantee that it is only called for `IEnumerable`s containing reference types:
+
+```csharp
+public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs) where T : class
+  => Maybe.Of(xs.FirstOrDefault());
+```
+
+Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/ixdNkO
+" target="_blank" rel="noopener noreferrer">play around with the corrected code</a> for yourself. Change up the examples and try different things to see why this code works the way it does.
 
 I hope you found this informative! Happy coding!
