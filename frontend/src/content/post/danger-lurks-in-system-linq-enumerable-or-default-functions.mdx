@@ -22,7 +22,7 @@ metadata:
 
 ## LINQ
 
-LINQ is one of C#'s most unique features, distinguishing it from its other C-based cousins. According to Microsoft's [documentation](https://learn.microsoft.com/en-us/dotnet/csharp/linq/):
+LINQ is one of C#'s most unique features, distinguishing it from its other C-based cousins. According to Microsoft's <a href="https://learn.microsoft.com/en-us/dotnet/csharp/linq/" target="_blank" rel="noopener noreferrer">documentation</a>:
 
 > Language-Integrated Query (LINQ) is the name for a set of technologies based on the integration of query capabilities directly into the C# language. Traditionally, queries against data are expressed as simple strings without type checking at compile time or IntelliSense support. Furthermore, you have to learn a different query language for each type of data source: SQL databases, XML documents, various Web services, and so on. With LINQ, a query is a first-class language construct, just like classes, methods, and events.
 
@@ -30,16 +30,16 @@ That's a lot of words to say: write whatever kind of query you like in C# withou
 
 #### System.Linq.Enumerable
 
-The `System.Linq` namespace provides the [`Enumerable` class](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable?view=net-10.0), which "provides a set of static...methods for querying objects that implement `IEnumerable<T>`." This class provides many static methods (i.e. _functions_) that C# programmers use every day, like [`Where()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.where?view=net-10.0#system-linq-enumerable-where-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))>) for filtering, [`Any()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.any?view=net-10.0#system-linq-enumerable-any-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))>) for testing if an element in a sequence satisfies certain conditions, or [`Order()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.order?view=net-10.0#system-linq-enumerable-order-1(system-collections-generic-ienumerable((-0)))>) for sorting. This class defines many operations with many variants depending on your needs. In this post, we'll hone in on operations with "OrDefault" variants, since they are what caused me trouble this week.
+The `System.Linq` namespace provides the <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable?view=net-10.0" target="_blank" rel="noopener noreferrer">`Enumerable` class</a>, which "provides a set of static...methods for querying objects that implement `IEnumerable<T>`." This class provides many static methods (i.e. _functions_) that C# programmers use every day, like <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.where?view=net-10.0#system-linq-enumerable-where-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))" target="_blank" rel="noopener noreferrer">`Where()`</a> for filtering, <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.any?view=net-10.0#system-linq-enumerable-any-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))" target="_blank" rel="noopener noreferrer">`Any()`</a> for testing if an element in a sequence satisfies certain conditions, or <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.order?view=net-10.0#system-linq-enumerable-order-1(system-collections-generic-ienumerable((-0)))" target="_blank" rel="noopener noreferrer">`Order()`</a> for sorting. This class defines many operations with many variants depending on your needs. In this post, we'll hone in on operations with "OrDefault" variants, since they are what caused me trouble this week.
 
 #### "OrDefault" functions in System.Linq.Enumerable
 
 Many of the operations that the `Enumerable` class provides come with an "OrDefault" variant. These operations are:
 
-- [`ElementAtOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.elementatordefault?view=net-10.0#system-linq-enumerable-elementatordefault-1(system-collections-generic-ienumerable((-0))-system-index)>)
-- [`FirstOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.firstordefault?view=net-10.0#system-linq-enumerable-firstordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)>)
-- [`LastOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.lastordefault?view=net-10.0#system-linq-enumerable-lastordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)>)
-- [`SingleOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.singleordefault?view=net-10.0#system-linq-enumerable-singleordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)>)
+- <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.elementatordefault?view=net-10.0#system-linq-enumerable-elementatordefault-1(system-collections-generic-ienumerable((-0))-system-index)" target="_blank" rel="noopener noreferrer">`ElementAtOrDefault()`</a>
+- <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.firstordefault?view=net-10.0#system-linq-enumerable-firstordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)" target="_blank" rel="noopener noreferrer">`FirstOrDefault()`</a>
+- <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.lastordefault?view=net-10.0#system-linq-enumerable-lastordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)" target="_blank" rel="noopener noreferrer">`LastOrDefault()`</a>
+- <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.singleordefault?view=net-10.0#system-linq-enumerable-singleordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)" target="_blank" rel="noopener noreferrer">`SingleOrDefault()`</a>
 
 What these "OrDefault" functions allow us to do is say:
 
@@ -53,7 +53,7 @@ Before they go off and wreak havoc, every footgun has symptoms. Fortunately for 
 
 #### Combining Maybe and System.Linq.Enumerable
 
-I wrote briefly about [Tony Hoare's "billion dollar mistake"](https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/) in my post about [functional architecture in C#](/posts/functional-architecture-in-csharp-a-case-study). In that post, I praised the C# team for how they have greatly improved the C# language's handling of nullability in recent releases, and yet I still advocated for the use of `Maybe` (or `Option`) types, arguing that years of bad developer habits still makes this explicit handling of optionality the better choice.
+I wrote briefly about <a href="https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/" target="_blank" rel="noopener noreferrer">Tony Hoare's "billion dollar mistake"</a> in my post about [functional architecture in C#](/posts/functional-architecture-in-csharp-a-case-study). In that post, I praised the C# team for how they have greatly improved the C# language's handling of nullability in recent releases, and yet I still advocated for the use of `Maybe` (or `Option`) types, arguing that years of bad developer habits still makes this explicit handling of optionality the better choice.
 
 In the codebase that I've been working on for almost 3 years now, we use `Maybe<T>` to explicitly model optionality. We quickly discovered some useful extension functions to allow `Maybe<T>` and `IEnumerable<T>` to interoperate seamlessly, leveraging some "OrDefault" functions to do it:
 
@@ -226,7 +226,7 @@ Examples of reference types include types defined as `class`, `interface`, `dele
 
 #### Default values
 
-Every type in C# has a default value. Here's what the [C# language specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/variables#93-default-values) has to say about that:
+Every type in C# has a default value. Here's what the <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/variables#93-default-values" target="_blank" rel="noopener noreferrer">C# language specification</a> has to say about that:
 
 > The default value of a variable depends on the type of the variable and is determined as follows:
 >
@@ -283,8 +283,8 @@ A quick overview:
 
 - Variables of reference types can be `null`
 - Variables of value types cannot be `null`
-- Since C# 2.0, the [`System.Nullable<T>` struct](https://learn.microsoft.com/en-us/dotnet/api/system.nullable-1?view=net-10.0) has given us the ability to have "a value type that can be assigned null"
-- Since C# 8.0, the [nullable reference types](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/nullable-reference-types) feature has given us the ability to define a "nullable aware context" within which static null checking and the [null-forgiving operator](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/null-forgiving) are available to us.
+- Since C# 2.0, the <a href="https://learn.microsoft.com/en-us/dotnet/api/system.nullable-1?view=net-10.0" target="_blank" rel="noopener noreferrer">`System.Nullable<T>` struct</a> has given us the ability to have "a value type that can be assigned null"
+- Since C# 8.0, the <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/nullable-reference-types" target="_blank" rel="noopener noreferrer">nullable reference types</a> feature has given us the ability to define a "nullable aware context" within which static null checking and the <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/null-forgiving" target="_blank" rel="noopener noreferrer">null-forgiving operator</a> are available to us.
 
 These are nice features, but here's the kicker:
 
@@ -308,7 +308,7 @@ The `?` **and** `null` are **both overloaded**.
 
 Ugh.
 
-This is complecting made difficult, _not_ [simple made easy.](https://www.infoq.com/presentations/Simple-Made-Easy/)
+This is complecting made difficult, _not_ <a href="https://www.infoq.com/presentations/Simple-Made-Easy/" target="_blank" rel="noopener noreferrer">simple made easy.</a>
 
 ## The solution
 
@@ -351,20 +351,20 @@ IEnumerable<DateTime> dateTimesIncludingMinValue = [
 Console.WriteLine(dateTimesIncludingMinValue.TryFirstValue());
 ```
 
-[Run the code](https://dotnetfiddle.net/A8kTWL) and see for yourself.
+<a href="https://dotnetfiddle.net/A8kTWL" target="_blank" rel="noopener noreferrer">Run the code</a> and see for yourself.
 
 Big thanks to my co-worker and <a href="https://truth.dalt.dev" target="_blank" rel="noopener noreferrer">favorite conspiracy theorist</a> Dalton for pointing this one out to me.
 
 #### What actually works
 
-Here's an implementation of `TryFirstValue()` that actually works (in C# 10 or newer thanks to [explicit return types in lambdas](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/lambda-expressions#explicit-return-type)):
+Here's an implementation of `TryFirstValue()` that actually works (in C# 10 or newer thanks to <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/lambda-expressions#explicit-return-type" target="_blank" rel="noopener noreferrer">explicit return types in lambdas</a>):
 
 ```csharp
 public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs) where T : struct
 	=> Maybe.Of(xs.Select(T? (x) => x).FirstOrDefault());
 ```
 
-First, we call [`Select()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.select?view=net-10.0) to transform our `IEnumerable<T>` to `IEnumerable<Nullable<T>>` internally. Then, we call `FirstOrDefault()` on that, which now returns `null` when no match is found, just as my original intuition expected. Then, since `Maybe.Of()` still accepts a `T?`, we pass it right in. _Now_ our API behaves correctly in every case.
+First, we call <a href="https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.select?view=net-10.0" target="_blank" rel="noopener noreferrer">`Select()`</a> to transform our `IEnumerable<T>` to `IEnumerable<Nullable<T>>` internally. Then, we call `FirstOrDefault()` on that, which now returns `null` when no match is found, just as my original intuition expected. Then, since `Maybe.Of()` still accepts a `T?`, we pass it right in. _Now_ our API behaves correctly in every case.
 
 Finally, we have to add a type constraint on the original function to guarantee that it is only called for `IEnumerable`s containing reference types:
 

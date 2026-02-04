@@ -22,7 +22,7 @@ In this post, we'll look at a case study in functional architecture using C#. We
 
 First, a little background on the project. My team and I have been building an eCommerce platform for our client for the last 2 years. In the beginning, it was always going to be a C# project, since the company I work for is a C# shop through and through (note I did _not_ say ".NET shop", F# enthusiast that I am. All you VB devs out there, I see you too 👀). I was just starting out at the company and I had taken the job because I wanted to add C# and .NET development to my skillset. It was also before I had my ["aha" moment with functional programming](/posts/why-the-fsharp-would-i-write-real-code-like-this), so my initial focus was on absorbing and learning everything C# and .NET, not on spearheading architecture. And so the project initially adopted the "standard" architecture for most new projects, a "Clean Architecture"-based boilerplate.
 
-Things were going well when I finally _did_ have my "aha" moment with functional programming. Feeling a rush of motivation to learn, I started reading as much as I could. I finally picked up the copy of Scott Wlaschin's "[Domain Modeling Made Functional](https://fsharpforfunandprofit.com/books/#domain-modeling-made-functional)" that [my co-worker](https://aligneddev.net/blog/2024/journey-towards-functional-programming/) had left on my desk and read the whole thing. All the while, I started trying to find ways to apply what I was learning to the project, since I learn best by doing. This started the project on the domain-driven design + functional programming path that it is on to this day.
+Things were going well when I finally _did_ have my "aha" moment with functional programming. Feeling a rush of motivation to learn, I started reading as much as I could. I finally picked up the copy of Scott Wlaschin's "<a href="https://fsharpforfunandprofit.com/books/#domain-modeling-made-functional" target="_blank" rel="noopener noreferrer">Domain Modeling Made Functional</a>" that <a href="https://aligneddev.net/blog/2024/journey-towards-functional-programming/" target="_blank" rel="noopener noreferrer">my co-worker</a> had left on my desk and read the whole thing. All the while, I started trying to find ways to apply what I was learning to the project, since I learn best by doing. This started the project on the domain-driven design + functional programming path that it is on to this day.
 
 ## Architecture
 
@@ -53,11 +53,11 @@ That said, I have two rebuttals to this objection:
 
 1. "Idiomatic" is in the eye of the beholder.
 
-"Idiomatic" is subjective. As developers we often mindlessly seek out the "idiomatic" approach for no other reason than that it makes us feel safe because we can write code in a prescribed style or fashion and not have to actually think about our current problem or context. Blindly chasing "idiomatic" is just a thinly veiled symptom of ["silver-bullet syndrome"](https://duckduckgo.com/?q=silver+bullet+syndrome) and should be avoided.
+"Idiomatic" is subjective. As developers we often mindlessly seek out the "idiomatic" approach for no other reason than that it makes us feel safe because we can write code in a prescribed style or fashion and not have to actually think about our current problem or context. Blindly chasing "idiomatic" is just a thinly veiled symptom of <a href="https://duckduckgo.com/?q=silver+bullet+syndrome" target="_blank" rel="noopener noreferrer">"silver-bullet syndrome"</a> and should be avoided.
 
 2. It's difficult to break years of bad habits
 
-I'll give the C# team credit - the language's handling of ["the billion dollar mistake"](https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/) in recent iterations has been very good. You should definitely be reaching for `<Nullable>enable</Nullable>` as a default if you haven't already.
+I'll give the C# team credit - the language's handling of <a href="https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/" target="_blank" rel="noopener noreferrer">"the billion dollar mistake"</a> in recent iterations has been very good. You should definitely be reaching for `<Nullable>enable</Nullable>` as a default if you haven't already.
 
 Even so, great `null` handling in newer versions doesn't just wipe out the last several decades of bad developer habits overnight. It's still far too easy for us to implicitly let `null`s and `Exceptions` wreak havoc on our codebases. I've said it before: [it is better to be explicit than implicit](/posts/why-the-fsharp-would-i-write-real-code-like-this#explicit-rather-than-implicit). Using dedicated `Option` and `Result` types forces us to explicitly handle missing values or calculations that can fail.
 
@@ -69,7 +69,7 @@ It's a fair point. Why re-invent the wheel?
 
 In this world of "there's a framework for that" or "just use something on NuGet", it's easy to take a hard dependency on a 3rd party. So easy, in fact, it almost feels like we can take these hard dependencies with no risks - but that's just not the case.
 
-Any hard dependency on something you don't control is a risk. There's a risk that the project might take a new direction that doesn't meet you or your project's needs anymore. There's a risk that eventually you will have to pay for a license to continue to get updates, even if initial versions were free. The .NET community knows this pain well (see [Fluent Assertions](https://fluentassertions.com/releases/#800), [AutoMapper, and MediatR](https://www.jimmybogard.com/automapper-and-mediatr-licensing-update/))
+Any hard dependency on something you don't control is a risk. There's a risk that the project might take a new direction that doesn't meet you or your project's needs anymore. There's a risk that eventually you will have to pay for a license to continue to get updates, even if initial versions were free. The .NET community knows this pain well (see <a href="https://fluentassertions.com/releases/#800" target="_blank" rel="noopener noreferrer">Fluent Assertions</a>, <a href="https://www.jimmybogard.com/automapper-and-mediatr-licensing-update/" target="_blank" rel="noopener noreferrer">AutoMapper, and MediatR</a>)
 
 2. The functional abstractions we use are simple
 
@@ -79,18 +79,18 @@ Why take on the risk of 3rd party libraries when the implementation is straightf
 
 #### Atom 2: C#'s standard functional toolkit 
 
-Mads Torgerson, the C# language's current design lead is [outspokenly proud to have borrowed or outright taken ideas for C# from F# and other functional programming languages](https://www.infoq.com/presentations/c-sharp-functional-features/). This is a good thing, because it means that C# developers have access to some of the most important tools for writing code in a functional style:
+Mads Torgerson, the C# language's current design lead is <a href="https://www.infoq.com/presentations/c-sharp-functional-features/" target="_blank" rel="noopener noreferrer">outspokenly proud to have borrowed or outright taken ideas for C# from F# and other functional programming languages</a>. This is a good thing, because it means that C# developers have access to some of the most important tools for writing code in a functional style:
 
-- First-class functions with [delegates and lambdas](https://learn.microsoft.com/en-us/dotnet/standard/delegates-lambdas)
+- First-class functions with <a href="https://learn.microsoft.com/en-us/dotnet/standard/delegates-lambdas" target="_blank" rel="noopener noreferrer">delegates and lambdas</a>
 - Immutable data:
-  - [Records](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/record)
-  - [Immutable collections (available as part of the core .NET libraries)](https://learn.microsoft.com/en-us/dotnet/api/system.collections.immutable?view=net-9.0#remarks)
+  - <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/record" target="_blank" rel="noopener noreferrer">Records</a>
+  - <a href="https://learn.microsoft.com/en-us/dotnet/api/system.collections.immutable?view=net-9.0#remarks" target="_blank" rel="noopener noreferrer">Immutable collections (available as part of the core .NET libraries)</a>
 
-And the honorable mention: [LINQ](https://learn.microsoft.com/en-us/dotnet/csharp/linq/)
+And the honorable mention: <a href="https://learn.microsoft.com/en-us/dotnet/csharp/linq/" target="_blank" rel="noopener noreferrer">LINQ</a>
 
 I might get some raised eyebrows for this one, but in my mind the honorable mention is LINQ. It isn't _strictly_ necessary for writing C# in a functional style, but it _does_ make doing so much more ergonomic and natural, and I love using it.
 
-The biggest points it gets, in my opinion, is its powerful use of [expression trees](https://learn.microsoft.com/en-us/dotnet/csharp/advanced-topics/expression-trees/). It's only disappointing that this "expression-orientedness" didn't spread to more of the language, since expression-based languages make writing value-oriented (think: immutability-oriented) code a snap. Hence honorable mention.
+The biggest points it gets, in my opinion, is its powerful use of <a href="https://learn.microsoft.com/en-us/dotnet/csharp/advanced-topics/expression-trees/" target="_blank" rel="noopener noreferrer">expression trees</a>. It's only disappointing that this "expression-orientedness" didn't spread to more of the language, since expression-based languages make writing value-oriented (think: immutability-oriented) code a snap. Hence honorable mention.
 
 ### Molecules: functional core
 
@@ -184,9 +184,9 @@ public sealed record RegistrationDto
 }
 ```
 
-Our main input type is `Registration`. It's a record where each of the properties is defined with an [`init`-only setter](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/init), which makes it immutable. It is composed of other types - `NonEmptyString`, `EmailAddress`, and `NewPassword`. These are types that represent constraints on the data that is acceptable as input to this workflow. This is an example of "making invalid states unrepresentable", which [I've written about before](https://twopoint.dev/posts/why-the-fsharp-would-i-write-real-code-like-this#making-invalid-states-unrepresentable). For registration, a user is required to provide an email address, a password, and optionally their name.
+Our main input type is `Registration`. It's a record where each of the properties is defined with an <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/init" target="_blank" rel="noopener noreferrer">`init`-only setter</a>, which makes it immutable. It is composed of other types - `NonEmptyString`, `EmailAddress`, and `NewPassword`. These are types that represent constraints on the data that is acceptable as input to this workflow. This is an example of "making invalid states unrepresentable", which <a href="https://twopoint.dev/posts/why-the-fsharp-would-i-write-real-code-like-this#making-invalid-states-unrepresentable" target="_blank" rel="noopener noreferrer">I've written about before</a>. For registration, a user is required to provide an email address, a password, and optionally their name.
 
-We also define a `RegistrationDto` record. This allows code from "outside" our core domain code to more ergonomically pass in unvalidated values. Then, on that record we define a `Validate()` method which gives us our first glimpse of what using our functional primitives looks like. I'll briefly explain how this code works, but I won't go in depth on how all of the "functional primitives" work. If you want a deep dive into functions like `Map()`, `Bind()`, `Traverse()`, `Sequence()`, etc, I highly recommend checking out [Scott Wlaschin's post series on the topic](https://fsharpforfunandprofit.com/series/map-and-bind-and-apply-oh-my/).
+We also define a `RegistrationDto` record. This allows code from "outside" our core domain code to more ergonomically pass in unvalidated values. Then, on that record we define a `Validate()` method which gives us our first glimpse of what using our functional primitives looks like. I'll briefly explain how this code works, but I won't go in depth on how all of the "functional primitives" work. If you want a deep dive into functions like `Map()`, `Bind()`, `Traverse()`, `Sequence()`, etc, I highly recommend checking out <a href="https://fsharpforfunandprofit.com/series/map-and-bind-and-apply-oh-my/" target="_blank" rel="noopener noreferrer">Scott Wlaschin's post series on the topic</a>.
 
 Let's break it into two sections:
 
@@ -254,9 +254,9 @@ return emailAddressResult
 
 When chaining computations like this, you often want to aggregate the results as you go along so that, at the end, you can do something with all the results. This is exactly what we're doing in this case - we're validating each of the fields, pulling the results forward as the computation goes along, and then at the end if everything else succeeded, we use one last `Map()` to wrap the results in the `Registration` type.
 
-In F#, you have [computation expressions](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/computation-expressions) to elegantly accomplish this. In C#, we don't have this sort of generalized computation syntax, so here, I'm leveraging tuples to aggregate the results throughout the computation. Not as elegant, but it does the trick.
+In F#, you have <a href="https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/computation-expressions" target="_blank" rel="noopener noreferrer">computation expressions</a> to elegantly accomplish this. In C#, we don't have this sort of generalized computation syntax, so here, I'm leveraging tuples to aggregate the results throughout the computation. Not as elegant, but it does the trick.
 
-**One last note**: C# **does** have a sort of computation expression syntax for one specific type - `Task`. `Task` can be thought of along the same lines as `Option` or `Result`, where the context it defines is "an asynchronous operation producing a value". [This blog post by Stephen Toub](https://devblogs.microsoft.com/dotnet/tasks-monads-and-linq/) explains this property of `Task` beautifully. I recommend giving it a read.
+**One last note**: C# **does** have a sort of computation expression syntax for one specific type - `Task`. `Task` can be thought of along the same lines as `Option` or `Result`, where the context it defines is "an asynchronous operation producing a value". <a href="https://devblogs.microsoft.com/dotnet/tasks-monads-and-linq/" target="_blank" rel="noopener noreferrer">This blog post by Stephen Toub</a> explains this property of `Task` beautifully. I recommend giving it a read.
 
 #### Outputs
 
@@ -285,9 +285,9 @@ public sealed record Registered(Registration Registration);
 
 Business decisions are most often binary choice - either we allow some operation or we don't. So, we need a type to represent each case.
 
-`RegistrationError` is a union type representing what could go wrong with this operation. Registration fails if the account already exists or if someone named "Matt" decides to register. While silly, I added this contrived case to avoid rehashing the argument about [the usefulness of single case unions](https://github.com/fsharp/fslang-suggestions/issues/1394).
+`RegistrationError` is a union type representing what could go wrong with this operation. Registration fails if the account already exists or if someone named "Matt" decides to register. While silly, I added this contrived case to avoid rehashing the argument about <a href="https://github.com/fsharp/fslang-suggestions/issues/1394" target="_blank" rel="noopener noreferrer">the usefulness of single case unions</a>.
 
-C# doesn't [yet](https://github.com/dotnet/csharplang/blob/main/meetings/working-groups/discriminated-unions/TypeUnions.md) support proper discriminated unions, but they can be simulated using inheritance, as is the case with `RegistrationError`. This isn't as good as built-in support for discriminated unions because you don't get exhaustive checking in the compiler that code which pattern matches on such values handles all cases, but it gets the job done.
+C# doesn't <a href="https://github.com/dotnet/csharplang/blob/main/meetings/working-groups/discriminated-unions/TypeUnions.md" target="_blank" rel="noopener noreferrer">yet</a> support proper discriminated unions, but they can be simulated using inheritance, as is the case with `RegistrationError`. This isn't as good as built-in support for discriminated unions because you don't get exhaustive checking in the compiler that code which pattern matches on such values handles all cases, but it gets the job done.
 
 `Registered` is a simple record type that represents the success case of registration. It has one field that holds on to the input data.
 
@@ -349,7 +349,7 @@ public static class AccountLogic
 
 First things first: this is a **pure function**, so we can't do any side-effects, like looking up data in a database. Any data that we need to make this calculation must therefore be passed in. For `Register`, all we need is an existing account if there is one - modeled with `Option<Account>` - and the inputs provided by the caller.
 
-The overall structure of this function should look similar to the `Validate()` function we stepped through earlier. First, we represent each individual rule as a `Result` computation, using some helper functions modeled after ones found in [FsToolkit.ErrorHandling](https://github.com/demystifyfp/FsToolkit.ErrorHandling). Go check out that library. It's a great way to learn about some fundamental functional programming techniques.
+The overall structure of this function should look similar to the `Validate()` function we stepped through earlier. First, we represent each individual rule as a `Result` computation, using some helper functions modeled after ones found in <a href="https://github.com/demystifyfp/FsToolkit.ErrorHandling" target="_blank" rel="noopener noreferrer">FsToolkit.ErrorHandling</a>. Go check out that library. It's a great way to learn about some fundamental functional programming techniques.
 
 Then, we compose those computations into the overall business decision using `Map()` and `Bind()`, just like before. If all of the validations succeed, we end up with a `Result.Ok` containing a value of the `Registered` type with the registration details.
 
@@ -365,7 +365,7 @@ But as much as we would love to stay in the clean, simple world of pure logic an
 
 ### Cells (or sandwiches, depending on your metaphor): imperative shell
 
-It is time to make a sandwich. This sandwich is not edible, but it will be no less delicious than an edible one. It is: the ["impuriem sandwich"](https://blog.ploeh.dk/2020/03/02/impureim-sandwich/)
+It is time to make a sandwich. This sandwich is not edible, but it will be no less delicious than an edible one. It is: the <a href="https://blog.ploeh.dk/2020/03/02/impureim-sandwich/" target="_blank" rel="noopener noreferrer">"impuriem sandwich"</a>
 
 Apologies for the mixed metaphors (or if I made you hungry). I started with atoms and molecules, so it made sense for the bigger structure to be "cell", but I _also_ needed to mention the _impuriem sandwich_, a term coined by Mark Seemann, since I use it to model many of the systems I build these days, including our case study.
 
@@ -480,11 +480,11 @@ Next, `ApiError<TLogicError>`. I use the term "API" for the "impuriem sandwich".
 
 3. `Validation(ValidationError Error)`: this case indicates that something about the input provided was unexpected or incorrect.
 
-Recently, I've seen discussions on the [F# Discord](https://discord.com/invite/fsharp-196693847965696000) from people much smarter than me about how, even after years of experience writing systems, it is still difficult to model errors. Error handling is indeed a challenge. Often, it ends up accounting for a large portion of the code we write. This makes sense, because we want our code to be resilient to the various things that can and do go wrong during the execution of our code.
+Recently, I've seen discussions on the <a href="https://discord.com/invite/fsharp-196693847965696000" target="_blank" rel="noopener noreferrer">F# Discord</a> from people much smarter than me about how, even after years of experience writing systems, it is still difficult to model errors. Error handling is indeed a challenge. Often, it ends up accounting for a large portion of the code we write. This makes sense, because we want our code to be resilient to the various things that can and do go wrong during the execution of our code.
 
 With `ApiError<TLogicError>`, I don't claim to have the silver-bullet for modeling errors, but it has been a fairly effective way for me to model 99% of the errors in the systems I'm currently working on, and so it has been my personal go-to.
 
-Next, let's talk about that gnarly looking `ApiResult<TSuccess, TLogicError>` type. This type is intended to be a simple type alias for `Result<TSuccess, ApiError<TLogicError>>`. Unfortunately, the only way to define type aliases in C# is with [`using` directives](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/using-directive) which can only be scoped globally or to the current file and don't support generics, which is very limiting. Ideally, we'd have something like [F# type abbreviations](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/type-abbreviations), but since we don't, this was the approach I had to take: I defined the type structure I wanted as a record that wraps the type I am aliasing. The result:
+Next, let's talk about that gnarly looking `ApiResult<TSuccess, TLogicError>` type. This type is intended to be a simple type alias for `Result<TSuccess, ApiError<TLogicError>>`. Unfortunately, the only way to define type aliases in C# is with <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/using-directive" target="_blank" rel="noopener noreferrer">`using` directives</a> which can only be scoped globally or to the current file and don't support generics, which is very limiting. Ideally, we'd have something like <a href="https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/type-abbreviations" target="_blank" rel="noopener noreferrer">F# type abbreviations</a>, but since we don't, this was the approach I had to take: I defined the type structure I wanted as a record that wraps the type I am aliasing. The result:
 
 ```csharp
 public sealed record ApiResult<TSuccess, TLogicError>(Result<TSuccess, ApiError<TLogicError>> Result);
@@ -505,7 +505,7 @@ Before we break down the implementation, we should take a quick detour into doma
 
 The best way to learn about aggregates, entities, and values (sometimes called value objects) is by example. Let's take a look at my favorite example for explaining it: a car configuration app.
 
-Imagine you want to buy a brand new car. You don't just want any car, either - you want a [bespoke](https://adventuretime.fandom.com/wiki/Bespoken_For/Transcript?sh=00i0V0dbD___5107) car, where you decide on every detail. Fortunately, the manufacturer you've chosen to buy from has an online car configuration app.
+Imagine you want to buy a brand new car. You don't just want any car, either - you want a <a href="https://adventuretime.fandom.com/wiki/Bespoken_For/Transcript?sh=00i0V0dbD___5107" target="_blank" rel="noopener noreferrer">bespoke</a> car, where you decide on every detail. Fortunately, the manufacturer you've chosen to buy from has an online car configuration app.
 
 First, you need to decide on the wheels. You can give each wheel a different style, if you want, so why not? Let's do it. The **front-driver wheel** will be blue, the **front-passenger wheel** will be red, the **rear-passenger wheel** will be green, and the **rear-driver wheel** will be gold. Each of the wheels is an **entity**. Each has a distinct, persistent identity based on its position on the car. You can change the color of it, but it remains the same positional wheel.
 
@@ -581,7 +581,7 @@ Let's look at those parameters first:
 
 1. `Func<EmailAddress, Task<Result<Option<Account>, DependencyError>>> getAccountByEmail`
 
-Our core logic requires an `Option<Account>` in order to make its decision. This **dependency function** fulfills that requirement, and it does so in a way that leaves the specific implementation up to whomever provides this function. If we wanted to use [Entity Framework](https://learn.microsoft.com/en-us/ef/core/) to query a database, we could. If we wanted to use an in-memory database for running tests, we could. As it turns out, you can have abstraction without interfaces - just use functions!
+Our core logic requires an `Option<Account>` in order to make its decision. This **dependency function** fulfills that requirement, and it does so in a way that leaves the specific implementation up to whomever provides this function. If we wanted to use <a href="https://learn.microsoft.com/en-us/ef/core/" target="_blank" rel="noopener noreferrer">Entity Framework</a> to query a database, we could. If we wanted to use an in-memory database for running tests, we could. As it turns out, you can have abstraction without interfaces - just use functions!
 
 2. `Func<Registered, Task<Result<Account, DependencyError>>> saveRegisteredAccount`
 
@@ -591,7 +591,7 @@ Next, the return type:
 
 `Func<RegistrationDto,  Task<ApiResult<AccountRegisteredEvent, RegistrationError>>`
 
-`WithDependencies` returns a function which takes a `RegistrationDto` as input and returns a `Task<ApiResult<AccountRegisteredEvent, RegistrationError>>` as output. In other words, `WithDependencies` returns the implementation of our API as a callable function, with the dependency functions "baked in". In F#, this is commonly accomplished using [currying and partial function application](https://fsharpforfunandprofit.com/posts/partial-application/). It's cool to know that this can be accomplished in C# as well!
+`WithDependencies` returns a function which takes a `RegistrationDto` as input and returns a `Task<ApiResult<AccountRegisteredEvent, RegistrationError>>` as output. In other words, `WithDependencies` returns the implementation of our API as a callable function, with the dependency functions "baked in". In F#, this is commonly accomplished using <a href="https://fsharpforfunandprofit.com/posts/partial-application/" target="_blank" rel="noopener noreferrer">currying and partial function application</a>. It's cool to know that this can be accomplished in C# as well!
 
 Finally, the body of our implementation:
 
