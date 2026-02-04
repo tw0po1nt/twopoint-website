@@ -7,7 +7,6 @@ import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import tailwind from '@astrojs/tailwind';
 import mdx from '@astrojs/mdx';
-import partytown from '@astrojs/partytown';
 import icon from 'astro-icon';
 import compress from 'astro-compress';
 import type { AstroIntegration } from 'astro';
@@ -20,10 +19,6 @@ import { readingTimeRemarkPlugin, responsiveTablesRehypePlugin, lazyImagesRehype
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fsproj = path.join(__dirname, 'src/src.fsproj');
 const stage = process.env.PUBLIC_STAGE;
-
-const hasExternalScripts = true;
-const whenExternalScripts = (items: (() => AstroIntegration) | (() => AstroIntegration)[] = []) =>
-  hasExternalScripts ? (Array.isArray(items) ? items.map((item) => item()) : [items()]) : [];
 
 function fsharpMiddlewarePlugin() {
   return {
@@ -81,12 +76,6 @@ export default defineConfig({
         ],
       },
     }),
-
-    ...whenExternalScripts(() =>
-      partytown({
-        config: { forward: ['dataLayer.push'] },
-      })
-    ),
 
     compress({
       CSS: true,

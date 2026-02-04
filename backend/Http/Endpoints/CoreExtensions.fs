@@ -5,9 +5,9 @@ open System.Net
 
 module QueryResult =
   open TwoPoint.Http.Endpoints
-  
+
   open FsToolkit.ErrorHandling
-  
+
   let toApiResponse (onSuccess: 'input -> 'output) (queryResult : QueryResult<'input>) =
     queryResult
     |>

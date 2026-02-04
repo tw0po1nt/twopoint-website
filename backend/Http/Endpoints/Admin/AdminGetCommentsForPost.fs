@@ -29,16 +29,16 @@ type AdminCommentDto =
     Commenter : AdminCommenterDto
     Status : string
     Content : string }
-  
+
 [<AutoOpen>]
 module CommentTypesExt =
-  
+
   type Commenter with
     member this.ToDto() =
       { AdminCommenterDto.Email = this.EmailAddress.ToString()
         Name = this.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
         Status = this.Status.ToString() }
-  
+
   type Comment with
     member this.ToDto() =
       { AdminCommentDto.Id = this.Id.ToString()
@@ -54,7 +54,7 @@ type AdminGetCommentsForPost (
   logger : ILogger<AdminGetCommentsForPost>,
   tableServiceClient: TableServiceClient
 ) =
-  
+
   [<Function("Admin-Posts-GetComments")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "internal/posts/{slug}/comments")>] req : HttpRequestData,
@@ -70,9 +70,9 @@ type AdminGetCommentsForPost (
       <| fun _ -> cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing 'Admin.Posts.GetComments' request with slug '{slug}'", slug)
-        
+
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
-        
+
         // Dependencies
         let postDependencies =
           PostDependencies.live
@@ -83,9 +83,9 @@ type AdminGetCommentsForPost (
             tableServiceClient
             logger
         let postQueries = PostQueries.withDependencies postDependencies
-        
+
         let! commentsResult = (slug, ct) ||> postQueries.GetCommentsForPost []
-        
+
         let apiResponse, statusCode =
           match commentsResult with
           | Ok (Some comments) ->
@@ -96,7 +96,7 @@ type AdminGetCommentsForPost (
             { Success = false;  Message = Some (queryError.ToString()); Data = None }, HttpStatusCode.BadRequest
           | Error queryError ->
             { Success = false; Message = Some (queryError.ToString()); Data = None }, HttpStatusCode.InternalServerError
-          
+
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)
         return response

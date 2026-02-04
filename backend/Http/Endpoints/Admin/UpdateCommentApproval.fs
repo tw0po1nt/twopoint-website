@@ -28,7 +28,7 @@ type UpdateCommentApproval(
   logger: ILogger<UpdateCommentApproval>,
   tableServiceClient: TableServiceClient
 ) =
-  
+
   [<Function("Admin-Posts-Comments-UpdateApproval")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "internal/posts/{slug}/comments/{commentId}")>] req : HttpRequestData,
@@ -46,9 +46,9 @@ type UpdateCommentApproval(
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing 'Admin.Posts.Comments.Approve' request with slug '{slug}' and comment id '{commentId}'", slug, commentId)
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
-        
-        let! json = req.ReadFromJsonAsync<UpdateCommentApprovalJson>(ct)
-        
+
+        let! json = req.ReadFromJsonAsync<UpdateCommentApprovalJson> ct
+
         // Dependencies
         let postDependencies =
           PostDependencies.live
@@ -59,12 +59,12 @@ type UpdateCommentApproval(
             tableServiceClient
             logger
         let postActions = PostActions.withDependencies postDependencies
-        
+
         let approvalUpdate =
           { CommentApprovalUpdateDto.CommentId = commentId
             Approval = json.Approval |> Option.defaultValue "" }
 
-        let! approvalUpdateResult = ct |> postActions.UpdateCommentApproval approvalUpdate    
+        let! approvalUpdateResult = ct |> postActions.UpdateCommentApproval approvalUpdate
         let apiResponse, statusCode =
           match approvalUpdateResult with
           | Ok _ ->
@@ -78,7 +78,7 @@ type UpdateCommentApproval(
             { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
           | Error actionError ->
             { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
-          
+
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)
         return response

@@ -20,7 +20,7 @@ type RegisterForNotifications(
   logger: ILogger<UpdateCommentApproval>,
   tableServiceClient: TableServiceClient
 ) =
-  
+
   [<Function("Admin-Notifications-Register")>]
   member _.Run (
     [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "internal/notifications")>] req : HttpRequestData,
@@ -35,21 +35,21 @@ type RegisterForNotifications(
       <| fun authInfo -> cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
         logger.LogInformation("Processing '{op}' request", op)
-        
-        let! json = req.ReadFromJsonAsync<RegisterForNotificationsJson>(ct)
-    
+
+        let! json = req.ReadFromJsonAsync<RegisterForNotificationsJson> ct
+
         // Dependencies
         let notificationDependencies = NotificationDependencies.live tableServiceClient logger
         let notificationActions = NotificationActions.withDependencies notificationDependencies
-        
+
         // Inputs
-       
+
         let newDeviceRegistration =
           { NewDeviceRegistrationDto.UserExternalId = authInfo.UserExternalId
             Client = authInfo.Client
             Token = json.Token }
-        
-        let! registrationResult = ct |> notificationActions.RegisterDevice newDeviceRegistration    
+
+        let! registrationResult = ct |> notificationActions.RegisterDevice newDeviceRegistration
         let apiResponse, statusCode =
           match registrationResult with
           | Ok _ ->
@@ -58,7 +58,7 @@ type RegisterForNotifications(
             { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
           | Error actionError ->
             { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
-          
+
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)
         return response
