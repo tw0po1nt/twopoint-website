@@ -310,18 +310,20 @@ This is complecting made difficult, _not_ [simple made easy.](https://www.infoq.
 
 ## The solution
 
-Is it my fault for not understanding the difference between nullable reference types and nullable value types thoroughly enough? Absolutely.
+Is it my fault for not understanding the difference between nullable reference types and nullable value types thoroughly enough? **Absolutely**.
 
-Do I accept responsibility for keeping an accurate mental model? Yes.
+Do I accept responsibility for not keeping an accurate mental model? **Definitely**.
 
-Is it bad language design that these two disparate (granted: _adjacent_) concepts share the exact same syntax? 1000%.
+Is it bad language design that these two disparate (granted: _adjacent_) concepts share the exact same syntax? <u>**1000%**</u>.
 
 So what's the solution? Let's break it down:
 
 - Add variants of each of the functions we defined earlier specially designed to work with value types
 - Add type constraints to each method so that it is impossible to call the wrong one
 
-Here's `TryFirst()`, implemented specifically to deal with value types. Let's call it `TryFirstValue()`:
+#### Attempt #1
+
+Here's my first crack at an implementation of `TryFirst()` that attempts to deal with value types. Let's call it `TryFirstValue()`:
 
 ```csharp
 public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs) where T : struct
@@ -333,6 +335,36 @@ public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs) where T : struct
 
 We first call `FirstOrDefault()`. Then, we check if the value returned is equal to the default value for the type we're working with. If it is, we return `Nothing`. Otherwise, we wrap the value in a `Just` and return it. Note the `where T : struct`: this guarantees that this function can only be called with `IEnumerable`s containing value types.
 
+But this won't work. What happens if the default value for the type we're working with _is in the enumerable_?
+
+```csharp
+IEnumerable<DateTime> dateTimesIncludingMinValue = [
+  new DateTime(),
+  new DateTime(1995, 08, 24),
+  new DateTime(2007, 06, 29),
+  new DateTime(1995, 08, 24)
+];
+
+// Output: Nothing
+Console.WriteLine(dateTimesIncludingMinValue.TryFirstValue());
+```
+
+[Run the code](https://dotnetfiddle.net/A8kTWL) and see for yourself.
+
+Big thanks to my co-worker and <a href="https://truth.dalt.dev
+" target="_blank" rel="noopener noreferrer">favorite conspiracy theorist</a> Dalton for pointing this one out to me.
+
+#### What actually works
+
+Here's an implementation of `TryFirstValue()` that actually works (in C# 10 or newer thanks to [explicit return types in lambdas](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/lambda-expressions#explicit-return-type)):
+
+```csharp
+public static Maybe<T> TryFirstValue<T>(this IEnumerable<T> xs) where T : struct
+	=> Maybe.Of(xs.Select(T? (x) => x).FirstOrDefault());
+```
+
+First, we call [`Select()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.select?view=net-10.0) to transform our `IEnumerable<T>` to `IEnumerable<Nullable<T>>` internally. Then, we call `FirstOrDefault()` on that, which now returns `null` when no match is found, just as my original intuition expected. Then, since `Maybe.Of()` still accepts a `T?`, we pass it right in. _Now_ our API behaves correctly in every case.
+
 Finally, we have to add a type constraint on the original function to guarantee that it is only called for `IEnumerable`s containing reference types:
 
 ```csharp
@@ -340,7 +372,7 @@ public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs) where T : class
   => Maybe.Of(xs.FirstOrDefault());
 ```
 
-Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/ixdNkO
+Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/BYnlc9
 " target="_blank" rel="noopener noreferrer">play around with the corrected code</a> for yourself. Change up the examples and try different things to see why this code works the way it does.
 
 I hope you found this informative! Happy coding!
