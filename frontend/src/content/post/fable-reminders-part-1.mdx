@@ -28,10 +28,10 @@ Now, I know what you're thinking. _Everyone_ builds to-do apps for their tutoria
 Before following this series, you should be fairly comfortable with web technologies such as:
 
 - HTML - Even though we're using F# to generate our markup, being familiar with HTML will make this much easier to follow.
-- CSS - specifically, [Tailwind](https://tailwindcss.com)
-- [npm](https://www.npmjs.com/) - we'll be using it to manage the dependencies on the JavaScript side of this project.
+- CSS - specifically, <a href="https://tailwindcss.com" target="_blank" rel="noopener noreferrer">Tailwind</a>
+- <a href="https://www.npmjs.com/" target="_blank" rel="noopener noreferrer">npm</a> - we'll be using it to manage the dependencies on the JavaScript side of this project.
 
-This series also assumes you have some familiarity with F# and its syntax. I will explain some syntax and language features along the way, but this is by no means a "fundamentals of F#" series. For that, I recommend checking out Scott Wlaschin's website [F# for Fun and Profit](https://fsharpforfunandprofit.com/) or a book like [F# in Action](https://www.amazon.com/F-Action-Isaac-Abraham-ebook/dp/B0CTHSHS4J/ref=sr_1_1?dib=eyJ2IjoiMSJ9.oYpKjYyQvkGaVeE1FsfyUg.ilTt3R1mCsLK9H0JyHaWxR58-MmY860yWWzjaDxT_lM&dib_tag=se&keywords=F%23+in+Action&qid=1731032966&sr=8-1) by Isaac Abraham.
+This series also assumes you have some familiarity with F# and its syntax. I will explain some syntax and language features along the way, but this is by no means a "fundamentals of F#" series. For that, I recommend checking out Scott Wlaschin's website <a href="https://fsharpforfunandprofit.com/" target="_blank" rel="noopener noreferrer">F# for Fun and Profit</a> or a book like <a href="https://www.amazon.com/F-Action-Isaac-Abraham-ebook/dp/B0CTHSHS4J/ref=sr_1_1?dib=eyJ2IjoiMSJ9.oYpKjYyQvkGaVeE1FsfyUg.ilTt3R1mCsLK9H0JyHaWxR58-MmY860yWWzjaDxT_lM&dib_tag=se&keywords=F%23+in+Action&qid=1731032966&sr=8-1" target="_blank" rel="noopener noreferrer">F# in Action</a> by Isaac Abraham.
 
 With that out of the way, let's begin.
 
@@ -39,30 +39,30 @@ With that out of the way, let's begin.
 
 In this series, we're going to learn how to build a frontend web app in F#. The tools we'll be using are:
 
-1. [Fable](https://fable.io/docs/) - an F#-to-Javascript transpiler
+1. <a href="https://fable.io/docs/" target="_blank" rel="noopener noreferrer">Fable</a> - an F#-to-Javascript transpiler
 
-2. [Elmish](https://elmish.github.io/elmish/) - a frontend framework for building robust, testable applications inspired by the Elm language
+2. <a href="https://elmish.github.io/elmish/" target="_blank" rel="noopener noreferrer">Elmish</a> - a frontend framework for building robust, testable applications inspired by the Elm language
 
-3. [Tailwind](https://tailwindcss.com) - for styling
+3. <a href="https://tailwindcss.com" target="_blank" rel="noopener noreferrer">Tailwind</a> - for styling
 
-4. [FontAwesome](https://fontawesome.com/) - for nice icons
+4. <a href="https://fontawesome.com/" target="_blank" rel="noopener noreferrer">FontAwesome</a> - for nice icons
 
-5. [Vite](https://vite.dev), the so called "Next Generation Frontend Tooling"
+5. <a href="https://vite.dev" target="_blank" rel="noopener noreferrer">Vite</a>, the so called "Next Generation Frontend Tooling"
 
-6. [vite-plugin-fable](https://github.com/nojaf/vite-plugin-fable) - An alternative approach to integrating the Fable compiler with Vite.
+6. <a href="https://github.com/nojaf/vite-plugin-fable" target="_blank" rel="noopener noreferrer">vite-plugin-fable</a> - An alternative approach to integrating the Fable compiler with Vite.
 
-We'll also be using [Feliz](https://zaid-ajaj.github.io/Feliz/) and [Elmish.React](https://elmish.github.io/react/), which are packages that allow you to use a domain-specific language (DSL) for expressing your views which then get rendered using React as a view engine.
+We'll also be using <a href="https://zaid-ajaj.github.io/Feliz/" target="_blank" rel="noopener noreferrer">Feliz</a> and <a href="https://elmish.github.io/react/" target="_blank" rel="noopener noreferrer">Elmish.React</a>, which are packages that allow you to use a domain-specific language (DSL) for expressing your views which then get rendered using React as a view engine.
 
 ### Dependencies
 
 The first thing we want to do is get our dependencies in place. To follow along with this series, you will need the following installed in your development environment:
 
 - .NET 6 or newer
-- NodeJS - latest LTS release should do ([22.11.0](https://nodejs.org/dist/v22.11.0/node-v22.11.0.pkg) at the time of writing)
+- NodeJS - latest LTS release should do (<a href="https://nodejs.org/dist/v22.11.0/node-v22.11.0.pkg" target="_blank" rel="noopener noreferrer">22.11.0</a> at the time of writing)
 
 #### Note for VSCode users:
 
-If you are using VSCode to follow along, you should also install the [Ionide Plugin for F#](https://marketplace.visualstudio.com/items?itemName=Ionide.Ionide-fsharp). It provides things like syntax highlighting, auto completions, F# interactive integration, and much, much more. It's a must-have for F# development.
+If you are using VSCode to follow along, you should also install the <a href="https://marketplace.visualstudio.com/items?itemName=Ionide.Ionide-fsharp" target="_blank" rel="noopener noreferrer">Ionide Plugin for F#</a>. It provides things like syntax highlighting, auto completions, F# interactive integration, and much, much more. It's a must-have for F# development.
 
 ### Scaffolding the project
 
@@ -365,7 +365,7 @@ Once that is done, all that's left is to configure the plugin. Open up `vite.con
   })
 ```
 
-This is essentially the default config pulled from the [plugin documentation](https://nojaf.com/vite-plugin-fable/getting-started.html). The main difference is that since our fsproj file is in a different location than the root project, we have to tell vite where it is, which is exactly what this is doing.
+This is essentially the default config pulled from the <a href="https://nojaf.com/vite-plugin-fable/getting-started.html" target="_blank" rel="noopener noreferrer">plugin documentation</a>. The main difference is that since our fsproj file is in a different location than the root project, we have to tell vite where it is, which is exactly what this is doing.
 
 With that, we should _finally_ be ready to fire up the project. In the root project folder, run:
 
@@ -373,7 +373,7 @@ With that, we should _finally_ be ready to fire up the project. In the root proj
 npm run dev
 ```
 
-Open your favorite browser to [http://localhost:5173](http://localhost:5173) and you should see the following:
+Open your favorite browser to <a href="http://localhost:5173" target="_blank" rel="noopener noreferrer">http://localhost:5173</a> and you should see the following:
 
 ![FableReminders running in Google Chrome with the DevTools console open and the text "Hello from F#"](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-1/first-run.jpg)
 
@@ -392,6 +392,6 @@ By the end of this series, we'll be able to add lists, add reminders, and mark t
 
 ### Conclusion
 
-In part 2, we'll learn about F#'s type system by modeling our application's domain using algebraic data types! We'll also learn about the main components of an Elmish application by bootstrapping our application. In the meantime, you can find the completed code for this post [here](https://github.com/tw0po1nt/FableReminders/tree/part1-blog-complete).
+In part 2, we'll learn about F#'s type system by modeling our application's domain using algebraic data types! We'll also learn about the main components of an Elmish application by bootstrapping our application. In the meantime, you can find the completed code for this post <a href="https://github.com/tw0po1nt/FableReminders/tree/part1-blog-complete" target="_blank" rel="noopener noreferrer">here</a>.
 
 Happy coding!

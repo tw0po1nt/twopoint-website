@@ -23,9 +23,9 @@ metadata:
 
 In part 1, we laid the groundwork for the F# goodness to come by:
 
-1. Creating a JavaScript project with [Vite](https://vite.dev)
-2. Creating a .NET solution + project and configuring it with its dependencies ([Feliz](https://zaid-ajaj.github.io/Feliz/) and [Elmish.React](https://elmish.github.io/react/))
-3. Configuring [vite-plugin-fable](https://github.com/nojaf/vite-plugin-fable) so that we can compile our F# and have it run in the browser as JavaScript.
+1. Creating a JavaScript project with <a href="https://vite.dev" target="_blank" rel="noopener noreferrer">Vite</a>
+2. Creating a .NET solution + project and configuring it with its dependencies (<a href="https://zaid-ajaj.github.io/Feliz/" target="_blank" rel="noopener noreferrer">Feliz</a> and <a href="https://elmish.github.io/react/" target="_blank" rel="noopener noreferrer">Elmish.React</a>)
+3. Configuring <a href="https://github.com/nojaf/vite-plugin-fable" target="_blank" rel="noopener noreferrer">vite-plugin-fable</a> so that we can compile our F# and have it run in the browser as JavaScript.
 
 By the end, we had a console log greeting from F#! How exciting! Well...not really. In fact, it's pretty boring and uninspired. Let's work toward changing that.
 
@@ -70,9 +70,9 @@ type Reminder =
 
 Let's break this down:
 
-First, we define a module. Per the [F# language reference](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/modules), a module is "a grouping of F# code, such as values, types, and function values, in an F# program. Grouping code in modules helps keep related code together and helps avoid name conflicts in your program." To start, all of our application code will live in a single module, the `App` module. In the future, we will see what it looks like to break up an application into multiple modules.
+First, we define a module. Per the <a href="https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/modules" target="_blank" rel="noopener noreferrer">F# language reference</a>, a module is "a grouping of F# code, such as values, types, and function values, in an F# program. Grouping code in modules helps keep related code together and helps avoid name conflicts in your program." To start, all of our application code will live in a single module, the `App` module. In the future, we will see what it looks like to break up an application into multiple modules.
 
-We are also using [F#'s attribute syntax](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/attributes) to mark this module `[<RequireQualifiedAccess>]`. This means that all of the types, values, and functions defined within the module must be accessed via the module name. So if we want to access our `Reminder` type from outside the `App` module, we have to type `App.Reminder`. The reason for doing this will be clear later.
+We are also using <a href="https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/attributes" target="_blank" rel="noopener noreferrer">F#'s attribute syntax</a> to mark this module `[<RequireQualifiedAccess>]`. This means that all of the types, values, and functions defined within the module must be accessed via the module name. So if we want to access our `Reminder` type from outside the `App` module, we have to type `App.Reminder`. The reason for doing this will be clear later.
 
 Next, we define our record. To define a record, we start with the `type` keyword, followed by the name of our type and an `"="`. Next, between a set of curly braces - _one of the few times we will actually use curly braces in F#, I might add_ - we define the properties of our record. Each property is defined by providing a name, followed by a `":"`, and then the type of the property. The type of the property can be any other F# type, such as primitive types like `int` or `bool`. It could _also_ be another record or other user-defined type. In our case, a reminder in our application's domain needs a unique identifier, a description of the task to be completed, and a value to tell us whether the task has been completed or not.
 
@@ -170,7 +170,7 @@ Breaking it down:
 
 - A reminder list has a color, which will be used to make the icons and some of the typography stand out in the user interface. Here, we model it as a `string` in which we will store a hex color value, such as `"#EB5545"`.
 
-- A reminder list has, well, a list of reminders. Here, we use F#'s [list type](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/lists) to store a list of `Reminder` records.
+- A reminder list has, well, a list of reminders. Here, we use F#'s <a href="https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/lists" target="_blank" rel="noopener noreferrer">list type</a> to store a list of `Reminder` records.
 
 #### Functional sidebar: making invalid states unrepresentable
 
@@ -192,11 +192,11 @@ Sidebar over.
 
 Now that we have modeled our specific domain -- the domain of reminders and lists of reminders -- as types, we need to model our *entire application* as types. For that, we have Elmish.
 
-Let's allow Elmish to introduce itself by reading its [documentation](https://elmish.github.io/elmish/):
+Let's allow Elmish to introduce itself by reading its <a href="https://elmish.github.io/elmish/" target="_blank" rel="noopener noreferrer">documentation</a>:
 
 > Elmish implements core abstractions that can be used to build F# applications following the “model view update” style of architecture, as made famous by Elm.
 
-It's ok if you've never used Elm directly -- the "model-view-update" (MVU) style of architecture has become popular outside of that ecosystem. If you've ever used a library like [Redux](https://redux.js.org/) for JavaScript or [The Composable Architecture](https://github.com/pointfreeco/swift-composable-architecture) for Swift, you've used an MVU architecture. Even if you haven't, the MVU pattern is not difficult to learn. So what exactly _is_ MVU/Elm?
+It's ok if you've never used Elm directly -- the "model-view-update" (MVU) style of architecture has become popular outside of that ecosystem. If you've ever used a library like <a href="https://redux.js.org/" target="_blank" rel="noopener noreferrer">Redux</a> for JavaScript or <a href="https://github.com/pointfreeco/swift-composable-architecture" target="_blank" rel="noopener noreferrer">The Composable Architecture</a> for Swift, you've used an MVU architecture. Even if you haven't, the MVU pattern is not difficult to learn. So what exactly _is_ MVU/Elm?
 
 At a high level, every Elmish application consists of the following five pieces:
 
@@ -220,7 +220,7 @@ type State =
 
 Our sidebar represents a list of lists, so our model reflects this with an F# list of `ReminderList`s.
 
-The main content area represents the currently selected list, if there is one. Our model reflects this using the F# option type. [Option](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/options) represents the presence or absence of a value. In our case, there may not be a list selected because we've only just loaded the page, or we might not have any lists at all.
+The main content area represents the currently selected list, if there is one. Our model reflects this using the F# option type. <a href="https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/options" target="_blank" rel="noopener noreferrer">Option</a> represents the presence or absence of a value. In our case, there may not be a list selected because we've only just loaded the page, or we might not have any lists at all.
 
 #### Message
 
@@ -335,7 +335,7 @@ val render:
 Breaking it down:
 
 - As with the `update` function, F# has inferred the `render` function to be almost entirely generic, except for in its return type. This will change when we call this function.
-- Our render function calls the `h1` function, which is a static member function defined on a type called `Html` from the Feliz module. Per the [documentation](https://zaid-ajaj.github.io/Feliz/#/Feliz/Syntax), the `h1` function, along with all these domain-specific language functions, "can take simple values as their only input such a string, a number, a single child element or a list of child elements" and return a `ReactElement`
+- Our render function calls the `h1` function, which is a static member function defined on a type called `Html` from the Feliz module. Per the <a href="https://zaid-ajaj.github.io/Feliz/#/Feliz/Syntax" target="_blank" rel="noopener noreferrer">documentation</a>, the `h1` function, along with all these domain-specific language functions, "can take simple values as their only input such a string, a number, a single child element or a list of child elements" and return a `ReactElement`
 - We want to provide some classes to make the text stand out on the black background, so we pass in a list of properties. To define properties, we call static member functions on the `prop` type provided by Feliz. For defining classes, we use the `prop.classname` function passing a list of strings. Here, we use the Tailwind class `"text-white"`
 - Finally, since we are using the "list of properties" version of the `h1` function, we need to set the text property of the element by using the `prop.text` function, passing a nice greeting.
 
@@ -403,6 +403,6 @@ With that, we should now have this:
 
 ### Conclusion
 
-I hope you are starting to get a taste for how web development works in F# -- and how fun it can be! In part 3, we're off to the races. We'll implement the sidebar for our application and in so doing, we'll see what building entire UIs in F# looks like! We'll see some cool F# language features in action and we'll learn about an important concept in functional programming: functors! In the meantime, you can find the completed code for this post [here](https://github.com/tw0po1nt/FableReminders/tree/part2-blog-complete).
+I hope you are starting to get a taste for how web development works in F# -- and how fun it can be! In part 3, we're off to the races. We'll implement the sidebar for our application and in so doing, we'll see what building entire UIs in F# looks like! We'll see some cool F# language features in action and we'll learn about an important concept in functional programming: functors! In the meantime, you can find the completed code for this post <a href="https://github.com/tw0po1nt/FableReminders/tree/part2-blog-complete" target="_blank" rel="noopener noreferrer">here</a>.
 
 Happy coding!
