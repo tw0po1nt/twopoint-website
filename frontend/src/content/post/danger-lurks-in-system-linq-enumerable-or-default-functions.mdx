@@ -6,21 +6,21 @@ excerpt: In this post, we'll look at how my misunderstanding of a very important
 category: Series
 series:
   slug: matts-footgun-collection
-  title: 'Matt''s Footgun Collection'
-  excerpt: 'A collection of all sorts of footguns I have encountered in code that I''ve worked with over the years'
+  title: "Matt's Footgun Collection"
+  excerpt: "A collection of all sorts of footguns I have encountered in code that I've worked with over the years"
   image: https://twopointwebsite.blob.core.windows.net/series/matts-footgun-collection/thumbnail.jpg
 tags:
   - Footguns
-  - CSharp 
+  - CSharp
   - LINQ
   - .NET
   - Functional programming
-  - "2026"
+  - '2026'
 metadata:
   canonical: https://twopoint.dev/posts/footgun-danger-lurks-in-system-linq-enumerable-or-default-functions
 ---
 
-## LINQ 
+## LINQ
 
 LINQ is one of C#'s most unique features, distinguishing it from its other C-based cousins. According to Microsoft's [documentation](https://learn.microsoft.com/en-us/dotnet/csharp/linq/):
 
@@ -30,16 +30,16 @@ That's a lot of words to say: write whatever kind of query you like in C# withou
 
 #### System.Linq.Enumerable
 
-The `System.Linq` namespace provides the [`Enumerable` class](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable?view=net-10.0), which "provides a set of static...methods for querying objects that implement `IEnumerable<T>`." This class provides many static methods (i.e. _functions_) that C# programmers use every day, like [`Where()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.where?view=net-10.0#system-linq-enumerable-where-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))) for filtering, [`Any()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.any?view=net-10.0#system-linq-enumerable-any-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))) for testing if an element in a sequence satisfies certain conditions, or [`Order()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.order?view=net-10.0#system-linq-enumerable-order-1(system-collections-generic-ienumerable((-0)))) for sorting. This class defines many operations with many variants depending on your needs. In this post, we'll hone in on operations with "OrDefault" variants, since they are what caused me trouble this week.
+The `System.Linq` namespace provides the [`Enumerable` class](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable?view=net-10.0), which "provides a set of static...methods for querying objects that implement `IEnumerable<T>`." This class provides many static methods (i.e. _functions_) that C# programmers use every day, like [`Where()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.where?view=net-10.0#system-linq-enumerable-where-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))>) for filtering, [`Any()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.any?view=net-10.0#system-linq-enumerable-any-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean)))>) for testing if an element in a sequence satisfies certain conditions, or [`Order()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.order?view=net-10.0#system-linq-enumerable-order-1(system-collections-generic-ienumerable((-0)))>) for sorting. This class defines many operations with many variants depending on your needs. In this post, we'll hone in on operations with "OrDefault" variants, since they are what caused me trouble this week.
 
 #### "OrDefault" functions in System.Linq.Enumerable
 
 Many of the operations that the `Enumerable` class provides come with an "OrDefault" variant. These operations are:
 
-- [`ElementAtOrDefault()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.elementatordefault?view=net-10.0#system-linq-enumerable-elementatordefault-1(system-collections-generic-ienumerable((-0))-system-index))
-- [`FirstOrDefault()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.firstordefault?view=net-10.0#system-linq-enumerable-firstordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0))
-- [`LastOrDefault()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.lastordefault?view=net-10.0#system-linq-enumerable-lastordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0))
-- [`SingleOrDefault()`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.singleordefault?view=net-10.0#system-linq-enumerable-singleordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0))
+- [`ElementAtOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.elementatordefault?view=net-10.0#system-linq-enumerable-elementatordefault-1(system-collections-generic-ienumerable((-0))-system-index)>)
+- [`FirstOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.firstordefault?view=net-10.0#system-linq-enumerable-firstordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)>)
+- [`LastOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.lastordefault?view=net-10.0#system-linq-enumerable-lastordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)>)
+- [`SingleOrDefault()`](<https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.singleordefault?view=net-10.0#system-linq-enumerable-singleordefault-1(system-collections-generic-ienumerable((-0))-system-func((-0-system-boolean))-0)>)
 
 What these "OrDefault" functions allow us to do is say:
 
@@ -51,7 +51,7 @@ Very useful! But danger lurks.
 
 Before they go off and wreak havoc, every footgun has symptoms. Fortunately for me, I caught the symptoms early. Let's take a look.
 
-#### Combining Maybe and System.Linq.Enumerable 
+#### Combining Maybe and System.Linq.Enumerable
 
 I wrote briefly about [Tony Hoare's "billion dollar mistake"](https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/) in my post about [functional architecture in C#](/posts/functional-architecture-in-csharp-a-case-study). In that post, I praised the C# team for how they have greatly improved the C# language's handling of nullability in recent releases, and yet I still advocated for the use of `Maybe` (or `Option`) types, arguing that years of bad developer habits still makes this explicit handling of optionality the better choice.
 
@@ -61,14 +61,14 @@ In the codebase that I've been working on for almost 3 years now, we use `Maybe<
 public static class MaybeEnumerableExtensions
 {
   // Maybe.Of()'s type is: T? -> Maybe<T>. It's the bridge between `Maybe` and C#'s built in nullability
-  public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs)   
+  public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs)
     => Maybe.Of(xs.FirstOrDefault());
 
   public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs, Func<T, bool> predicate)
     => Maybe.Of(xs.FirstOrDefault(predicate));
 
-  public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs) 
-    => xs.Count() > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault()); 
+  public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs)
+    => xs.Count() > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault());
 
   public static Maybe<T> TrySingle<T>(this IEnumerable<T> xs, Func<T, bool> predicate)
     => xs.Count(predicate) > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault(predicate));
@@ -89,7 +89,7 @@ Console.WriteLine(noStrings.TryFirst());
 Console.WriteLine(oneString.TryFirst());
 
 // Output: Nothing
-Console.WriteLine(oneString.TryFirst(str => str == "Foo")); 
+Console.WriteLine(oneString.TryFirst(str => str == "Foo"));
 
 // Output: Just "John"
 Console.WriteLine(manyStrings.TryFirst());
@@ -98,7 +98,7 @@ Console.WriteLine(manyStrings.TryFirst());
 Console.WriteLine(manyStrings.TryFirst(str => str == "Paul"));
 ```
 
-This all seems sensible. We've taken `FirstOrDefault()` and interpreted "default" to mean `Nothing`. 
+This all seems sensible. We've taken `FirstOrDefault()` and interpreted "default" to mean `Nothing`.
 
 `TrySingle()` is similarly sensible:
 
@@ -114,7 +114,7 @@ Console.WriteLine(noStrings.TrySingle());
 Console.WriteLine(oneString.TrySingle());
 
 // Output: Nothing
-Console.WriteLine(oneString.TrySingle(str => str == "Foo")); 
+Console.WriteLine(oneString.TrySingle(str => str == "Foo"));
 
 // Output: Nothing
 Console.WriteLine(manyStrings.TrySingle());
@@ -122,7 +122,7 @@ Console.WriteLine(manyStrings.TrySingle());
 // Output: Just "George"
 Console.WriteLine(manyStrings.TrySingle(str => str == "George"));
 
-// Output: Nothing 
+// Output: Nothing
 Console.WriteLine(manyStrings.TrySingle(str => str == "Paul"));
 ```
 
@@ -149,7 +149,7 @@ Console.WriteLine(noDateTimes.TryFirst());
 Console.WriteLine(oneDateTime.TryFirst());
 
 // Output: Just "1/1/0001 12:00:00 AM"
-Console.WriteLine(oneDateTime.TryFirst(dt => dt == new DateTime(2026, 12, 31))); 
+Console.WriteLine(oneDateTime.TryFirst(dt => dt == new DateTime(2026, 12, 31)));
 
 // Output: Just "7/20/1969 12:00:00 AM"
 Console.WriteLine(manyDateTimes.TryFirst());
@@ -181,12 +181,12 @@ Console.WriteLine(noDateTimes.TrySingle());
 Console.WriteLine(oneDateTime.TrySingle());
 
 // Output: Just "1/1/0001 12:00:00 AM"
-Console.WriteLine(oneDateTime.TrySingle(dt => dt == new DateTime(2026, 12, 31))); 
+Console.WriteLine(oneDateTime.TrySingle(dt => dt == new DateTime(2026, 12, 31)));
 
-// Output: Nothing 
+// Output: Nothing
 Console.WriteLine(manyDateTimes.TrySingle());
 
-// Output: Nothing 
+// Output: Nothing
 Console.WriteLine(manyDateTimes.TrySingle(dt => dt == new DateTime(1995, 08, 24)));
 ```
 
@@ -198,7 +198,7 @@ Go and <a href="https://dotnetfiddle.net/2WjQeR" target="_blank" rel="noopener n
 
 ## The Footgun: nullable value types and nullable reference types are overloaded
 
-If you've been doing .NET development for any significant amount of time, you likely saw the issue right away. It's like my dad used to say whenever I'd go looking for something in the house (usually in the fridge): 
+If you've been doing .NET development for any significant amount of time, you likely saw the issue right away. It's like my dad used to say whenever I'd go looking for something in the house (usually in the fridge):
 
 > If it were a snake, it'd have bit you in the face
 
@@ -229,6 +229,7 @@ Examples of reference types include types defined as `class`, `interface`, `dele
 Every type in C# has a default value. Here's what the [C# language specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/variables#93-default-values) has to say about that:
 
 > The default value of a variable depends on the type of the variable and is determined as follows:
+>
 > - For a variable of a value_type, the default value is the same as the value computed by the value_type’s default constructor.
 > - For a variable of a reference_type, the default value is null.
 
@@ -238,29 +239,30 @@ _These_ are the values returned by the "OrDefault" family of functions in the `E
 public static class MaybeEnumerableExtensions
 {
   // Maybe.Of()'s type is: T? -> Maybe<T>. It's the bridge between `Maybe` and C#'s built in nullability
-  public static Maybe<T> TryFirst(this IEnumerable<T> xs)   
+  public static Maybe<T> TryFirst(this IEnumerable<T> xs)
     => Maybe.Of(xs.FirstOrDefault());
 
   public static Maybe<T> TryFirst(this IEnumerable<T> xs, Func<T, bool> predicate)
     => Maybe.Of(xs.FirstOrDefault(predicate));
 
-  public static Maybe<T> TrySingle(this IEnumerable<T> xs) 
-    => xs.Count() > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault()); 
+  public static Maybe<T> TrySingle(this IEnumerable<T> xs)
+    => xs.Count() > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault());
 
   public static Maybe<T> TrySingle(this IEnumerable<T> xs, Func<T, bool> predicate)
     => xs.Count(predicate) > 1 ? Maybe.Nothing : Maybe.Of(xs.SingleOrDefault(predicate));
 }
 ```
 
-The code comment is the key: `Maybe.Of()` expects `T?`, but for a value type like a `struct`, the "OrDefault" function will **never return `null`**. It will return whatever the default for the type is. 
+The code comment is the key: `Maybe.Of()` expects `T?`, but for a value type like a `struct`, the "OrDefault" function will **never return `null`**. It will return whatever the default for the type is.
 
 So for `IEnumerable<string>`:
+
 ```csharp
 // Output: true
 Console.WriteLine(default(string) is null);
 ```
 
-This is why the first example using strings actually worked. 
+This is why the first example using strings actually worked.
 
 For `IEnumerable<DateTime>`:
 
@@ -290,7 +292,7 @@ These are nice features, but here's the kicker:
 
 ```csharp
 // or set <Nullable>enable</Nullable> in your .csproj to make the whole project a "nullable aware context"
-#nullable enable 
+#nullable enable
 // ❌ NOT THE SAME
 string? possiblyNullString = null; // a null reference to something potentially on the heap
 DateTime? possiblyNullDateTime = null; // an instance of Nullable<DateTime>
@@ -298,7 +300,7 @@ DateTime? possiblyNullDateTime = null; // an instance of Nullable<DateTime>
 
 The `?` **and** `null` are **both overloaded**.
 
-**This is the footgun.** 
+**This is the footgun.**
 
 - C# overloads nullability syntax for reference and value types
 - We _mostly_ use reference types, and so my mental model for "OrDefault" became "OrNull", which works...
@@ -351,8 +353,7 @@ Console.WriteLine(dateTimesIncludingMinValue.TryFirstValue());
 
 [Run the code](https://dotnetfiddle.net/A8kTWL) and see for yourself.
 
-Big thanks to my co-worker and <a href="https://truth.dalt.dev
-" target="_blank" rel="noopener noreferrer">favorite conspiracy theorist</a> Dalton for pointing this one out to me.
+Big thanks to my co-worker and <a href="https://truth.dalt.dev" target="_blank" rel="noopener noreferrer">favorite conspiracy theorist</a> Dalton for pointing this one out to me.
 
 #### What actually works
 
@@ -372,7 +373,6 @@ public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs) where T : class
   => Maybe.Of(xs.FirstOrDefault());
 ```
 
-Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/BYnlc9
-" target="_blank" rel="noopener noreferrer">play around with the corrected code</a> for yourself. Change up the examples and try different things to see why this code works the way it does.
+Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/BYnlc9" target="_blank" rel="noopener noreferrer">play around with the corrected code</a> for yourself. Change up the examples and try different things to see why this code works the way it does.
 
 I hope you found this informative! Happy coding!
