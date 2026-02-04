@@ -351,8 +351,7 @@ Console.WriteLine(dateTimesIncludingMinValue.TryFirstValue());
 
 [Run the code](https://dotnetfiddle.net/A8kTWL) and see for yourself.
 
-Big thanks to my co-worker and <a href="https://truth.dalt.dev
-" target="_blank" rel="noopener noreferrer">favorite conspiracy theorist</a> Dalton for pointing this one out to me.
+Big thanks to my co-worker and <a href="https://truth.dalt.dev" target="_blank" rel="noopener noreferrer">favorite conspiracy theorist</a> Dalton for pointing this one out to me.
 
 #### What actually works
 
@@ -372,7 +371,6 @@ public static Maybe<T> TryFirst<T>(this IEnumerable<T> xs) where T : class
   => Maybe.Of(xs.FirstOrDefault());
 ```
 
-Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/BYnlc9
-" target="_blank" rel="noopener noreferrer">play around with the corrected code</a> for yourself. Change up the examples and try different things to see why this code works the way it does.
+Applying this change to all our variants, our `DateTime` examples actually produce the expected output. I highly encourage you to <a href="https://dotnetfiddle.net/BYnlc9" target="_blank" rel="noopener noreferrer">play around with the corrected code</a> for yourself. Change up the examples and try different things to see why this code works the way it does.
 
 I hope you found this informative! Happy coding!
