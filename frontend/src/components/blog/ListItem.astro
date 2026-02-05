@@ -20,7 +20,7 @@ const { post, seriesSlug } = Astro.props;
 
 // Hide image if this post belongs to the series being displayed
 const shouldHideImage = seriesSlug && post.series?.slug === seriesSlug;
-const image = shouldHideImage ? undefined : await findImage(post.series?.image ?? post.image);
+const image = !shouldHideImage ? (await findImage(post.series?.image ?? post.image)) as ImageMetadata | undefined : undefined;
 
 const link = APP_BLOG?.post?.isEnabled ? getPermalink(post.permalink, 'post') : '';
 ---
