@@ -100,7 +100,7 @@ const link = APP_BLOG?.post?.isEnabled ? getPermalink(post.permalink, 'post') : 
         </span>
       </div>
       {
-        post.series && (
+        post.series && !shouldHideImage && (
           <p class="bg-gray-100 dark:bg-slate-700 rounded-md inline-block mr-2 rtl:mr-0 rtl:ml-2 my-2 py-0.5 px-2 font-medium">
           <a
             href={getPermalink(post.series.slug, 'series')}
