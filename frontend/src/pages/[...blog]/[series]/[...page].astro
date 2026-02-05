@@ -1,11 +1,13 @@
 ---
-import type { InferGetStaticPropsType, GetStaticPaths } from 'astro';
+import type { InferGetStaticPropsType, GetStaticPaths, ImageMetadata } from 'astro';
 import { blogSeriesRobots, getStaticPathsBlogSeries } from '~/utils/blog';
+import { findImage } from '~/utils/images';
 
 import Layout from '~/layouts/PageLayout.astro';
 import BlogList from '~/components/blog/List.astro';
 import Headline from '~/components/blog/Headline.astro';
 import Pagination from '~/components/blog/Pagination.astro';
+import Image from '~/components/common/Image.astro';
 
 export const prerender = true;
 
@@ -26,12 +28,31 @@ const metadata = {
     follow: blogSeriesRobots?.follow,
   },
 };
+
+const seriesImage = series.image ? ((await findImage(series.image)) as ImageMetadata | undefined) : undefined;
 ---
 
 <Layout metadata={metadata}>
   <section class="px-4 md:px-6 py-12 sm:py-16 lg:py-20 mx-auto max-w-4xl">
     <Headline title={series.title} subtitle={series.excerpt} />
-    <BlogList posts={page.data} />
+    {
+      seriesImage && (
+        <div class="mb-8 md:mb-16 max-w-3xl mx-auto">
+          <Image
+            src={seriesImage}
+            class="w-full rounded shadow-lg bg-gray-400 dark:bg-slate-700"
+            widths={[400, 900]}
+            width={900}
+            sizes="(max-width: 900px) 400px, 900px"
+            alt={series.title}
+            aspectRatio="16:9"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+      )
+    }
+    <BlogList posts={page.data} seriesSlug={series.slug} />
     <Pagination prevUrl={page.url.prev} nextUrl={page.url.next} />
   </section>
 </Layout>

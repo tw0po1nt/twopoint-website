@@ -4,16 +4,17 @@ import type { Post } from '~/types';
 
 export interface Props {
   posts: Array<Post>;
+  seriesSlug?: string;
 }
 
-const { posts } = Astro.props;
+const { posts, seriesSlug } = Astro.props;
 ---
 
 <ul>
   {
     posts.map((post) => (
       <li class="mb-12 md:mb-20">
-        <Item post={post} />
+        <Item post={post} seriesSlug={seriesSlug} />
       </li>
     ))
   }
