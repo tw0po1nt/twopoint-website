@@ -37,20 +37,18 @@ const seriesImage = series.image ? await findImage(series.image) : undefined;
     <Headline title={series.title} subtitle={series.excerpt} />
     {
       seriesImage && (
-        <div class="mb-8 md:mb-16 max-w-3xl mx-auto">
-          <div class="relative h-0 pb-[56.25%] overflow-hidden bg-gray-400 dark:bg-slate-700 rounded shadow-lg">
-            <Image
-              src={seriesImage}
-              class="absolute inset-0 object-cover w-full h-full"
-              widths={[400, 900]}
-              width={900}
-              sizes="(max-width: 900px) 400px, 900px"
-              alt={series.title}
-              aspectRatio="16:9"
-              loading="eager"
-              decoding="async"
-            />
-          </div>
+        <div class="mb-8 md:mb-16">
+          <Image
+            src={seriesImage}
+            class="w-full max-w-3xl mx-auto rounded shadow-lg"
+            widths={[400, 900]}
+            width={900}
+            sizes="(max-width: 900px) 400px, 900px"
+            alt={series.title}
+            aspectRatio="16:9"
+            loading="eager"
+            decoding="async"
+          />
         </div>
       )
     }
