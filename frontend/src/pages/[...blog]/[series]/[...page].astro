@@ -29,7 +29,7 @@ const metadata = {
   },
 };
 
-const seriesImage = series.image ? ((await findImage(series.image)) as ImageMetadata | undefined) : undefined;
+const seriesImage = series.image ? await findImage(series.image) : undefined;
 ---
 
 <Layout metadata={metadata}>
