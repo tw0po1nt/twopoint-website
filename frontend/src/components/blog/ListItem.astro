@@ -18,12 +18,12 @@ export interface Props {
 
 const { post, seriesSlug } = Astro.props;
 
-// Hide image if this post belongs to the series being displayed
-const shouldHideImage = seriesSlug && post.series?.slug === seriesSlug;
+// Hide series image and badge if this post belongs to the series being displayed
+const shouldHideSeriesElements = seriesSlug && post.series?.slug === seriesSlug;
 
 // Only fetch image if it won't be hidden
 let image: ImageMetadata | undefined = undefined;
-if (!shouldHideImage) {
+if (!shouldHideSeriesElements) {
   image = (await findImage(post.series?.image ?? post.image)) as ImageMetadata | undefined;
 }
 
@@ -100,7 +100,7 @@ const link = APP_BLOG?.post?.isEnabled ? getPermalink(post.permalink, 'post') : 
         </span>
       </div>
       {
-        post.series && !shouldHideImage && (
+        post.series && !shouldHideSeriesElements && (
           <p class="bg-gray-100 dark:bg-slate-700 rounded-md inline-block mr-2 rtl:mr-0 rtl:ml-2 my-2 py-0.5 px-2 font-medium">
           <a
             href={getPermalink(post.series.slug, 'series')}
