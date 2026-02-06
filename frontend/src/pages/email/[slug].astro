@@ -1,0 +1,20 @@
+---
+// Endpoint that generates email-friendly HTML for all blog posts
+import EmailBlogLayout from '~/layouts/EmailBlogLayout.astro';
+import { fetchPosts } from '~/utils/blog';
+
+export async function getStaticPaths() {
+  const allPosts = await fetchPosts();
+  
+  return allPosts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+---
+
+<EmailBlogLayout post={post}>
+  <post.Content />
+</EmailBlogLayout>
