@@ -13,8 +13,9 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
+const ContentToRender = post.Content;
 ---
 
 <EmailBlogLayout post={post}>
-  <post.Content />
+  {ContentToRender ? <ContentToRender /> : <Fragment set:html={post.content || ''} />}
 </EmailBlogLayout>

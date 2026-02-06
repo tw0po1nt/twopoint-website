@@ -54,45 +54,58 @@ az login
 
 #### For GitHub Actions (Recommended):
 
-Use a Service Principal with federated credentials (passwordless):
+Use a Service Principal with the following steps:
 
-1. Create a Service Principal:
+1. **Create a Service Principal:**
 ```bash
-az ad sp create-for-rbac --name "github-actions-twopoint" --sdk-auth
-```
-
-2. Assign the "Storage Blob Data Contributor" role:
-```bash
-az role assignment create \
-  --assignee <service-principal-id> \
+az ad sp create-for-rbac \
+  --name "github-actions-twopoint" \
   --role "Storage Blob Data Contributor" \
-  --scope "/subscriptions/<subscription-id>/resourceGroups/twopoint-resources/providers/Microsoft.Storage/storageAccounts/twopointstorage"
+  --scopes /subscriptions/{subscription-id}/resourceGroups/twopoint-resources/providers/Microsoft.Storage/storageAccounts/twopointstorage
 ```
 
-3. Set up GitHub environment variables (see below)
+This command will output JSON with the credentials you need. Save this output securely.
 
-### 3. Environment Variables
+2. **Add GitHub Secrets** (see section 3 below)
 
-Add these environment variables to your GitHub repository secrets:
+### 3. GitHub Repository Secrets
 
-| Variable Name | Description | Example Value | Required |
-|--------------|-------------|---------------|----------|
-| `AZURE_STORAGE_ACCOUNT_NAME` | Name of your Azure Storage account | `twopointstorage` | Yes |
-| `AZURE_STORAGE_CONTAINER_NAME` | Container name for email HTML files | `email-posts` | No (defaults to `email-posts`) |
-| `AZURE_CLIENT_ID` | Service Principal Application ID | `12345678-1234-...` | Yes (for CI/CD) |
-| `AZURE_TENANT_ID` | Azure AD Tenant ID | `87654321-4321-...` | Yes (for CI/CD) |
-| `AZURE_CLIENT_SECRET` | Service Principal Secret | `your-secret-value` | Yes (for CI/CD) |
+Add these secrets to your GitHub repository:
 
-### To add secrets in GitHub:
+**Navigation:** Repository → Settings → Secrets and variables → Actions → New repository secret
 
-1. Go to your repository on GitHub
-2. Navigate to Settings → Secrets and variables → Actions
-3. Click "New repository secret"
-4. Add each variable listed above
+| Secret Name | Description | Where to Find It | Required |
+|------------|-------------|------------------|----------|
+| `AZURE_STORAGE_ACCOUNT_NAME` | Name of your Azure Storage account | The name you chose when creating the storage account | Yes |
+| `AZURE_STORAGE_CONTAINER_NAME` | Container name for email HTML files (defaults to `email-posts` if not set) | Choose any valid container name | No |
+| `AZURE_CLIENT_ID` | Service Principal Application (client) ID | From `appId` in the create-for-rbac output | Yes |
+| `AZURE_TENANT_ID` | Azure AD Tenant ID | From `tenant` in the create-for-rbac output | Yes |
+| `AZURE_CLIENT_SECRET` | Service Principal password/secret | From `password` in the create-for-rbac output | Yes |
 
-### 4. Update GitHub Actions Workflow
+**Example create-for-rbac output:**
+```json
+{
+  "appId": "12345678-1234-1234-1234-123456789abc",     ← Use for AZURE_CLIENT_ID
+  "displayName": "github-actions-twopoint",
+  "password": "your-secret-here",                      ← Use for AZURE_CLIENT_SECRET
+  "tenant": "87654321-4321-4321-4321-987654321xyz"    ← Use for AZURE_TENANT_ID
+}
+```
 
-The production build workflow has been updated to automatically upload email HTML after building. See `.github/workflows/astro-prod.yml` for the implementation.
+### 4. Verify Setup
+
+After adding the secrets, the next production deployment will automatically upload email HTML to Azure. You can verify by:
+
+1. Triggering a workflow run (push to main or manual trigger)
+2. Checking the GitHub Actions log for the "Upload email HTML to Azure Blob Storage" step
+3. Verifying files in Azure Storage using the Azure Portal or CLI:
+
+```bash
+az storage blob list \
+  --account-name twopointstorage \
+  --container-name email-posts \
+  --output table
+```
 
 ## Usage
 
