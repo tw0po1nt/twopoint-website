@@ -17,8 +17,8 @@ const __dirname = dirname(__filename);
 
 // Configuration from environment variables
 const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || 'email-posts';
-const emailDistPath = join(__dirname, '../dist/email');
+const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || 'newsletter';
+const emailDistPath = join(__dirname, '../dist/newsletter');
 
 // Validate required environment variables
 function validateConfig() {
