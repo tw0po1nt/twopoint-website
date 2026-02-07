@@ -109,7 +109,7 @@ async function uploadEmailPosts() {
     if (!containerExists) {
       console.log(`📦 Creating container: ${containerName}`);
       await containerClient.create({
-        access: 'blob' // Allow public read access to blobs
+        access: 'none' // Private container - no public access
       });
     }
     

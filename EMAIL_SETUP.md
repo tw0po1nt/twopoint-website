@@ -169,7 +169,7 @@ The email renderer applies inline styles to all HTML elements:
 - **No connection strings**: Never use connection strings; use DefaultAzureCredential instead
 - **Least privilege**: Service Principal only has "Storage Blob Data Contributor" role
 - **Secrets management**: All credentials stored in GitHub Secrets, never in code
-- **Container access**: Container allows public read access to blobs (required for email clients)
+- **Container access**: Container is private with no public access - only authenticated requests can read blobs
 
 ## Troubleshooting
 

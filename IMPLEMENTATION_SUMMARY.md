@@ -22,7 +22,7 @@ This PR implements email-friendly blog post rendering and Azure Blob Storage int
 ### 3. Azure Upload Script (`/frontend/scripts/upload-email-posts.js`)
 - Uploads all email HTML files to Azure Blob Storage
 - Uses `DefaultAzureCredential` for secure, passwordless authentication
-- Automatically creates container if it doesn't exist
+- Automatically creates private container if it doesn't exist (no public access)
 - Sets proper content types and cache headers
 - Maps local paths to Azure blob paths: `email/{slug}.html` → `posts/{slug}`
 
