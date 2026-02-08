@@ -13,6 +13,7 @@ import type { AstroIntegration } from 'astro';
 import fable from 'vite-plugin-fable';
 
 import astrowind from './vendor/integration';
+import newsletterExport from './src/integrations/newsletter-export';
 
 import { readingTimeRemarkPlugin, responsiveTablesRehypePlugin, lazyImagesRehypePlugin } from './src/utils/frontmatter';
 
@@ -93,6 +94,8 @@ export default defineConfig({
     astrowind({
       config: stage === 'staging' ? './src/staging.config.yaml' : './src/config.yaml',
     }),
+    
+    newsletterExport(),
   ],
 
   image: {
