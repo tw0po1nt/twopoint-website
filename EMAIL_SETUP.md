@@ -55,19 +55,31 @@ Use Azure CLI authentication:
 az login
 ```
 
-#### For GitHub Actions (Recommended):
+#### For GitHub Actions (Recommended - Federated Identity):
 
-Use a Service Principal with the following steps:
+GitHub Actions uses **Workload Identity Federation** (OIDC) for secure, passwordless authentication to Azure. This eliminates the need to manage client secrets.
 
-1. **Create a Service Principal:**
+1. **Create a Service Principal and configure federated credentials:**
+
 ```bash
+# Create the Service Principal
 az ad sp create-for-rbac \
   --name "github-actions-twopoint" \
   --role "Storage Blob Data Contributor" \
   --scopes /subscriptions/{subscription-id}/resourceGroups/twopoint-resources/providers/Microsoft.Storage/storageAccounts/twopointstorage
+
+# Note the appId from the output, then create federated credential
+az ad app federated-credential create \
+  --id <appId-from-previous-command> \
+  --parameters '{
+    "name": "github-actions-federation",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:tw0po1nt/twopoint-website-staging:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
 ```
 
-This command will output JSON with the credentials you need. Save this output securely.
+**Important:** Replace `{subscription-id}` and `<appId-from-previous-command>` with your actual values.
 
 2. **Add GitHub Secrets** (see section 3 below)
 
@@ -80,20 +92,21 @@ Add these secrets to your GitHub repository:
 | Secret Name | Description | Where to Find It | Required |
 |------------|-------------|------------------|----------|
 | `AZURE_STORAGE_ACCOUNT_NAME` | Name of your Azure Storage account | The name you chose when creating the storage account | Yes |
-| `AZURE_STORAGE_CONTAINER_NAME` | Container name for email HTML files (defaults to `email-posts` if not set) | Choose any valid container name | No |
+| `AZURE_STORAGE_CONTAINER_NAME` | Container name for newsletter HTML files (defaults to `newsletter` if not set) | Choose any valid container name | No |
 | `AZURE_CLIENT_ID` | Service Principal Application (client) ID | From `appId` in the create-for-rbac output | Yes |
 | `AZURE_TENANT_ID` | Azure AD Tenant ID | From `tenant` in the create-for-rbac output | Yes |
-| `AZURE_CLIENT_SECRET` | Service Principal password/secret | From `password` in the create-for-rbac output | Yes |
+| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID | From your Azure subscription (visible in Azure Portal) | Yes |
 
 **Example create-for-rbac output:**
 ```json
 {
   "appId": "12345678-1234-1234-1234-123456789abc",     ← Use for AZURE_CLIENT_ID
   "displayName": "github-actions-twopoint",
-  "password": "your-secret-here",                      ← Use for AZURE_CLIENT_SECRET
   "tenant": "87654321-4321-4321-4321-987654321xyz"    ← Use for AZURE_TENANT_ID
 }
 ```
+
+**Note:** With federated identity, you no longer need `AZURE_CLIENT_SECRET`. Authentication happens via OIDC tokens.
 
 ### 4. Verify Setup
 
