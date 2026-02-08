@@ -80,7 +80,7 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        run: ${{ steps.detect-package-manager.outputs.runner }} upload:email
+        run: ${{ steps.detect-package-manager.outputs.runner }} upload:newsletter
         working-directory: ${{ env.BUILD_PATH }}
         continue-on-error: true
       
