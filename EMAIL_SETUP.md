@@ -6,6 +6,8 @@ This document describes the email newsletter feature that renders blog posts as 
 
 The system automatically generates email-optimized HTML versions of all blog posts during production builds. These HTML files use inline CSS for maximum compatibility with email clients and are uploaded to Azure Blob Storage for use in email campaigns.
 
+**Important**: Newsletter HTML files are generated during the build but are **NOT served as regular pages** on the website. They are automatically exported to a separate directory (`dist/newsletter-export/`) and excluded from the site's static output.
+
 ## Features
 
 - **Email-friendly HTML**: All blog posts are rendered with inline CSS styles
@@ -13,6 +15,7 @@ The system automatically generates email-optimized HTML versions of all blog pos
 - **Automated uploads**: Production builds automatically upload to Azure Blob Storage
 - **Secure authentication**: Uses Azure DefaultAzureCredential for secure, passwordless authentication
 - **Same URL structure**: Email HTML is uploaded to match the website URL structure
+- **Not served as pages**: Newsletter HTML is excluded from the website - only available in Azure for backend use
 
 ## URL Structure
 

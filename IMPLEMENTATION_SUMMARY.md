@@ -4,13 +4,19 @@ This PR implements email-friendly blog post rendering and Azure Blob Storage int
 
 ## What Was Implemented
 
-### 1. Email-Friendly HTML Generation (`/frontend/src/pages/email/[slug].astro`)
-- Creates an `/email/{slug}` route for each blog post
+### 1. Newsletter HTML Generation (`/frontend/src/pages/newsletter/[slug].astro`)
+- Creates a `/newsletter/{slug}` route for each blog post
 - Generates static HTML during build time
 - Uses inline CSS for maximum email client compatibility
-- Follows the same URL pattern as regular blog posts
+- **Files are NOT served as pages** - automatically excluded from site output
 
-### 2. Email Layout (`/frontend/src/layouts/EmailBlogLayout.astro`)
+### 2. Newsletter Export Integration (`/frontend/src/integrations/newsletter-export.ts`)
+- Custom Astro integration that runs after build
+- Moves newsletter HTML from `dist/newsletter/` to `dist/newsletter-export/`
+- Removes the original `dist/newsletter/` directory so pages aren't served
+- Keeps HTML available for upload script while preventing public access via website
+
+### 2. Newsletter Layout (`/frontend/src/layouts/EmailBlogLayout.astro`)
 - Table-based layout for email compatibility
 - Inline styles embedded in `<style>` tag
 - Includes:
@@ -19,26 +25,28 @@ This PR implements email-friendly blog post rendering and Azure Blob Storage int
   - Link back to web version
   - Tags footer
 
-### 3. Azure Upload Script (`/frontend/scripts/upload-email-posts.js`)
-- Uploads all email HTML files to Azure Blob Storage
+### 4. Azure Upload Script (`/frontend/scripts/upload-email-posts.js`)
+- Uploads all newsletter HTML files to Azure Blob Storage
 - Uses `DefaultAzureCredential` for secure, passwordless authentication
 - Automatically creates private container if it doesn't exist (no public access)
 - Sets proper content types and cache headers
-- Maps local paths to Azure blob paths: `email/{slug}.html` → `posts/{slug}`
+- Reads from `dist/newsletter-export/` directory
+- Maps local paths to Azure blob paths: `newsletter/{slug}.html` → `posts/{slug}`
 
-### 4. Build Integration
+### 5. Build Integration
 - Added `npm run upload:email` script to package.json
 - Added `npm run build:production` that builds and uploads in one command
 - Updated `.github/workflows/astro-prod.yml` to automatically upload on production deployments
+- Newsletter pages are generated but NOT included in served static output
 
-### 5. Documentation (`/EMAIL_SETUP.md`)
+### 6. Documentation (`/EMAIL_SETUP.md`)
 - Complete setup guide for Azure resources
 - Instructions for creating Service Principal
 - GitHub Secrets configuration
 - Local development setup
 - Troubleshooting guide
 
-### 6. Testing (`/scripts/test-email-generation.sh`)
+### 7. Testing (`/scripts/test-email-generation.sh`)
 - Bash script to verify email HTML generation
 - Checks for proper file structure
 - Validates HTML content
