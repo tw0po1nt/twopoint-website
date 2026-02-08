@@ -53,7 +53,7 @@ function fsharpMiddlewarePlugin() {
 
 export default defineConfig({
   output: 'static',
-
+  outDir: './dist/website',
   integrations: [
     react({ include: /\.(fs|js|jsx|ts|tsx)$/ }),
     tailwind({

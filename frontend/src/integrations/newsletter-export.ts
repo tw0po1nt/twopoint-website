@@ -11,17 +11,19 @@ import * as fs from 'fs/promises';
  * 3. Removes them from the served static output
  */
 export default function newsletterExportIntegration(): AstroIntegration {
+  let distWebsiteDir: string;
   let distDir: string;
   
   return {
     name: 'newsletter-export',
     hooks: {
       'astro:config:done': ({ config }) => {
-        distDir = fileURLToPath(config.outDir);
+        distWebsiteDir = fileURLToPath(config.outDir);
+        distDir = path.dirname(distWebsiteDir); 
       },
       'astro:build:done': async () => {
-        const newsletterDir = path.join(distDir, 'newsletter');
-        const exportDir = path.join(distDir, 'newsletter-export');
+        const newsletterDir = path.join(distWebsiteDir, 'newsletter');
+        const exportDir = path.join(distDir, 'newsletter');
         
         try {
           // Check if newsletter directory exists
@@ -32,7 +34,7 @@ export default function newsletterExportIntegration(): AstroIntegration {
           // Create export directory
           await fs.mkdir(exportDir, { recursive: true });
           
-          // Move all files from newsletter to newsletter-export
+          // Move all files from /dist/website/newsletter to /dist/newsletter
           const files = await fs.readdir(newsletterDir, { recursive: true });
           
           for (const file of files) {
