@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Upload email HTML files to Azure Blob Storage
+ * Upload newsletter HTML files to Azure Blob Storage
  * Uses DefaultAzureCredential for secure authentication
  */
 
