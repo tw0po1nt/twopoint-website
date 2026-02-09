@@ -68,7 +68,9 @@ async function uploadFileToBlob(blobClient, filePath, relativePath) {
       blobHTTPHeaders: {
         blobContentType: 'text/html',
         blobCacheControl: 'public, max-age=3600'
-      }
+      },
+      // Explicitly overwrite existing files to ensure updates are reflected
+      overwrite: true
     };
     
     await blobClient.upload(fileContent, fileContent.length, uploadOptions);
