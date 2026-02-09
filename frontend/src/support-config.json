@@ -1,9 +1,9 @@
 {
     "currencies": [
-        { "symbol": "ZEC", "address": "u17vxv2avl24wrlryehluuuqeq9sgyrtws96kv3nct6jl6rcasgmq4ccpvwl4u00yfyuq822q47u5krtr463wxwvsnkss504snyrfyk6l6zwgw02yafc32vtn4432a6yx982dnq09ncrs7n4733p8hqa8r9xwk0um9sl5d5ayuag2t3h36" },
+        { "symbol": "ZEC", "address": "u1ep3us2kehts2u3eyyajxu3hggq39c95t94w27n335a735ezq6a9lapehmc0ej34tjvq59rjyfyw5qda7kv5ycsdywm95apmkw5xn8c6vswzvx9h8enk6cmzlx0nxnytv9a85f06fqn0ae030a65700lv0x0u0g487s92s5gvmsrh0hjp" },
         { "symbol": "BTC", "address": "1Bz2yVzp68gCgUvv3esiyaLijDBwjV9M79" },
         { "symbol": "BCH", "address": "bitcoincash:qpu848vhzz2tzgvhd89t0dcf2m5httzsfukkxsjnpj" },
-        { "symbol": "LTC", "address": "LQt47d4iVi6NZTo6dDXGKf9vdrFHQF5817" },
+        { "symbol": "LTC", "address": "ltc1qdqx6zhtq3as5843jyurusxy0zshs0s5v79cvd9" },
         { "symbol": "ETH", "address": "0xcc3b1e98b16648f7028d6A657972442802A25e7C" }
     ]
 }
