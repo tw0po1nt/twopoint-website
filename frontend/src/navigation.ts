@@ -36,7 +36,6 @@ export const footerData = {
   links: [],
   secondaryLinks: [],
   socialLinks: [
-    { ariaLabel: 'X', icon: 'tabler:brand-x', href: 'https://x.com/tw0po1nt' },
     { ariaLabel: 'Github', icon: 'tabler:brand-github', href: 'https://github.com/tw0po1nt' },
   ],
   footNote: `
