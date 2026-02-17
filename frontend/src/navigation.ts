@@ -25,6 +25,10 @@ export const headerData = {
       ],
     },
     {
+      text: 'Subscribe',
+      href: getPermalink('/subscribe'),
+    },
+    {
       text: 'About',
       href: getPermalink('/about'),
     },

@@ -1,9 +1,6 @@
-namespace TwoPoint.Api
+namespace TwoPoint.Api.Comments
 
-type ApiResponse<'T> =
-  { Success : bool
-    Message : string option
-    Data : 'T option }
+open TwoPoint.Api
 
 type Comment =
   { Id : string
