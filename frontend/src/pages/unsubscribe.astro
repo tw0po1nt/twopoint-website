@@ -19,9 +19,10 @@ const metadata = {
 
   <WidgetWrapper containerClass="max-w-7xl mx-auto">
     <Headline 
-      classes={{ container: "mb-16 md:mb-20" } as Record<string, string>}
+      classes={{ container: "mb-0 md:mb-0" } as Record<string, string>}
       title="No longer interested?" 
-      subtitle="Sorry to see you go! Is there something I could do better? Email me or leave a comment! I welcome the feedback" />
+      subtitle="Sorry to see you go! Is there something I could do better?" />
+      <p class="mt-4 mb-12 md:mb-16 text-xl text-center text-muted">Email me or leave a comment! I welcome the feedback</p>
       <div class="max-w-xl mx-auto w-full">
         <SubscribeUnsubscribe client:only="react" uri={apiUri} isSubscribing={false} />
       </div> 
