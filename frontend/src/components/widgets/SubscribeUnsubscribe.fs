@@ -1,4 +1,4 @@
-module Subscribe 
+module SubscribeUnsubscribe 
 
 open TwoPoint.Api.Subscriptions
 open Util
