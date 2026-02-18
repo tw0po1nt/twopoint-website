@@ -118,9 +118,9 @@ let update state = function
     Cmd.none
 
 [<ReactComponent(exportDefault=true)>]
-let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
+let SubscribeUnsubscribe (apiUri: string, unsubscribeUri: string, subscribeUri: string, isSubscribing: bool) =
 
-  let state, dispatch = React.useElmish(init uri, flip update, [| box uri |])
+  let state, dispatch = React.useElmish(init apiUri, flip update, [| box apiUri; box isSubscribing |])
 
   let isEmailValid (email : string) = Constants.emailRegex.IsMatch email
 
@@ -238,15 +238,33 @@ let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
     ]
 
     Html.div [
-      prop.className "mt-3 text-center text-muted"
+      prop.className "mt-3"
       prop.children [
-        Html.p [
-          prop.className "text-sm text-gray-600 dark:text-gray-400"
-          prop.text (
-            if isSubscribing
-            then "You can unsubscribe at any time."
-            else "You can re-subscribe at any time."
-          )
+        Html.div [
+          prop.className "flex flex-row items-baseline space-x-1"
+          prop.children [
+            Html.span [
+              prop.className "text-sm font-normal text-muted align-middle leading-none"
+              prop.text "You can "
+            ]
+            Html.a [
+              prop.className "text-sm font-normal text-primary underline decoration-1 underline-offset-[5px] hover:underline align-middle leading-none"
+              prop.href (
+                if isSubscribing
+                then unsubscribeUri
+                else subscribeUri
+              )
+              prop.text (
+                if isSubscribing
+                then "unsubscribe"
+                else "re-subscribe"
+              )
+            ]
+            Html.span [ 
+              prop.className "text-sm font-normal text-muted align-middle leading-none"
+              prop.text " at any time."
+            ]
+          ]
         ]
       ]
     ]

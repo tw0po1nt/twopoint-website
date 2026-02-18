@@ -6,12 +6,18 @@ import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
 import SubscribeUnsubscribe from '~/components/widgets/SubscribeUnsubscribe.fs';
 
 import { getApiUri } from '~/utils/api';
+import { getPermalink } from '~/utils/permalinks';
+
 
 const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
 
 const metadata = {
   title: 'Unsubscribe',
 };
+
+const subscribeLink = getPermalink('subscribe');
+const unsubscribeLink = getPermalink('unsubscribe');
+
 ---
 
 <Layout metadata={metadata}>
@@ -19,7 +25,7 @@ const metadata = {
 
   <WidgetWrapper containerClass="max-w-7xl mx-auto">
     <!-- Auto-unsubscribe content (shown when subscriptionId is in URL) -->
-    <div id="auto-unsubscribe" class="hidden max-w-3xl mx-auto text-center py-12">
+    <div id="auto-unsubscribe" class="hidden max-w-3xl mx-auto text-center">
       <div id="unsubscribe-content">
         <div class="flex justify-center items-center">
           <svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -39,7 +45,12 @@ const metadata = {
         subtitle="Sorry to see you go! Is there something I could do better?" />
         <p class="mt-4 mb-12 md:mb-16 text-xl text-center text-muted">Email me or leave a comment! I welcome the feedback</p>
         <div class="max-w-xl mx-auto w-full">
-          <SubscribeUnsubscribe client:only="react" uri={apiUri} isSubscribing={false} />
+          <SubscribeUnsubscribe 
+            client:only="react" 
+            apiUri={apiUri} 
+            subscribeUri={subscribeLink} 
+            unsubscribeUri={unsubscribeLink} 
+            isSubscribing={false} />
         </div>
     </div>
   </WidgetWrapper>
@@ -82,14 +93,17 @@ const metadata = {
 
         if (result.success) {
           contentDiv.innerHTML = `
-            <div class="space-y-6">
-              <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+            <div class="space-y-4">
+              <h1 class="text-3xl md:text-4xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
                 Sorry to see you go!
               </h1>
-              <p class="text-xl text-muted dark:text-slate-400">
-                Is there something I could do better? Email me or leave a comment! I welcome the feedback
+              <p class="text-xl text-muted">
+                Is there something I could do better?
               </p>
-              <p class="text-base text-muted dark:text-slate-400 mt-8">
+              <p class="text-xl text-muted">
+                Email me or leave a comment! I welcome the feedback
+              </p>
+              <p class="text-sm text-muted mt-8">
                 If you unsubscribed by mistake, you can re-subscribe <a href="/subscribe" class="text-primary hover:underline">here</a>
               </p>
             </div>
@@ -111,7 +125,7 @@ const metadata = {
           `;
           document.getElementById('error-message').textContent = errorMessage;
         }
-      } catch (error) {
+      } catch {
         contentDiv.innerHTML = `
           <div class="space-y-6">
             <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
