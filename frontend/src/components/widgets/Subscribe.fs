@@ -98,7 +98,7 @@ let update state = function
     Cmd.none
 
 [<ReactComponent(exportDefault=true)>]
-let SubscribeUnsubscribe (apiUri: string) =
+let Subscribe (apiUri: string) =
 
   let state, dispatch = React.useElmish(init apiUri, flip update, [| box apiUri |])
 
