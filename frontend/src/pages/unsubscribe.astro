@@ -1,0 +1,38 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import Headline from '~/components/ui/Headline.astro';
+import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
+import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
+import SubscribeUnsubscribe from '~/components/widgets/SubscribeUnsubscribe.fs';
+
+import { getApiUri } from '~/utils/api';
+
+const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
+
+const metadata = {
+  title: 'Unsubscribe',
+};
+---
+
+<Layout metadata={metadata}>
+  <!-- HeroText Widget ******************* -->
+
+  <WidgetWrapper containerClass="max-w-7xl mx-auto">
+    <Headline 
+      classes={{ container: "mb-16 md:mb-20" } as Record<string, string>}
+      title="No longer interested?" 
+      subtitle="Sorry to see you go! Is there something I could do better? Email me or leave a comment! I welcome the feedback" />
+      <div class="max-w-xl mx-auto w-full">
+        <SubscribeUnsubscribe client:only="react" uri={apiUri} isSubscribing={false} />
+      </div> 
+  </WidgetWrapper>
+  
+  <!-- BlogLatestPost Widget **************** -->
+
+  <BlogLatestPosts id="blog" title="Explore my writing">
+    <Fragment slot="bg">
+      <div class="absolute inset-0 bg-blue-50 dark:bg-transparent"></div>
+    </Fragment>
+  </BlogLatestPosts>
+
+</Layout>

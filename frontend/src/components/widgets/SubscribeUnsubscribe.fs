@@ -224,7 +224,10 @@ let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
                   prop.onClick (fun _ ->
                     if state.Subscription.Email |> isEmailValid |> not
                     then SetEmailIsDirty |> dispatch
-                    else Subscribe |> dispatch
+                    else 
+                      if isSubscribing
+                      then Subscribe |> dispatch
+                      else Unsubscribe |> dispatch
                   )
                 ]
               ]

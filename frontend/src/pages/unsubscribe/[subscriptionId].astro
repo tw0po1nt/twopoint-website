@@ -1,0 +1,95 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
+
+import { getApiUri } from '~/utils/api';
+
+const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
+const { subscriptionId } = Astro.params;
+
+const metadata = {
+  title: 'Unsubscribe',
+};
+---
+
+<Layout metadata={metadata}>
+  <WidgetWrapper containerClass="max-w-7xl mx-auto">
+    <div class="max-w-3xl mx-auto text-center py-12">
+      <div id="unsubscribe-content">
+        <div class="flex justify-center items-center">
+          <svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="ml-3 text-lg">Processing your unsubscribe request...</span>
+        </div>
+      </div>
+    </div>
+  </WidgetWrapper>
+
+  <script define:vars={{ apiUri, subscriptionId }}>
+    async function unsubscribe() {
+      const contentDiv = document.getElementById('unsubscribe-content');
+      
+      try {
+        const response = await fetch(`${apiUri}/api/blog/subscriptions/cancellations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ subscriptionId }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          contentDiv.innerHTML = `
+            <div class="space-y-6">
+              <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+                Sorry to see you go!
+              </h1>
+              <p class="text-xl text-muted dark:text-slate-400">
+                Is there something I could do better? Email me or leave a comment! I welcome the feedback
+              </p>
+              <p class="text-base text-muted dark:text-slate-400 mt-8">
+                If you unsubscribed by mistake, you can re-subscribe <a href="/subscribe" class="text-primary hover:underline">here</a>
+              </p>
+            </div>
+          `;
+        } else {
+          const errorMessage = result.message || 'Unable to process your unsubscribe request. Please try again later.';
+          contentDiv.innerHTML = `
+            <div class="space-y-6">
+              <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+                Oops, something went wrong
+              </h1>
+              <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
+                <p>${errorMessage}</p>
+              </div>
+              <p class="text-base text-muted dark:text-slate-400 mt-8">
+                You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
+              </p>
+            </div>
+          `;
+        }
+      } catch (error) {
+        contentDiv.innerHTML = `
+          <div class="space-y-6">
+            <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+              Oops, something went wrong
+            </h1>
+            <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
+              <p>Unable to process your unsubscribe request. Please try again later.</p>
+            </div>
+            <p class="text-base text-muted dark:text-slate-400 mt-8">
+              You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
+            </p>
+          </div>
+        `;
+      }
+    }
+
+    // Call unsubscribe when the page loads
+    unsubscribe();
+  </script>
+</Layout>
