@@ -238,14 +238,14 @@ let SubscribeUnsubscribe (apiUri: string, unsubscribeUri: string, subscribeUri: 
     ]
 
     Html.div [
-      prop.className "mt-3 text-center"
+      prop.className "mt-3"
       prop.children [
-        Html.p [
-          prop.className "text-sm text-gray-600 dark:text-gray-400"
+        Html.div [
+          prop.className "flex flex-row justify-center text-sm text-muted space-x-1"
           prop.children [
-            Html.text "You can "
+            Html.p "You can "
             Html.a [
-              prop.className "text-primary hover:underline"
+              prop.className "text-primary hover:underline mt-[1px]"
               prop.href (
                 if isSubscribing
                 then unsubscribeUri
@@ -257,7 +257,7 @@ let SubscribeUnsubscribe (apiUri: string, unsubscribeUri: string, subscribeUri: 
                 else "re-subscribe"
               )
             ]
-            Html.text " at any time."
+            Html.p " at any time."
           ]
         ]
       ]
