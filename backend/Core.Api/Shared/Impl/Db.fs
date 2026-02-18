@@ -13,9 +13,12 @@ module TableEntityExtensions =
       | _ -> None
 
     member this.TryGetBoolean (key: string) =
-      match this.GetBoolean key with
-      | value when value.HasValue -> Some value.Value
-      | _ -> None
+      try
+        match this.GetBoolean key with
+        | value when value.HasValue -> Some value.Value
+        | _ -> None
+      with
+        | _ -> None
 
     member this.RequireString entity key =
       key
@@ -34,7 +37,6 @@ module Db =
   open IcedTasks
   open Microsoft.Extensions.Logging
   
-  open System
   open System.Net
   
   let private runQuery logger op fn =

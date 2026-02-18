@@ -11,13 +11,11 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
-open System
 open System.Net
 open System.Threading
 
 type SubscriptionCancellationJson =
-  { EmailAddress : string option
-    SubscriptionId : string option }
+  { SubscriptionId : string option }
 
 type Unsubscribe (
   logger: ILogger<Unsubscribe>,
@@ -31,17 +29,13 @@ type Unsubscribe (
   ) = task {
     let response = req.CreateResponse HttpStatusCode.OK
     let! json = req.ReadFromJsonAsync<SubscriptionCancellationJson> ct
-    let email =
-      json.EmailAddress
-      |> Option.map (fun em -> if em = "" then "<not provided>" else $"{em[0]}*****@*****.***")
-      |> Option.defaultValue "<not provided>"
     let subscriptionId =
       json.SubscriptionId
       |> Option.map (fun sid -> if sid = "" then "<not provided>" else sid)
       |> Option.defaultValue "<not provided>"
 
 
-    logger.LogInformation("Processing 'Blog.Unsubscribe' request with email '{email}', subscriptionId '{subscriptionId}'", email, subscriptionId)
+    logger.LogInformation("Processing 'Blog.Unsubscribe' request with subscriptionId '{subscriptionId}'", subscriptionId)
 
     // Dependencies
     let subscriptionDependencies =
@@ -51,7 +45,7 @@ type Unsubscribe (
 
     // Inputs
     let subscriptionCancellation =
-      { SubscriptionCancellation.Dto.EmailAddress = json.EmailAddress |> Option.map SubscriptionCancellation.EmailAddress
+      { SubscriptionCancellation.Dto.EmailAddress = None 
         SubscriptionCancellation.Dto.SubscriptionId = json.SubscriptionId |> Option.map SubscriptionCancellation.SubscriptionId }
 
     // Action

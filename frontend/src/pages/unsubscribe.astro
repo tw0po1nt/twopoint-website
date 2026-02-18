@@ -1,9 +1,7 @@
 ---
 import Layout from '~/layouts/PageLayout.astro';
-import Headline from '~/components/ui/Headline.astro';
 import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
 import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
-import SubscribeUnsubscribe from '~/components/widgets/SubscribeUnsubscribe.fs';
 
 import { getApiUri } from '~/utils/api';
 import { getPermalink } from '~/utils/permalinks';
@@ -16,7 +14,6 @@ const metadata = {
 };
 
 const subscribeLink = getPermalink('subscribe');
-const unsubscribeLink = getPermalink('unsubscribe');
 
 ---
 
@@ -24,34 +21,15 @@ const unsubscribeLink = getPermalink('unsubscribe');
   <!-- HeroText Widget ******************* -->
 
   <WidgetWrapper containerClass="max-w-7xl mx-auto">
-    <!-- Auto-unsubscribe content (shown when subscriptionId is in URL) -->
-    <div id="auto-unsubscribe" class="hidden max-w-3xl mx-auto text-center">
-      <div id="unsubscribe-content">
-        <div class="flex justify-center items-center">
-          <svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span class="ml-3 text-lg">Processing your unsubscribe request...</span>
-        </div>
+    <!-- Unsubscribe content (auto-unsubscribe when subscriptionId is in URL, or error message if not) -->
+    <div id="unsubscribe-content" class="max-w-3xl mx-auto text-center">
+      <div class="flex justify-center items-center">
+        <svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="ml-3 text-lg">Processing your unsubscribe request...</span>
       </div>
-    </div>
-
-    <!-- Manual unsubscribe form (shown when no subscriptionId in URL) -->
-    <div id="manual-unsubscribe">
-      <Headline 
-        classes={{ container: "mb-0 md:mb-0" } as Record<string, string>}
-        title="No longer interested?" 
-        subtitle="Sorry to see you go! Is there something I could do better?" />
-        <p class="mt-4 mb-12 md:mb-16 text-xl text-center text-muted">Email me or leave a comment! I welcome the feedback</p>
-        <div class="max-w-xl mx-auto w-full">
-          <SubscribeUnsubscribe 
-            client:only="react" 
-            apiUri={apiUri} 
-            subscribeUri={subscribeLink} 
-            unsubscribeUri={unsubscribeLink} 
-            isSubscribing={false} />
-        </div>
     </div>
   </WidgetWrapper>
   
@@ -63,22 +41,31 @@ const unsubscribeLink = getPermalink('unsubscribe');
     </Fragment>
   </BlogLatestPosts>
 
-  <script define:vars={{ apiUri }}>
+  <script define:vars={{ apiUri, subscribeLink }}>
     async function handleAutoUnsubscribe() {
       // Check if subscriptionId is in the URL query parameters
       const urlParams = new URLSearchParams(window.location.search);
       const subscriptionId = urlParams.get('subscriptionId');
       
+      const contentDiv = document.getElementById('unsubscribe-content');
+      
       if (!subscriptionId) {
-        // No subscriptionId, show the manual form
+        // No subscriptionId provided - show error message
+        contentDiv.innerHTML = `
+          <div class="space-y-6">
+            <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+              Invalid Unsubscribe Link
+            </h1>
+            <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
+              <p><strong>Error:</strong> This unsubscribe link is invalid or incomplete. Please use the unsubscribe link from your email.</p>
+            </div>
+            <p class="text-base text-muted dark:text-slate-400 mt-8">
+              If you continue to have issues, please email me directly and I'll help you unsubscribe.
+            </p>
+          </div>
+        `;
         return;
       }
-
-      // Hide manual form and show auto-unsubscribe content
-      document.getElementById('manual-unsubscribe').classList.add('hidden');
-      document.getElementById('auto-unsubscribe').classList.remove('hidden');
-      
-      const contentDiv = document.getElementById('unsubscribe-content');
       
       try {
         const response = await fetch(`${apiUri}/api/blog/subscriptions/cancellations`, {
@@ -104,7 +91,7 @@ const unsubscribeLink = getPermalink('unsubscribe');
                 Email me or leave a comment! I welcome the feedback
               </p>
               <p class="text-sm text-muted mt-8">
-                If you unsubscribed by mistake, you can re-subscribe <a href="/subscribe" class="text-primary hover:underline">here</a>
+                If you unsubscribed by mistake, you can re-subscribe <a href="${subscribeLink}" class="text-primary hover:underline">here</a>
               </p>
             </div>
           `;
@@ -119,7 +106,7 @@ const unsubscribeLink = getPermalink('unsubscribe');
                 <p><strong>Error:</strong> <span id="error-message"></span></p>
               </div>
               <p class="text-base text-muted dark:text-slate-400 mt-8">
-                You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
+                If you continue to have issues, please email me directly and I'll help you unsubscribe.
               </p>
             </div>
           `;
@@ -135,7 +122,7 @@ const unsubscribeLink = getPermalink('unsubscribe');
               <p><strong>Error:</strong> Unable to process your unsubscribe request. Please try again later.</p>
             </div>
             <p class="text-base text-muted dark:text-slate-400 mt-8">
-              You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
+              If you continue to have issues, please email me directly and I'll help you unsubscribe.
             </p>
           </div>
         `;
