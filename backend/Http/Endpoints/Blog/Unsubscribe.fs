@@ -41,7 +41,7 @@ type Unsubscribe (
       |> Option.defaultValue "<not provided>"
 
 
-    logger.LogInformation("Processing 'Blog.Unsubscribe' request with email '{email}', subscriptionId '{subscriptionId}", email, subscriptionId)
+    logger.LogInformation("Processing 'Blog.Unsubscribe' request with email '{email}', subscriptionId '{subscriptionId}'", email, subscriptionId)
 
     // Dependencies
     let subscriptionDependencies =
