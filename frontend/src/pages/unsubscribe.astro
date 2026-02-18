@@ -1,0 +1,148 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import Headline from '~/components/ui/Headline.astro';
+import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
+import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
+import SubscribeUnsubscribe from '~/components/widgets/SubscribeUnsubscribe.fs';
+
+import { getApiUri } from '~/utils/api';
+import { getPermalink } from '~/utils/permalinks';
+
+
+const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
+
+const metadata = {
+  title: 'Unsubscribe',
+};
+
+const subscribeLink = getPermalink('subscribe');
+const unsubscribeLink = getPermalink('unsubscribe');
+
+---
+
+<Layout metadata={metadata}>
+  <!-- HeroText Widget ******************* -->
+
+  <WidgetWrapper containerClass="max-w-7xl mx-auto">
+    <!-- Auto-unsubscribe content (shown when subscriptionId is in URL) -->
+    <div id="auto-unsubscribe" class="hidden max-w-3xl mx-auto text-center">
+      <div id="unsubscribe-content">
+        <div class="flex justify-center items-center">
+          <svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="ml-3 text-lg">Processing your unsubscribe request...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual unsubscribe form (shown when no subscriptionId in URL) -->
+    <div id="manual-unsubscribe">
+      <Headline 
+        classes={{ container: "mb-0 md:mb-0" } as Record<string, string>}
+        title="No longer interested?" 
+        subtitle="Sorry to see you go! Is there something I could do better?" />
+        <p class="mt-4 mb-12 md:mb-16 text-xl text-center text-muted">Email me or leave a comment! I welcome the feedback</p>
+        <div class="max-w-xl mx-auto w-full">
+          <SubscribeUnsubscribe 
+            client:only="react" 
+            apiUri={apiUri} 
+            subscribeUri={subscribeLink} 
+            unsubscribeUri={unsubscribeLink} 
+            isSubscribing={false} />
+        </div>
+    </div>
+  </WidgetWrapper>
+  
+  <!-- BlogLatestPost Widget **************** -->
+
+  <BlogLatestPosts id="blog" title="Explore my writing">
+    <Fragment slot="bg">
+      <div class="absolute inset-0 bg-blue-50 dark:bg-transparent"></div>
+    </Fragment>
+  </BlogLatestPosts>
+
+  <script define:vars={{ apiUri }}>
+    async function handleAutoUnsubscribe() {
+      // Check if subscriptionId is in the URL query parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const subscriptionId = urlParams.get('subscriptionId');
+      
+      if (!subscriptionId) {
+        // No subscriptionId, show the manual form
+        return;
+      }
+
+      // Hide manual form and show auto-unsubscribe content
+      document.getElementById('manual-unsubscribe').classList.add('hidden');
+      document.getElementById('auto-unsubscribe').classList.remove('hidden');
+      
+      const contentDiv = document.getElementById('unsubscribe-content');
+      
+      try {
+        const response = await fetch(`${apiUri}/api/blog/subscriptions/cancellations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ subscriptionId }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          contentDiv.innerHTML = `
+            <div class="space-y-4">
+              <h1 class="text-3xl md:text-4xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+                Sorry to see you go!
+              </h1>
+              <p class="text-xl text-muted">
+                Is there something I could do better?
+              </p>
+              <p class="text-xl text-muted">
+                Email me or leave a comment! I welcome the feedback
+              </p>
+              <p class="text-sm text-muted mt-8">
+                If you unsubscribed by mistake, you can re-subscribe <a href="/subscribe" class="text-primary hover:underline">here</a>
+              </p>
+            </div>
+          `;
+        } else {
+          const errorMessage = result.message || 'Unable to process your unsubscribe request. Please try again later.';
+          contentDiv.innerHTML = `
+            <div class="space-y-6">
+              <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+                Oops, something went wrong
+              </h1>
+              <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
+                <p><strong>Error:</strong> <span id="error-message"></span></p>
+              </div>
+              <p class="text-base text-muted dark:text-slate-400 mt-8">
+                You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
+              </p>
+            </div>
+          `;
+          document.getElementById('error-message').textContent = errorMessage;
+        }
+      } catch {
+        contentDiv.innerHTML = `
+          <div class="space-y-6">
+            <h1 class="text-4xl md:text-5xl font-bold tracking-tighter leading-tighter mb-4 font-heading dark:text-gray-200">
+              Oops, something went wrong
+            </h1>
+            <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
+              <p><strong>Error:</strong> Unable to process your unsubscribe request. Please try again later.</p>
+            </div>
+            <p class="text-base text-muted dark:text-slate-400 mt-8">
+              You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
+            </p>
+          </div>
+        `;
+      }
+    }
+
+    // Handle auto-unsubscribe on page load
+    handleAutoUnsubscribe();
+  </script>
+</Layout>

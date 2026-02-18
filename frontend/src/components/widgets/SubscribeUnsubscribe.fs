@@ -118,9 +118,9 @@ let update state = function
     Cmd.none
 
 [<ReactComponent(exportDefault=true)>]
-let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
+let SubscribeUnsubscribe (apiUri: string, unsubscribeUri: string, subscribeUri: string, isSubscribing: bool) =
 
-  let state, dispatch = React.useElmish(init uri, flip update, [| box uri |])
+  let state, dispatch = React.useElmish(init apiUri, flip update, [| box apiUri; box isSubscribing |])
 
   let isEmailValid (email : string) = Constants.emailRegex.IsMatch email
 
@@ -224,7 +224,10 @@ let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
                   prop.onClick (fun _ ->
                     if state.Subscription.Email |> isEmailValid |> not
                     then SetEmailIsDirty |> dispatch
-                    else Subscribe |> dispatch
+                    else 
+                      if isSubscribing
+                      then Subscribe |> dispatch
+                      else Unsubscribe |> dispatch
                   )
                 ]
               ]
@@ -235,15 +238,27 @@ let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
     ]
 
     Html.div [
-      prop.className "mt-3 text-center text-muted"
+      prop.className "mt-3"
       prop.children [
-        Html.p [
-          prop.className "text-sm text-gray-600 dark:text-gray-400"
-          prop.text (
-            if isSubscribing
-            then "You can unsubscribe at any time."
-            else "You can re-subscribe at any time."
-          )
+        Html.div [
+          prop.className "flex flex-row justify-center text-sm text-muted space-x-1"
+          prop.children [
+            Html.p "You can "
+            Html.a [
+              prop.className "text-primary hover:underline mt-[1px]"
+              prop.href (
+                if isSubscribing
+                then unsubscribeUri
+                else subscribeUri
+              )
+              prop.text (
+                if isSubscribing
+                then "unsubscribe"
+                else "re-subscribe"
+              )
+            ]
+            Html.p " at any time."
+          ]
         ]
       ]
     ]
