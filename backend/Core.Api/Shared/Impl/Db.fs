@@ -8,10 +8,18 @@ module TableEntityExtensions =
   
   type TableEntity with
     member this.TryGetString (key: string) =
-      match this.TryGetValue(key) with
+      match this.TryGetValue key with
       | true, value when value <> null -> Some (value.ToString())
       | _ -> None
-      
+
+    member this.TryGetBoolean (key: string) =
+      try
+        match this.GetBoolean key with
+        | value when value.HasValue -> Some value.Value
+        | _ -> None
+      with
+        | _ -> None
+
     member this.RequireString entity key =
       key
       |> this.TryGetString
@@ -29,7 +37,6 @@ module Db =
   open IcedTasks
   open Microsoft.Extensions.Logging
   
-  open System
   open System.Net
   
   let private runQuery logger op fn =

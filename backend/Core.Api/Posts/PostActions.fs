@@ -134,7 +134,7 @@ module PostActions =
           |> Result.traverseCancellableTask postDependencies.CreatePost
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult PostCreatedEvent)
-            (ActionError.Logic >> ActionResult.failure)
+            (Logic >> ActionResult.failure)
       }
       
       member this.ValidateCommenter commenterValidation = cancellableTaskResult {

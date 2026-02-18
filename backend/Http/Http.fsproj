@@ -18,6 +18,8 @@
     <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
     <Compile Include="Endpoints\Blog\PostComment.fs" />
     <Compile Include="Endpoints\Blog\ValidateCommenter.fs" />
+    <Compile Include="Endpoints\Blog\Subscribe.fs" />
+    <Compile Include="Endpoints\Blog\Unsubscribe.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Endpoints\Admin\SyncPosts.fs" />
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />

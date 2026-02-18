@@ -1,6 +1,6 @@
 module Comments
 
-open TwoPoint.Api
+open TwoPoint.Api.Comments
 open DateFormatter
 open NewComment
 
