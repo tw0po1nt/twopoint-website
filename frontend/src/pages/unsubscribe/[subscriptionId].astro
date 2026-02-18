@@ -64,13 +64,14 @@ const metadata = {
                 Oops, something went wrong
               </h1>
               <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
-                <p>${errorMessage}</p>
+                <p><strong>Error:</strong> <span id="error-message"></span></p>
               </div>
               <p class="text-base text-muted dark:text-slate-400 mt-8">
                 You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
               </p>
             </div>
           `;
+          document.getElementById('error-message').textContent = errorMessage;
         }
       } catch (error) {
         contentDiv.innerHTML = `
@@ -79,7 +80,7 @@ const metadata = {
               Oops, something went wrong
             </h1>
             <div class="bg-red-100 text-red-900 rounded-lg border border-red-900 p-4">
-              <p>Unable to process your unsubscribe request. Please try again later.</p>
+              <p><strong>Error:</strong> Unable to process your unsubscribe request. Please try again later.</p>
             </div>
             <p class="text-base text-muted dark:text-slate-400 mt-8">
               You can try to <a href="/unsubscribe" class="text-primary hover:underline">unsubscribe manually here</a>
