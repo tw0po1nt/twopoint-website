@@ -20,7 +20,8 @@
     <Compile Include="Posts\PostQueries.fs" />
     <Compile Include="Posts\PostActions.fs" />
     <Compile Include="Subscriptions/Impl/SubscriptionDb.fs" />
-    <Compile Include="Subscriptions/SubscriptionApiDependencies.fs" /><Compile Include="Subscriptions/SubscriptionActions.fs" />
+    <Compile Include="Subscriptions/SubscriptionApiDependencies.fs" />
+    <Compile Include="Subscriptions/SubscriptionActions.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Communication.Email" Version="1.0.2" />
