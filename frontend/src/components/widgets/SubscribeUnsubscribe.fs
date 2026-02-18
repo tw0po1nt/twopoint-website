@@ -19,9 +19,9 @@ type Msg =
   | SetEmailIsDirty
   | SetName of Name
   | Subscribe
+  | Unsubscribe
   | SubscriptionFailed of string
   | SubscriptionSucceeded of Email
-  | ResetForm
 
 type SubscriptionStatus =
   | NotStarted
@@ -91,18 +91,34 @@ let update state = function
 
     { state with Subscription.Status = Pending state.Subscription.Email },
     Cmd.fromAsync (subscribe newSubscription)
+   | Unsubscribe ->
+    let unsubscribe cancellation = async {
+      let! result =
+        cancellation 
+        |> Subscriptions.unsubscribe state.Uri
+        |> Async.AwaitPromise
+
+      if result.Success
+      then
+        return SubscriptionSucceeded cancellation.EmailAddress
+      else
+        return SubscriptionFailed (result.Message |> Option.defaultValue $"Unable to unsubscribe. Please try again later.")
+    }
+
+    let cancellation =
+      { EmailAddress = state.Subscription.Email }
+
+    { state with Subscription.Status = Pending state.Subscription.Email },
+    Cmd.fromAsync (unsubscribe cancellation)
   | SubscriptionFailed err ->
     { state with Subscription.Status = Failed err },
     Cmd.none
   | SubscriptionSucceeded email ->
-    { state with Subscription.Status = Succeeded email },
-    Cmd.none
-  | ResetForm ->
-    { state with Subscription = SubscriptionState.Initial },
+    { state with Subscription = { SubscriptionState.Initial with Status = Succeeded email } },
     Cmd.none
 
 [<ReactComponent(exportDefault=true)>]
-let Subscribe (uri: string) =
+let SubscribeUnsubscribe (uri: string, isSubscribing: bool) =
 
   let state, dispatch = React.useElmish(init uri, flip update, [| box uri |])
 
@@ -115,10 +131,15 @@ let Subscribe (uri: string) =
     ]
   ]
 
-  let subscribed = Html.p [
+  let successMessage =
+    if isSubscribing
+    then "You've successfully subscribed! Keep an eye out for my next post!"
+    else "You've successfully unsubscribed! Sorry to see you go."
+
+  let success = Html.p [
     prop.className "bg-green-100 text-green-900 rounded-lg border border-green-900 p-4 mt-4"
     prop.children [
-      Html.text "You've successfully subscribed! Keep an eye out for my next post!"
+      Html.text successMessage 
     ]
   ]
 
@@ -163,36 +184,43 @@ let Subscribe (uri: string) =
               ]
             ]
 
-            Html.div [
-              prop.className "mb-6"
-              prop.children [
-                Html.label [
-                  prop.className "block font-medium text-sm mb-2"
-                  prop.htmlFor "name"
-                  prop.text "Name (optional)"
-                ]
+            if isSubscribing
+            then
+              Html.div [
+                prop.className "mb-6"
+                prop.children [
+                  Html.label [
+                    prop.className "block font-medium text-sm mb-2"
+                    prop.htmlFor "name"
+                    prop.text "Name (optional)"
+                  ]
 
-                Html.input [
-                  prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full mb-2"
-                  prop.id "name"
-                  prop.name "name"
-                  prop.type' "text"
-                  prop.autoComplete "on"
-                  prop.placeholder ""
-                  prop.value state.Subscription.Name
-                  prop.onTextChange (SetName >> dispatch) 
-                  prop.maxLength 256
+                  Html.input [
+                    prop.className "block bg-white border border-gray-200 dark:bg-zinc-900 dark:border-gray-700 px-4 py-3 rounded-lg text-md w-full mb-2"
+                    prop.id "name"
+                    prop.name "name"
+                    prop.type' "text"
+                    prop.autoComplete "on"
+                    prop.placeholder ""
+                    prop.value state.Subscription.Name
+                    prop.onTextChange (SetName >> dispatch) 
+                    prop.maxLength 256
+                  ]
                 ]
               ]
-            ]
 
             Html.div [
               prop.className "grid mt-10"
               prop.children [
                 Html.button [
-                  prop.className (if isEmailValid state.Subscription.Email then "btn-primary" else "btn-tertiary dark:hover:bg-zinc-800")
-                  prop.text "Subscribe"
+                  prop.className (
+                    if isEmailValid state.Subscription.Email && not state.Subscription.Status.IsPending
+                    then "btn-primary" 
+                    else "btn-tertiary dark:hover:bg-zinc-800"
+                  )
+                  prop.text (if isSubscribing then "Subscribe" else "Unsubscribe")
                   prop.type' "button"
+                  prop.disabled state.Subscription.Status.IsPending
                   prop.onClick (fun _ ->
                     if state.Subscription.Email |> isEmailValid |> not
                     then SetEmailIsDirty |> dispatch
@@ -211,7 +239,11 @@ let Subscribe (uri: string) =
       prop.children [
         Html.p [
           prop.className "text-sm text-gray-600 dark:text-gray-400"
-          prop.text "You can unsubscribe at any time."
+          prop.text (
+            if isSubscribing
+            then "You can unsubscribe at any time."
+            else "You can re-subscribe at any time."
+          )
         ]
       ]
     ]
@@ -219,5 +251,5 @@ let Subscribe (uri: string) =
     match state.Subscription.Status with
     | NotStarted | Pending _ -> Html.none
     | Failed error -> errorMessage error
-    | Succeeded _  -> subscribed
+    | Succeeded _ -> success
   ]

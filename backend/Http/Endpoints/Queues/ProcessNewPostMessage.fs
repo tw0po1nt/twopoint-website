@@ -23,9 +23,9 @@ type ProcessNewPostMessage(
   tableServiceClient: TableServiceClient
 ) =
 
-  [<Function("Queues-ProcessNewPostMessage")>]
+  // [<Function("Queues-ProcessNewPostMessage")>]
   member _.Run (
-    [<ServiceBusTrigger("new_post", Connection = "TwoPointWebsiteServiceBus")>] message : ServiceBusReceivedMessage,
+    (*[<ServiceBusTrigger("new_post", Connection = "TwoPointWebsiteServiceBus")>]*) message : ServiceBusReceivedMessage,
     ct : CancellationToken
   ) = task {
     let json = message.Body.FromJson<NewPostDto | null>()

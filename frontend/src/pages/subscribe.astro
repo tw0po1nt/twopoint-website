@@ -3,7 +3,7 @@ import Layout from '~/layouts/PageLayout.astro';
 import Headline from '~/components/ui/Headline.astro';
 import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
 import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
-import Subscribe from '~/components/widgets/Subscribe.fs';
+import SubscribeUnsubscribe from '~/components/widgets/SubscribeUnsubscribe.fs';
 
 import { getApiUri } from '~/utils/api';
 
@@ -23,7 +23,7 @@ const metadata = {
       title="Subscribe and never miss a post!" 
       subtitle="If you like my content, subscribe to get notified whenever there's a new post!" />
       <div class="max-w-xl mx-auto w-full">
-        <Subscribe client:only="react" uri={apiUri} />
+        <SubscribeUnsubscribe client:only="react" uri={apiUri} isSubscribing={true} />
       </div> 
   </WidgetWrapper>
   
