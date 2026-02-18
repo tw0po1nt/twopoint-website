@@ -3,20 +3,15 @@ import Layout from '~/layouts/PageLayout.astro';
 import Headline from '~/components/ui/Headline.astro';
 import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
 import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
-import SubscribeUnsubscribe from '~/components/widgets/SubscribeUnsubscribe.fs';
+import Subscribe from '~/components/widgets/Subscribe.fs';
 
 import { getApiUri } from '~/utils/api';
-import { getPermalink } from '~/utils/permalinks';
-
 
 const apiUri = getApiUri(process.env.PUBLIC_STAGE || 'local');
 
 const metadata = {
   title: 'Subscribe',
 };
-
-const subscribeLink = getPermalink('subscribe');
-const unsubscribeLink = getPermalink('unsubscribe');
 
 ---
 
@@ -29,12 +24,7 @@ const unsubscribeLink = getPermalink('unsubscribe');
       title="Subscribe and never miss a post!" 
       subtitle="If you like my content, subscribe to get notified whenever there's a new post!" />
       <div class="max-w-xl mx-auto w-full">
-        <SubscribeUnsubscribe 
-            client:only="react" 
-            apiUri={apiUri} 
-            subscribeUri={subscribeLink} 
-            unsubscribeUri={unsubscribeLink} 
-            isSubscribing={true} />
+        <Subscribe client:only="react" apiUri={apiUri} />
       </div> 
   </WidgetWrapper>
   

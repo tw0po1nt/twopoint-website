@@ -68,7 +68,7 @@ const subscribeLink = getPermalink('subscribe');
       }
       
       try {
-        const response = await fetch(\`\${apiUri}/api/blog/subscriptions/cancellations\`, {
+        const response = await fetch(`${apiUri}/api/blog/subscriptions/cancellations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -91,7 +91,7 @@ const subscribeLink = getPermalink('subscribe');
                 Email me or leave a comment! I welcome the feedback
               </p>
               <p class="text-sm text-muted mt-8">
-                If you unsubscribed by mistake, you can re-subscribe <a href="\${subscribeLink}" class="text-primary hover:underline">here</a>
+                If you unsubscribed by mistake, you can re-subscribe <a href="${subscribeLink}" class="text-primary hover:underline">here</a>
               </p>
             </div>
           `;

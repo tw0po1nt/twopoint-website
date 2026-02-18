@@ -15,7 +15,7 @@
     <Compile Include="components/widgets/ReactPdf.fs" />
     <Compile Include="components/widgets/Toast.fs" />
     <Compile Include="components/widgets/Support.fs" />
-    <Compile Include="components/widgets/SubscribeUnsubscribe.fs" />
+    <Compile Include="components/widgets/Subscribe.fs" />
     <Compile Include="components/widgets/NewComment.fs" />
     <Compile Include="components/widgets/Comments.fs" />
     <Compile Include="components/widgets/Pdf.fs" />
