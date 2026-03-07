@@ -114,7 +114,7 @@ module PostActions =
     
     { new IPostActions with
     
-      member this.CreatePost newPost = cancellableTaskResult {
+      member _.CreatePost newPost = cancellableTaskResult {
         let! (newPost: NewPost) =
           NewPost.create
             newPost.Title
@@ -137,7 +137,7 @@ module PostActions =
             (Logic >> ActionResult.failure)
       }
       
-      member this.ValidateCommenter commenterValidation = cancellableTaskResult {
+      member _.ValidateCommenter commenterValidation = cancellableTaskResult {
         let! (commenterValidation: CommenterValidation) =
           CommenterValidation.create
             commenterValidation.EmailAddress
@@ -160,10 +160,10 @@ module PostActions =
           |> Result.traverseCancellableTask handleCommenterValidated
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult CommenterValidatedEvent)
-            (ActionError.Logic >> ActionResult.failure)
+            (Logic >> ActionResult.failure)
       }
         
-      member this.PostComment newComment = cancellableTaskResult {
+      member _.PostComment newComment = cancellableTaskResult {
         let! (newComment: NewComment) =
           NewComment.create
             newComment.Post
@@ -188,10 +188,10 @@ module PostActions =
           |> Result.traverseCancellableTask handleCommentPosted
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult (commentPostedEvent (Option.get existingPost)))
-            (ActionError.Logic >> ActionResult.failure)
+            (Logic >> ActionResult.failure)
       }
       
-      member this.UpdateCommentApproval approvalUpdate = cancellableTaskResult {
+      member _.UpdateCommentApproval approvalUpdate = cancellableTaskResult {
         let! (approvalUpdate: CommentApprovalUpdate) =
           CommentApprovalUpdate.create
             approvalUpdate.CommentId
@@ -209,10 +209,10 @@ module PostActions =
           |> Result.traverseCancellableTask handleCommentApprovalUpdated
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult CommentApprovalUpdatedEvent)
-            (ActionError.Logic >> ActionResult.failure)
+            (Logic >> ActionResult.failure)
       }
       
-      member this.DeleteComment commentDeletion = cancellableTaskResult {
+      member _.DeleteComment commentDeletion = cancellableTaskResult {
         let! (commentDeletion: CommentDeletion) =
           CommentDeletion.create commentDeletion.CommentId
           |> Result.mapError ActionError<DeleteCommentError>.Validation
@@ -228,10 +228,10 @@ module PostActions =
           |> Result.traverseCancellableTask handleCommentDeleted
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult CommentDeletedEvent)
-            (ActionError.Logic >> ActionResult.failure)
+            (Logic >> ActionResult.failure)
       }
       
-      member this.UpdateCommenterStatus statusUpdate = cancellableTaskResult {
+      member _.UpdateCommenterStatus statusUpdate = cancellableTaskResult {
         let! (statusUpdate: CommenterStatusUpdate) =
           CommenterStatusUpdate.create
             statusUpdate.EmailAddress
@@ -249,7 +249,7 @@ module PostActions =
           |> Result.traverseCancellableTask handleCommenterStatusUpdated
           |> CancellableTaskResult.foldResult
             (DependencyResult.toActionResult CommenterStatusUpdatedEvent)
-            (ActionError.Logic >> ActionResult.failure)
+            (Logic >> ActionResult.failure)
       }
     }
 

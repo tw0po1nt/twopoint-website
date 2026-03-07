@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Subscriptions.Api
 
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Logic
 open TwoPoint.Core.Shared
@@ -156,5 +157,63 @@ module CancelSubscription =
         |> Result.traverseCancellableTask dependencies.DeactivateSubscription 
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult SubscriptionCancelledEvent)
+          (Logic >> ActionResult.failure)
+    }
+
+// ========================================================================================
+// Send welcome 
+// ========================================================================================
+
+// Input
+
+type UnvalidatedSubscriptionId = UnvalidatedSubscriptionId of string
+
+// Output
+
+type WelcomeSentEvent = WelcomeSentEvent of Subscription * SubscriptionDelivery
+
+// Action
+
+type SendWelcome = UnvalidatedSubscriptionId -> CancellableTask<ActionResult<WelcomeSentEvent, SendWelcomeError>>
+
+[<RequireQualifiedAccess>]
+module SendWelcome =
+
+  type Dependencies =
+    // todo: implement these next
+    abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<Map<SubscriptionDeliveryType, SubscriptionDelivery list>>
+    abstract member GetLatestPost: unit -> DependencyResult<Post>
+    abstract member SendWelcome: Subscription -> Post -> DependencyResult<Subscription * SubscriptionDelivery>
+
+  let withDependencies (dependencies : Dependencies) : SendWelcome =
+    fun (UnvalidatedSubscriptionId subscriptionId) -> cancellableTaskResult {
+      let! subscriptionId = 
+        subscriptionId 
+        |> SubscriptionId.create
+        |> Result.mapError ActionError<SendWelcomeError>.Validation
+
+      let! (subscription: Subscription option) =
+        dependencies.GetSubscriptionById subscriptionId
+        |> CancellableTaskResult.mapError ActionError<SendWelcomeError>.Dependency
+
+      let! deliveries =
+        subscription
+        |> Option.traverseCancellableTaskResult dependencies.GetDeliveriesForSubscription
+        |> CancellableTaskResult.map (Option.defaultValue Map.empty)
+        |> CancellableTaskResult.mapError ActionError<SendWelcomeError>.Dependency
+
+      let! (latestPost : Post) =
+        dependencies.GetLatestPost()
+        |> CancellableTaskResult.mapError ActionError<SendWelcomeError>.Dependency
+
+      let decision = SendWelcome.decide subscription deliveries latestPost subscriptionId
+
+      return!
+        decision
+        |> Result.map (fun (WelcomeSent (subscription, post)) -> subscription, post)
+        |> Result.traverseCancellableTask (uncurry dependencies.SendWelcome)
+        |> CancellableTaskResult.foldResult
+          (DependencyResult.toActionResult WelcomeSentEvent)
           (Logic >> ActionResult.failure)
     }
