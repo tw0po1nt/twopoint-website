@@ -3,7 +3,6 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
-open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 
@@ -17,9 +16,6 @@ open Microsoft.Extensions.Logging
 
 open System.Net
 open System.Threading
-
-type DeleteCommentAction = TwoPoint.Core.Posts.Actions.DeleteComment
-module DeleteCommentAction = TwoPoint.Core.Posts.Actions.DeleteComment
 
 type DeleteComment(
   config: Config,
@@ -56,8 +52,8 @@ type DeleteComment(
           tableServiceClient,
           logger
         )
-        let deleteComment = DeleteCommentAction.withDependencies {
-          new DeleteCommentAction.Dependencies with
+        let deleteComment = DeleteComment.withDependencies {
+          new DeleteComment.Dependencies with
           
           member _.GetCommentById commentId = postDependencies.GetCommentById commentId
           member _.DeleteComment comment = postDependencies.DeleteComment comment
@@ -73,7 +69,7 @@ type DeleteComment(
           | Error (Logic deleteCommentError) ->
             let errorMessage =
               match deleteCommentError with
-              | DeleteCommentError.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
+              | DeleteComment.Error.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
             { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
           | Error actionError when actionError.IsValidation ->
             { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest

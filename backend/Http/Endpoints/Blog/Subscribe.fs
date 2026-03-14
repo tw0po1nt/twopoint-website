@@ -2,7 +2,6 @@ namespace TwoPoint.Http.Endpoints.Blog
 
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Subscriptions.Actions
-open TwoPoint.Core.Subscriptions.Logic
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
 
@@ -43,10 +42,10 @@ type Subscribe (
     logger.LogInformation("Processing 'Blog.Subscribe' request with email '{email}', name '{name}'", email, name)
 
     // Dependencies
-    let subscriptionDependencies =
-      SubscriptionDependencies.live
-        tableServiceClient
-        logger
+    let subscriptionDependencies = SubscriptionDependencies(
+      tableServiceClient,
+      logger
+    )
 
     // Inputs
     let newSubscription =

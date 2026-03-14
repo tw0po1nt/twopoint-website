@@ -1,4 +1,4 @@
-namespace TwoPoint.Dependencies.Shared
+namespace TwoPoint.Dependencies.Comms
 
 open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Util

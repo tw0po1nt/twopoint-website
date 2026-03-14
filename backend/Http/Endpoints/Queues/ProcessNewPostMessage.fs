@@ -71,7 +71,7 @@ type ProcessNewPostMessage(
       let! newPostResult = (newPost, ct) ||> createPost
 
       match newPostResult with
-      | Ok (PostCreatedEvent post) ->
+      | Ok (CreatePost.Event.Created post) ->
           logger.LogInformation("Successfully created post with slug: {slug}", post.Id.ToString())
       | Error error ->
           logger.LogError("Error creating post: {error}", error)

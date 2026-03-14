@@ -2,7 +2,6 @@ namespace TwoPoint.Core.Subscriptions.Actions
 
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
-open TwoPoint.Core.Subscriptions.Logic
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
@@ -16,6 +15,10 @@ open System
 // ========================================================================================
 
 // Input
+
+type NewSubscription =
+  { EmailAddress : EmailAddress
+    Name : NonEmptyString option }
 
 module NewSubscription =
 
@@ -38,18 +41,36 @@ module NewSubscription =
         Name = name }
   }
 
-// Output
-
-type SubscriptionCreatedEvent = SubscriptionCreatedEvent of Subscription
-
-// Action
-
-type CreateSubscription = 
-  NewSubscription.Dto 
-    -> CancellableTask<ActionResult<SubscriptionCreatedEvent, CreateSubscriptionError>>
-
 [<RequireQualifiedAccess>]
 module CreateSubscription =
+
+  // Output
+  type Error = unit
+  type Success = 
+    | New of NewSubscription
+    | Reactivate of Subscription
+  type Decision = Decision<Success, Error>
+  type Event = Created of Subscription
+
+  // Logic
+
+  type Logic =
+    Subscription option
+      -> NewSubscription
+      -> Decision
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic = 
+      fun existingSubscription newSubscription ->
+        existingSubscription
+        |> Option.map Reactivate
+        |> Option.defaultValue (New newSubscription)
+        |> Ok
+
+  // Action
+
+  type Action = NewSubscription.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
     abstract member GetSubscriptionByEmail: EmailAddress -> DependencyResult<Subscription option>
@@ -60,20 +81,20 @@ module CreateSubscription =
         -> DependencyResult<Subscription>
     abstract member ActivateSubscription: Subscription -> DependencyResult<Subscription>
 
-  let withDependencies (dependencies : Dependencies) : CreateSubscription =
+  let withDependencies (dependencies : Dependencies) : Action =
     fun newSubscription -> cancellableTaskResult {
       let! newSubscription = 
         newSubscription 
         |> NewSubscription.create
-        |> Result.mapError ActionError<CreateSubscriptionError>.Validation
+        |> Result.mapError ActionError<Error>.Validation
 
       let! existingSubscription =
         dependencies.GetSubscriptionByEmail newSubscription.EmailAddress
-        |> CancellableTaskResult.mapError ActionError<CreateSubscriptionError>.Dependency
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let utcNow = dependencies.GetUtcNow()
 
-      let decision = CreateSubscription.decide existingSubscription newSubscription
+      let decision = Logic.decide existingSubscription newSubscription
 
       return!
         decision
@@ -82,7 +103,7 @@ module CreateSubscription =
           | Reactivate existing -> dependencies.ActivateSubscription existing
         )
         |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult SubscriptionCreatedEvent)
+          (DependencyResult.toActionResult Event.Created)
           (Logic >> ActionResult.failure)
     }
 
@@ -91,6 +112,10 @@ module CreateSubscription =
 // ========================================================================================
 
 // Input
+
+type SubscriptionCancellation =
+  | ByEmailAddress of EmailAddress
+  | BySubscriptionId of SubscriptionId
 
 module SubscriptionCancellation =
 
@@ -116,47 +141,62 @@ module SubscriptionCancellation =
       |> Option.orElse subscriptionId
       |> Validation.requireSome $"'{nameof emailAddress}' or '{nameof subscriptionId}' is required"
   }
-    
-
-// Output
-
-type SubscriptionCancelledEvent = SubscriptionCancelledEvent of Subscription
-
-// Action
-
-type CancelSubscription = 
-  SubscriptionCancellation.Dto 
-    -> CancellableTask<ActionResult<SubscriptionCancelledEvent, CancelSubscriptionError>>
 
 [<RequireQualifiedAccess>]
 module CancelSubscription =
+
+  // Output
+
+  type Error = SubscriptionNotFound of SubscriptionCancellation 
+  type Success = Cancelled of Subscription
+  type Decision = Decision<Success, Error>
+  type Event = Cancelled of Subscription
+  
+  // Logic
+
+  type Logic =
+    Subscription option
+      -> SubscriptionCancellation
+      -> Decision 
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic = 
+      fun existingSubscription cancellation ->
+        existingSubscription 
+        |> Result.requireSome (SubscriptionNotFound cancellation)
+        |> Result.map Success.Cancelled
+   
+  // Action
+
+  type Action = SubscriptionCancellation.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
     abstract member GetSubscriptionByEmail: EmailAddress -> DependencyResult<Subscription option>
     abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
     abstract member DeactivateSubscription: Subscription -> DependencyResult<Subscription>
 
-  let withDependencies (dependencies : Dependencies) : CancelSubscription =
+  let withDependencies (dependencies : Dependencies) : Action =
     fun cancellation -> cancellableTaskResult {
       let! cancellation = 
         cancellation 
         |> SubscriptionCancellation.create
-        |> Result.mapError ActionError<CancelSubscriptionError>.Validation
+        |> Result.mapError ActionError<Error>.Validation
 
       let! existingSubscription =
         match cancellation with
         | ByEmailAddress emailAddress     -> dependencies.GetSubscriptionByEmail emailAddress
         | BySubscriptionId subscriptionId -> dependencies.GetSubscriptionById subscriptionId
-        |> CancellableTaskResult.mapError ActionError<CancelSubscriptionError>.Dependency
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = CancelSubscription.decide existingSubscription cancellation
+      let decision = Logic.decide existingSubscription cancellation
 
       return!
         decision
-        |> Result.map (fun (SubscriptionCancelled subscription) -> subscription)
+        |> Result.map (fun (Success.Cancelled subscription) -> subscription)
         |> Result.traverseCancellableTask dependencies.DeactivateSubscription 
         |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult SubscriptionCancelledEvent)
+          (DependencyResult.toActionResult Event.Cancelled)
           (Logic >> ActionResult.failure)
     }
 
@@ -168,16 +208,52 @@ module CancelSubscription =
 
 type UnvalidatedSubscriptionId = UnvalidatedSubscriptionId of string
 
-// Output
-
-type WelcomeSentEvent = WelcomeSentEvent of Subscription * SubscriptionDelivery
-
-// Action
-
-type SendWelcome = UnvalidatedSubscriptionId -> CancellableTask<ActionResult<WelcomeSentEvent, SendWelcomeError>>
-
 [<RequireQualifiedAccess>]
 module SendWelcome =
+  
+  // Output
+
+  type Error =
+    | NotFound of Data
+    | WelcomeAlreadySent of Subscription * SubscriptionDelivery 
+  and Data =
+    | Subscription of SubscriptionId
+    | Post of Slug
+  type Success = Sent of Subscription * Post
+  type Decision = Decision<Success, Error>
+  type Event = Sent of Subscription * SubscriptionDelivery
+  
+  // Logic
+
+  type Logic =
+    Subscription option
+      -> Map<SubscriptionDeliveryType, SubscriptionDelivery list>
+      -> Post
+      -> SubscriptionId
+      -> Decision 
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic = 
+      fun subscription deliveries latestPost subscriptionId -> result {
+        let! subscription = subscription |> Result.requireSome (subscriptionId |> Data.Subscription |> Error.NotFound)
+        let welcomeDeliveries = 
+          deliveries 
+          |> Map.tryFind Welcome
+          |> Option.defaultValue []
+        // Don't send multiple welcomes if the latest post hasn't changed.
+        // This will ensure someone doesn't get multiple emails ex. subscribe -> unsubscribe -> subscribe
+        // They *should* get another welcome email if they re-subscribe and there have since been new posts
+        let existingWelcomeForSamePost = welcomeDeliveries |> List.tryFind (fun d -> d.Post = latestPost.Id)
+        do! 
+          existingWelcomeForSamePost 
+          |> Result.requireNoneWith (fun welcome -> WelcomeAlreadySent (subscription, welcome))
+        return Success.Sent (subscription, latestPost)
+      }
+
+  // Action
+
+  type SendWelcome = UnvalidatedSubscriptionId -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
     // todo: implement these next
@@ -191,29 +267,29 @@ module SendWelcome =
       let! subscriptionId = 
         subscriptionId 
         |> SubscriptionId.create
-        |> Result.mapError ActionError<SendWelcomeError>.Validation
+        |> Result.mapError ActionError<Error>.Validation
 
       let! (subscription: Subscription option) =
         dependencies.GetSubscriptionById subscriptionId
-        |> CancellableTaskResult.mapError ActionError<SendWelcomeError>.Dependency
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! deliveries =
         subscription
         |> Option.traverseCancellableTaskResult dependencies.GetDeliveriesForSubscription
         |> CancellableTaskResult.map (Option.defaultValue Map.empty)
-        |> CancellableTaskResult.mapError ActionError<SendWelcomeError>.Dependency
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! (latestPost : Post) =
         dependencies.GetLatestPost()
-        |> CancellableTaskResult.mapError ActionError<SendWelcomeError>.Dependency
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = SendWelcome.decide subscription deliveries latestPost subscriptionId
+      let decision = Logic.decide subscription deliveries latestPost subscriptionId
 
       return!
         decision
-        |> Result.map (fun (WelcomeSent (subscription, post)) -> subscription, post)
+        |> Result.map (fun (Success.Sent (subscription, post)) -> subscription, post)
         |> Result.traverseCancellableTask (uncurry dependencies.SendWelcome)
         |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult WelcomeSentEvent)
+          (DependencyResult.toActionResult Event.Sent)
           (Logic >> ActionResult.failure)
     }

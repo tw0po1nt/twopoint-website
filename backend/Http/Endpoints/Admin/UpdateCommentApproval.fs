@@ -3,7 +3,6 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
-open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 
@@ -21,10 +20,6 @@ open System.Threading
 type UpdateCommentApprovalJson =
   { Approval: string option }
   
-type UpdateCommentApprovalAction = TwoPoint.Core.Posts.Actions.UpdateCommentApproval
-
-module UpdateCommentApprovalAction = TwoPoint.Core.Posts.Actions.UpdateCommentApproval
-
 type UpdateCommentApproval(
   config: Config,
   emailClient: EmailClient,
@@ -62,8 +57,8 @@ type UpdateCommentApproval(
           tableServiceClient,
           logger
         )
-        let updateCommentApproval = UpdateCommentApprovalAction.withDependencies {
-          new UpdateCommentApprovalAction.Dependencies with
+        let updateCommentApproval = UpdateCommentApproval.withDependencies {
+          new UpdateCommentApproval.Dependencies with
           
           member _.GetCommentById commentId = postDependencies.GetCommentById commentId
           member _.UpdateCommenterStatus commenter status = postDependencies.UpdateCommenterStatus commenter status
@@ -85,7 +80,7 @@ type UpdateCommentApproval(
           | Error (Logic updateCommentApprovalError) ->
             let errorMessage =
               match updateCommentApprovalError with
-              | UpdateCommentApprovalError.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
+              | UpdateCommentApproval.Error.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
             { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
           | Error actionError when actionError.IsValidation ->
             { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest

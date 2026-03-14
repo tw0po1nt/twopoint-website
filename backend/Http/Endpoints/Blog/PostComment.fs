@@ -3,7 +3,6 @@ namespace TwoPoint.Http.Endpoints.Blog
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
-open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 
@@ -66,13 +65,13 @@ type PostComment (
     let! postCommentResult = ct |> postComment newComment
     let apiResponse, statusCode =
       match postCommentResult with
-      | Ok _ | Error (Logic (CommenterBanned _)) ->
+      | Ok _ | Error (Logic (PostComment.Error.Banned _)) ->
         { Success = true; Message = None; Data = None }, HttpStatusCode.OK
       | Error (Logic postCommentError) ->
         let errorMessage =
           match postCommentError with
-          | PostNotFound slug -> $"Post '{slug.ToString()}' not found"
-          | PostCommentError.CommenterNotFound validationId -> $"Commenter '{validationId.ToString()}' not found"
+          | PostComment.Error.NotFound(PostComment.Data.Post slug) -> $"Post '{slug.ToString()}' not found"
+          | PostComment.Error.NotFound(PostComment.Data.Commenter validationId) -> $"Commenter '{validationId.ToString()}' not found"
           | _ -> "Not found"
         { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
       | Error actionError when actionError.IsValidation ->

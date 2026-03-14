@@ -1,9 +1,9 @@
 namespace TwoPoint.Dependencies.Posts
 
 open TwoPoint.Dependencies.Notifications
-open TwoPoint.Dependencies.Shared
+open TwoPoint.Dependencies.Comms
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Posts.Logic
+open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
@@ -19,7 +19,7 @@ open System
 open System.Web
 
 type EmailAddress = TwoPoint.Core.Shared.EmailAddress
-type EmailMessage = TwoPoint.Dependencies.Shared.EmailMessage
+type EmailMessage = TwoPoint.Dependencies.Comms.EmailMessage
 
 type PostDependencies(
   validRedirectUris : Uri list,
@@ -93,7 +93,7 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreatePost newPost = cancellableTaskResult {
+  member _.CreatePost (newPost : NewPost) = cancellableTaskResult {
     let newPost =
       { DbPost.Title = newPost.Title |> NonEmptyString.value
         Slug = newPost.Slug |> Slug.value

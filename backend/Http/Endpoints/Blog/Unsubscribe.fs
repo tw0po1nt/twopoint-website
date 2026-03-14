@@ -2,7 +2,6 @@ namespace TwoPoint.Http.Endpoints.Blog
 
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Subscriptions.Actions
-open TwoPoint.Core.Subscriptions.Logic
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
 
@@ -38,10 +37,10 @@ type Unsubscribe (
     logger.LogInformation("Processing 'Blog.Unsubscribe' request with subscriptionId '{subscriptionId}'", subscriptionId)
 
     // Dependencies
-    let subscriptionDependencies =
-      SubscriptionDependencies.live
-        tableServiceClient
-        logger
+    let subscriptionDependencies = SubscriptionDependencies(
+      tableServiceClient,
+      logger
+    )
 
     // Inputs
     let subscriptionCancellation =

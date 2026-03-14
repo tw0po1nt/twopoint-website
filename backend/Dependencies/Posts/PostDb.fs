@@ -1,6 +1,6 @@
 namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Dependencies.Shared
+open TwoPoint.Dependencies.Util
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util

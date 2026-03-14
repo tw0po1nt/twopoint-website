@@ -1,4 +1,4 @@
-namespace TwoPoint.Dependencies.Shared
+namespace TwoPoint.Dependencies.Util
 
 open Azure.Data.Tables
 

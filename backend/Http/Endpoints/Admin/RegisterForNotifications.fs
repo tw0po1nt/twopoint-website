@@ -2,7 +2,6 @@ namespace TwoPoint.Http.Endpoints.Admin
 
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Notifications.Actions
-open TwoPoint.Core.Posts.Logic
 open TwoPoint.Dependencies.Notifications
 
 open Azure.Data.Tables

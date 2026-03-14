@@ -10,15 +10,15 @@ open IcedTasks
 // Get all posts
 // ====================================================================================================================
 
-type GetAllPosts = unit -> CancellableTask<QueryResult<PostInfo list>>
-
 [<RequireQualifiedAccess>]
 module GetAllPosts =
+
+  type Query = unit -> CancellableTask<QueryResult<PostInfo list>>
 
   type Dependencies =
     abstract member GetAllPosts: unit -> DependencyResult<PostInfo list>
 
-  let withDependencies (dependencies : Dependencies) : GetAllPosts =
+  let withDependencies (dependencies : Dependencies) : Query =
     fun () -> cancellableTaskResult {
       let! allPosts =
         dependencies.GetAllPosts()
@@ -31,15 +31,15 @@ module GetAllPosts =
 // Get post by slug
 // ====================================================================================================================
 
-type GetPostBySlug = string -> CancellableTask<QueryResult<Post option>>
-
 [<RequireQualifiedAccess>]
 module GetPostBySlug =
+
+  type Query = string -> CancellableTask<QueryResult<Post option>>
 
   type Dependencies =
     abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
 
-  let withDependencies (dependencies : Dependencies) : GetPostBySlug =
+  let withDependencies (dependencies : Dependencies) : Query =
     fun slug -> cancellableTaskResult {
       let! slug =
         slug
@@ -57,16 +57,18 @@ module GetPostBySlug =
 // Get comments for post
 // ====================================================================================================================
 
+// Input
+
 type Approvals = string list
 type Slug = string
 
-type GetCommentsForPost =
-  Approvals
-    -> Slug
-    -> CancellableTask<QueryResult<Comment list option>>
-
 [<RequireQualifiedAccess>]
 module GetCommentsForPost =
+
+  type Query =
+    Approvals
+      -> Slug
+      -> CancellableTask<QueryResult<Comment list option>>
 
   type Dependencies =
     abstract member GetPostBySlug: slug: TwoPoint.Core.Posts.Slug -> DependencyResult<Post option>
@@ -75,7 +77,7 @@ module GetCommentsForPost =
         -> post: Post
         -> DependencyResult<Comment list>
 
-  let withDependencies (dependencies : Dependencies) : GetCommentsForPost =
+  let withDependencies (dependencies : Dependencies) : Query =
     fun approvals slug -> cancellableTaskResult {
       let! slug =
         slug

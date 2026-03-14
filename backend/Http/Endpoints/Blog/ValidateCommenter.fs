@@ -3,7 +3,6 @@ namespace TwoPoint.Http.Endpoints.Blog
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
-open TwoPoint.Core.Posts.Logic
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 
@@ -73,9 +72,9 @@ type ValidateCommenter (
     let! validateCommenterResult = ct |> validateCommenter commenterValidation
     let apiResponse, statusCode =
       match validateCommenterResult with
-      | Ok _ | Error (Logic (ValidateCommenterError.CommenterBanned _)) ->
+      | Ok _ | Error (Logic (ValidateCommenter.Error.Banned _)) ->
         { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-      | Error (Logic (InvalidRedirect uri)) ->
+      | Error (Logic (ValidateCommenter.Error.InvalidRedirect uri)) ->
         { Success = false; Message = Some $"Redirect uri '{uri}' is invalid"; Data = None }, HttpStatusCode.BadRequest
       | Error actionError when actionError.IsValidation ->
         { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest

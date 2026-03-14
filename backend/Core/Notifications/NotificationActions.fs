@@ -1,6 +1,5 @@
 namespace TwoPoint.Core.Notifications.Actions
 
-open TwoPoint.Core.Notifications.Logic
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
@@ -13,6 +12,11 @@ open IcedTasks
 // ====================================================================================================================
 
 // Input
+
+type NewDeviceRegistration =
+  { UserExternalId : UserExternalId
+    Client : Client
+    Token : NonEmptyString }
 
 module NewDeviceRegistration =
 
@@ -39,24 +43,48 @@ module NewDeviceRegistration =
         Token = token }
   }
 
-// Output
-
-type RegistrationType =
-  | Created
-  | Updated
-
-type DeviceRegisteredEvent =
-  { Registration : DeviceRegistration
-    Type : RegistrationType }
-
-// Action
-
-type RegisterDevice =
-  NewDeviceRegistration.Dto
-    -> CancellableTask<ActionResult<DeviceRegisteredEvent, RegisterDeviceError>>
-
 [<RequireQualifiedAccess>]
 module RegisterDevice =
+  
+  // Output
+
+  type Error = unit
+  type Success =
+    | Created of NewDeviceRegistration
+    | Updated of DeviceRegistration * NewDeviceRegistration
+  type Decision = Decision<Success, Error>
+  type Event = Registered of RegistrationData
+  and RegistrationData =
+    { Registration : DeviceRegistration
+      Type : RegistrationType }
+  and RegistrationType =
+    | Created
+    | Updated
+
+  // Logic
+
+  type Logic =
+    DeviceRegistration option
+      -> NewDeviceRegistration
+      -> Decision
+    
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic =
+      let deviceRegistrationUpdated newRegistration existing = Success.Updated (existing, newRegistration)
+
+      fun existingDeviceRegistration newDeviceRegistration ->
+        let createdOrUpdated =
+          existingDeviceRegistration
+          |> Option.map (deviceRegistrationUpdated newDeviceRegistration)
+          |> Option.defaultValue (Success.Created newDeviceRegistration)
+        Ok createdOrUpdated
+  
+  // Action
+
+  type Action =
+    NewDeviceRegistration.Dto
+      -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
     abstract member GetDeviceRegistrationByUserAndClient:
@@ -71,29 +99,28 @@ module RegisterDevice =
         -> token: NonEmptyString
         -> DependencyResult<DeviceRegistration>
 
-  let withDependencies (dependencies: Dependencies) : RegisterDevice =
+  let withDependencies (dependencies: Dependencies) : Action =
 
-    let handleDeviceRegistered (deviceRegistered : DeviceRegistered) : DependencyResult<DeviceRegisteredEvent> =
+    let handleDeviceRegistered (deviceRegistered : Success) : DependencyResult<Event> =
       match deviceRegistered with
-      | DeviceRegistered.Created newRegistration ->
+      | Success.Created newRegistration ->
         dependencies.CreateDeviceRegistration newRegistration
-        |> CancellableTaskResult.map (fun registration -> { Registration = registration; Type = Created })
-      | DeviceRegistered.Updated (existing, updates) ->
+        |> CancellableTaskResult.map (fun registration -> Registered { Registration = registration; Type = Created })
+      | Success.Updated (existing, updates) ->
         dependencies.UpdateDeviceRegistration existing updates.Token
-        |> CancellableTaskResult.map (fun registration -> { Registration = registration; Type = Updated })
-
+        |> CancellableTaskResult.map (fun registration -> Registered { Registration = registration; Type = Updated })
 
     fun newDeviceRegistration -> cancellableTaskResult {
       let! (newDeviceRegistration: NewDeviceRegistration) =
         newDeviceRegistration
         |> NewDeviceRegistration.create
-        |> Result.mapError ActionError<RegisterDeviceError>.Validation
+        |> Result.mapError ActionError<Error>.Validation
 
       let! existingRegistration =
         dependencies.GetDeviceRegistrationByUserAndClient newDeviceRegistration.UserExternalId newDeviceRegistration.Client
-        |> CancellableTaskResult.mapError ActionError<RegisterDeviceError>.Dependency
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Notifications.registerDevice existingRegistration newDeviceRegistration
+      let decision = Logic.decide existingRegistration newDeviceRegistration
 
       return!
         decision

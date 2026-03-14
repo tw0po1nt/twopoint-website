@@ -6,11 +6,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Util\Logging.fs" />
-    <Compile Include="Shared\Db.fs" />
+    <Compile Include="Util\Db.fs" />
     <Compile Include="Notifications\NotificationDb.fs" />
     <Compile Include="Notifications\NotificationDependencies.fs" />
-    <Compile Include="Shared\Comms\CommsDb.fs" />
-    <Compile Include="Shared\Comms\Comms.fs" />
+    <Compile Include="Comms\CommsDb.fs" />
+    <Compile Include="Comms\Comms.fs" />
     <Compile Include="Posts\PostDb.fs" />
     <Compile Include="Posts\PostEmails.fs" />
     <Compile Include="Posts\PostDependencies.fs" />

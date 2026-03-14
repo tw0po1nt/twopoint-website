@@ -1,6 +1,6 @@
 namespace TwoPoint.Dependencies.Notifications
 
-open TwoPoint.Dependencies.Shared
+open TwoPoint.Dependencies.Util
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 

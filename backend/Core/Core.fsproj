@@ -17,14 +17,11 @@
     <Compile Include="Shared\StringTypes.fs" />
     <Compile Include="Shared\SharedTypes.fs" />
     <Compile Include="Notifications\NotificationTypes.fs" />
-    <Compile Include="Notifications\NotificationLogic.fs" />
     <Compile Include="Notifications\NotificationActions.fs" />
     <Compile Include="Posts\PostTypes.fs" />
-    <Compile Include="Posts\PostLogic.fs" />
     <Compile Include="Posts\PostActions.fs" />
     <Compile Include="Posts\PostQueries.fs" />
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
-    <Compile Include="Subscriptions\SubscriptionLogic.fs" />
     <Compile Include="Subscriptions\SubscriptionActions.fs" />
   </ItemGroup>
 

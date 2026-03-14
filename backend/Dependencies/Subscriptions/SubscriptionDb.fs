@@ -1,6 +1,6 @@
 namespace TwoPoint.Dependencies.Subscriptions
 
-open TwoPoint.Dependencies.Shared
+open TwoPoint.Dependencies.Util
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util

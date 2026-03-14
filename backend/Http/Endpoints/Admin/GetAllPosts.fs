@@ -45,7 +45,6 @@ module PostTypesExt =
         CreatedDate = this.CreatedDate
         CommentStats = this.CommentStats.ToDto() }
 
-type GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
 module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
 
 type GetAllPosts (
