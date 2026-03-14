@@ -1,13 +1,13 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
-open Azure.Communication.Email
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
-open TwoPoint.Core.Posts.Logic
-open TwoPoint.Core.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Posts.Logic
+open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
+open Azure.Communication.Email
 open Azure.Data.Tables
 open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
@@ -42,22 +42,28 @@ type PostComment (
     let! json = req.ReadFromJsonAsync<NewCommentJson> ct
 
     // Dependencies
-    let postDependencies =
-      PostDependencies.live
-        validRedirectUris
-        emailClient
-        config.Azure.EmailSender
-        messaging
-        tableServiceClient
-        logger
-    let postActions = PostActions.withDependencies postDependencies
+    let postDependencies = PostDependencies(
+      validRedirectUris,
+      emailClient,
+      config.Azure.EmailSender,
+      messaging,
+      tableServiceClient,
+      logger
+    )
+    let postComment = PostComment.withDependencies {
+      new PostComment.Dependencies with
+      
+      member this.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+      member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
+      member this.CreateComment post commenter newComment = postDependencies.CreateComment post commenter newComment
+    }
 
     let newComment =
-      { NewCommentDto.Post = slug
-        ValidationId = json.ValidationId |> Option.defaultValue ""
-        Comment = json.Comment |> Option.defaultValue "" }
+      { NewComment.Dto.Post = NewComment.Post slug
+        NewComment.Dto.ValidationId = json.ValidationId |> Option.defaultValue "" |> NewComment.ValidationId
+        NewComment.Dto.Comment = json.Comment |> Option.map NewComment.Comment |> Option.defaultValue (NewComment.Comment "") }
 
-    let! postCommentResult = ct |> postActions.PostComment newComment
+    let! postCommentResult = ct |> postComment newComment
     let apiResponse, statusCode =
       match postCommentResult with
       | Ok _ | Error (Logic (CommenterBanned _)) ->

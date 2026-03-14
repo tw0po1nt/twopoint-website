@@ -1,4 +1,6 @@
-namespace TwoPoint.Core.Util
+namespace TwoPoint.Dependencies.Util
+
+open TwoPoint.Core.Util
 
 [<AutoOpen>]
 module Logging =

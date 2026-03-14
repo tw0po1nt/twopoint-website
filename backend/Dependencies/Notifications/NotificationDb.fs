@@ -1,7 +1,7 @@
-namespace TwoPoint.Core.Notifications.Dependencies
+namespace TwoPoint.Dependencies.Notifications
 
+open TwoPoint.Dependencies.Shared
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Shared.Impl
 open TwoPoint.Core.Util
 
 open Azure.Data.Tables

@@ -134,3 +134,5 @@ module QueryResult =
   let inline success (x: 'success) : QueryResult<'success> = Ok x
 
   let inline failure x : QueryResult<'success> = Error x
+
+

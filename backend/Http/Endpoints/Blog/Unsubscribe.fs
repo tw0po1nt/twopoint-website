@@ -1,10 +1,10 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
-open TwoPoint.Core.Subscriptions.Api
-open TwoPoint.Core.Subscriptions.Dependencies
+open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Subscriptions.Logic
 open TwoPoint.Core.Util
-open TwoPoint.Http.Endpoints
+open TwoPoint.Dependencies.Subscriptions
 
 open Azure.Data.Tables
 open Microsoft.Azure.Functions.Worker

@@ -66,7 +66,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Core.Api\Core.Api.fsproj" />
+    <ProjectReference Include="..\Dependencies\Dependencies.fsproj" />
   </ItemGroup>
 
 </Project>

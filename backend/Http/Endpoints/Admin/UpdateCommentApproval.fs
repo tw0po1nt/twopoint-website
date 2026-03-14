@@ -1,11 +1,11 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
-open TwoPoint.Core.Posts.Logic
-open TwoPoint.Core.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Posts.Logic
+open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -20,6 +20,10 @@ open System.Threading
 
 type UpdateCommentApprovalJson =
   { Approval: string option }
+  
+type UpdateCommentApprovalAction = TwoPoint.Core.Posts.Actions.UpdateCommentApproval
+
+module UpdateCommentApprovalAction = TwoPoint.Core.Posts.Actions.UpdateCommentApproval
 
 type UpdateCommentApproval(
   config: Config,
@@ -50,21 +54,30 @@ type UpdateCommentApproval(
         let! json = req.ReadFromJsonAsync<UpdateCommentApprovalJson> ct
 
         // Dependencies
-        let postDependencies =
-          PostDependencies.live
-            validRedirectUris
-            emailClient
-            config.Azure.EmailSender
-            messaging
-            tableServiceClient
-            logger
-        let postActions = PostActions.withDependencies postDependencies
+        let postDependencies = PostDependencies(
+          validRedirectUris,
+          emailClient,
+          config.Azure.EmailSender,
+          messaging,
+          tableServiceClient,
+          logger
+        )
+        let updateCommentApproval = UpdateCommentApprovalAction.withDependencies {
+          new UpdateCommentApprovalAction.Dependencies with
+          
+          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.UpdateCommenterStatus commenter status = postDependencies.UpdateCommenterStatus commenter status
+          member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
+        }
 
         let approvalUpdate =
-          { CommentApprovalUpdateDto.CommentId = commentId
-            Approval = json.Approval |> Option.defaultValue "" }
+          { CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId commentId
+            CommentApprovalUpdate.Dto.Approval =
+              json.Approval
+              |> Option.map CommentApprovalUpdate.Approval
+              |> Option.defaultValue (CommentApprovalUpdate.Approval "") }
 
-        let! approvalUpdateResult = ct |> postActions.UpdateCommentApproval approvalUpdate
+        let! approvalUpdateResult = ct |> updateCommentApproval approvalUpdate
         let apiResponse, statusCode =
           match approvalUpdateResult with
           | Ok _ ->

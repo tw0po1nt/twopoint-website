@@ -1,4 +1,4 @@
-namespace TwoPoint.Core.Subscriptions.Api
+namespace TwoPoint.Core.Subscriptions.Actions
 
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions

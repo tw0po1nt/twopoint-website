@@ -1,13 +1,13 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
-open Azure.Communication.Email
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
-open TwoPoint.Core.Posts.Logic
-open TwoPoint.Core.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Posts.Logic
+open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
+open Azure.Communication.Email
 open Azure.Data.Tables
 open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
@@ -42,22 +42,35 @@ type ValidateCommenter (
     let! json = req.ReadFromJsonAsync<CommenterValidationJson> ct
 
     // Dependencies
-    let postDependencies =
-      PostDependencies.live
-        validRedirectUris
-        emailClient
-        config.Azure.EmailSender
-        messaging
-        tableServiceClient
-        logger
-    let postActions = PostActions.withDependencies postDependencies
+    let postDependencies = PostDependencies(
+      validRedirectUris,
+      emailClient,
+      config.Azure.EmailSender,
+      messaging,
+      tableServiceClient,
+      logger
+    )
+    let validateCommenter = ValidateCommenter.withDependencies {
+      new ValidateCommenter.Dependencies with
+      
+      member this.GetCommenterByEmailAddress emailAddress = postDependencies.GetCommenterByEmailAddress emailAddress
+      member this.GetValidRedirectUris () = postDependencies.GetValidRedirectUris()
+      member this.CreateCommenter emailAddress name status = postDependencies.CreateCommenter emailAddress name status
+      member this.SendCommenterValidationEmail commenter redirectUri = postDependencies.SendCommenterValidationEmail commenter redirectUri
+    }
 
     let commenterValidation =
-      { CommenterValidationDto.EmailAddress = json.EmailAddress |> Option.defaultValue ""
-        Name = json.Name
-        RedirectUri = json.RedirectUri |> Option.defaultValue "" }
+      { CommenterValidation.Dto.EmailAddress =
+          json.EmailAddress
+          |> Option.map CommenterValidation.EmailAddress
+          |> Option.defaultValue (CommenterValidation.EmailAddress "")
+        CommenterValidation.Dto.Name = json.Name |> Option.map CommenterValidation.Name
+        CommenterValidation.Dto.RedirectUri =
+          json.RedirectUri
+          |> Option.map CommenterValidation.RedirectUri
+          |> Option.defaultValue (CommenterValidation.RedirectUri "") }
 
-    let! validateCommenterResult = ct |> postActions.ValidateCommenter commenterValidation
+    let! validateCommenterResult = ct |> validateCommenter commenterValidation
     let apiResponse, statusCode =
       match validateCommenterResult with
       | Ok _ | Error (Logic (ValidateCommenterError.CommenterBanned _)) ->

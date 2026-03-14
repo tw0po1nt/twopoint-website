@@ -1,6 +1,5 @@
-namespace TwoPoint.Core.Shared.Impl
+namespace TwoPoint.Dependencies.Shared
 
-open TwoPoint.Core.Shared.Impl
 open TwoPoint.Core.Util
 
 open Azure.Data.Tables
@@ -152,20 +151,20 @@ module internal CommsDb =
     
     { new ICommsDb with
       
-      member this.GetEmailByOperationId operationId =
+      member _.GetEmailByOperationId operationId =
         operationId |> trySingle emailsTable DbEmail.FromEntity (Some operationId)
 
-      member this.CreateEmail email =
+      member _.CreateEmail email =
         email.ToEntity() |> add emailsTable CommsDbError.validation DbEmail.FromEntity
 
-      member this.UpdateEmailStatus commenter status statusReason =
+      member _.UpdateEmailStatus commenter status statusReason =
         commenter.ToEntity() |> update emailsTable CommsDbError.validation DbEmail.FromEntity
         <| fun entity ->
           entity["Status"] <- status
           entity["StatusReason"] <- statusReason |> Option.toObj
           entity
           
-      member this.CreatePush push =
+      member _.CreatePush push =
         push.ToEntity() |> add pushesTable CommsDbError.validation DbPush.FromEntity
     }
   

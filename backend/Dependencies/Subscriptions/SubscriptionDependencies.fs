@@ -1,4 +1,4 @@
-namespace TwoPoint.Core.Subscriptions.Dependencies
+namespace TwoPoint.Dependencies.Subscriptions
 
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Logic

@@ -1,8 +1,8 @@
-namespace TwoPoint.Core.Posts.Dependencies
+namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Core.Posts
+open TwoPoint.Dependencies.Shared
 open TwoPoint.Core.Shared
-open TwoPoint.Core.Shared.Impl
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 
 open Azure.Data.Tables

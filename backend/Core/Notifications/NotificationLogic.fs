@@ -13,26 +13,14 @@ open FsToolkit.ErrorHandling
 // Register device
 // -----------------------------------------------------------------------------------------
 
-// Inputs
+// Input
 
 type NewDeviceRegistration =
   { UserExternalId : UserExternalId
     Client : Client
     Token : NonEmptyString }
 
-module NewDeviceRegistration =
-  let create userExternalId client token = validation {
-    let! userExternalId = UserExternalId.create userExternalId
-    and! client = Client.create client
-    and! token = NonEmptyString.create (Some (nameof token)) token
-    
-    return
-      { UserExternalId = userExternalId
-        Client = client
-        Token = token }
-  }
-
-// Outputs
+// Output
 
 type RegisterDeviceError = unit
 

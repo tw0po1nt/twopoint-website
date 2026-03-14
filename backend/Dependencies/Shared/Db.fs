@@ -1,4 +1,4 @@
-namespace TwoPoint.Core.Shared.Impl
+namespace TwoPoint.Dependencies.Shared
 
 open Azure.Data.Tables
 
@@ -28,6 +28,7 @@ module TableEntityExtensions =
 [<RequireQualifiedAccess>]
 module Db =
   
+  open TwoPoint.Dependencies.Util
   open TwoPoint.Core.Util
   
   open Azure

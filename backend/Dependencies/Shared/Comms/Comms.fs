@@ -1,10 +1,11 @@
-namespace TwoPoint.Core.Shared.Impl
+namespace TwoPoint.Dependencies.Shared
 
-open FirebaseAdmin
-open TwoPoint.Core.Notifications.Dependencies
+open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Util
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
+open FirebaseAdmin
 open FirebaseAdmin.Messaging
 open FsToolkit.ErrorHandling
 open IcedTasks
@@ -59,7 +60,7 @@ module internal CommsService =
     
     { new ICommsService with
       
-      member this.SendEmail message =
+      member _.SendEmail message =
         runComms logger $"{nameof ICommsService}.SendEmail"
         <| cancellableTaskResult {
           let! ct = CancellableTask.getCancellationToken()
@@ -92,7 +93,7 @@ module internal CommsService =
           return dbEmail.OperationId
         }
         
-      member this.SendPushNotification message =
+      member _.SendPushNotification message =
         runComms logger $"{nameof ICommsService}.SendPushNotification"
         <| cancellableTaskResult {
           let! ct = CancellableTask.getCancellationToken()

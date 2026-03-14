@@ -1,11 +1,11 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
-open TwoPoint.Core.Posts.Logic
-open TwoPoint.Core.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Posts.Logic
+open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -17,6 +17,9 @@ open Microsoft.Extensions.Logging
 
 open System.Net
 open System.Threading
+
+type DeleteCommentAction = TwoPoint.Core.Posts.Actions.DeleteComment
+module DeleteCommentAction = TwoPoint.Core.Posts.Actions.DeleteComment
 
 type DeleteComment(
   config: Config,
@@ -45,19 +48,24 @@ type DeleteComment(
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         // Dependencies
-        let postDependencies =
-          PostDependencies.live
-            validRedirectUris
-            emailClient
-            config.Azure.EmailSender
-            messaging
-            tableServiceClient
-            logger
-        let postActions = PostActions.withDependencies postDependencies
+        let postDependencies = PostDependencies(
+          validRedirectUris,
+          emailClient,
+          config.Azure.EmailSender,
+          messaging,
+          tableServiceClient,
+          logger
+        )
+        let deleteComment = DeleteCommentAction.withDependencies {
+          new DeleteCommentAction.Dependencies with
+          
+          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.DeleteComment comment = postDependencies.DeleteComment comment
+        }
 
-        let deletion = { CommentDeletionDto.CommentId = commentId }
+        let deletion = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
 
-        let! deletionResult = ct |> postActions.DeleteComment deletion
+        let! deletionResult = ct |> deleteComment deletion
         let apiResponse, statusCode =
           match deletionResult with
           | Ok _ ->

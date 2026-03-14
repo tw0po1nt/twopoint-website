@@ -1,8 +1,8 @@
-namespace TwoPoint.Core.Subscriptions.Dependencies
+namespace TwoPoint.Dependencies.Subscriptions
 
+open TwoPoint.Dependencies.Shared
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
-open TwoPoint.Core.Shared.Impl
 open TwoPoint.Core.Util
 
 open Azure.Data.Tables

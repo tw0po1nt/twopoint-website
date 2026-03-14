@@ -11,7 +11,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "backend", "backend", "{6E49
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Core", "backend\Core\Core.fsproj", "{F67D07CC-C5C8-4F92-B664-05A15441D79B}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Core.Api", "backend\Core.Api\Core.Api.fsproj", "{8C37085F-95F2-4AB2-AEA5-B31A07C29397}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Dependencies", "backend\Dependencies\Dependencies.fsproj", "{8C37085F-95F2-4AB2-AEA5-B31A07C29397}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Http", "backend\Http\Http.fsproj", "{EF7DA714-46FD-4CFC-9D82-33C59F800ADB}"
 EndProject

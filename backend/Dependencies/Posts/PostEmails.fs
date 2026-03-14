@@ -1,4 +1,4 @@
-namespace TwoPoint.Core.Posts.Dependencies
+namespace TwoPoint.Dependencies.Posts
 
 module internal PostEmails =
   
