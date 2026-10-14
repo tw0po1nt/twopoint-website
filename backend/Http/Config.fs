@@ -19,10 +19,16 @@ type FirebaseConfig =
 type ValidRedirectUri =
   { Uri : Uri }
 
+type WelcomeConfig =
+  { Enabled : bool
+    NewsletterContainerUri : Uri
+    UnsubscribeUri : Uri }
+
 type Config =
   { Azure : AzureConfig
     Firebase : FirebaseConfig
-    ValidRedirectUris : ValidRedirectUri list }
+    ValidRedirectUris : ValidRedirectUri list
+    Welcome : WelcomeConfig option }
 
 module Config =
 
@@ -65,6 +71,20 @@ module Config =
 
       let! validRedirectUris = Bind.section "ValidRedirectUris" (Bind.list bindValidRedirectUri)
 
-      return { Azure = azure; Firebase = firebase; ValidRedirectUris = validRedirectUris }
+      let! welcome = Bind.optSection "Welcome" <| bind {
+        let! enabled = Bind.optValueAt "Enabled" Bind.bool
+        let! newsletterContainerUri = Bind.valueAt "NewsletterContainerUri" (Bind.uri UriKind.Absolute)
+        let! unsubscribeUri = Bind.valueAt "UnsubscribeUri" (Bind.uri UriKind.Absolute)
+        return
+          { Enabled = enabled |> Option.defaultValue false
+            NewsletterContainerUri = newsletterContainerUri
+            UnsubscribeUri = unsubscribeUri }
+      }
+
+      return
+        { Azure = azure
+          Firebase = firebase
+          ValidRedirectUris = validRedirectUris
+          Welcome = welcome }
     }
     |> Binder.eval config

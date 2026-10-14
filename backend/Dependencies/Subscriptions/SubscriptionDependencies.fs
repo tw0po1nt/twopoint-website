@@ -1,5 +1,6 @@
 namespace TwoPoint.Dependencies.Subscriptions
 
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Subscriptions.Actions
@@ -70,4 +71,25 @@ type SubscriptionDependencies(
 
     let! (dbSubscription: DbSubscription) = subscriptionDb.UpdateSubscriptionActivation dbSubscription isActive
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
+  }
+
+  member _.GetDeliveriesForSubscription (subscription : Subscription) = cancellableTaskResult {
+    let! dbDeliveries = subscriptionDb.GetDeliveriesForSubscription (subscription.Id.ToString())
+
+    return!
+      dbDeliveries
+      |> List.traverseValidationA (fun (dbo: DbSubscriptionDelivery) -> dbo.ToSubscriptionDelivery())
+      |> DependencyError.ofValidation source
+  }
+
+  member _.CreateDelivery (subscription : Subscription) deliveryType (post : Post) operationId createdDateUtc = cancellableTaskResult {
+    let newDelivery =
+      { DbSubscriptionDelivery.SubscriptionId = subscription.Id.ToString()
+        DeliveryId = Guid.NewGuid().ToString()
+        CreatedDate = createdDateUtc
+        Type = DbSubscriptionDelivery.TypeToString deliveryType
+        Post = post.Id |> Slug.value
+        OperationId = operationId }
+    let! (dbDelivery: DbSubscriptionDelivery) = subscriptionDb.CreateDelivery newDelivery
+    return! dbDelivery.ToSubscriptionDelivery() |> DependencyError.ofValidation source
   }

@@ -72,6 +72,7 @@ let main args =
   |> Async.RunSynchronously
   |> ignore
 
+  builder.Services.AddSingleton<Azure.Core.TokenCredential>(fun _ -> credential :> Azure.Core.TokenCredential) |> ignore
   builder.Services.AddScoped<Config>(fun _ -> config) |> ignore
   builder.Services.AddScoped<EmailClient>(fun _ -> emailClient) |> ignore
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore

@@ -1,6 +1,7 @@
 namespace TwoPoint.Dependencies.Subscriptions
 
 open TwoPoint.Dependencies.Util
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
@@ -84,6 +85,81 @@ type internal DbSubscription =
         IsActive = this.IsActive }
   }
 
+/// <summary>
+/// Database representation of a delivery to a subscription
+/// </summary>
+/// <remarks>
+/// The <c>SubscriptionDelivery</c> entity has the following structure: <br/>
+/// <c>
+/// {
+///    "PartitionKey": "&lt;subscriptionId&gt;",
+///    "RowKey": "&lt;deliveryId&gt;",
+///    "Timestamp": "&lt;date&gt;",
+///    "CreatedDate": "&lt;date&gt;",
+///    "Type": "&lt;welcome | newpost&gt;",
+///    "Post": "&lt;slug&gt;",
+///    "OperationId": "&lt;string&gt;"
+///  }
+/// </c>
+/// </remarks>
+type internal DbSubscriptionDelivery =
+  { SubscriptionId : string
+    DeliveryId : string
+    CreatedDate : DateTime
+    Type : string
+    Post : string
+    OperationId : string }
+
+  static member FromEntity (entity : TableEntity) = validation {
+    let entityName = nameof DbSubscriptionDelivery
+    let! createdDate =
+      "CreatedDate"
+      |> entity.RequireString entityName
+      |> Validation.bind DateTime.TryValidateUtc
+    and! ``type`` = "Type" |> entity.RequireString entityName
+    and! post = "Post" |> entity.RequireString entityName
+    and! operationId = "OperationId" |> entity.RequireString entityName
+
+    return
+      { SubscriptionId = entity.PartitionKey
+        DeliveryId = entity.RowKey
+        CreatedDate = createdDate
+        Type = ``type``
+        Post = post
+        OperationId = operationId }
+  }
+
+  member this.ToEntity() =
+    let entity = TableEntity(partitionKey = this.SubscriptionId, rowKey = this.DeliveryId)
+    entity["CreatedDate"] <- this.CreatedDate.ToString("o", CultureInfo.InvariantCulture)
+    entity["Type"] <- this.Type
+    entity["Post"] <- this.Post
+    entity["OperationId"] <- this.OperationId
+    entity
+
+  static member TypeToString = function
+    | Welcome -> "welcome"
+    | NewPost -> "newpost"
+
+  member this.ToSubscriptionDelivery () = validation {
+    let! id = this.DeliveryId |> SubscriptionDeliveryId.create
+    and! createdDate = DateTime.TryValidateUtc(
+      this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
+      "CreatedDate"
+    )
+    and! ``type`` =
+      match this.Type with
+      | "welcome" -> Validation.ok Welcome
+      | "newpost" -> Validation.ok NewPost
+      | other -> Validation.error $"'{other}' is an unknown delivery type"
+    and! post = this.Post |> Slug.create
+    return
+      { Id = id
+        CreatedDate = createdDate
+        Type = ``type``
+        Post = post }
+  }
+
 type internal ISubscriptionDb =
   abstract member GetAllSubscriptions: unit -> CancellableTaskResult<DbSubscription list, DependencyError>
   abstract member GetSubscriptionByEmail: email: string -> CancellableTaskResult<DbSubscription option, DependencyError>
@@ -93,6 +169,10 @@ type internal ISubscriptionDb =
     subscription: DbSubscription
       -> isActive: bool
       -> CancellableTaskResult<DbSubscription, DependencyError>
+  abstract member GetDeliveriesForSubscription:
+    subscriptionId: string -> CancellableTaskResult<DbSubscriptionDelivery list, DependencyError>
+  abstract member CreateDelivery:
+    delivery: DbSubscriptionDelivery -> CancellableTaskResult<DbSubscriptionDelivery, DependencyError>
 
 module internal SubscriptionDbError =
   let private subscriptionDbError =
@@ -128,8 +208,12 @@ module internal SubscriptionDb =
     let update table onError onEntity entity updateEntity =
       Db.update tableServiceClient logger db table onError onEntity entity updateEntity
       
+    let where table onEntity filter =
+      Db.where tableServiceClient logger db table onEntity filter
+
     let subscriptionsTable = "subscriptions"
-    
+    let deliveriesTable = "deliveries"
+
     { new ISubscriptionDb with
       
       member _.GetAllSubscriptions () = 
@@ -148,6 +232,12 @@ module internal SubscriptionDb =
         subscription.ToEntity() |> update subscriptionsTable SubscriptionDbError.validation DbSubscription.FromEntity
         <| fun entity ->
           entity["IsActive"] <- isActive
-          entity 
+          entity
+
+      member _.GetDeliveriesForSubscription subscriptionId =
+        eq "PartitionKey" subscriptionId |> where deliveriesTable DbSubscriptionDelivery.FromEntity
+
+      member _.CreateDelivery delivery =
+        delivery.ToEntity() |> add deliveriesTable SubscriptionDbError.validation DbSubscriptionDelivery.FromEntity
     }
   
