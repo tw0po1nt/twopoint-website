@@ -1,11 +1,10 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
-open TwoPoint.Core.Posts.Logic
-open TwoPoint.Core.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -45,19 +44,24 @@ type DeleteComment(
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         // Dependencies
-        let postDependencies =
-          PostDependencies.live
-            validRedirectUris
-            emailClient
-            config.Azure.EmailSender
-            messaging
-            tableServiceClient
-            logger
-        let postActions = PostActions.withDependencies postDependencies
+        let postDependencies = PostDependencies(
+          validRedirectUris,
+          emailClient,
+          config.Azure.EmailSender,
+          messaging,
+          tableServiceClient,
+          logger
+        )
+        let deleteComment = DeleteComment.withDependencies {
+          new DeleteComment.Dependencies with
+          
+          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.DeleteComment comment = postDependencies.DeleteComment comment
+        }
 
-        let deletion = { CommentDeletionDto.CommentId = commentId }
+        let deletion = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
 
-        let! deletionResult = ct |> postActions.DeleteComment deletion
+        let! deletionResult = ct |> deleteComment deletion
         let apiResponse, statusCode =
           match deletionResult with
           | Ok _ ->
@@ -65,7 +69,7 @@ type DeleteComment(
           | Error (Logic deleteCommentError) ->
             let errorMessage =
               match deleteCommentError with
-              | DeleteCommentError.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
+              | DeleteComment.Error.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
             { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
           | Error actionError when actionError.IsValidation ->
             { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest

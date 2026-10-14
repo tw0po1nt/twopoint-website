@@ -8,4 +8,6 @@ module Bind =
 
   let guid = Bind.tryParseable Guid.TryParse
 
+  let bool = Bind.tryParseable Boolean.TryParse
+
   let emailAddress = Bind.tryParseable EmailAddress.tryParse

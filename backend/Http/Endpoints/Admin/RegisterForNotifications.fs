@@ -1,9 +1,8 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Core.Notifications.Api
-open TwoPoint.Core.Notifications.Dependencies
-open TwoPoint.Core.Posts.Logic
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Notifications.Actions
+open TwoPoint.Dependencies.Notifications
 
 open Azure.Data.Tables
 open IcedTasks
@@ -39,17 +38,26 @@ type RegisterForNotifications(
         let! json = req.ReadFromJsonAsync<RegisterForNotificationsJson> ct
 
         // Dependencies
-        let notificationDependencies = NotificationDependencies.live tableServiceClient logger
-        let notificationActions = NotificationActions.withDependencies notificationDependencies
+        let notificationDependencies = NotificationDependencies(tableServiceClient, logger)
+        let registerDevice = RegisterDevice.withDependencies {
+          new RegisterDevice.Dependencies with
+          
+          member _.GetDeviceRegistrationByUserAndClient userExternalId client =
+            notificationDependencies.GetDeviceRegistrationByUserAndClient userExternalId client
+          member _.CreateDeviceRegistration newDeviceRegistration =
+            notificationDependencies.CreateDeviceRegistration newDeviceRegistration
+          member _.UpdateDeviceRegistration registration token =
+            notificationDependencies.UpdateDeviceRegistration registration token
+        }
 
         // Inputs
 
         let newDeviceRegistration =
-          { NewDeviceRegistrationDto.UserExternalId = authInfo.UserExternalId
-            Client = authInfo.Client
-            Token = json.Token }
+          { NewDeviceRegistration.Dto.UserExternalId = NewDeviceRegistration.UserExternalId authInfo.UserExternalId
+            NewDeviceRegistration.Dto.Client = NewDeviceRegistration.Client authInfo.Client
+            NewDeviceRegistration.Dto.Token = NewDeviceRegistration.Token json.Token }
 
-        let! registrationResult = ct |> notificationActions.RegisterDevice newDeviceRegistration
+        let! registrationResult = ct |> registerDevice newDeviceRegistration
         let apiResponse, statusCode =
           match registrationResult with
           | Ok _ ->

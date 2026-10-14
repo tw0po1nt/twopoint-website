@@ -11,6 +11,8 @@
     "start": "PUBLIC_STAGE=local astro dev",
     "build": "PUBLIC_STAGE=production astro build",
     "build:staging": "PUBLIC_STAGE=staging astro build",
+    "build:production": "PUBLIC_STAGE=production astro build && node scripts/upload-newsletter-posts.js",
+    "upload:newsletter": "node scripts/upload-newsletter-posts.js",
     "preview": "astro preview",
     "astro": "astro",
     "check": "npm run check:astro && npm run check:eslint && npm run check:prettier",
@@ -26,6 +28,8 @@
     "@astrojs/rss": "^4.0.10",
     "@astrojs/sitemap": "^3.2.1",
     "@astrolib/seo": "^1.0.0-beta.8",
+    "@azure/identity": "^4.13.0",
+    "@azure/storage-blob": "^12.30.0",
     "@fontsource-variable/inter": "^5.1.0",
     "@fontsource-variable/jetbrains-mono": "^5.1.1",
     "astro": "^5.1.1",
@@ -62,6 +66,7 @@
     "eslint-plugin-astro": "^1.3.1",
     "globals": "^15.14.0",
     "js-yaml": "^4.1.0",
+    "juice": "^12.2.0",
     "mdast-util-to-string": "^4.0.0",
     "prettier": "^3.4.2",
     "prettier-plugin-astro": "^0.14.1",
@@ -72,6 +77,6 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
     "unist-util-visit": "^5.0.0",
-    "vite-plugin-fable": "^0.0.32"
+    "vite-plugin-fable": "^0.2.1"
   }
 }

@@ -3,9 +3,8 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -46,6 +45,8 @@ module PostTypesExt =
         CreatedDate = this.CreatedDate
         CommentStats = this.CommentStats.ToDto() }
 
+module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
+
 type GetAllPosts (
   config: Config,
   emailClient: EmailClient,
@@ -73,17 +74,21 @@ type GetAllPosts (
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         // Dependencies
-        let postDependencies =
-          PostDependencies.live
-            validRedirectUris
-            emailClient
-            config.Azure.EmailSender
-            messaging
-            tableServiceClient
-            logger
-        let postQueries = PostQueries.withDependencies postDependencies
+        let postDependencies = PostDependencies(
+          validRedirectUris,
+          emailClient,
+          config.Azure.EmailSender,
+          messaging,
+          tableServiceClient,
+          logger
+        )
+        let getAllPosts = TwoPoint.Core.Posts.Queries.GetAllPosts.withDependencies {
+          new GetAllPostsQuery.Dependencies with
 
-        let! postsResult = postQueries.GetAllPosts()
+          member this.GetAllPosts () = postDependencies.GetAllPosts()
+        }
+
+        let! postsResult = getAllPosts()
         let apiResponse, statusCode = postsResult |> QueryResult.toApiResponse (List.map _.ToDto())
 
         response.StatusCode <- statusCode

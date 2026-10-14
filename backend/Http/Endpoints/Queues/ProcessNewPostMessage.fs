@@ -1,19 +1,23 @@
 namespace TwoPoint.Http.Endpoints.Queues
 
-
-open Azure.Messaging.ServiceBus
 open TwoPoint.Http
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Dependencies.Posts
 
-open Azure.Data.Tables
 open Azure.Communication.Email
+open Azure.Data.Tables
+open Azure.Messaging.ServiceBus
 open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Extensions.Logging
 
 open System
 open System.Threading
+
+type NewPostJson =
+  { Title : string 
+    Slug : string 
+    CreatedDate : string }
 
 type ProcessNewPostMessage(
   config: Config,
@@ -28,36 +32,46 @@ type ProcessNewPostMessage(
     [<ServiceBusTrigger("new_post", Connection = "TwoPointWebsiteServiceBus")>] message : ServiceBusReceivedMessage,
     ct : CancellationToken
   ) = task {
-    let json = message.Body.FromJson<NewPostDto | null>()
+    let json = message.Body.FromJson<NewPostJson | null>()
 
     match json with
     | null ->
       logger.LogError "Unable to process 'new_post' message from queue. Failed to deserialize message from JSON"
-    | newPostDto ->
+    | newPostJson ->
       logger.LogInformation(
         "Processing 'new_post' message from queue: Title='{title}', Slug='{slug}'",
-        newPostDto.Title,
-        newPostDto.Slug
+        newPostJson.Title,
+        newPostJson.Slug
       )
 
       let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
       // Dependencies
-      let postDependencies =
-        PostDependencies.live
-          validRedirectUris
-          emailClient
-          config.Azure.EmailSender
-          messaging
-          tableServiceClient
-          logger
+      let postDependencies = PostDependencies(
+        validRedirectUris,
+        emailClient,
+        config.Azure.EmailSender,
+        messaging,
+        tableServiceClient,
+        logger
+      )
 
-      let postActions = PostActions.withDependencies postDependencies
+      let createPost = CreatePost.withDependencies {
+        new CreatePost.Dependencies with
+        
+        member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+        member _.CreatePost newPost = postDependencies.CreatePost newPost
+      }
+      
+      let newPost =
+        { NewPost.Dto.Title = NewPost.Title newPostJson.Title
+          NewPost.Dto.Slug = NewPost.Slug newPostJson.Slug
+          NewPost.Dto.CreatedDate = NewPost.CreatedDate newPostJson.CreatedDate }
 
-      let! newPostResult = (newPostDto, ct) ||> postActions.CreatePost
+      let! newPostResult = (newPost, ct) ||> createPost
 
       match newPostResult with
-      | Ok (PostCreatedEvent post) ->
+      | Ok (CreatePost.Event.Created post) ->
           logger.LogInformation("Successfully created post with slug: {slug}", post.Id.ToString())
       | Error error ->
           logger.LogError("Error creating post: {error}", error)

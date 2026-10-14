@@ -89,7 +89,7 @@ let NewComment (disabled: bool, initial: NewCommentData option, onComment: NewCo
               then
                 Html.p [
                   prop.className "block font-medium text-sm text-primary"
-                  prop.text "Must be provide a valid email address" 
+                  prop.text "Must provide a valid email address" 
                 ]
             ]
           ]

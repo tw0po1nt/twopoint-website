@@ -18,6 +18,8 @@
     <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
     <Compile Include="Endpoints\Blog\PostComment.fs" />
     <Compile Include="Endpoints\Blog\ValidateCommenter.fs" />
+    <Compile Include="Endpoints\Blog\Subscribe.fs" />
+    <Compile Include="Endpoints\Blog\Unsubscribe.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Endpoints\Admin\SyncPosts.fs" />
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />
@@ -25,6 +27,7 @@
     <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
+    <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
     <Compile Include="Endpoints\Health.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -64,7 +67,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Core.Api\Core.Api.fsproj" />
+    <ProjectReference Include="..\Dependencies\Dependencies.fsproj" />
   </ItemGroup>
 
 </Project>

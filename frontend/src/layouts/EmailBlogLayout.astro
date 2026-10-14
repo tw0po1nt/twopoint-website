@@ -1,0 +1,178 @@
+---
+// Email layout for the newsletter of a post. The newsletter-export integration inlines the first <style> block
+// at build time. It keeps the `data-embed` block as is, because media queries cannot go inline.
+import type { Post } from '~/types';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const webUrl = `https://twopoint.dev/posts/${post.slug}`;
+const isoDate = post.publishDate.toISOString().slice(0, 10);
+const meta = [
+  isoDate,
+  post.readingTime ? `${post.readingTime} min` : undefined,
+  post.tags?.map((tag) => `#${tag.slug}`).join(' '),
+].filter(Boolean);
+const label = post.series ? `// latest post · ${post.series.title.toLowerCase()}` : '// latest post';
+
+// The backend replaces these slots for each delivery. It refuses to send a newsletter without them.
+// The intro goes into the dark terminal panel, so the backend writes the intro with the terminal colors.
+const introSlot = '%%TWOPOINT_INTRO%%';
+const unsubscribeUrlSlot = '%%TWOPOINT_UNSUBSCRIBE_URL%%';
+
+const sans = "'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
+const mono = "'JetBrains Mono', Consolas, Menlo, monospace";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>{post.title}</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+    <style is:inline>
+      .tp-post { font-family: 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.75; color: #2a2d34; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+      .tp-post p { margin: 0 0 18px; }
+      .tp-post h2 { font-size: 24px; line-height: 1.3; margin: 40px 0 14px; color: #16181d; }
+      .tp-post h3 { font-size: 20px; line-height: 1.35; margin: 32px 0 12px; color: #16181d; }
+      .tp-post h4 { font-size: 18px; line-height: 1.35; margin: 28px 0 10px; color: #16181d; }
+      .tp-post a { color: #b91c1c; text-decoration: underline; }
+      .tp-post ul, .tp-post ol { margin: 0 0 18px; padding-left: 24px; }
+      .tp-post li { margin: 6px 0; }
+      .tp-post code { font-family: 'JetBrains Mono', Consolas, Menlo, monospace; font-size: 14px; }
+      .tp-post p code, .tp-post li code { background-color: #eef0f3; color: #b4232f; padding: 2px 5px; border-radius: 4px; }
+      .tp-post pre { margin: 22px 0; padding: 16px 18px; border-radius: 8px; font-size: 13px; line-height: 1.6; }
+      .tp-post pre code { font-size: 13px; }
+      .tp-post blockquote { margin: 22px 0; padding: 2px 0 2px 18px; border-left: 3px solid #24292e; color: #4b4f58; }
+      .tp-post table { width: 100%; border-collapse: collapse; margin: 22px 0; }
+      .tp-post th { border: 1px solid #e3e4e8; padding: 10px 12px; background-color: #f7f7f9; font-weight: 700; text-align: left; }
+      .tp-post td { border: 1px solid #e3e4e8; padding: 10px 12px; }
+      .tp-post img { max-width: 100%; height: auto; display: block; margin: 22px 0; }
+    </style>
+    <style is:inline data-embed>
+      :root { color-scheme: light dark; supported-color-schemes: light dark; }
+
+      @media (max-width: 620px) {
+        .tp-container { width: 100% !important; }
+        .tp-outer { padding: 0 !important; }
+        .tp-px { padding-left: 20px !important; padding-right: 20px !important; }
+        .tp-h1 { font-size: 26px !important; }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .tp-canvas { background-color: #010409 !important; }
+        .tp-card { background-color: #0d1117 !important; }
+        .tp-term { background-color: #161b22 !important; }
+        .tp-term-end { border-bottom: 1px solid #30363d !important; }
+        .tp-ink { color: #f0f3f6 !important; }
+        .tp-muted, .tp-muted a { color: #8b949e !important; }
+        .tp-accent { color: #ff7b72 !important; }
+        .tp-button { border-color: #8b949e !important; }
+        .tp-button a { color: #f0f3f6 !important; }
+        .tp-footer { background-color: #0d1117 !important; border-top-color: #30363d !important; }
+        .tp-post { color: #c9d1d9 !important; }
+        .tp-post h2, .tp-post h3, .tp-post h4 { color: #f0f3f6 !important; }
+        .tp-post a { color: #ff7b72 !important; }
+        .tp-post p code, .tp-post li code { background-color: #1f242c !important; color: #ff7b72 !important; }
+        .tp-post blockquote { border-left-color: #8b949e !important; color: #a8b1bb !important; }
+        .tp-post th { background-color: #161b22 !important; }
+        .tp-post th, .tp-post td { border-color: #30363d !important; }
+      }
+
+      /* Outlook.com marks the elements it recolors in dark mode with these attributes. */
+      [data-ogsb] .tp-canvas { background-color: #010409 !important; }
+      [data-ogsb] .tp-card, [data-ogsb] .tp-footer { background-color: #0d1117 !important; }
+      [data-ogsb] .tp-term { background-color: #161b22 !important; }
+      [data-ogsc] .tp-ink, [data-ogsc] .tp-post h2, [data-ogsc] .tp-post h3, [data-ogsc] .tp-post h4 { color: #f0f3f6 !important; }
+      [data-ogsc] .tp-post { color: #c9d1d9 !important; }
+      [data-ogsc] .tp-accent, [data-ogsc] .tp-post a { color: #ff7b72 !important; }
+    </style>
+  </head>
+  <body class="tp-canvas" style="margin: 0; padding: 0; background-color: #ebebee; -webkit-text-size-adjust: 100%;">
+    {
+      post.excerpt && (
+        <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px; color: transparent;">
+          {post.excerpt}
+        </div>
+      )
+    }
+    <table role="presentation" class="tp-canvas" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ebebee;">
+      <tr>
+        <td class="tp-outer" align="center" style="padding: 32px 16px;">
+          <table role="presentation" class="tp-container tp-card" border="0" cellpadding="0" cellspacing="0" width="600" style="width: 600px; max-width: 600px; background-color: #ffffff; border-radius: 10px; overflow: hidden;">
+            <!-- Terminal title bar -->
+            <tr>
+              <td class="tp-term" style={`background-color: #24292e; padding: 14px 20px 0; font-family: ${mono}; font-size: 12px; line-height: 1;`}>
+                <span style="color: #ff5f57;">●</span>&nbsp;<span style="color: #febc2e;">●</span>&nbsp;<span style="color: #28c840;">●</span>
+                <span style="color: #8b949e; padding-left: 8px;">~/twopoint</span>
+              </td>
+            </tr>
+
+            <!-- Intro: the backend fills this slot. An empty intro leaves only the title bar. -->
+            <tr>
+              <td class="tp-term tp-term-end" style="background-color: #24292e; padding: 0 0 14px;">{introSlot}</td>
+            </tr>
+
+            <!-- Post header -->
+            <tr>
+              <td class="tp-px" style="padding: 34px 40px 6px;">
+                <p class="tp-accent" style={`margin: 0 0 12px; font-family: ${mono}; font-size: 12px; color: #b91c1c;`}>{label}</p>
+                <h1 class="tp-h1 tp-ink" style={`margin: 0 0 14px; font-family: ${sans}; font-size: 30px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; color: #16181d;`}>
+                  {post.title}
+                </h1>
+                <p class="tp-muted" style={`margin: 0 0 18px; font-family: ${mono}; font-size: 12px; line-height: 1.8; color: #6a6f7a;`}>
+                  {meta.join(' · ')}
+                </p>
+                {
+                  post.excerpt && (
+                    <p class="tp-muted" style={`margin: 0 0 6px; font-family: ${sans}; font-size: 17px; line-height: 1.6; color: #6a6f7a;`}>
+                      {post.excerpt}
+                    </p>
+                  )
+                }
+              </td>
+            </tr>
+
+            <!-- Post content -->
+            <tr>
+              <td class="tp-px tp-post" style="padding: 18px 40px 12px;">
+                <slot />
+              </td>
+            </tr>
+
+            <!-- Link to the post on the web -->
+            <tr>
+              <td class="tp-px" style="padding: 4px 40px 34px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td class="tp-button" style="border: 1px solid #16181d; border-radius: 6px;">
+                      <a href={webUrl} style={`display: inline-block; padding: 10px 16px; font-family: ${mono}; font-size: 13px; color: #16181d; text-decoration: none;`}>
+                        open on twopoint.dev ↗
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td class="tp-px tp-footer tp-muted" style={`padding: 22px 40px; border-top: 1px solid #e3e4e8; background-color: #f7f7f9; font-family: ${mono}; font-size: 12px; line-height: 1.8; color: #6a6f7a;`}>
+                <p style="margin: 0;">You subscribed at <a href="https://twopoint.dev" style="color: #6a6f7a;">twopoint.dev</a>.</p>
+                <p style="margin: 0;"><a href={unsubscribeUrlSlot} style="color: #6a6f7a;">$ unsubscribe</a></p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
