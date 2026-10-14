@@ -13,6 +13,7 @@ step() {
 
 step ./scripts/check-banned-patterns.sh
 step dotnet build TwoPoint.sln --nologo
+step dotnet test TwoPoint.sln --nologo --no-build
 
 if [ "$status" -eq 0 ]; then
   echo "verify: green"
