@@ -2,12 +2,25 @@ import type { AstroIntegration } from 'astro';
 import { fileURLToPath } from 'url';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import juice from 'juice';
+
+/**
+ * Prepare a newsletter page for email clients. Many clients ignore <style> blocks and external stylesheets,
+ * so this inlines the styles and drops the site stylesheets and scripts that Astro adds for post components.
+ */
+export function toEmailHtml(html: string): string {
+  const withoutSiteAssets = html
+    .replace(/<link[^>]+rel="stylesheet"[^>]+href="\/[^"]*"[^>]*>/g, '')
+    .replace(/<link[^>]+href="\/[^"]*"[^>]+rel="stylesheet"[^>]*>/g, '')
+    .replace(/<script\b[\s\S]*?<\/script>/g, '');
+  return juice(withoutSiteAssets);
+}
 
 /**
  * Custom Astro integration to handle newsletter HTML generation
  * This integration:
  * 1. Generates newsletter HTML pages during build
- * 2. Moves them to a separate directory (dist/newsletter-export)
+ * 2. Inlines their styles and moves them to a separate directory (dist/newsletter)
  * 3. Removes them from the served static output
  */
 export default function newsletterExportIntegration(): AstroIntegration {
@@ -48,8 +61,12 @@ export default function newsletterExportIntegration(): AstroIntegration {
               // Ensure target directory exists
               await fs.mkdir(targetDir, { recursive: true });
               
-              // Copy file to export directory
-              await fs.copyFile(sourcePath, targetPath);
+              // Write the email version of the file to the export directory
+              if (file.endsWith('.html')) {
+                await fs.writeFile(targetPath, toEmailHtml(await fs.readFile(sourcePath, 'utf8')));
+              } else {
+                await fs.copyFile(sourcePath, targetPath);
+              }
               console.log(`  ✓ Exported: ${file}`);
             }
           }
