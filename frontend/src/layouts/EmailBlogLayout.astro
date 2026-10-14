@@ -9,6 +9,7 @@ interface Props {
 
 const { post } = Astro.props;
 const webUrl = `https://twopoint.dev/posts/${post.slug}`;
+const privacyUrl = 'https://twopoint.dev/privacy';
 const isoDate = post.publishDate.toISOString().slice(0, 10);
 const meta = [
   isoDate,
@@ -167,7 +168,9 @@ const mono = "'JetBrains Mono', Consolas, Menlo, monospace";
             <tr>
               <td class="tp-px tp-footer tp-muted" style={`padding: 22px 40px; border-top: 1px solid #e3e4e8; background-color: #f7f7f9; font-family: ${mono}; font-size: 12px; line-height: 1.8; color: #6a6f7a;`}>
                 <p style="margin: 0;">You subscribed at <a href="https://twopoint.dev" style="color: #6a6f7a;">twopoint.dev</a>.</p>
-                <p style="margin: 0;"><a href={unsubscribeUrlSlot} style="color: #6a6f7a;">$ unsubscribe</a></p>
+                <p style="margin: 0;">
+                  <a href={unsubscribeUrlSlot} style="color: #6a6f7a;">$ unsubscribe</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href={privacyUrl} style="color: #6a6f7a;">$ privacy</a>
+                </p>
               </td>
             </tr>
           </table>

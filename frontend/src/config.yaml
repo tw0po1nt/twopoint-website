@@ -23,9 +23,11 @@ metadata:
         height: 628
     type: website
   twitter:
-    handle: '@tw0po1nt'
-    site: '@tw0po1nt'
     cardType: summary_large_image
+
+analytics:
+  pulse:
+    siteId: ps_wKUsetBa02nUCCLQY4Lt
 
 i18n:
   language: en

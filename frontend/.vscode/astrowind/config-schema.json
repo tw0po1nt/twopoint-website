@@ -271,27 +271,15 @@
     "analytics": {
       "type": "object",
       "properties": {
-        "vendors": {
+        "pulse": {
           "type": "object",
           "properties": {
-            "googleAnalytics": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": ["string", "null"]
-                },
-                "partytown": {
-                  "type": "boolean",
-                  "default": true
-                }
-              },
-              "required": ["id"]
+            "siteId": {
+              "type": ["string", "null"]
             }
-          },
-          "required": ["googleAnalytics"]
+          }
         }
-      },
-      "required": ["vendors"]
+      }
     },
     "ui": {
       "type": "object",
