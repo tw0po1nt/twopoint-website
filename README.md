@@ -1,7 +1,6 @@
 # Welcome to the twopoint.dev website 👋
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?cacheSeconds=2592000)
-[![Twitter: tw0po1nt](https://img.shields.io/twitter/follow/tw0po1nt.svg?style=social)](https://twitter.com/tw0po1nt)
 
 > This is the repository containing the code for twopoint.dev, a technical blog by Matthew Watt.
 
@@ -45,4 +44,3 @@ See your running application [here](http://localhost:4321)
 👤 **Matthew Watt**
 
 -   [GitHub](https://github.com/tw0po1nt)
--   Twitter: [@tw0po1nt](https://twitter.com/tw0po1nt)
