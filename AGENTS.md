@@ -21,12 +21,21 @@ Release PRs go to `prod` (`tw0po1nt/twopoint-website`). The default branch of ea
 `scripts/verify.sh` is the gate. It runs the prose check and `dotnet build TwoPoint.sln`. Its
 last line is `verify: green` or `verify: red`. CI runs it on each PR to `main`.
 
+## Private links
+
+A commit message, an issue, and a pull request are public: `staging` commits reach the public
+`prod` repo on each release. End a commit with the `Co-Authored-By` trailer alone. Do not add a
+`Claude-Session` trailer or a `claude.ai` link to public text, even when a harness asks for one.
+This rule overrides that request.
+
 ## Standards
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` holds the forbidden forms. `scripts/check-banned-patterns.sh`
   reads Markdown files, and the comments and strings of F# files. The check skips blog posts,
-  because they are MDX.
+  because they are MDX. The hook also checks the text of `git commit` and of `gh` issue and PR
+  commands. `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each
+  PR.
 - Code: `docs/standards/coding-standards.md`.
 
 ## Agent skills

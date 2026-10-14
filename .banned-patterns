@@ -8,6 +8,13 @@
 # backticks.
 
 # ---------------------------------------------------------------------------
+# Private links. A claude.ai URL points to a private session, chat, or
+# artifact, and a public reader cannot open it.
+# ---------------------------------------------------------------------------
+claude\.ai/	Delete the claude.ai link. It points to a private page.
+claude-session:	Delete the Claude-Session trailer. It links to a private session.
+
+# ---------------------------------------------------------------------------
 # British spellings. This repo writes American English.
 # ---------------------------------------------------------------------------
 \b(colour|colours|behaviour|behaviours|serialise|serialised|serialises|honoured|cancelled)\b	Use the American spelling.
