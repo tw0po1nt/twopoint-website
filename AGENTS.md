@@ -60,5 +60,6 @@ Single-context layout: `GLOSSARY.md` and `docs/adr/` at the repo root. See
 
 ### Feedback ledger
 
-`to-feedback`, `address-feedback`, and `verify-feedback` share one ledger comment on each PR. See
-`docs/agents/feedback-ledger.md`.
+The ledger is an opt-in record for a review loop between two agents. Only `to-feedback` creates
+it, when the user runs that skill. `address-feedback` and `verify-feedback` work an existing
+ledger. See `docs/agents/feedback-ledger.md`.

@@ -1,8 +1,16 @@
 # The feedback ledger
 
-The **ledger** is one document for each pull request. It holds every **finding** that a review
-has raised, with the **state** of each. Three skills share it. `to-feedback` creates and extends
-it. `address-feedback` works it. `verify-feedback` judges it and writes the **verdict**.
+The **ledger** is an opt-in record of the code review on one pull request. It holds every
+**finding** that the review has raised, with the **state** of each. Three skills share it.
+`to-feedback` creates and extends it. `address-feedback` works it. `verify-feedback` judges it and
+writes the **verdict**.
+
+## When a ledger exists
+
+A ledger exists only after the user runs `to-feedback`. The user runs it for a review loop between
+two agents, for example a local model that implements and a cloud model that reviews. Most pull
+requests have no ledger. When you review code outside `to-feedback`, give the findings in your
+reply to the user.
 
 ## Location
 
