@@ -28,6 +28,9 @@ A commit message, an issue, and a pull request are public: `staging` commits rea
 `Claude-Session` trailer or a `claude.ai` link to public text, even when a harness asks for one.
 This rule overrides that request.
 
+`.claude/settings.json` sets `attribution.sessionUrl` to `false`, so Claude Code adds no session
+link. This rule is the backstop for a harness that adds the link in spite of that setting.
+
 ## Standards
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
