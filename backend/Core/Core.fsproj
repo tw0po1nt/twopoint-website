@@ -11,20 +11,27 @@
     <Compile Include="Util\Parsing.fs" />
     <Compile Include="Util\NetExtensions.fs" />
     <Compile Include="Util\ListExtensions.fs" />
+    <Compile Include="Util\Result.fs" />
     <Compile Include="Shared\ConstrainedTypes.fs" />
     <Compile Include="Shared\LogicTypes.fs" />
     <Compile Include="Shared\StringTypes.fs" />
+    <Compile Include="Shared\SharedTypes.fs" />
     <Compile Include="Notifications\NotificationTypes.fs" />
-    <Compile Include="Notifications\NotificationLogic.fs" />
+    <Compile Include="Notifications\NotificationActions.fs" />
     <Compile Include="Posts\PostTypes.fs" />
-    <Compile Include="Posts\PostLogic.fs" />
+    <Compile Include="Posts\Newsletter.fs" />
+    <Compile Include="Posts\PostActions.fs" />
+    <Compile Include="Posts\PostQueries.fs" />
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
-    <Compile Include="Subscriptions\SubscriptionLogic.fs" />
+    <Compile Include="Subscriptions\SubscriptionActions.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.1" />
     <PackageReference Update="FSharp.Core" Version="10.0.102" />
+    <PackageReference Include="FSharp.Control.TaskSeq" Version="0.4.0" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
+    <PackageReference Include="FsToolkit.ErrorHandling.IcedTasks" Version="5.2.0" />
+    <PackageReference Include="IcedTasks" Version="0.11.9" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
   </ItemGroup>
 

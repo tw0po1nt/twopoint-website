@@ -1,18 +1,21 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
-open TwoPoint.Core.Subscriptions.Api
-open TwoPoint.Core.Subscriptions.Dependencies
-open TwoPoint.Core.Subscriptions.Logic
-open TwoPoint.Core.Util
+open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Subscriptions
+open TwoPoint.Core.Subscriptions.Actions
+open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Subscriptions
 
 open Azure.Data.Tables
+open Azure.Messaging.ServiceBus
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
 open System
 open System.Net
+open System.Text.Json
 open System.Threading
 
 type NewSubscriptionJson =
@@ -20,9 +23,21 @@ type NewSubscriptionJson =
     Name : string option }
 
 type Subscribe (
+  config: Config,
   logger: ILogger<Subscribe>,
+  serviceBus: ServiceBusClient,
   tableServiceClient: TableServiceClient
 ) =
+
+  let enqueueWelcome (subscription : Subscription) ct = task {
+    try
+      use sender = serviceBus.CreateSender WelcomeQueue.Name
+      let json = JsonSerializer.Serialize {| subscriptionId = subscription.Id.ToString() |}
+      do! sender.SendMessageAsync(ServiceBusMessage json, ct)
+      logger.LogInformation("Queued a welcome for subscription '{subscriptionId}'", subscription.Id)
+    with ex ->
+      logger.LogError(ex, "Unable to queue a welcome for subscription '{subscriptionId}'", subscription.Id)
+  }
 
   [<Function("Blog-Subscribe")>]
   member _.Run (
@@ -43,10 +58,10 @@ type Subscribe (
     logger.LogInformation("Processing 'Blog.Subscribe' request with email '{email}', name '{name}'", email, name)
 
     // Dependencies
-    let subscriptionDependencies =
-      SubscriptionDependencies.live
-        tableServiceClient
-        logger
+    let subscriptionDependencies = SubscriptionDependencies(
+      tableServiceClient,
+      logger
+    )
 
     // Inputs
     let newSubscription =
@@ -66,9 +81,17 @@ type Subscribe (
     }
 
     let! createSubscriptionResult = ct |> createSubscription newSubscription
+
+    let welcomeEnabled = config.Welcome |> Option.exists _.Enabled
+    match createSubscriptionResult with
+    | Ok (CreateSubscription.Event.Created subscription)
+    | Ok (CreateSubscription.Event.Reactivated subscription) when welcomeEnabled ->
+      do! enqueueWelcome subscription ct
+    | _ -> ()
+
     let apiResponse, statusCode =
       match createSubscriptionResult with
-      | Ok _ | Error (Logic ()) ->
+      | Ok _ | Error (Logic _) ->
         { Success = true; Message = None; Data = None }, HttpStatusCode.OK
       | Error actionError when actionError.IsValidation ->
         { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest

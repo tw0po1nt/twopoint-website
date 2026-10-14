@@ -1,8 +1,8 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
+open TwoPoint.Core.Posts.Queries
+open TwoPoint.Dependencies.Posts
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -54,18 +54,24 @@ type GetCommentsForPost (
     let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
     // Dependencies
-    let postDependencies =
-      PostDependencies.live
-        validRedirectUris
-        emailClient
-        config.Azure.EmailSender
-        messaging
-        tableServiceClient
-        logger
-    let postQueries = PostQueries.withDependencies postDependencies
+    let postDependencies = PostDependencies(
+      validRedirectUris,
+      emailClient,
+      config.Azure.EmailSender,
+      messaging,
+      tableServiceClient,
+      logger
+    )
+
+    let getCommentsForPost = GetCommentsForPost.withDependencies {
+      new GetCommentsForPost.Dependencies with
+
+      member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+      member _.GetCommentsForPost approvals post = postDependencies.GetCommentsForPost approvals post
+    }
 
     let onlyApproved = [CommentApproval.Approved.ToString()]
-    let! commentsResult = (slug, ct) ||> postQueries.GetCommentsForPost onlyApproved
+    let! commentsResult = (slug, ct) ||> getCommentsForPost onlyApproved
 
     let apiResponse, statusCode =
       match commentsResult with

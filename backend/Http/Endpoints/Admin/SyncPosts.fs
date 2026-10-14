@@ -3,8 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
+open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -65,19 +64,23 @@ type SyncPosts (
 
         logger.LogInformation("Found {count} posts in RSS feed", feedPosts.Length)
 
-        let postDependencies =
-          PostDependencies.live
-            validRedirectUris
-            emailClient
-            config.Azure.EmailSender
-            messaging
-            tableServiceClient
-            logger
-        let postQueries = PostQueries.withDependencies postDependencies
+        let postDependencies = PostDependencies(
+          validRedirectUris,
+          emailClient,
+          config.Azure.EmailSender,
+          messaging,
+          tableServiceClient,
+          logger
+        )
+        let getAllPosts = TwoPoint.Core.Posts.Queries.GetAllPosts.withDependencies {
+          new TwoPoint.Core.Posts.Queries.GetAllPosts.Dependencies with
+          
+          member _.GetAllPosts () = postDependencies.GetAllPosts()
+        }
 
         let! newPosts = cancellableTask {
           let! existingSlugs =
-            postQueries.GetAllPosts()
+            getAllPosts()
             |> CancellableTask.map (Result.defaultValue [])
             |> CancellableTask.map (List.map (_.Slug >> Slug.value) >> Set.ofList)
           return feedPosts |> List.filter (fun post -> not (existingSlugs.Contains post.Slug))

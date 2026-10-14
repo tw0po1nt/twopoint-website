@@ -1,10 +1,9 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Core.Posts
-open TwoPoint.Core.Posts.Api
-open TwoPoint.Core.Posts.Dependencies
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts
+open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -74,17 +73,22 @@ type AdminGetCommentsForPost (
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         // Dependencies
-        let postDependencies =
-          PostDependencies.live
-            validRedirectUris
-            emailClient
-            config.Azure.EmailSender
-            messaging
-            tableServiceClient
-            logger
-        let postQueries = PostQueries.withDependencies postDependencies
+        let postDependencies = PostDependencies(
+          validRedirectUris,
+          emailClient,
+          config.Azure.EmailSender,
+          messaging,
+          tableServiceClient,
+          logger
+        )
+        let getCommentsForPost = TwoPoint.Core.Posts.Queries.GetCommentsForPost.withDependencies {
+          new TwoPoint.Core.Posts.Queries.GetCommentsForPost.Dependencies with
+          
+          member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+          member _.GetCommentsForPost approvals slug = postDependencies.GetCommentsForPost approvals slug
+        }
 
-        let! commentsResult = (slug, ct) ||> postQueries.GetCommentsForPost []
+        let! commentsResult = (slug, ct) ||> getCommentsForPost []
 
         let apiResponse, statusCode =
           match commentsResult with
