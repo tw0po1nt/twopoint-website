@@ -67,7 +67,7 @@ type Subscribe (
     let! createSubscriptionResult = ct |> createSubscription newSubscription
     let apiResponse, statusCode =
       match createSubscriptionResult with
-      | Ok _ | Error (Logic ()) ->
+      | Ok _ | Error (Logic _) ->
         { Success = true; Message = None; Data = None }, HttpStatusCode.OK
       | Error actionError when actionError.IsValidation ->
         { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest

@@ -45,12 +45,14 @@ module NewSubscription =
 module CreateSubscription =
 
   // Output
-  type Error = unit
-  type Success = 
+  type Error = AlreadyActive of Subscription
+  type Success =
     | New of NewSubscription
     | Reactivate of Subscription
   type Decision = Decision<Success, Error>
-  type Event = Created of Subscription
+  type Event =
+    | Created of Subscription
+    | Reactivated of Subscription
 
   // Logic
 
@@ -61,12 +63,12 @@ module CreateSubscription =
 
   [<RequireQualifiedAccess>]
   module Logic =
-    let decide : Logic = 
+    let decide : Logic =
       fun existingSubscription newSubscription ->
-        existingSubscription
-        |> Option.map Reactivate
-        |> Option.defaultValue (New newSubscription)
-        |> Ok
+        match existingSubscription with
+        | None -> Ok (New newSubscription)
+        | Some existing when existing.IsActive -> Error (AlreadyActive existing)
+        | Some existing -> Ok (Reactivate existing)
 
   // Action
 
@@ -99,11 +101,13 @@ module CreateSubscription =
       return!
         decision
         |> Result.traverseCancellableTask (function
-          | New newSubscription -> dependencies.CreateSubscription newSubscription utcNow
-          | Reactivate existing -> dependencies.ActivateSubscription existing
+          | New newSubscription ->
+            dependencies.CreateSubscription newSubscription utcNow |> CancellableTaskResult.map Event.Created
+          | Reactivate existing ->
+            dependencies.ActivateSubscription existing |> CancellableTaskResult.map Event.Reactivated
         )
         |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult Event.Created)
+          (DependencyResult.toActionResult id)
           (Logic >> ActionResult.failure)
     }
 
@@ -200,96 +204,137 @@ module CancelSubscription =
           (Logic >> ActionResult.failure)
     }
 
+
 // ========================================================================================
-// Send welcome 
+// Send welcome
 // ========================================================================================
 
 // Input
 
-type UnvalidatedSubscriptionId = UnvalidatedSubscriptionId of string
+type WelcomeRequest =
+  { SubscriptionId : SubscriptionId }
+
+module WelcomeRequest =
+
+  type SubscriptionId = SubscriptionId of string
+
+  type Dto =
+    { SubscriptionId : SubscriptionId }
+
+  let create (dto : Dto) = validation {
+    let (SubscriptionId subscriptionId) = dto.SubscriptionId
+
+    let! subscriptionId = subscriptionId |> SubscriptionId.create
+
+    return { WelcomeRequest.SubscriptionId = subscriptionId }
+  }
 
 [<RequireQualifiedAccess>]
 module SendWelcome =
-  
+
   // Output
 
   type Error =
-    | NotFound of Data
-    | WelcomeAlreadySent of Subscription * SubscriptionDelivery 
-  and Data =
-    | Subscription of SubscriptionId
-    | Post of Slug
-  type Success = Sent of Subscription * Post
+    | SubscriptionNotFound of SubscriptionId
+    | SubscriptionInactive of Subscription
+    | NoPosts
+    | AlreadySent of Subscription * SubscriptionDelivery
+    | NewsletterNotFound of Post
+    | NewsletterInvalid of Post * reason : string
+  type Success = Send of Subscription * Post
   type Decision = Decision<Success, Error>
   type Event = Sent of Subscription * SubscriptionDelivery
-  
+
   // Logic
 
   type Logic =
-    Subscription option
-      -> Map<SubscriptionDeliveryType, SubscriptionDelivery list>
-      -> Post
-      -> SubscriptionId
-      -> Decision 
+    SubscriptionId
+      -> Subscription option
+      -> SubscriptionDelivery list
+      -> Post option
+      -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
-    let decide : Logic = 
-      fun subscription deliveries latestPost subscriptionId -> result {
-        let! subscription = subscription |> Result.requireSome (subscriptionId |> Data.Subscription |> Error.NotFound)
-        let welcomeDeliveries = 
-          deliveries 
-          |> Map.tryFind Welcome
-          |> Option.defaultValue []
-        // Don't send multiple welcomes if the latest post hasn't changed.
-        // This will ensure someone doesn't get multiple emails ex. subscribe -> unsubscribe -> subscribe
-        // They *should* get another welcome email if they re-subscribe and there have since been new posts
-        let existingWelcomeForSamePost = welcomeDeliveries |> List.tryFind (fun d -> d.Post = latestPost.Id)
-        do! 
-          existingWelcomeForSamePost 
-          |> Result.requireNoneWith (fun welcome -> WelcomeAlreadySent (subscription, welcome))
-        return Success.Sent (subscription, latestPost)
+    let decide : Logic =
+      fun subscriptionId subscription deliveries latestPost -> result {
+        let! subscription = subscription |> Result.requireSome (SubscriptionNotFound subscriptionId)
+        do! subscription.IsActive |> Result.requireTrue (SubscriptionInactive subscription)
+        let! latestPost = latestPost |> Result.requireSome NoPosts
+        // A reactivation gets a second welcome only when a newer post exists than the one in the last welcome.
+        do!
+          deliveries
+          |> List.tryFind (fun delivery -> delivery.Type = Welcome && delivery.Post = latestPost.Id)
+          |> Result.requireNoneWith (fun welcome -> AlreadySent (subscription, welcome))
+        return Send (subscription, latestPost)
       }
+
+    let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
+      html
+      |> Result.requireSome (NewsletterNotFound post)
+      |> Result.bind (Newsletter.create >> Result.mapError (fun reason -> NewsletterInvalid (post, reason)))
 
   // Action
 
-  type SendWelcome = UnvalidatedSubscriptionId -> CancellableTask<ActionResult<Event, Error>>
+  type Action = WelcomeRequest.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    // todo: implement these next
     abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
-    abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<Map<SubscriptionDeliveryType, SubscriptionDelivery list>>
-    abstract member GetLatestPost: unit -> DependencyResult<Post>
-    abstract member SendWelcome: Subscription -> Post -> DependencyResult<Subscription * SubscriptionDelivery>
+    abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<SubscriptionDelivery list>
+    abstract member GetLatestPost: unit -> DependencyResult<Post option>
+    abstract member GetNewsletter: Post -> DependencyResult<string option>
+    abstract member GetUtcNow: unit -> DateTime
+    abstract member SendWelcome: Subscription -> Newsletter -> DependencyResult<OperationId>
+    abstract member CreateDelivery:
+      subscription: Subscription
+        -> deliveryType: SubscriptionDeliveryType
+        -> post: Post
+        -> operationId: OperationId
+        -> createdDateUtc: DateTime
+        -> DependencyResult<SubscriptionDelivery>
 
-  let withDependencies (dependencies : Dependencies) : SendWelcome =
-    fun (UnvalidatedSubscriptionId subscriptionId) -> cancellableTaskResult {
-      let! subscriptionId = 
-        subscriptionId 
-        |> SubscriptionId.create
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun request -> cancellableTaskResult {
+      let! request =
+        request
+        |> WelcomeRequest.create
         |> Result.mapError ActionError<Error>.Validation
 
-      let! (subscription: Subscription option) =
-        dependencies.GetSubscriptionById subscriptionId
+      let! subscription =
+        dependencies.GetSubscriptionById request.SubscriptionId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! deliveries =
         subscription
         |> Option.traverseCancellableTaskResult dependencies.GetDeliveriesForSubscription
-        |> CancellableTaskResult.map (Option.defaultValue Map.empty)
+        |> CancellableTaskResult.map (Option.defaultValue [])
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let! (latestPost : Post) =
+      let! latestPost =
         dependencies.GetLatestPost()
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide subscription deliveries latestPost subscriptionId
+      let! (Send (subscription, post)) =
+        Logic.decide request.SubscriptionId subscription deliveries latestPost
+        |> Result.mapError ActionError<Error>.Logic
 
-      return!
-        decision
-        |> Result.map (fun (Success.Sent (subscription, post)) -> subscription, post)
-        |> Result.traverseCancellableTask (uncurry dependencies.SendWelcome)
-        |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult Event.Sent)
-          (Logic >> ActionResult.failure)
+      let! html =
+        dependencies.GetNewsletter post
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! newsletter =
+        Logic.prepareNewsletter post html
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! operationId =
+        dependencies.SendWelcome subscription newsletter
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      // Record the delivery after the send. If the record fails, a retry can send a second welcome. This order
+      // makes sure that each subscription gets its welcome.
+      let! delivery =
+        dependencies.CreateDelivery subscription Welcome post operationId (dependencies.GetUtcNow())
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return Event.Sent (subscription, delivery)
     }
