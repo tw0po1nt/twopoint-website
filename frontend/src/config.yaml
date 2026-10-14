@@ -27,6 +27,10 @@ metadata:
     site: '@tw0po1nt'
     cardType: summary_large_image
 
+analytics:
+  pulse:
+    siteId: ps_wKUsetBa02nUCCLQY4Lt
+
 i18n:
   language: en
   textDirection: ltr

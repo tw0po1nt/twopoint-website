@@ -201,7 +201,20 @@ let Subscribe (apiUri: string) =
                   )
                 ]
               ]
-            ] 
+            ]
+
+            Html.p [
+              prop.className "mt-4 text-sm text-center text-muted dark:text-slate-400"
+              prop.children [
+                Html.text "The site uses your email address only to send the newsletter. See the "
+                Html.a [
+                  prop.className "underline hover:text-gray-700 dark:hover:text-slate-200"
+                  prop.href "/privacy"
+                  prop.text "privacy policy"
+                ]
+                Html.text "."
+              ]
+            ]
           ]
         ]
       ] 

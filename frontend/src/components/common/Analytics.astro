@@ -1,0 +1,9 @@
+---
+import { ANALYTICS } from 'astrowind:config';
+
+// Only the production config holds a Pulse site ID. The dev server reads the production config too,
+// so a local visit must not count as a visit to the site.
+const pulseSiteId = import.meta.env.PROD ? ANALYTICS.pulse.siteId : undefined;
+---
+
+{pulseSiteId && <script is:inline defer src="https://pulse.w7ech.com/cdn/s.js" data-site={pulseSiteId}></script>}

@@ -38,7 +38,7 @@ export const headerData = {
 
 export const footerData = {
   links: [],
-  secondaryLinks: [],
+  secondaryLinks: [{ text: 'Privacy', href: getPermalink('/privacy') }],
   socialLinks: [
     { ariaLabel: 'Github', icon: 'tabler:brand-github', href: 'https://github.com/tw0po1nt' },
   ],
