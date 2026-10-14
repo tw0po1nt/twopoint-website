@@ -70,11 +70,8 @@ export interface AppBlogConfig {
   };
 }
 export interface AnalyticsConfig {
-  vendors: {
-    googleAnalytics: {
-      id?: string;
-      partytown?: boolean;
-    };
+  pulse: {
+    siteId?: string;
   };
 }
 
@@ -182,11 +179,8 @@ const getUI = (config: Config) => {
 
 const getAnalytics = (config: Config) => {
   const _default = {
-    vendors: {
-      googleAnalytics: {
-        id: undefined,
-        partytown: true,
-      },
+    pulse: {
+      siteId: undefined,
     },
   };
 

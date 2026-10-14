@@ -171,6 +171,19 @@ let NewComment (disabled: bool, initial: NewCommentData option, onComment: NewCo
               ]
             ]
           ]
+
+          Html.p [
+            prop.className "mt-4 text-sm text-center text-muted dark:text-slate-400"
+            prop.children [
+              Html.text "Your name shows with your comment. Your email address stays private. See the "
+              Html.a [
+                prop.className "underline hover:text-gray-700 dark:hover:text-slate-200"
+                prop.href "/privacy"
+                prop.text "privacy policy"
+              ]
+              Html.text "."
+            ]
+          ]
         ]
       ]
     ]
