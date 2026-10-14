@@ -59,7 +59,7 @@ The managed identity of your Azure Function App must have the "Key Vault Secrets
 
 Add these application settings to your Azure Function App via Azure Portal:
 1. Go to your Function App in Azure Portal
-2. Navigate to Configuration > Application Settings
+2. Go to Configuration > Application Settings
 3. Add these settings:
    - `Azure__KeyVaultUri`: `https://your-keyvault-name.vault.azure.net/`
    - `Firebase__ServiceAccountJsonFromKeyVault`: `firebase-service-account-key`

@@ -36,3 +36,8 @@ pnpm-lock.yaml
 
 *.DotSettings.user
 **/.vscode/settings.json
+
+# agent skills (restore with scripts/bootstrap.sh)
+.agents/skills/
+.claude/skills/
+.scratch/
