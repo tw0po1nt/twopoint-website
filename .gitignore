@@ -41,3 +41,6 @@ pnpm-lock.yaml
 .agents/skills/
 .claude/skills/
 .scratch/
+
+# agent worktrees (made by Claude Code subagents)
+.claude/worktrees/
