@@ -13,6 +13,11 @@ _Avoid_: Article, entry
 **Latest post**:
 The post with the most recent created date.
 
+**Upcoming post**:
+A post with a publish date in the future. Readers can open it before that date, but they cannot comment
+on it until that date.
+_Avoid_: Scheduled post, future post
+
 **Newsletter**:
 The email version of a post. The build makes one newsletter for each post.
 _Avoid_: Email post
