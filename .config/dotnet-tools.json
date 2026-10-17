@@ -6,6 +6,11 @@
       "version": "5.22.0",
       "commands": ["fable"],
       "rollForward": false
+    },
+    "sagefs": {
+      "version": "0.6.908",
+      "commands": ["sagefs"],
+      "rollForward": false
     }
   }
 }

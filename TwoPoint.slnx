@@ -8,6 +8,8 @@
     <Project Path="backend/Http/Http.fsproj" />
   </Folder>
   <Folder Name="/site/">
+    <Project Path="site/Dev.Tests/Dev.Tests.fsproj" />
+    <Project Path="site/Dev/Dev.fsproj" />
     <Project Path="site/Generator.Tests/Generator.Tests.fsproj" />
     <Project Path="site/Generator/Generator.fsproj" />
   </Folder>
