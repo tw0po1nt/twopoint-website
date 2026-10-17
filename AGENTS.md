@@ -6,6 +6,11 @@ This repo holds the code for twopoint.dev, a technical blog. `frontend/` is an A
 AstroWind template. Each post is an MDX file in `frontend/src/content/post/`. `backend/` is an F#
 Azure Functions app for newsletter subscriptions, notifications, and posts.
 
+`site/` holds the F# generator that replaces the Astro site (spec #124). Run
+`dotnet run --project site/Generator -- build --stage <local|staging|production>`. The command
+writes the site to `site/dist/website/`, the newsletters to `site/dist/newsletter/`, and the stage
+to `site/dist/stage`.
+
 ## Setup
 
 Run `scripts/bootstrap.sh` after a fresh clone. It installs each skill in `skills-lock.json` into
