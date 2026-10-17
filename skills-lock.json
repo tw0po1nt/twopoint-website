@@ -127,6 +127,12 @@
       "skillPath": "skills/productivity/teach/SKILL.md",
       "computedHash": "81c196426808c270a9d4688be291405c038bba11f020b9fe10098ad0f1d8c132"
     },
+    "to-abstract": {
+      "source": "tw0po1nt/skills",
+      "sourceType": "github",
+      "skillPath": "skills/to-abstract/SKILL.md",
+      "computedHash": "fe99b2845cbd512cf52c1cb0635c58190e29f2fb49cdbed9d21d83052f96881e"
+    },
     "to-feedback": {
       "source": "tw0po1nt/skills",
       "sourceType": "github",
