@@ -3,7 +3,6 @@ module TwoPoint.Site.Generator.Program
 open FsToolkit.ErrorHandling
 open System.IO
 
-/// The `site/dist` folder of the repo that contains the current folder.
 let private outputFolder () =
   let rec find (folder: DirectoryInfo) =
     if isNull folder then

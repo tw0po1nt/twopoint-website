@@ -8,7 +8,6 @@ type Output =
   | Newsletter of slug: string
   | StageMarker
 
-/// A render that runs only when a caller asks for its bytes.
 type Render = unit -> byte array
 
 type RenderMap = Map<Output, Render>

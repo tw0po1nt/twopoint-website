@@ -16,7 +16,7 @@ let filePath (outputFolder: string) output =
   | Newsletter slug -> Path.Combine(newsletterDir outputFolder, $"{slug}.html")
   | StageMarker -> Path.Combine(outputFolder, stageMarkerFile)
 
-/// Empties the output folder, then runs each render and writes its bytes.
+/// Deletes all of the output folder before it writes.
 let write (outputFolder: string) (map: RenderMap) =
   if Directory.Exists outputFolder then
     Directory.Delete(outputFolder, true)

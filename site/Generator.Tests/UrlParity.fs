@@ -1,5 +1,3 @@
-/// The URL list contains each public path of the Astro build. The pending list contains the paths
-/// of the URL list that the generator does not write yet.
 module TwoPoint.Site.Generator.Tests.UrlParity
 
 open System.IO
@@ -18,8 +16,6 @@ let urls = readList "urls.txt"
 
 let pending = readList "pending-urls.txt"
 
-/// Gives one error for each listed path that is missing and not pending, and one error for each pending
-/// path that is in the output.
 let check (output: Set<string>) =
   let missing =
     Set.difference (Set.difference urls pending) output
