@@ -54,6 +54,10 @@ jobs:
             echo "Unable to determine package manager"
             exit 1
           fi
+      - name: Setup .NET from global.json
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

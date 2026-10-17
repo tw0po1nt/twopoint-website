@@ -23,6 +23,6 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0'
+          global-json-file: global.json
 
       - run: ./scripts/verify.sh
