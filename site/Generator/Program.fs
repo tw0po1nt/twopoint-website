@@ -1,5 +1,6 @@
 module TwoPoint.Site.Generator.Program
 
+open FsToolkit.ErrorHandling
 open System.IO
 
 /// The `site/dist` folder of the repo that contains the current folder.
@@ -17,13 +18,13 @@ let private outputFolder () =
 [<EntryPoint>]
 let main argv =
   let result =
-    Cli.parse (List.ofArray argv)
-    |> Result.bind (fun (Cli.Build stage) ->
-      outputFolder ()
-      |> Result.map (fun folder ->
-        let map = RenderMap.create stage
-        Disk.write folder map
-        $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}"))
+    result {
+      let! (Cli.Build stage) = Cli.parse (List.ofArray argv)
+      let! folder = outputFolder ()
+      let map = RenderMap.create stage
+      Disk.write folder map
+      return $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}"
+    }
 
   match result with
   | Ok message ->
