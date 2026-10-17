@@ -12,7 +12,7 @@ An F# program builds twopoint.dev as a static site, with no Astro and no hand-wr
 
 The site gets the "Source+" design: a code-native look in light and dark, a post log on the home page, and one reading column with an outline, an explorer, and a Comments panel. The widgets move to Oxpecker.Solid. The F# build grows beside Astro, replaces Astro on staging when the posts and the home page render, and replaces Astro on prod in one release when it writes each URL. One PR then deletes Astro.
 
-The map [Wayfinder: convert twopoint.dev to F#](https://github.com/tw0po1nt/twopoint-website-staging/issues/97) holds the decisions. Each ticket of the map holds the detail and the reasons for its decisions. When this spec and a ticket disagree, this spec is correct.
+The map [Wayfinder: convert twopoint.dev to F#](https://github.com/tw0po1nt/twopoint-website-staging/issues/97) contains the decisions. Each ticket of the map contains the detail and the reasons for its decisions. When this spec and a ticket disagree, this spec is correct.
 
 ## User Stories
 
@@ -113,7 +113,7 @@ The map [Wayfinder: convert twopoint.dev to F#](https://github.com/tw0po1nt/twop
 
 The site is six .NET projects in a `site` solution folder, beside `frontend/` and `backend/`. The PR that deletes Astro renames the folder to `frontend/`.
 
-- **Generator.** A compiled `net10.0` console program with two commands, `build` and `upload`. It holds the site model, the views, the Markdown pipeline, the highlighter, the image steps, the newsletter writer, and the upload. It embeds the grammar files and the scope map.
+- **Generator.** A compiled `net10.0` console program with two commands, `build` and `upload`. It contains the site model, the views, the Markdown pipeline, the highlighter, the image steps, the newsletter writer, and the upload. It embeds the grammar files and the scope map.
 - **Generator tests.**
 - **Widgets.** The Fable and Oxpecker.Solid widgets, the head script, the dev reload script, the widget contract, the HTTP client of the API, and the Node bundle build.
 - **Widget tests.**
@@ -137,7 +137,7 @@ The center of the generator is one pure function. It takes the content, the stag
 
 ### Stages
 
-A union of three stages, `Local`, `Staging`, and `Production`, with one record each. No configuration file holds stage values.
+A union of three stages, `Local`, `Staging`, and `Production`, with one record each. No configuration file contains stage values.
 
 | Value | Local | Staging | Production |
 | --- | --- | --- | --- |
@@ -229,7 +229,7 @@ A value that does not change by stage is a constant, for example the Google site
 - Hand-written plain CSS in about five files. The generator joins them in a listed order and hashes the result. A file that is not on the list fails the build. No CSS tool. Tailwind goes.
 - Semantic class names. The post body uses element selectors under one container.
 - Each color uses `light-dark()`. `data-theme` on `<html>` forces one theme.
-- The site CSS holds the widget styles.
+- The site CSS contains the widget styles.
 - Self-hosted Latin-subset WOFF2 fonts: JetBrains Mono and IBM Plex Sans, with their OFL license. Inter goes.
 - Baseline "newly available" features by the end of 2024. No vendor prefixes.
 - The email CSS stays apart from the site CSS.
@@ -239,7 +239,7 @@ A value that does not change by stage is a constant, for example the Google site
 - Oxpecker.Solid 1.1.0 on solid-js 1.9, with Fable 5 stable. React, Feliz, and `vite-plugin-fable` go. No Datastar.
 - The widgets: Subscribe, Comments (with NewComment), Unsubscribe, and Pdf. The Support widget goes, with its toast and QR code packages.
 - Each widget with state has a pure `Model`, `Msg`, and `update`, which a small helper runs on a Solid signal.
-- The contract: the generator writes `<div data-widget="<name>" data-<prop>="…">`. One plain F# file holds a closed union of the widgets with their props, `toAttributes`, and `parse`. The Generator and the Widgets both compile it. The generator writes `data-api` from the stage.
+- The contract: the generator writes `<div data-widget="<name>" data-<prop>="…">`. One plain F# file contains a closed union of the widgets with their props, `toAttributes`, and `parse`. The Generator and the Widgets both compile it. The generator writes `data-api` from the stage.
 - The generator adds a widget script and its preloads only to a page with a mount for that widget. A bad mount logs an error and keeps its static HTML.
 - The bundle build: `dotnet fable` writes JSX, and one Node script bundles it with esbuild and an inline Babel step for Solid. One entry for each widget, with shared chunks, minified, target `es2022`. A manifest gives the entries with their imports, the head script, and the dev reload script. The build fails when a widget has no entry.
 - Comments loads its view on the first `toggle` of its panel. Pdf imports `pdfjs-dist`, and the build gives it the hashed worker URL.
@@ -301,7 +301,7 @@ A good test checks the behavior that a reader, the author, or the backend sees: 
 
 ### Named checks
 
-- **URL list and pending list.** The first generator issue builds Astro one time and commits the list of its public paths: 44 pages (with `404.html`) and the 4 feed and robots files. It also commits a pending list. The parity test fails when a listed path is missing and not pending, or when a pending path is in the output. Each page issue removes its paths from the pending list.
+- **URL list and pending list.** The first generator issue builds Astro one time and commits the list of its public paths: each page (with `404.html`) and the 4 feed and robots files. It also commits a pending list. The parity test fails when a listed path is missing and not pending, or when a pending path is in the output. Each page issue removes its paths from the pending list.
 - **Class check.** Each class in the output has a CSS rule, and each rule has a use. Widget classes are on an allow list. An unused `tk-*` rule passes. The newsletter output checks against the email CSS.
 - **Newsletter contract.** One fixture post through the email path: the slots stay, no script, no site stylesheet, the embed style block as written, and the inline styles on a code token and a body image.
 - **Tests on the real posts.** The tests load the real content, so `verify.sh` fails on an invalid post.

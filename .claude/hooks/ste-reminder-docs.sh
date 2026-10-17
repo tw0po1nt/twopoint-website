@@ -15,7 +15,7 @@ if echo "$file_path" | grep -Eq '\.(md|markdown)$'; then
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
-      additionalContext: "Reminder (docs/standards/technical-prose.md): this file is Markdown, prose a human will read. All prose in this repo carries the STE rule. Before you write it, confirm the simplified-technical-english skill has been applied to the text. If not, run it now, then retry."
+      additionalContext: "Reminder (docs/standards/technical-prose.md): this file is Markdown, prose a human will read. The STE rule applies to all prose in this repo. Before you write it, confirm the simplified-technical-english skill has been applied to the text. If not, run it now, then retry."
     }
   }'
 fi

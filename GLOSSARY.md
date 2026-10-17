@@ -22,6 +22,16 @@ _Avoid_: Scheduled post, future post
 The email version of a post. The build makes one newsletter for each post.
 _Avoid_: Email post
 
+### Build
+
+**Stage**:
+A place where the site runs: local, staging, or production. Each stage has its own site URL and its own
+values.
+_Avoid_: Environment
+
+**Stage marker**:
+The file that the build writes next to the site output. It contains the stage name of the build.
+
 ### Subscriptions
 
 **Subscription**:

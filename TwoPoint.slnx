@@ -7,4 +7,8 @@
     <Project Path="backend/Dependencies/Dependencies.fsproj" />
     <Project Path="backend/Http/Http.fsproj" />
   </Folder>
+  <Folder Name="/site/">
+    <Project Path="site/Generator.Tests/Generator.Tests.fsproj" />
+    <Project Path="site/Generator/Generator.fsproj" />
+  </Folder>
 </Solution>

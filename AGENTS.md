@@ -2,9 +2,15 @@
 
 Instructions for agents in this repo.
 
-This repo holds the code for twopoint.dev, a technical blog. `frontend/` is an Astro site on the
+This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an Astro site on the
 AstroWind template. Each post is an MDX file in `frontend/src/content/post/`. `backend/` is an F#
 Azure Functions app for newsletter subscriptions, notifications, and posts.
+
+`site/` contains the F# generator that replaces the Astro site
+(`docs/spec/124-build-twopoint-dev-with-fsharp.md`). Run
+`dotnet run --project site/Generator -- build --stage <local|staging|production>`. The command
+writes the site to `site/dist/website/`, the newsletters to `site/dist/newsletter/`, and the
+stage marker to `site/dist/stage`. The stage marker contains the stage name of the build.
 
 ## Setup
 
@@ -35,7 +41,7 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 ## Standards
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
-  all prose. `.banned-patterns` holds the forbidden forms. `scripts/check-banned-patterns.sh`
+  all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
   reads Markdown files, and the comments and strings of F# files. The check skips blog posts,
   because they are MDX. The hook also checks the text of `git commit` and of `gh` issue and PR
   commands. `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each

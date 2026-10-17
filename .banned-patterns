@@ -1,4 +1,4 @@
-# Every line holds an extended regular expression, a tab, and the message that a
+# Every line has an extended regular expression, a tab, and the message that a
 # hit reports. A blank line is skipped, and a line that starts with `#` is a
 # note. The match is case-insensitive, so write each pattern in lower case. Use
 # `\b` to bound a whole word.
@@ -33,6 +33,11 @@ claude-session:	Delete the Claude-Session trailer. It links to a private session
 # Ceremony verbs
 # ---------------------------------------------------------------------------
 \b(delve|delves|delved|delving|facilitat(e|es|ed|ing)|foster|fosters|fostered|underscor(e|es|ed|ing)|showcas(e|es|ed|ing)|streamlin(e|es|ed|ing)|empower|empowers|empowered|unlock|unlocks|unlocked|elevat(e|es|ed|ing)|embark|embarks|embarked|navigat(e|es|ed|ing)|boasts)\b	Use the plain verb for the action.
+
+# ---------------------------------------------------------------------------
+# Container verbs. Say that a thing has or contains another thing.
+# ---------------------------------------------------------------------------
+\b(hold|holds|held|holding|carry|carries|carried|carrying)\b	Use "has" or "contains".
 
 # ---------------------------------------------------------------------------
 # Metaphor that reaches for grandeur
