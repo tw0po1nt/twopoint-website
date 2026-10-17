@@ -18,8 +18,8 @@ Release PRs go to `prod` (`tw0po1nt/twopoint-website`). The default branch of ea
 
 ## Gate
 
-`scripts/verify.sh` is the gate. It runs the prose check, `dotnet build TwoPoint.sln`, and
-`dotnet test TwoPoint.sln`. Its last line is `verify: green` or `verify: red`. CI runs it on each
+`scripts/verify.sh` is the gate. It runs the prose check, `dotnet build TwoPoint.slnx`, and
+`dotnet test TwoPoint.slnx`. Its last line is `verify: green` or `verify: red`. CI runs it on each
 PR to `main`.
 
 ## Private links
