@@ -20,7 +20,7 @@ let pending = readList "pending-urls.txt"
 
 /// Gives one error for each listed path that is missing and not pending, and one error for each pending
 /// path that is in the output.
-let check (urls: Set<string>) (pending: Set<string>) (output: Set<string>) =
+let check (output: Set<string>) =
   let missing =
     Set.difference (Set.difference urls pending) output
     |> Seq.map (fun path -> $"The output has no '{path}'.")

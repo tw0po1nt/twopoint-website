@@ -14,14 +14,14 @@ let tests =
     test "the output of each stage has each listed path that is not pending" {
       for stage in Stage.all do
         let output = RenderMap.create stage |> RenderMap.sitePaths
-        Expect.isEmpty (UrlParity.check UrlParity.urls UrlParity.pending output) $"The {Stage.name stage} output agrees"
+        Expect.isEmpty (UrlParity.check output) $"The {Stage.name stage} output agrees"
     }
 
     test "the check fails when robots.txt is missing" {
       let output = RenderMap.create Stage.Production |> RenderMap.sitePaths |> Set.remove "robots.txt"
 
       Expect.equal
-        (UrlParity.check UrlParity.urls UrlParity.pending output)
+        (UrlParity.check output)
         [ "The output has no 'robots.txt'." ]
         "A missing path that is not pending fails"
     }
@@ -30,7 +30,7 @@ let tests =
       let output = RenderMap.create Stage.Production |> RenderMap.sitePaths |> Set.add "rss.xml"
 
       Expect.equal
-        (UrlParity.check UrlParity.urls UrlParity.pending output)
+        (UrlParity.check output)
         [ "The output has 'rss.xml'. Remove it from the pending list." ]
         "A pending path in the output fails"
     }

@@ -301,7 +301,7 @@ A good test checks the behavior that a reader, the author, or the backend sees: 
 
 ### Named checks
 
-- **URL list and pending list.** The first generator issue builds Astro one time and commits the list of its public paths: 44 pages (with `404.html`) and the 4 feed and robots files. It also commits a pending list. The parity test fails when a listed path is missing and not pending, or when a pending path is in the output. Each page issue removes its paths from the pending list.
+- **URL list and pending list.** The first generator issue builds Astro one time and commits the list of its public paths: each page (with `404.html`) and the 4 feed and robots files. It also commits a pending list. The parity test fails when a listed path is missing and not pending, or when a pending path is in the output. Each page issue removes its paths from the pending list.
 - **Class check.** Each class in the output has a CSS rule, and each rule has a use. Widget classes are on an allow list. An unused `tk-*` rule passes. The newsletter output checks against the email CSS.
 - **Newsletter contract.** One fixture post through the email path: the slots stay, no script, no site stylesheet, the embed style block as written, and the inline styles on a code token and a body image.
 - **Tests on the real posts.** The tests load the real content, so `verify.sh` fails on an invalid post.

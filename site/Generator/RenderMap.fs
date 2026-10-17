@@ -8,7 +8,7 @@ type Output =
   | SiteFile of path: string
   /// The newsletter of the post with this slug.
   | Newsletter of slug: string
-  /// The file that records the stage of the build for `upload`.
+  /// The file that contains the stage name of the build.
   | StageMarker
 
 /// A render that runs only when a caller asks for its bytes.
