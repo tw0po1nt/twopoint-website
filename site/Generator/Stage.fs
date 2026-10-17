@@ -2,14 +2,12 @@ namespace TwoPoint.Site.Generator
 
 open System
 
-/// A place where the site runs. Each stage has its own site URL.
 [<RequireQualifiedAccess>]
 type Stage =
   | Local
   | Staging
   | Production
 
-/// The values that change by stage.
 type StageConfig =
   { SiteUrl: Uri
     SiteTitle: string
@@ -24,7 +22,6 @@ module Stage =
 
   let all = [ Stage.Local; Stage.Staging; Stage.Production ]
 
-  /// The name of the stage in the `--stage` option and in the stage marker.
   let name stage =
     match stage with
     | Stage.Local -> "local"

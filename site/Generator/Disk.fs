@@ -3,18 +3,13 @@ module TwoPoint.Site.Generator.Disk
 
 open System.IO
 
-/// The folder of the site files.
 let siteFolder = "website"
-
-/// The folder of the newsletter files.
 let newsletterFolder = "newsletter"
-
 let stageMarkerFile = "stage"
 
 let private siteDir (outputFolder: string) = Path.Combine(outputFolder, siteFolder)
 let private newsletterDir (outputFolder: string) = Path.Combine(outputFolder, newsletterFolder)
 
-/// The file of an output under the output folder.
 let filePath (outputFolder: string) output =
   match output with
   | SiteFile path -> Path.Combine(siteDir outputFolder, path)
