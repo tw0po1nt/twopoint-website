@@ -2,7 +2,7 @@
 # Fails when a banned pattern reaches the prose of this repo. The pattern list is
 # `.banned-patterns` at the repo root.
 #
-# Each list line holds an extended regular expression, a tab, and the message to
+# Each list line has an extended regular expression, a tab, and the message to
 # report. The check reads Markdown files and F# source files. In F#, it reads
 # comments and string literals. Add a case arm under the LANGUAGE marker below
 # when this repo adopts another source language.
@@ -32,7 +32,7 @@ while IFS=$'\t' read -r pattern message; do
 done < .banned-patterns
 
 if [ ${#patterns[@]} -eq 0 ]; then
-  echo "check-banned-patterns: .banned-patterns holds no pattern. Nothing to check."
+  echo "check-banned-patterns: .banned-patterns has no pattern. Nothing to check."
   exit 0
 fi
 
@@ -53,7 +53,7 @@ strip_markdown='
 
 # F#: keep the text of `//` and `(* *)` comments and of string literals. A
 # block comment and a triple-quoted string can span lines, so the state
-# carries from one line to the next. `(*)` is the multiplication operator.
+# continues from one line to the next. `(*)` is the multiplication operator.
 strip_fsharp='
   BEGIN { q = sprintf("%c", 39); dq = sprintf("%c", 34) }
   {

@@ -18,7 +18,7 @@ let tests =
           Indexable = false
           PulseSiteId = None
           ApiUrl = Uri "http://localhost:7071" }
-        "The local record holds the local values"
+        "The local record has the local values"
     }
 
     test "the staging record gives each staging value" {
@@ -31,7 +31,7 @@ let tests =
           Indexable = false
           PulseSiteId = None
           ApiUrl = Uri "https://func-twopoint-website-api.azurewebsites.net" }
-        "The staging record holds the staging values"
+        "The staging record has the staging values"
     }
 
     test "the production record gives each production value" {
@@ -44,7 +44,7 @@ let tests =
           Indexable = true
           PulseSiteId = Some "ps_wKUsetBa02nUCCLQY4Lt"
           ApiUrl = Uri "https://func-twopoint-website-api.azurewebsites.net" }
-        "The production record holds the production values"
+        "The production record has the production values"
     }
 
     test "parse reads the name of each stage" {

@@ -1,5 +1,5 @@
-/// The URL list holds each public path of the Astro build. The pending list holds the paths of the URL
-/// list that the generator does not write yet.
+/// The URL list contains each public path of the Astro build. The pending list contains the paths
+/// of the URL list that the generator does not write yet.
 module TwoPoint.Site.Generator.Tests.UrlParity
 
 open System.IO

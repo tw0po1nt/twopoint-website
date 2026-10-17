@@ -40,7 +40,7 @@ The site keeps an inactive subscription until you ask for deletion. To delete yo
 
 ## Comments
 
-When you comment, the site stores a commenter record. The record holds your email address, your name if you give one,
+When you comment, the site stores a commenter record. The record contains your email address, your name if you give one,
 the date of your first comment, and a moderation status.
 
 Your name shows publicly with each of your comments. Your email address stays private. The site sends a validation

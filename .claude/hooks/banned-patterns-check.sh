@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse check: deny the call when its pending prose matches a pattern that
-# `.banned-patterns` forbids. Two kinds of call carry prose:
+# `.banned-patterns` forbids. Two kinds of call contain prose:
 #
 #   - A Write or an Edit on a Markdown or F# file.
 #   - A Bash command that publishes prose: `git commit`, a `gh` issue or pull
@@ -12,7 +12,7 @@
 # This is enforcement. The pattern list decides the answer with no judgment, so
 # the agent learns at the moment of writing rather than in CI.
 # scripts/check-banned-patterns.sh stays the complete check for files, because
-# this hook cannot see a file that a Bash command writes. An Edit carries a
+# this hook cannot see a file that a Bash command writes. An Edit contains a
 # fragment, so the F# stripper reads the fragment as if it starts outside a
 # comment or a string. Extend the `case` below with a source-language extension
 # the same way that script's LANGUAGE marker describes.
@@ -50,7 +50,7 @@ else
     *) exit 0 ;;
   esac
 
-  # Write carries the whole file, Edit carries the replacement text alone.
+  # Write contains the whole file, Edit contains the replacement text alone.
   pending="$(jq -r '[.tool_input.content, .tool_input.new_string] | map(select(. != null)) | join("\n")' <<<"$input")"
   label="$file_path"
 fi

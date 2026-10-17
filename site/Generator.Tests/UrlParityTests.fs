@@ -8,7 +8,7 @@ open Expecto
 let tests =
   testList "URL parity" [
     test "each pending path is on the URL list" {
-      Expect.isEmpty (Set.difference UrlParity.pending UrlParity.urls) "The pending list holds only listed paths"
+      Expect.isEmpty (Set.difference UrlParity.pending UrlParity.urls) "The pending list contains only listed paths"
     }
 
     test "the output of each stage has each listed path that is not pending" {
