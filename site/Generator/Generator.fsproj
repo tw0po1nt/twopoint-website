@@ -18,12 +18,14 @@
     <Compile Include="FrontMatter.fs" />
     <Compile Include="Highlight.fs" />
     <Compile Include="Directive.fs" />
+    <Compile Include="Images.fs" />
     <Compile Include="Body.fs" />
     <Compile Include="Post.fs" />
     <Compile Include="PendingPages.fs" />
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
     <Compile Include="Assets.fs" />
+    <Compile Include="OgImages.fs" />
     <Compile Include="Blog.fs" />
     <Compile Include="Layout.fs" />
     <Compile Include="PostPage.fs" />
@@ -39,6 +41,8 @@
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
     <PackageReference Include="Markdig" Version="1.4.1" />
     <PackageReference Include="Oxpecker.ViewEngine" Version="2.1.0" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
     <PackageReference Include="TextMateSharp" Version="2.0.4" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>

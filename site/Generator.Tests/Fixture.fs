@@ -3,8 +3,40 @@ module TwoPoint.Site.Generator.Tests.Fixture
 open TwoPoint.Site.Generator
 
 open Expecto
+open SkiaSharp
 open System
+open System.Security.Cryptography
 open System.Text
+
+let jpeg (width: int) (height: int) (color: SKColor) =
+  use bitmap = new SKBitmap(width, height)
+  bitmap.Erase color
+  use image = SKImage.FromBitmap bitmap
+  use data = image.Encode(SKEncodedImageFormat.Jpeg, 90)
+  data.ToArray()
+
+let fetchWith (get: Uri -> Result<byte array, string>) =
+  { new IImageFetch with
+      member _.Get url = get url }
+
+/// Each URL gives a JPEG of 1600×900, in a color that comes from the URL.
+let anyImage =
+  fetchWith (fun url ->
+    let hash = SHA256.HashData(Encoding.UTF8.GetBytes url.AbsoluteUri)
+    Ok(jpeg 1600 900 (SKColor(hash[0], hash[1], hash[2]))))
+
+let recording (fetch: IImageFetch) =
+  let calls = ResizeArray<string>()
+
+  fetchWith (fun url ->
+    calls.Add url.AbsoluteUri
+    fetch.Get url),
+  calls
+
+let ok result =
+  match result with
+  | Ok value -> value
+  | Error errors -> failtest $"%A{errors}"
 
 /// Lines 2 to 6 of a fixture post.
 let frontMatter =
@@ -19,7 +51,7 @@ let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{bo
 
 let file slug = $"site/content/posts/{slug}.md"
 
-let parse slug text = Post.parse (file slug) text
+let parse slug text = Post.parse anyImage (file slug) text
 
 let published slug text =
   match parse slug text with
@@ -46,15 +78,20 @@ let realRoot =
 
 let realContent =
   lazy
-    (match Site.loadContent realRoot.Value with
+    (match Site.loadContent anyImage realRoot.Value with
      | Ok content -> content
      | Error errors -> failtest (String.concat "\n" errors))
 
 let realPosts = lazy realContent.Value.Posts
 
-let content (posts: Post list) =
+let contentWith (fetch: IImageFetch) (posts: Post list) =
+  let assets = realContent.Value.Assets
+
   { Posts = posts
-    Assets = realContent.Value.Assets }
+    Assets = assets
+    OgImages = OgImages.create fetch assets.DefaultImage posts |> ok }
+
+let content (posts: Post list) = contentWith anyImage posts
 
 let pagePaths (map: RenderMap) =
   RenderMap.sitePaths map |> Set.filter (fun path -> not (path.StartsWith "_/"))

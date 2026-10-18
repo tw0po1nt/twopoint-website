@@ -75,8 +75,13 @@ let private rawHtmlErrors file (document: MarkdownDocument) =
     let lineAt index = line + html.AsSpan(0, index).Count '\n'
 
     [ for tag in startTag.Matches html do
-        if tag.Groups[1].Value.Equals("a", StringComparison.OrdinalIgnoreCase) then
+        let name = tag.Groups[1].Value
+
+        if name.Equals("a", StringComparison.OrdinalIgnoreCase) then
           errorAt file (lineAt tag.Index) "Write the link as a Markdown link, for example [the docs](https://example.com/)."
+
+        if name.Equals("img", StringComparison.OrdinalIgnoreCase) then
+          errorAt file (lineAt tag.Index) "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
 
         let attributes = tag.Groups[2]
 
@@ -186,7 +191,7 @@ let private render (document: MarkdownDocument) =
   writer.ToString()
 
 /// Changes the document in place.
-let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
+let ofDocument (fetch: IImageFetch) (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
   let headings = descendants<HeadingBlock> document
   let texts = headings |> List.map (fun heading -> inlineText heading.Inline)
   let ids = Slug.headingIds texts
@@ -194,8 +199,22 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
   for heading, id in List.zip headings ids do
     heading.GetAttributes().Id <- id
 
-  for image in descendants<LinkInline> document |> List.filter _.IsImage do
-    image.GetAttributes().AddPropertyIfNotExist("loading", "lazy")
+  let imageErrors =
+    descendants<LinkInline> document
+    |> List.filter _.IsImage
+    |> List.choose (fun image ->
+      let attributes = image.GetAttributes()
+      attributes.AddPropertyIfNotExist("loading", "lazy")
+
+      match Uri.TryCreate(image.Url, UriKind.Absolute) with
+      | true, url when url.Scheme = Uri.UriSchemeHttps ->
+        match fetch.Get url |> Result.bind Images.size with
+        | Ok size ->
+          attributes.AddProperty("width", string size.Width)
+          attributes.AddProperty("height", string size.Height)
+          None
+        | Error reason -> Some(errorAt file image.Line $"The build cannot read the size of the image {url}: {reason}.")
+      | _ -> Some(errorAt file image.Line $"Give the image '{image.Url}' as an https URL."))
 
   let links = links document
 
@@ -229,7 +248,7 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
       | Error message -> Some(errorAt file block.Line message))
 
   let errors =
-    rawHtmlErrors file document @ linkErrors @ languageErrors @ directiveErrors
+    rawHtmlErrors file document @ imageErrors @ linkErrors @ languageErrors @ directiveErrors
     |> List.sortBy _.Line
 
   if errors.IsEmpty then

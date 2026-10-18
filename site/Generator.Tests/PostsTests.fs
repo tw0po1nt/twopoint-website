@@ -70,7 +70,7 @@ let tests =
 
     test "each internal link of the posts goes to a page and a heading in the output" {
       for stage in Stage.all do
-        match Site.load realRoot.Value stage with
+        match Site.load anyImage realRoot.Value stage with
         | Ok _ -> ()
         | Error errors -> failtest (String.concat "\n" errors)
     }

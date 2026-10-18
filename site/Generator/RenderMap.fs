@@ -12,7 +12,10 @@ type Render = unit -> byte array
 
 type RenderMap = Map<Output, Render>
 
-type Content = { Posts: Post list; Assets: Assets }
+type Content =
+  { Posts: Post list
+    Assets: Assets
+    OgImages: OgImages }
 
 [<RequireQualifiedAccess>]
 module RenderMap =
@@ -27,10 +30,12 @@ module RenderMap =
     Map
       [ SiteFile "robots.txt", text (fun () -> Robots.render config)
         StageMarker, text (fun () -> Stage.name stage)
-        for KeyValue(path, bytes) in content.Assets.Files do
-          SiteFile path, (fun () -> bytes)
+        for files in [ content.Assets.Files; content.OgImages.Files ] do
+          for KeyValue(path, bytes) in files do
+            SiteFile path, (fun () -> bytes)
         for post in content.Posts do
-          postFile post, (fun () -> PostPage.render config content.Assets content.Posts post) ]
+          postFile post,
+          (fun () -> PostPage.render config content.Assets content.Posts content.OgImages.ByPost[post.Slug] post) ]
 
   let sitePaths (map: RenderMap) =
     map

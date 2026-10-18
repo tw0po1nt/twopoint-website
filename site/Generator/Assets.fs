@@ -23,7 +23,8 @@ type Assets =
   { /// Each file at its site path, for example `_/favicon-1a2b3c4d.svg`.
     Files: Map<string, byte array>
     Stylesheet: string
-    Favicons: Favicons }
+    Favicons: Favicons
+    DefaultImage: OgImage }
 
 [<RequireQualifiedAccess>]
 module Styles =
@@ -92,6 +93,16 @@ module Assets =
           AppleTouch = appleTouch }
     }
 
+  let private defaultImage (assets: Asset list) (urls: Map<string, string>) =
+    let name = "images/default.jpg"
+
+    match assets |> List.tryFind (fun asset -> asset.Name = name) with
+    | Some asset ->
+      Images.size asset.Bytes
+      |> Result.map (fun size -> { UrlPath = urls[name]; Size = size })
+      |> Result.mapError (fun reason -> [ $"site/content/assets/{name} cannot be read: {reason}." ])
+    | None -> Error [ $"site/content/assets/ has no {name}." ]
+
   /// `css` is the joined site CSS.
   let create (assets: Asset list) (css: string) : Result<Assets, string list> =
     let paths = assets |> List.map (fun asset -> asset.Name, sitePath asset.Name asset.Bytes)
@@ -100,6 +111,7 @@ module Assets =
     validation {
       let! css = resolve urls css
       and! favicons = favicons urls
+      and! defaultImage = defaultImage assets urls
       let bytes = Encoding.UTF8.GetBytes css
       let stylesheet = sitePath "site.css" bytes
 
@@ -110,5 +122,6 @@ module Assets =
                   path, asset.Bytes
                 stylesheet, bytes ]
           Stylesheet = $"/{stylesheet}"
-          Favicons = favicons }
+          Favicons = favicons
+          DefaultImage = defaultImage }
     }

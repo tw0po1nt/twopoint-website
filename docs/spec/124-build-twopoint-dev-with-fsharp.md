@@ -221,7 +221,8 @@ A value that does not change by stage is a constant, for example the Google site
 ### Images
 
 - `og:image` is the only use of `series.image` and `image`, in that order, with the site default last.
-- The build downloads each source and writes a 1200×630 center crop with SixLabors.ImageSharp as `/_/og-<hash>.jpg`, with no upscale. `og:image:width` and `og:image:height` come from the written file.
+- The build downloads each source and writes a 1200×630 center crop with SkiaSharp as `/_/og-<hash>.jpg`, with no upscale. `og:image:width` and `og:image:height` come from the written file.
+- SkiaSharp replaces ImageSharp, which #110 chose. A Release build with ImageSharp 4.x fails when it has no license key. Only 4.x fixes the advisories in 3.1.12. SkiaSharp uses a native library. The package contains the macOS and Windows libraries, and `SkiaSharp.NativeAssets.Linux.NoDependencies` contains the Linux library.
 - A failed download after a small number of retries fails the build. No host list.
 - The default image and the About photo are committed copies that the build copies with a hash. The 18.5 MB `default.png` goes.
 - Body images keep their Blob URL. The build reads their size.

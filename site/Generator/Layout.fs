@@ -23,6 +23,7 @@ type Page =
     UrlPath: string option
     Robots: Robots
     OgType: OgType
+    OgImage: OgImage
     /// The post that the explorer marks.
     Current: Post option }
 
@@ -85,10 +86,13 @@ let private head (config: StageConfig) (assets: Assets) (page: Page) =
     | Some urlPath -> meta().attr("property", "og:url").attr ("content", url config urlPath)
     | None -> ()
 
+    meta().attr("property", "og:image").attr ("content", url config page.OgImage.UrlPath)
+    meta().attr("property", "og:image:width").attr ("content", string page.OgImage.Size.Width)
+    meta().attr("property", "og:image:height").attr ("content", string page.OgImage.Size.Height)
     meta().attr("property", "og:type").attr ("content", ogType)
     meta().attr("property", "og:locale").attr ("content", "en")
     meta().attr("property", "og:site_name").attr ("content", config.OgSiteName)
-    meta (name = "twitter:card", content = "summary")
+    meta (name = "twitter:card", content = "summary_large_image")
     meta (name = "google-site-verification", content = googleSiteVerification)
     link (rel = "alternate", type' = "application/rss+xml", title = feedTitle, href = "/rss.xml")
     link(rel = "icon", href = assets.Favicons.Ico).attr ("sizes", "32x32")
