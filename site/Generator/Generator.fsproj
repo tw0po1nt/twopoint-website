@@ -25,6 +25,7 @@
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
     <Compile Include="Assets.fs" />
+    <Compile Include="Widgets.fs" />
     <Compile Include="OgImages.fs" />
     <Compile Include="Blog.fs" />
     <Compile Include="Layout.fs" />

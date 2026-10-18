@@ -70,6 +70,15 @@ let siteText (map: RenderMap) path =
   | Some render -> Encoding.UTF8.GetString(render ())
   | None -> failtest $"The output has no '{path}'."
 
+/// The files of a widget build with no widget entry.
+let widgetFiles =
+  Map
+    [ "manifest.json", Encoding.UTF8.GetBytes """{ "entries": {}, "head": "head-TEST.js", "devReload": "dev-reload-TEST.js" }"""
+      "head-TEST.js", Encoding.UTF8.GetBytes "(()=>{document.documentElement.dataset.fixture=\"head\"})();"
+      "dev-reload-TEST.js", Encoding.UTF8.GetBytes "(()=>{})();" ]
+
+let widgets = Widgets.create widgetFiles |> ok
+
 let realRoot =
   lazy
     (match Site.root AppContext.BaseDirectory with

@@ -32,6 +32,7 @@
     <Compile Include="PostsTests.fs" />
     <Compile Include="BlogTests.fs" />
     <Compile Include="AssetsTests.fs" />
+    <Compile Include="WidgetsTests.fs" />
     <Compile Include="ImagesTests.fs" />
     <Compile Include="OgImagesTests.fs" />
     <Compile Include="PostPageTests.fs" />

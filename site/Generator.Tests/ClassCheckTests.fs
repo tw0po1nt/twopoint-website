@@ -21,8 +21,8 @@ let private fixturePosts =
 let tests =
   testList "Class check" [
     test "each class of the real output and the fixture output has a rule, and each rule has a use" {
-      let real = RenderMap.create Stage.Production realContent.Value
-      let fixture = RenderMap.create Stage.Production (content fixturePosts)
+      let real = RenderMap.create Stage.Production widgets realContent.Value
+      let fixture = RenderMap.create Stage.Production widgets (content fixturePosts)
       let css = text real (realContent.Value.Assets.Stylesheet.TrimStart '/')
       Expect.isEmpty (ClassCheck.check css (Seq.append (pages real) (pages fixture))) "The site CSS agrees with the output"
     }

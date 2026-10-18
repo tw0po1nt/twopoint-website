@@ -12,9 +12,18 @@ let private noAssets =
     Favicons = { Ico = ""; Svg = ""; AppleTouch = "" }
     DefaultImage = { UrlPath = ""; Size = { Width = 0; Height = 0 } } }
 
+let private noWidgets =
+  { Manifest =
+      { Entries = Map.empty
+        Head = ""
+        DevReload = "" }
+    HeadScript = ""
+    Files = Map.empty }
+
 let private map =
   RenderMap.create
     Stage.Local
+    noWidgets
     { Posts = []
       Assets = noAssets
       OgImages = { Files = Map.empty; ByPost = Map.empty } }

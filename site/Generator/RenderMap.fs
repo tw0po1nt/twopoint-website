@@ -24,18 +24,18 @@ module RenderMap =
 
   let private postFile (post: Post) = SiteFile(SitePath.ofUrlPath (Post.urlPath post))
 
-  let create (stage: Stage) (content: Content) : RenderMap =
+  let create (stage: Stage) (widgets: Widgets) (content: Content) : RenderMap =
     let config = Stage.config stage
 
     Map
       [ SiteFile "robots.txt", text (fun () -> Robots.render config)
         StageMarker, text (fun () -> Stage.name stage)
-        for files in [ content.Assets.Files; content.OgImages.Files ] do
+        for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do
           for KeyValue(path, bytes) in files do
             SiteFile path, (fun () -> bytes)
         for post in content.Posts do
           postFile post,
-          (fun () -> PostPage.render config content.Assets content.Posts content.OgImages.ByPost[post.Slug] post) ]
+          (fun () -> PostPage.render config content.Assets widgets content.Posts content.OgImages.ByPost[post.Slug] post) ]
 
   let sitePaths (map: RenderMap) =
     map

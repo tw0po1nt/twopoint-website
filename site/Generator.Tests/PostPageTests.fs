@@ -21,7 +21,7 @@ let private newest = postWith "smatterings-of-fsharp" "2025-11-14T00:00:00Z" "Ta
 let private posts = [ oldest; middle; newest ]
 
 let private page stage (post: Post) =
-  siteText (RenderMap.create stage (content posts)) $"posts/{post.Slug}/index.html"
+  siteText (RenderMap.create stage widgets (content posts)) $"posts/{post.Slug}/index.html"
 
 let private robots stage =
   Regex.Match(page stage middle, """<meta name="robots" content="([^"]+)">""").Groups[1].Value
@@ -50,7 +50,7 @@ let tests =
     }
 
     test "the stylesheet and the favicons are files in the output" {
-      let map = RenderMap.create Stage.Production (content posts)
+      let map = RenderMap.create Stage.Production widgets (content posts)
       let html = siteText map "posts/fable-reminders-part-2/index.html"
 
       for found in Regex.Matches(html, """<link rel="(?:stylesheet|icon|apple-touch-icon)"[^>]* href="([^"]+)""") do
@@ -59,11 +59,12 @@ let tests =
         Expect.contains (RenderMap.sitePaths map) (href.Substring 1) $"{href} is in the output"
     }
 
-    test "only Production has the Pulse script, and no page has another script" {
+    test "only Production has the Pulse script, and the other script of a page is the inline head script" {
       Expect.stringContains (page Stage.Production middle) """<script src="https://pulse.w7ech.com/cdn/s.js" defer data-site=""" "Production counts visits"
 
       for stage in [ Stage.Local; Stage.Staging ] do
-        Expect.isFalse ((page stage middle).Contains "<script") $"{Stage.name stage} has no script"
+        let scripts = [ for found in Regex.Matches(page stage middle, "<script[^>]*>") -> found.Value ]
+        Expect.equal scripts [ "<script>" ] $"{Stage.name stage} has only the inline head script"
     }
 
     test "the explorer is a popover that opens and closes with no script" {

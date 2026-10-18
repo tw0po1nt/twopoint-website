@@ -57,7 +57,7 @@ let private robots (config: StageConfig) (page: Page) =
   | true, Robots.Index -> "index,follow"
   | true, Robots.NoIndex -> "noindex,follow"
 
-let private head (config: StageConfig) (assets: Assets) (page: Page) =
+let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (page: Page) =
   let title =
     match page.Title with
     | Some title -> $"{title} {emDash} {config.SiteTitle}"
@@ -99,6 +99,7 @@ let private head (config: StageConfig) (assets: Assets) (page: Page) =
     link (rel = "icon", type' = "image/svg+xml", href = assets.Favicons.Svg)
     link (rel = "apple-touch-icon", href = assets.Favicons.AppleTouch)
     link (rel = "stylesheet", href = assets.Stylesheet)
+    script () { raw widgets.HeadScript }
 
     match config.PulseSiteId with
     | Some siteId -> script(src = "https://pulse.w7ech.com/cdn/s.js", defer = true).data ("site", siteId)
@@ -197,9 +198,9 @@ let private footer () =
   }
 
 /// `posts` are the posts that the explorer lists.
-let render (config: StageConfig) (assets: Assets) (posts: Post list) (page: Page) (main: HtmlElement) =
+let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (page: Page) (main: HtmlElement) =
   html (lang = "en") {
-    head config assets page
+    head config assets widgets page
 
     body () {
       header ()
