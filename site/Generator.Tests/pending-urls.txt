@@ -13,7 +13,6 @@ series/index.html
 series/matts-footgun-collection/index.html
 sitemap-0.xml
 sitemap-index.xml
-subscribe/index.html
 tag/2023/index.html
 tag/2024/index.html
 tag/2025/index.html

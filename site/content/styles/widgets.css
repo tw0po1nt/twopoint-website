@@ -1,0 +1,80 @@
+/* The widgets. A widget script writes most of these classes in the browser. */
+
+.subscribe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font: 14px var(--mono);
+}
+
+.explorer .subscribe {
+  font-size: 13px;
+}
+
+.subscribe-field {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--muted);
+}
+
+.subscribe-field span {
+  min-width: 6ch;
+}
+
+.subscribe-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--fg);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+
+.subscribe-field input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.subscribe button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.subscribe button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.subscribe-error,
+.subscribe-status,
+.subscribe-note,
+.subscribe-fallback {
+  margin: 0;
+  font: 13px/1.5 var(--mono);
+}
+
+.subscribe-error,
+.subscribe-status.is-failed {
+  color: var(--accent);
+}
+
+.subscribe-status.is-subscribed {
+  color: var(--accent-2);
+}
+
+.subscribe-status:empty {
+  display: none;
+}
+
+.subscribe-note,
+.subscribe-fallback {
+  color: var(--muted);
+}

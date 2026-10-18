@@ -57,7 +57,7 @@ let private robots (config: StageConfig) (page: Page) =
   | true, Robots.Index -> "index,follow"
   | true, Robots.NoIndex -> "noindex,follow"
 
-let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (page: Page) =
+let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (scripts: WidgetScripts) (page: Page) =
   let title =
     match page.Title with
     | Some title -> $"{title} {emDash} {config.SiteTitle}"
@@ -101,6 +101,12 @@ let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (page
     link (rel = "stylesheet", href = assets.Stylesheet)
     script () { raw widgets.HeadScript }
 
+    for href in scripts.Preloads do
+      link (rel = "modulepreload", href = href)
+
+    for src in scripts.Entries do
+      script (type' = "module", src = src)
+
     match config.PulseSiteId with
     | Some siteId -> script(src = "https://pulse.w7ech.com/cdn/s.js", defer = true).data ("site", siteId)
     | None -> ()
@@ -133,7 +139,7 @@ let private footerLinks () =
     a (href = "/rss.xml") { "rss.xml" }
   }
 
-let private explorer (posts: Post list) (current: Post option) =
+let private explorer (config: StageConfig) (posts: Post list) (current: Post option) =
   let isCurrent (post: Post) = current |> Option.exists (fun current -> current.Slug = post.Slug)
 
   aside(id = "explorer", class' = "explorer", popover = "auto").attr ("aria-label", "Explorer") {
@@ -188,6 +194,8 @@ let private explorer (posts: Post list) (current: Post option) =
           a (href = $"/tag/{tag.Slug}/") { $"#{tag.Title}" }
       }
 
+    p (class' = "label") { "subscribe" }
+    Mount.subscribe config
     p (class' = "explorer-foot") { footerLinks () }
   }
 
@@ -197,16 +205,19 @@ let private footer () =
     footerLinks ()
   }
 
-/// `posts` are the posts that the explorer lists.
+/// `posts` are the posts that the explorer lists. The head loads the script of each widget that the body mounts.
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (page: Page) (main: HtmlElement) =
-  html (lang = "en") {
-    head config assets widgets page
-
+  let body =
     body () {
       header ()
-      explorer posts page.Current
+      explorer config posts page.Current
       main
       footer ()
     }
+    |> Render.toString
+
+  html (lang = "en") {
+    head config assets widgets (Widgets.scripts widgets body) page
+    raw body
   }
   |> Render.toHtmlDocBytes

@@ -59,12 +59,15 @@ let tests =
         Expect.contains (RenderMap.sitePaths map) (href.Substring 1) $"{href} is in the output"
     }
 
-    test "only Production has the Pulse script, and the other script of a page is the inline head script" {
+    test "only Production has the Pulse script, and the other scripts are the inline head script and the Subscribe entry" {
       Expect.stringContains (page Stage.Production middle) """<script src="https://pulse.w7ech.com/cdn/s.js" defer data-site=""" "Production counts visits"
 
       for stage in [ Stage.Local; Stage.Staging ] do
         let scripts = [ for found in Regex.Matches(page stage middle, "<script[^>]*>") -> found.Value ]
-        Expect.equal scripts [ "<script>" ] $"{Stage.name stage} has only the inline head script"
+        Expect.equal
+          scripts
+          [ "<script>"; """<script type="module" src="/_/widgets/subscribe-TEST.js">""" ]
+          $"{Stage.name stage} has the head script and the entry of the explorer mount"
     }
 
     test "the explorer is a popover that opens and closes with no script" {

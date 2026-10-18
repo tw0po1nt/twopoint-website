@@ -30,6 +30,8 @@ module RenderMap =
     Map
       [ SiteFile "robots.txt", text (fun () -> Robots.render config)
         StageMarker, text (fun () -> Stage.name stage)
+        SiteFile(SitePath.ofUrlPath SubscribePage.urlPath),
+        (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
         for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do
           for KeyValue(path, bytes) in files do
             SiteFile path, (fun () -> bytes)
