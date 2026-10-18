@@ -138,10 +138,35 @@ let private links (document: MarkdownDocument) =
 
   links @ autolinks
 
+let private lines (block: CodeBlock) =
+  [ for index in 0 .. block.Lines.Count - 1 -> block.Lines.Lines[index].Slice.ToString() ]
+
+let private fence (block: CodeBlock) =
+  match block with
+  | :? FencedCodeBlock as fenced -> Highlight.tryLanguage fenced.Info |> Option.map (fun language -> fenced.Info, language)
+  | _ -> None
+
+type private CodeRenderer() =
+  inherit HtmlObjectRenderer<CodeBlock>()
+
+  override _.Write(renderer: HtmlRenderer, block: CodeBlock) =
+    renderer.EnsureLine() |> ignore
+
+    match fence block with
+    | Some(name, language) ->
+      renderer
+        .Write($"<pre data-lang=\"{name}\" tabindex=\"0\"><code>")
+        .Write(Highlight.html language (lines block))
+      |> ignore
+    | None -> renderer.Write("<pre tabindex=\"0\"><code>").Write(Highlight.plain (lines block)) |> ignore
+
+    renderer.WriteLine "</code></pre>" |> ignore
+
 let private render (document: MarkdownDocument) =
   use writer = new StringWriter()
   let renderer = HtmlRenderer(writer)
   pipeline.Setup renderer
+  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeRenderer()) |> ignore
   renderer.Render document |> ignore
   writer.ToString()
 
@@ -156,9 +181,6 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
 
   for image in descendants<LinkInline> document |> List.filter _.IsImage do
     image.GetAttributes().AddPropertyIfNotExist("loading", "lazy")
-
-  for code in descendants<FencedCodeBlock> document do
-    code.GetAttributes().Classes <- null
 
   let links = links document
 
@@ -178,7 +200,15 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
       | node, Internal target -> Some { Target = target; Line = node.Line + 1 }
       | _ -> None)
 
-  let errors = rawHtmlErrors file document @ linkErrors |> List.sortBy _.Line
+  let languageErrors =
+    descendants<FencedCodeBlock> document
+    |> List.filter (fun code -> not (String.IsNullOrEmpty code.Info) && (Highlight.tryLanguage code.Info).IsNone)
+    |> List.map (fun code ->
+      let names = Highlight.languages |> List.map fst |> String.concat ", "
+      errorAt file code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {names}.")
+
+  let errors =
+    rawHtmlErrors file document @ linkErrors @ languageErrors |> List.sortBy _.Line
 
   if errors.IsEmpty then
     Ok
