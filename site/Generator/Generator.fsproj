@@ -20,6 +20,9 @@
     <Compile Include="PendingPosts.fs" />
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
+    <Compile Include="Assets.fs" />
+    <Compile Include="Blog.fs" />
+    <Compile Include="Layout.fs" />
     <Compile Include="PostPage.fs" />
     <Compile Include="RenderMap.fs" />
     <Compile Include="Site.fs" />

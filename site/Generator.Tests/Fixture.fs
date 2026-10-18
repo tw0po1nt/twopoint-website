@@ -44,8 +44,35 @@ let realRoot =
      | Ok root -> root
      | Error message -> failtest message)
 
-let realPosts =
+let realContent =
   lazy
-    (match Site.loadPosts realRoot.Value with
-     | Ok posts -> posts
-     | Error errors -> failtest (errors |> List.map PostError.format |> String.concat "\n"))
+    (match Site.loadContent realRoot.Value with
+     | Ok content -> content
+     | Error errors -> failtest (String.concat "\n" errors))
+
+let realPosts = lazy realContent.Value.Posts
+
+let content (posts: Post list) =
+  { Posts = posts
+    Assets = realContent.Value.Assets }
+
+let pagePaths (map: RenderMap) =
+  RenderMap.sitePaths map |> Set.filter (fun path -> not (path.StartsWith "_/"))
+
+/// A post with the title `slug` and a body of one paragraph.
+let postWith slug (publishDate: string) category (tags: string list) (series: string option) =
+  let tagLines =
+    match tags with
+    | [] -> ""
+    | tags -> "\ntags:" + (tags |> List.map (fun tag -> $"\n  - {tag}") |> String.concat "")
+
+  let seriesLines =
+    match series with
+    | Some series -> $"\nseries:\n  slug: {series}\n  title: {series}\n  excerpt: A series"
+    | None -> ""
+
+  published
+    slug
+    (text
+      $"publishDate: {publishDate}\nauthor: Matthew Watt\ntitle: {slug}\nexcerpt: An excerpt\ncategory: {category}{tagLines}{seriesLines}"
+      "Text.")

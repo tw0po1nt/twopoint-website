@@ -6,7 +6,12 @@ open TwoPoint.Site.Generator
 open Expecto
 open System.Text
 
-let private map = RenderMap.create Stage.Local []
+let private noAssets =
+  { Files = Map.empty
+    Stylesheet = ""
+    Favicons = { Ico = ""; Svg = ""; AppleTouch = "" } }
+
+let private map = RenderMap.create Stage.Local { Posts = []; Assets = noAssets }
 
 let private text (render: Render) = Encoding.UTF8.GetString(render ())
 

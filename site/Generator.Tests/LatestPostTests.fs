@@ -16,16 +16,16 @@ let tests =
   testList "The latest post" [
     test "the post page is in the output of each stage" {
       for stage in Stage.all do
-        let map = RenderMap.create stage realPosts.Value
+        let map = RenderMap.create stage realContent.Value
         let page = siteText map $"posts/{slug}/index.html"
         Expect.stringContains page "<h1>Danger lurks in System.Linq.Enumerable&#39;s &quot;OrDefault&quot; functions</h1>" "The page has the title"
-        Expect.stringContains page "<time datetime=\"2026-02-04T13:00:00Z\">Feb 4, 2026</time>" "The page has the date"
+        Expect.stringContains page "<time datetime=\"2026-02-04T13:00:00Z\">2026-02-04</time>" "The page has the date"
         Expect.stringContains page "In this post, we&#39;ll look at how my misunderstanding" "The page has the excerpt"
         Expect.stringContains page "<h2 id=\"linq\">LINQ</h2>" "The page has the body"
     }
 
     test "the heading ids agree with the Astro output" {
-      let page = siteText (RenderMap.create Stage.Production realPosts.Value) $"posts/{slug}/index.html"
+      let page = siteText (RenderMap.create Stage.Production realContent.Value) $"posts/{slug}/index.html"
       let ids = [ for found in Regex.Matches(page, """<h[1-6] id="([^"]+)">""") -> found.Groups[1].Value ]
 
       Expect.equal

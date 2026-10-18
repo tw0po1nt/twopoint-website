@@ -28,8 +28,8 @@ let tests =
 
     test "a published post has a page, and a draft has none" {
       let post = published "a-post" (text frontMatter "Text.")
-      let map = RenderMap.create Stage.Production [ post ]
-      Expect.contains (RenderMap.sitePaths map) "posts/a-post/index.html" "The published post has a page"
-      Expect.hasLength (RenderMap.sitePaths map) 2 "The output has the post page and robots.txt only"
+      let map = RenderMap.create Stage.Production (content [ post ])
+      Expect.contains (pagePaths map) "posts/a-post/index.html" "The published post has a page"
+      Expect.hasLength (pagePaths map) 2 "The output has the post page and robots.txt only"
     }
   ]

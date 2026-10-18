@@ -27,6 +27,11 @@
     <Compile Include="UrlParity.fs" />
     <Compile Include="UrlParityTests.fs" />
     <Compile Include="LatestPostTests.fs" />
+    <Compile Include="BlogTests.fs" />
+    <Compile Include="AssetsTests.fs" />
+    <Compile Include="PostPageTests.fs" />
+    <Compile Include="ClassCheck.fs" />
+    <Compile Include="ClassCheckTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

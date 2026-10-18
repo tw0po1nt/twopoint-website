@@ -48,8 +48,11 @@ type LinkTarget =
 
 type InternalLink = { Target: LinkTarget; Line: int }
 
+type Heading = { Level: int; Id: string; Text: string }
+
 type Body =
   { Html: string
+    Headings: Heading list
     Anchors: Set<string>
     Links: InternalLink list
     /// In minutes, at 200 words a minute, rounded up.
