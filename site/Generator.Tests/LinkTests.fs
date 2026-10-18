@@ -10,9 +10,8 @@ let private post slug body = published slug (text frontMatter body)
 let private target = post "b-post" "## First step\n\nText."
 
 let private check body =
-  match RenderMap.create Stage.Production [ post "a-post" body; target ] with
-  | Ok _ -> []
-  | Error errors -> errors
+  let posts = [ post "a-post" body; target ]
+  Links.check (RenderMap.create Stage.Production posts |> RenderMap.sitePaths) posts
 
 [<Tests>]
 let tests =

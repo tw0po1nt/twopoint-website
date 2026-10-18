@@ -4,6 +4,7 @@ open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
+open System.Text.RegularExpressions
 
 let private slug = "danger-lurks-in-system-linq-enumerable-or-default-functions"
 
@@ -15,7 +16,7 @@ let tests =
   testList "The latest post" [
     test "the post page is in the output of each stage" {
       for stage in Stage.all do
-        let map = renderMap stage realPosts.Value
+        let map = RenderMap.create stage realPosts.Value
         let page = siteText map $"posts/{slug}/index.html"
         Expect.stringContains page "<h1>Danger lurks in System.Linq.Enumerable&#39;s &quot;OrDefault&quot; functions</h1>" "The page has the title"
         Expect.stringContains page "<time datetime=\"2026-02-04T13:00:00Z\">Feb 4, 2026</time>" "The page has the date"
@@ -24,23 +25,25 @@ let tests =
     }
 
     test "the heading ids agree with the Astro output" {
+      let page = siteText (RenderMap.create Stage.Production realPosts.Value) $"posts/{slug}/index.html"
+      let ids = [ for found in Regex.Matches(page, """<h[1-6] id="([^"]+)">""") -> found.Groups[1].Value ]
+
       Expect.equal
-        ((latest ()).Body.Anchors)
-        (set
-          [ "linq"
-            "systemlinqenumerable"
-            "ordefault-functions-in-systemlinqenumerable"
-            "the-symptoms"
-            "combining-maybe-and-systemlinqenumerable"
-            "the-footgun-nullable-value-types-and-nullable-reference-types-are-overloaded"
-            "value-types"
-            "reference-types"
-            "default-values"
-            "what-about-nullable-value-types"
-            "the-solution"
-            "attempt-1"
-            "what-actually-works" ])
-        "The ids are the Astro ids"
+        ids
+        [ "linq"
+          "systemlinqenumerable"
+          "ordefault-functions-in-systemlinqenumerable"
+          "the-symptoms"
+          "combining-maybe-and-systemlinqenumerable"
+          "the-footgun-nullable-value-types-and-nullable-reference-types-are-overloaded"
+          "value-types"
+          "reference-types"
+          "default-values"
+          "what-about-nullable-value-types"
+          "the-solution"
+          "attempt-1"
+          "what-actually-works" ]
+        "The ids are the Astro ids, in order"
     }
 
     test "the reading time agrees with the Astro value" {
@@ -62,9 +65,9 @@ let tests =
         "Astro gives /series/matts-footgun-collection"
     }
 
-    test "each pending post is on the URL list and has no Markdown copy" {
+    test "each pending post is on the pending URL list and has no Markdown copy" {
       for pending in PendingPosts.slugs do
-        Expect.contains UrlParity.urls $"posts/{pending}/index.html" $"{pending} is a current post"
+        Expect.contains UrlParity.pending $"posts/{pending}/index.html" $"The page of {pending} is pending"
         Expect.isFalse (realPosts.Value |> List.exists (fun post -> post.Slug = pending)) $"{pending} is not Markdown yet"
     }
   ]

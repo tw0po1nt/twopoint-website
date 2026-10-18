@@ -68,6 +68,24 @@ let tests =
       Expect.isNotEmpty (html "<p data-class=\"x\">Text</p>") "data-class is not class"
     }
 
+    test "the word class or style in an attribute value is not an attribute" {
+      Expect.isNotEmpty (html "<abbr title=\"a style guide\">SG</abbr>") "A word in a value passes"
+
+      Expect.equal
+        (bodyErrors "<span title=\"a class act\" style=\"color: red\">red</span>")
+        [ errorAt "a-post" 9 "Delete the 'style' attribute. A post has no class or style in raw HTML." ]
+        "Only the style attribute fails"
+    }
+
+    test "a link in raw HTML fails with its line" {
+      Expect.equal
+        (bodyErrors "Text.\n\nRead <a href=\"https://example.com/\">the docs</a>.")
+        [ errorAt "a-post" 11 "Write the link as a Markdown link, for example [the docs](https://example.com/)." ]
+        "An inline a element fails"
+
+      Expect.isNonEmpty (bodyErrors "<div>\n<A HREF=\"/posts/b-post/\">b</A>\n</div>") "An a element in an HTML block fails"
+    }
+
     test "a link to twopoint.dev fails with its line" {
       Expect.equal
         (bodyErrors "Text.\n\nRead [the post](https://twopoint.dev/posts/a-post/).")

@@ -42,8 +42,7 @@ let private leafText (leaf: LeafBlock) =
   | _ when isNull leaf.Inline -> ""
   | _ -> inlineText leaf.Inline
 
-/// The text of the post as the `reading-time` count of the Astro build sees it: the text of each
-/// node, code included, joined with no separator.
+/// The text that the `reading-time` count of the Astro build sees: each node, code included.
 let rec private blockText (block: Block) =
   match block with
   | :? Extensions.Yaml.YamlFrontMatterBlock -> ""
@@ -55,20 +54,34 @@ let private readingTime (text: string) =
   let words = text.Split([| ' '; '\n'; '\r'; '\t' |], StringSplitOptions.RemoveEmptyEntries).Length
   int (ceil (float words / 200.0))
 
-let private errorAt file (line: int) message : PostError =
-  { File = file
-    Line = line + 1
-    Message = message }
+let private errorAt file (line: int) message = PostError.at file (line + 1) message
 
-let private styleAttribute =
-  Regex(@"<[A-Za-z][^>]*?\s(class|style)\b", RegexOptions.IgnoreCase)
+let private attributePattern = """\s+([^\s"'>/=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?"""
+
+let private attribute = Regex(attributePattern)
+
+let private startTag = Regex("""<([A-Za-z][\w:-]*)((?:""" + attributePattern + """)*)\s*/?>""")
+
+let private styleAttributes = set [ "class"; "style" ]
 
 let private rawHtmlErrors file (document: MarkdownDocument) =
   let errors line (html: string) =
-    [ for found in styleAttribute.Matches html do
-        let lineInHtml = html.AsSpan(0, found.Index).Count '\n'
-        let attribute = found.Groups[1].Value
-        errorAt file (line + lineInHtml) $"Delete the '{attribute}' attribute. A post has no class or style in raw HTML." ]
+    let lineAt index = line + html.AsSpan(0, index).Count '\n'
+
+    [ for tag in startTag.Matches html do
+        if tag.Groups[1].Value.Equals("a", StringComparison.OrdinalIgnoreCase) then
+          errorAt file (lineAt tag.Index) "Write the link as a Markdown link, for example [the docs](https://example.com/)."
+
+        let attributes = tag.Groups[2]
+
+        for found in attribute.Matches attributes.Value do
+          let name = found.Groups[1]
+
+          if styleAttributes.Contains(name.Value.ToLowerInvariant()) then
+            errorAt
+              file
+              (lineAt (attributes.Index + name.Index))
+              $"Delete the '{name.Value}' attribute. A post has no class or style in raw HTML." ]
 
   let blocks =
     descendants<HtmlBlock> document
@@ -88,7 +101,7 @@ let private openInNewTab (node: MarkdownObject) =
   attributes.AddPropertyIfNotExist("target", "_blank")
   attributes.AddPropertyIfNotExist("rel", "noopener noreferrer")
 
-let private target (url: string) =
+let private splitAnchor (url: string) =
   match url.IndexOf '#' with
   | -1 -> url, None
   | index -> url.Substring(0, index), Some(url.Substring(index + 1))
@@ -105,7 +118,7 @@ let private kind (url: string) =
   elif url.StartsWith '#' then
     Internal(SamePage(url.Substring 1))
   elif url.StartsWith '/' && not (url.StartsWith "//") then
-    Internal(Page(target url))
+    Internal(Page(splitAnchor url))
   else
     match Uri.TryCreate(url, UriKind.Absolute) with
     | true, uri when externalSchemes.Contains uri.Scheme && ownHosts.Contains uri.Host ->

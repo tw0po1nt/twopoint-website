@@ -6,30 +6,13 @@ open TwoPoint.Site.Generator
 open Expecto
 open System.Text
 
-let private map =
-  match RenderMap.create Stage.Local [] with
-  | Ok map -> map
-  | Error errors -> failwith $"The render map has errors: %A{errors}"
+let private map = RenderMap.create Stage.Local []
 
 let private text (render: Render) = Encoding.UTF8.GetString(render ())
 
 [<Tests>]
 let tests =
   testList "Lookup" [
-    test "the root path gives the root index page" {
-      Expect.equal (Lookup.sitePath "/") "index.html" "The root path gives index.html"
-    }
-
-    test "a folder path gives its index page" {
-      Expect.equal (Lookup.sitePath "/posts/") "posts/index.html" "A folder path gives its index.html"
-      Expect.equal (Lookup.sitePath "/posts/2/") "posts/2/index.html" "A nested folder path gives its index.html"
-    }
-
-    test "a file path gives the same file" {
-      Expect.equal (Lookup.sitePath "/robots.txt") "robots.txt" "A file path gives the file"
-      Expect.equal (Lookup.sitePath "/posts") "posts" "A path with no trailing slash is a file path"
-    }
-
     test "robots.txt gives the Local robots text" {
       let path, render = Expect.wantSome (Lookup.find map "/robots.txt") "The map contains robots.txt"
       Expect.equal path "robots.txt" "The lookup gives the site path of the file"

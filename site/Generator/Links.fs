@@ -1,15 +1,25 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Links
 
-/// `pages` maps each site path of the output to the heading ids of that file.
-let check (pages: Map<string, Set<string>>) (posts: Post list) : PostError list =
+let check (sitePaths: Set<string>) (posts: Post list) : PostError list =
   let converted = posts |> List.map _.Slug |> Set.ofList
+
+  let postAnchors =
+    posts
+    |> List.map (fun post -> SitePath.ofUrlPath (Post.urlPath post), post.Body.Anchors)
+    |> Map.ofList
+
+  let anchorsAt sitePath =
+    if sitePaths.Contains sitePath then
+      Some(postAnchors.TryFind sitePath |> Option.defaultValue Set.empty)
+    else
+      None
 
   let pending (path: string) =
     PendingPosts.slugs
     |> Set.exists (fun slug -> not (converted.Contains slug) && path = $"/posts/{slug}/")
 
-  let exists path = pending path || pages.ContainsKey(SitePath.ofUrlPath path)
+  let exists path = pending path || sitePaths.Contains(SitePath.ofUrlPath path)
 
   let problem (post: Post) target =
     match target with
@@ -18,7 +28,7 @@ let check (pages: Map<string, Set<string>>) (posts: Post list) : PostError list 
     | Page(path, _) when pending path -> None
     | Page(path, _) when not (exists path) && exists $"{path}/" -> Some $"Add the trailing slash: {path}/"
     | Page(path, anchor) ->
-      match pages.TryFind(SitePath.ofUrlPath path), anchor with
+      match anchorsAt (SitePath.ofUrlPath path), anchor with
       | None, _ -> Some $"The output has no page at {path}."
       | Some _, None -> None
       | Some anchors, Some anchor when anchors.Contains anchor -> None
@@ -27,8 +37,6 @@ let check (pages: Map<string, Set<string>>) (posts: Post list) : PostError list 
   [ for post in posts do
       for link in post.Body.Links do
         match problem post link.Target with
-        | Some message ->
-          { File = post.File
-            Line = link.Line
-            Message = message }
+        | Some message -> PostError.at post.File link.Line message
         | None -> () ]
+  |> List.sortBy (fun error -> error.File, error.Line)

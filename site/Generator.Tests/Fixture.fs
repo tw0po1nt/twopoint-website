@@ -31,15 +31,7 @@ let errors slug text =
   | Error errors -> errors
   | other -> failtest $"The fixture post has no error: %A{other}"
 
-let errorAt slug line message : PostError =
-  { File = file slug
-    Line = line
-    Message = message }
-
-let renderMap stage posts =
-  match RenderMap.create stage posts with
-  | Ok map -> map
-  | Error errors -> failtest $"The render map has errors: %A{errors}"
+let errorAt slug line message = PostError.at (file slug) line message
 
 let siteText (map: RenderMap) path =
   match map.TryFind(SiteFile path) with

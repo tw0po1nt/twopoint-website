@@ -18,7 +18,6 @@ let root (start: string) =
 
   find (DirectoryInfo start)
 
-/// Gives the published posts. A draft is not in the list.
 let loadPosts (root: string) : Result<Post list, PostError list> =
   Directory.GetFiles(Path.Combine(root, postsFolder), "*.md")
   |> Array.sort
@@ -33,8 +32,13 @@ let loadPosts (root: string) : Result<Post list, PostError list> =
       | Draft -> None)
   )
 
-/// Reads the content of the repo at `root`, and gives the render map or each error.
 let load (root: string) (stage: Stage) : Result<RenderMap, string list> =
-  loadPosts root
-  |> Result.bind (RenderMap.create stage)
+  result {
+    let! posts = loadPosts root
+    let map = RenderMap.create stage posts
+
+    match Links.check (RenderMap.sitePaths map) posts with
+    | [] -> return map
+    | errors -> return! Error errors
+  }
   |> Result.mapError (List.map PostError.format)

@@ -10,10 +10,8 @@ open YamlDotNet.RepresentationModel
 
 type private Context = { File: string; StartLine: int }
 
-let private errorAt (context: Context) (yamlLine: int64) message : PostError =
-  { File = context.File
-    Line = context.StartLine + int yamlLine
-    Message = message }
+let private errorAt (context: Context) (yamlLine: int64) message =
+  PostError.at context.File (context.StartLine + int yamlLine) message
 
 let private fail context (node: YamlNode) message = Error [ errorAt context node.Start.Line message ]
 

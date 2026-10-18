@@ -25,20 +25,19 @@ let private keepsInHeading (c: char) =
 let private headingSlug (text: string) =
   String(text.ToLowerInvariant() |> Seq.filter keepsInHeading |> Array.ofSeq).Replace(' ', '-')
 
-/// Gives the ids of the headings of one page, in order, with the `github-slugger` rules that the
-/// Astro build uses. A repeated id gets the suffix `-1`, `-2`, and so on.
+/// The `github-slugger` ids that the Astro build gives to the headings of one page.
 let headingIds (texts: string list) =
   let next (occurrences: Map<string, int>, ids) text =
     let original = headingSlug text
 
-    let rec free (occurrences: Map<string, int>) result =
+    let rec claimUnusedId (occurrences: Map<string, int>) result =
       if occurrences.ContainsKey result then
         let count = occurrences[original] + 1
-        free (occurrences.Add(original, count)) $"{original}-{count}"
+        claimUnusedId (occurrences.Add(original, count)) $"{original}-{count}"
       else
         occurrences.Add(result, 0), result
 
-    let occurrences, id = free occurrences original
+    let occurrences, id = claimUnusedId occurrences original
     occurrences, id :: ids
 
   texts |> List.fold next (Map.empty, []) |> snd |> List.rev
@@ -52,16 +51,15 @@ let private withoutMarks (text: string) =
   |> Array.ofSeq
   |> String
 
-/// Gives the slug of a category or a tag with the `limax` rules, as the Astro build does.
-/// For example, `.NET Conf` gives `net-conf`.
+/// The `limax` slug that the Astro build gives to a category or a tag.
 let term (text: string) =
   let joined = apostrophe.Replace(text, "$1$2").Replace("&", " and ")
   separators.Replace((withoutMarks joined).ToLowerInvariant(), "-").Trim '-'
 
-let private oddballs =
+let private languageNames =
   [ Regex("fsharp", RegexOptions.IgnoreCase), "F#"
     Regex("csharp", RegexOptions.IgnoreCase), "C#" ]
 
 /// Gives the title of a category or a tag. For example, `fsharp` gives `F#`.
 let termTitle (text: string) =
-  oddballs |> List.fold (fun (title: string) (pattern, value) -> pattern.Replace(title, value)) text
+  languageNames |> List.fold (fun (title: string) (pattern, value) -> pattern.Replace(title, value)) text

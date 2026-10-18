@@ -1,5 +1,4 @@
-/// The posts that are not Markdown yet. A link to one of them passes the link check, and its anchor
-/// gets no check.
+/// The posts that are not Markdown yet.
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.PendingPosts
 

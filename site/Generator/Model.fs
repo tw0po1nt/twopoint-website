@@ -11,6 +11,11 @@ type PostError =
 [<RequireQualifiedAccess>]
 module PostError =
 
+  let at file line message : PostError =
+    { File = file
+      Line = line
+      Message = message }
+
   let format (error: PostError) = $"{error.File}:{error.Line}: {error.Message}"
 
 /// A category or a tag.

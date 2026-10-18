@@ -18,6 +18,7 @@
     <Compile Include="CliTests.fs" />
     <Compile Include="RobotsTests.fs" />
     <Compile Include="RenderMapTests.fs" />
+    <Compile Include="SitePathTests.fs" />
     <Compile Include="SlugTests.fs" />
     <Compile Include="FrontMatterTests.fs" />
     <Compile Include="BodyTests.fs" />
