@@ -14,7 +14,7 @@ let private text (render: Render) = Encoding.UTF8.GetString(render ())
 let tests =
   testList "Lookup" [
     test "the root path gives the root index page" {
-      Expect.equal (Lookup.sitePath "/") "index.html" "A folder path gives its index.html"
+      Expect.equal (Lookup.sitePath "/") "index.html" "The root path gives index.html"
     }
 
     test "a folder path gives its index page" {
@@ -28,9 +28,9 @@ let tests =
     }
 
     test "robots.txt gives the Local robots text" {
-      let render = Lookup.find map "/robots.txt"
-      Expect.isSome render "The map contains robots.txt"
-      Expect.equal (text render.Value) "User-agent: *\nDisallow:\n" "The dev server serves the Local robots text"
+      let path, render = Expect.wantSome (Lookup.find map "/robots.txt") "The map contains robots.txt"
+      Expect.equal path "robots.txt" "The lookup gives the site path of the file"
+      Expect.equal (text render) "User-agent: *\nDisallow:\n" "The dev server serves the Local robots text"
     }
 
     test "a path that is not in the site gives nothing" {

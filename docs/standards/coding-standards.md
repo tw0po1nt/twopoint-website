@@ -68,6 +68,20 @@ alternatives, in this order, before you use one:
 Use a closure-record field only when none of these three alternatives fits. State the reason in
 your reply to the user, and keep it out of a source comment (rule 1).
 
+## 3. Open the project namespaces first
+
+In an F# file, put the `open` lines for the namespaces of this repo first. Then put a blank line,
+and then the `open` lines for the other namespaces. Keep each group in alphabetical order. The
+first group then shows which parts of the repo the file uses.
+
+```fsharp
+open TwoPoint.Site.Dev
+open TwoPoint.Site.Generator
+
+open Expecto
+open System.Text
+```
+
 ---
 
 *Add a rule only when a real review finding shows that an unwritten convention caused a problem.

@@ -8,5 +8,6 @@ let sitePath (requestPath: string) =
   let path = requestPath.TrimStart '/'
   if path = "" || path.EndsWith '/' then path + "index.html" else path
 
-let find (map: RenderMap) (requestPath: string) : Render option =
-  Map.tryFind (SiteFile(sitePath requestPath)) map
+let find (map: RenderMap) (requestPath: string) : (string * Render) option =
+  let path = sitePath requestPath
+  Map.tryFind (SiteFile path) map |> Option.map (fun render -> path, render)
