@@ -1,6 +1,3 @@
-// Bundles the Fable output in build/fable/ into dist/, and writes dist/manifest.json.
-// Each file in the manifest is relative to dist/.
-
 import * as esbuild from 'esbuild';
 import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';

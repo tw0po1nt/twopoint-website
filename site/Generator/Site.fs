@@ -7,7 +7,6 @@ open System.IO
 let private postsFolder = Path.Combine("site", "content", "posts")
 let private assetsFolder = Path.Combine("site", "content", "assets")
 let private stylesFolder = Path.Combine("site", "content", "styles")
-let private widgetsFolder = Path.Combine("site", "Widgets", "dist")
 
 /// Gives the folder of `TwoPoint.slnx`, from `start` or a parent folder of it.
 let root (start: string) =
@@ -73,7 +72,7 @@ let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string lis
   }
 
 let loadWidgets (root: string) : Result<Widgets, string list> =
-  let folder = Path.Combine(root, widgetsFolder)
+  let folder = Path.Combine(root, WidgetManifest.folder)
 
   let files =
     if Directory.Exists folder then

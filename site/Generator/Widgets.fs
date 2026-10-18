@@ -17,7 +17,6 @@ type WidgetManifest =
 
 type Widgets =
   { Manifest: WidgetManifest
-    /// The text of the inline `<script>` in each page head.
     HeadScript: string
     /// Each file at its site path, for example `_/widgets/chunk-1a2b3c4d.js`.
     Files: Map<string, byte array> }
@@ -25,7 +24,9 @@ type Widgets =
 [<RequireQualifiedAccess>]
 module WidgetManifest =
 
-  let file = "site/Widgets/dist/manifest.json"
+  let folder = "site/Widgets/dist"
+
+  let file = $"{folder}/manifest.json"
 
   let private property (element: JsonElement) (key: string) (kind: JsonValueKind) =
     match element.TryGetProperty key with
@@ -83,8 +84,6 @@ module WidgetManifest =
 [<RequireQualifiedAccess>]
 module Widgets =
 
-  let private folder = "site/Widgets/dist"
-
   let sitePath (name: string) = $"_/widgets/{name}"
 
   /// `files` are the files of `site/Widgets/dist/`, by path in that folder, with `/`.
@@ -106,13 +105,13 @@ module Widgets =
       do!
         match named |> List.distinct |> List.filter (fun name -> not (files.ContainsKey name)) with
         | [] -> Ok()
-        | missing -> Error [ for name in missing -> $"{WidgetManifest.file} names {name}, and {folder}/ has no such file." ]
+        | missing -> Error [ for name in missing -> $"{WidgetManifest.file} names {name}, and {WidgetManifest.folder}/ has no such file." ]
 
       let headScript = Encoding.UTF8.GetString files[manifest.Head]
 
       do!
         headScript.Contains("</script", StringComparison.OrdinalIgnoreCase)
-        |> Result.requireFalse [ $"{folder}/{manifest.Head} contains '</script', so a page cannot put it inline." ]
+        |> Result.requireFalse [ $"{WidgetManifest.folder}/{manifest.Head} contains '</script', so a page cannot put it inline." ]
 
       let excluded = set [ "manifest.json"; manifest.Head; manifest.DevReload ]
 
