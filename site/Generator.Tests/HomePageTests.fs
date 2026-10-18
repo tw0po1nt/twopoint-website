@@ -128,12 +128,12 @@ let tests =
 
     test "the head script hides the banner from the publish date on" {
       let publishDate = DateTimeOffset(2026, 10, 29, 13, 0, 0, TimeSpan.Zero)
-      let hideAt = HomePage.hideAtTime publishDate
+      let hideAt = Layout.scriptTime publishDate
 
-      Expect.isTrue (HideAt.isPast (HomePage.hideAtTime publishDate) hideAt) "At the publish date"
+      Expect.isTrue (HideAt.isPast (Layout.scriptTime publishDate) hideAt) "At the publish date"
 
       Expect.isFalse
-        (HideAt.isPast (HomePage.hideAtTime (publishDate.AddMilliseconds -1.0)) hideAt)
+        (HideAt.isPast (Layout.scriptTime (publishDate.AddMilliseconds -1.0)) hideAt)
         "One millisecond before the publish date"
     }
 

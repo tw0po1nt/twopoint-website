@@ -22,51 +22,55 @@ module Comments =
 
   open Fable.Core
   open Fable.Core.JS
-  open Fable.SimpleHttp
+  open Fetch
   open Thoth.Json
 
+  let private invalid = { Success = false; Message = Some "An invalid response was received"; Data = None }
 
   let getCommentsForPost uri slug : Promise<ApiResponse<Comment list>> = promise {
     let! response =
-      Http.request $"{uri}/api/blog/posts/{slug}/comments"
-      |> Http.method GET
-      |> Http.header (Headers.accept "application/json")
-      |> Http.send
-      |> Async.StartAsPromise
-    
+      fetchUnsafe $"{uri}/api/blog/posts/{slug}/comments" [
+        Method HttpMethod.GET
+        requestHeaders [ Accept "application/json" ]
+      ]
+
+    let! text = response.text ()
+
     return
-      Decode.Auto.fromString<ApiResponse<Comment list>>(response.responseText, caseStrategy = CamelCase)
-      |> Result.defaultValue { Success = false; Message = Some "An invalid response was received"; Data = None }
+      Decode.Auto.fromString<ApiResponse<Comment list>>(text, caseStrategy = CamelCase)
+      |> Result.defaultValue invalid
   }
 
   let validateCommenter uri (commenterValidation: CommenterValidation) : Promise<ApiResponse<unit>> = promise {
     let body = Encode.Auto.toString commenterValidation
 
     let! response =
-      Http.request $"{uri}/api/blog/commenters"
-      |> Http.method POST
-      |> Http.header (Headers.accept "application/json")
-      |> Http.content (BodyContent.Text body)
-      |> Http.send
-      |> Async.StartAsPromise
-    
+      fetchUnsafe $"{uri}/api/blog/commenters" [
+        Method HttpMethod.POST
+        requestHeaders [ Accept "application/json" ]
+        Body (U3.Case3 body)
+      ]
+
+    let! text = response.text ()
+
     return
-      Decode.Auto.fromString<ApiResponse<unit>>(response.responseText, caseStrategy = CamelCase)
-      |> Result.defaultValue { Success = false; Message = Some "An invalid response was received"; Data = None }
+      Decode.Auto.fromString<ApiResponse<unit>>(text, caseStrategy = CamelCase)
+      |> Result.defaultValue invalid
   }
 
   let postComment uri slug (newComment: NewComment) : Promise<ApiResponse<unit>> = promise {
     let body = Encode.Auto.toString newComment
 
     let! response =
-      Http.request $"{uri}/api/blog/posts/{slug}/comments"
-      |> Http.method POST
-      |> Http.header (Headers.accept "application/json")
-      |> Http.content (BodyContent.Text body)
-      |> Http.send
-      |> Async.StartAsPromise
-    
+      fetchUnsafe $"{uri}/api/blog/posts/{slug}/comments" [
+        Method HttpMethod.POST
+        requestHeaders [ Accept "application/json" ]
+        Body (U3.Case3 body)
+      ]
+
+    let! text = response.text ()
+
     return
-      Decode.Auto.fromString<ApiResponse<unit>>(response.responseText, caseStrategy = CamelCase)
-      |> Result.defaultValue { Success = false; Message = Some "An invalid response was received"; Data = None }
+      Decode.Auto.fromString<ApiResponse<unit>>(text, caseStrategy = CamelCase)
+      |> Result.defaultValue invalid
   }

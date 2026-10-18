@@ -15,7 +15,10 @@ let private errorsOf files =
 
 let private manifest =
   """{
-  "entries": { "subscribe": { "file": "subscribe-A.js", "imports": [ "chunk-B.js" ] } },
+  "entries": {
+    "comments": { "file": "comments-E.js", "imports": [ "chunk-B.js" ] },
+    "subscribe": { "file": "subscribe-A.js", "imports": [ "chunk-B.js" ] }
+  },
   "head": "head-C.js",
   "devReload": "dev-reload-D.js"
 }"""
@@ -23,6 +26,7 @@ let private manifest =
 let private files =
   Map
     [ "manifest.json", bytes manifest
+      "comments-E.js", bytes "export{};"
       "subscribe-A.js", bytes "export{};"
       "chunk-B.js", bytes "export{};"
       "head-C.js", bytes "(()=>{})();"
@@ -36,7 +40,10 @@ let tests =
 
       Expect.equal
         parsed
-        { Entries = Map [ "subscribe", { File = "subscribe-A.js"; Imports = [ "chunk-B.js" ] } ]
+        { Entries =
+            Map
+              [ "comments", { File = "comments-E.js"; Imports = [ "chunk-B.js" ] }
+                "subscribe", { File = "subscribe-A.js"; Imports = [ "chunk-B.js" ] } ]
           Head = "head-C.js"
           DevReload = "dev-reload-D.js" }
         "The manifest gives each key"
@@ -79,14 +86,19 @@ let tests =
 
       Expect.equal
         (errorsOf (files |> Map.add "manifest.json" (bytes manifest)))
-        [ "site/Widgets/dist/manifest.json has no entry for the widget 'subscribe'." ]
-        "The error names the widget"
+        [ "site/Widgets/dist/manifest.json has no entry for the widget 'subscribe'."
+          "site/Widgets/dist/manifest.json has no entry for the widget 'comments'." ]
+        "The error names each widget"
     }
 
     test "an entry that is not a widget of the contract gives an error" {
       let manifest =
         """{
-  "entries": { "subscribe": { "file": "subscribe-A.js", "imports": [] }, "search": { "file": "chunk-B.js", "imports": [] } },
+  "entries": {
+    "comments": { "file": "comments-E.js", "imports": [] },
+    "subscribe": { "file": "subscribe-A.js", "imports": [] },
+    "search": { "file": "chunk-B.js", "imports": [] }
+  },
   "head": "head-C.js",
   "devReload": "dev-reload-D.js"
 }"""
@@ -113,7 +125,10 @@ let tests =
 
     test "the site gets each widget file under _/widgets/, with no manifest, head script, or dev reload script" {
       let created = Widgets.create files |> ok
-      Expect.equal (created.Files |> Map.keys |> List.ofSeq) [ "_/widgets/chunk-B.js"; "_/widgets/subscribe-A.js" ] "Only the bundles go to the site"
+      Expect.equal
+        (created.Files |> Map.keys |> List.ofSeq)
+        [ "_/widgets/chunk-B.js"; "_/widgets/comments-E.js"; "_/widgets/subscribe-A.js" ]
+        "Only the bundles go to the site"
       Expect.equal created.HeadScript "(()=>{})();" "The head script is the text of its file"
     }
 

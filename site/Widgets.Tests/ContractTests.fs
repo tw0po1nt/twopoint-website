@@ -7,8 +7,11 @@ open Microsoft.FSharp.Reflection
 
 let private subscribe = Contract.Widget.Subscribe { Api = "http://localhost:7071" }
 
+let private comments =
+  Contract.Widget.Comments { Api = "https://api.example"; Slug = "fable-reminders-part-1" }
+
 /// One value of each case of `Contract.Widget`.
-let private widgets = [ subscribe ]
+let private widgets = [ subscribe; comments ]
 
 [<Tests>]
 let tests =
@@ -23,6 +26,11 @@ let tests =
         (Contract.toAttributes subscribe)
         [ "data-widget", "subscribe"; "data-api", "http://localhost:7071" ]
         "The Subscribe mount has its name and the API origin"
+
+      Expect.equal
+        (Contract.toAttributes comments)
+        [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "fable-reminders-part-1" ]
+        "The Comments mount has its name, the API origin, and the slug"
     }
 
     test "the names list each widget one time" {
@@ -42,7 +50,7 @@ let tests =
 
       Expect.equal
         (Contract.parse [ "data-widget", "search" ])
-        (Error "The widget 'search' is unknown. Use one of these names: subscribe.")
+        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments.")
         "An unknown name"
     }
 
@@ -58,6 +66,33 @@ let tests =
         Expect.equal
           (Contract.parse [ "data-widget", "subscribe"; "data-api", value ])
           (Error $"The 'data-api' of the subscribe mount is '{value}'. Give an http or https origin with no '/' at the end.")
+          $"'{value}' is not valid"
+    }
+  
+    test "a Comments mount with no API origin or no slug gives an error" {
+      Expect.equal
+        (Contract.parse [ "data-widget", "comments"; "data-slug", "a-post" ])
+        (Error "The comments mount has no 'data-api' attribute.")
+        "No data-api"
+
+      Expect.equal
+        (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example" ])
+        (Error "The comments mount has no 'data-slug' attribute.")
+        "No data-slug"
+    }
+
+    test "a Comments mount with a bad API origin gives the error of the API origin" {
+      Expect.equal
+        (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example/"; "data-slug", "a-post" ])
+        (Error "The 'data-api' of the comments mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
+        "A '/' at the end"
+    }
+
+    test "a Comments mount with a slug that is not a post slug gives an error" {
+      for value in [ ""; "A-Post"; "a post"; "a/post"; "a-post?x=1" ] do
+        Expect.equal
+          (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", value ])
+          (Error $"The 'data-slug' of the comments mount is '{value}'. Give a post slug of lowercase letters, digits, and '-'.")
           $"'{value}' is not valid"
     }
   ]

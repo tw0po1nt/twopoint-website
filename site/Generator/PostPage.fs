@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.PostPage
 
+open TwoPoint.Site.Widgets
+
 open Oxpecker.ViewEngine
 open System
 
@@ -132,7 +134,31 @@ let private outline (post: Post) =
       }
   }
 
-let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (ogImage: OgImage) (post: Post) =
+/// For an upcoming post, the panel is hidden until the publish date, and the head script shows it from that date on.
+let private commentsPanel (config: StageConfig) (buildTime: DateTimeOffset) (post: Post) =
+  let publishDate = post.FrontMatter.PublishDate
+  let panel = details (class' = "panel", id = "comments")
+
+  let panel =
+    if publishDate > buildTime then
+      panel.attr("hidden", "").attr (HideAt.showAttribute, Layout.scriptTime publishDate)
+    else
+      panel
+
+  panel {
+    summary () { "$ comments --list" }
+    Mount.comments config post.Slug
+  }
+
+let render
+  (config: StageConfig)
+  (assets: Assets)
+  (widgets: Widgets)
+  (buildTime: DateTimeOffset)
+  (posts: Post list)
+  (ogImage: OgImage)
+  (post: Post)
+  =
   let frontMatter = post.FrontMatter
   let position = Blog.seriesPosition posts post
 
@@ -156,7 +182,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Pos
       shareLinks config post
       olderNewer (Blog.neighbors posts post)
 
-      details (class' = "panel", id = "comments") { summary () { "$ comments --list" } }
+      commentsPanel config buildTime post
 
       relatedPosts (Blog.related posts post)
     }

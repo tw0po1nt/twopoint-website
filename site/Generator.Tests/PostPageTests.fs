@@ -59,15 +59,17 @@ let tests =
         Expect.contains (RenderMap.sitePaths map) (href.Substring 1) $"{href} is in the output"
     }
 
-    test "only Production has the Pulse script, and the other scripts are the inline head script and the Subscribe entry" {
+    test "only Production has the Pulse script, and the other scripts are the inline head script and the widget entries" {
       Expect.stringContains (page Stage.Production middle) """<script src="https://pulse.w7ech.com/cdn/s.js" defer data-site=""" "Production counts visits"
 
       for stage in [ Stage.Local; Stage.Staging ] do
         let scripts = [ for found in Regex.Matches(page stage middle, "<script[^>]*>") -> found.Value ]
         Expect.equal
           scripts
-          [ "<script>"; """<script type="module" src="/_/widgets/subscribe-TEST.js">""" ]
-          $"{Stage.name stage} has the head script and the entry of the explorer mount"
+          [ "<script>"
+            """<script type="module" src="/_/widgets/subscribe-TEST.js">"""
+            """<script type="module" src="/_/widgets/comments-TEST.js">""" ]
+          $"{Stage.name stage} has the head script and the entries of the explorer mount and the Comments mount"
     }
 
     test "the explorer is a popover that opens and closes with no script" {
@@ -120,6 +122,33 @@ let tests =
       Expect.stringContains html """<ul class="related"><li><a href="/posts/fable-reminders-part-1/">fable-reminders-part-1</a></li><li><a href="/posts/smatterings-of-fsharp/">""" "The related posts by score"
       Expect.stringContains html """<a href="https://www.facebook.com/sharer.php?u=https%3A%2F%2Ftwopoint.dev%2Fposts%2Ffable-reminders-part-2%2F" target="_blank" rel="noopener noreferrer">facebook</a>""" "A share link opens in a new tab"
       Expect.stringContains html """<a href="mailto:?subject=Fable%20Reminders%20-%20Part%202&amp;body=""" "The email link stays in the tab"
-      Expect.stringContains html """<details class="panel" id="comments"><summary>$ comments --list</summary></details>""" "The Comments panel is empty"
+    }
+
+    test "the closed Comments panel has the Comments mount with the API origin of the stage and the slug" {
+      Expect.stringContains
+        (page Stage.Local middle)
+        """<details class="panel" id="comments"><summary>$ comments --list</summary><div data-widget="comments" data-api="http://localhost:7071" data-slug="fable-reminders-part-2"><p class="comments-fallback">The comments need JavaScript.</p></div></details>"""
+        "The panel has the mount"
+    }
+
+    test "the Comments panel of an upcoming post is hidden until the publish date" {
+      let upcoming = postWith "upcoming-post" "2026-10-29T13:00:00Z" "One-offs" [] None
+      let map = RenderMap.create Stage.Local buildTime widgets (content (upcoming :: posts))
+
+      Expect.stringContains
+        (siteText map "posts/upcoming-post/index.html")
+        """<details class="panel" id="comments" hidden="" data-show-at="2026-10-29T13:00:00.000Z"><summary>"""
+        "The panel is hidden, and the head script shows it from the publish date on"
+
+      Expect.stringContains
+        (siteText map "posts/smatterings-of-fsharp/index.html")
+        """<details class="panel" id="comments"><summary>"""
+        "The panel of a published post is not hidden"
+    }
+
+    test "the Comments panel of a post that the build publishes at the build time is not hidden" {
+      let post = postWith "now-post" (Layout.isoTime buildTime) "One-offs" [] None
+      let html = siteText (RenderMap.create Stage.Local buildTime widgets (content [ post ])) "posts/now-post/index.html"
+      Expect.stringContains html """<details class="panel" id="comments"><summary>""" "The panel is open to comments"
     }
   ]

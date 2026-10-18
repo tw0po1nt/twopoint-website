@@ -16,6 +16,11 @@ let view (widget: Contract.Widget) (fallback: HtmlElement) =
 
 let private apiOrigin (config: StageConfig) = config.ApiUrl.GetLeftPart UriPartial.Authority
 
+let comments (config: StageConfig) (slug: string) =
+  view
+    (Contract.Widget.Comments { Api = apiOrigin config; Slug = slug })
+    (p (class' = "comments-fallback") { "The comments need JavaScript." })
+
 let subscribe (config: StageConfig) =
   view
     (Contract.Widget.Subscribe { Api = apiOrigin config })
