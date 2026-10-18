@@ -101,7 +101,7 @@
 }
 
 .explorer::backdrop {
-  background: rgb(0 0 0 / 20%);
+  background: var(--backdrop);
 }
 
 .explorer-close {

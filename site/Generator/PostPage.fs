@@ -57,7 +57,7 @@ let private frontMatterBlock (post: Post) (position: Blog.SeriesPosition option)
             if index > 0 then
               " "
 
-            a (href = $"/tag/{tag.Slug}/") { $"#{tag.Slug}" }
+            a (href = $"/tag/{tag.Slug}/") { $"#{tag.Title}" }
         })
 
     row "read" (Fragment() { $"{post.Body.ReadingTime} min" })

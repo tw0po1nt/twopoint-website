@@ -10,6 +10,7 @@
   --accent: light-dark(#c8251f, #ff5a4e);
   --accent-2: light-dark(#2f6f4f, #7fd1a0);
   --shadow: light-dark(rgb(0 0 0 / 12%), rgb(0 0 0 / 50%));
+  --backdrop: light-dark(rgb(0 0 0 / 20%), rgb(0 0 0 / 50%));
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   --sans: 'IBM Plex Sans', system-ui, sans-serif;
 }

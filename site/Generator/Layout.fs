@@ -180,7 +180,7 @@ let private explorer (posts: Post list) (current: Post option) =
 
       p (class' = "tags") {
         for tag, _ in tags do
-          a (href = $"/tag/{tag.Slug}/") { $"#{tag.Slug}" }
+          a (href = $"/tag/{tag.Slug}/") { $"#{tag.Title}" }
       }
 
     p (class' = "explorer-foot") { footerLinks () }

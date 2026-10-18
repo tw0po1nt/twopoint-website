@@ -20,7 +20,6 @@ let private quoted = Regex(@"""(?:[^""\\]|\\.)*""|'(?:[^'\\]|\\.)*'")
 let private declarations = Regex(@"\{[^{}]*\}")
 let private selectorClass = Regex(@"\.(-?[A-Za-z_][\w-]*)")
 
-/// The classes in the selectors of `css`.
 let cssClasses (css: string) =
   let selectors = declarations.Replace(quoted.Replace(comment.Replace(css, ""), "''"), " ")
   set [ for found in selectorClass.Matches selectors -> found.Groups[1].Value ]

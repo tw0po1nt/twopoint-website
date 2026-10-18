@@ -21,7 +21,6 @@ let relatedScore (post: Post) (other: Post) =
   let category = if post.FrontMatter.Category.Slug = other.FrontMatter.Category.Slug then 5 else 0
   category + (Set.intersect (tags post) (tags other)).Count
 
-/// A post with a score of 0 is not related.
 let related (posts: Post list) (post: Post) =
   newestFirst posts
   |> List.filter (fun other -> other.Slug <> post.Slug)

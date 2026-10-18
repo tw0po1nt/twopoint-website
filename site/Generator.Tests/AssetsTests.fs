@@ -35,7 +35,7 @@ let tests =
       Expect.equal
         (Styles.join (List.rev listed))
         (Ok(Styles.order |> List.map (fun name -> $"/* {name} */") |> String.concat "\n"))
-        "The list gives the order, and the folder order does not"
+        "The files join in the listed order"
     }
 
     test "a CSS file that is not on the list fails the build" {

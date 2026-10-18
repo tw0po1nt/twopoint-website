@@ -43,7 +43,7 @@ let tests =
       let url = "https://staging.twopoint.dev/posts/fable-reminders-part-2/"
       Expect.stringContains html $"""<link rel="canonical" href="{url}">""" "The canonical URL comes from the slug"
       Expect.stringContains html $"""<meta property="og:url" content="{url}">""" "og:url is the canonical URL"
-      Expect.stringContains html """<meta property="og:type" content="article">""" "A post is an article"
+      Expect.stringContains html """<meta property="og:type" content="article">""" "The Open Graph type of a post is article"
       Expect.stringContains html """<meta property="og:site_name" content="TwoPoint (Staging)">""" "The site name comes from the stage"
       Expect.stringContains html """<link rel="alternate" type="application/rss+xml" """ "The page links the feed"
       Expect.stringContains html """<meta name="google-site-verification" """ "The page has the verification"
@@ -79,7 +79,7 @@ let tests =
       Expect.stringContains html """<li class="is-current"><time datetime="2024-11-15T00:00:00Z">11-15</time><a href="/posts/fable-reminders-part-2/" aria-current="page">""" "The current post is marked"
       Expect.stringContains html """<span class="kind">talk</span>""" "A talk shows its kind"
       Expect.stringContains html """<a href="/series/fable-reminders/">fable-reminders/</a><span class="count">2</span>""" "The series has its count"
-      Expect.stringContains html """<a href="/tag/fsharp/">#fsharp</a>""" "The tags are in the explorer"
+      Expect.stringContains html """<a href="/tag/fsharp/">#F#</a>""" "The explorer shows each tag by its title"
     }
 
     test "a series post shows its position in the path line and the front matter" {

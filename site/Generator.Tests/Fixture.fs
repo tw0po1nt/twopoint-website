@@ -52,12 +52,10 @@ let realContent =
 
 let realPosts = lazy realContent.Value.Posts
 
-/// The real assets, with `posts`.
 let content (posts: Post list) =
   { Posts = posts
     Assets = realContent.Value.Assets }
 
-/// The site paths that are not under `_/`.
 let pagePaths (map: RenderMap) =
   RenderMap.sitePaths map |> Set.filter (fun path -> not (path.StartsWith "_/"))
 
