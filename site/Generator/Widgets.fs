@@ -1,9 +1,12 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Widgets
+
 open FsToolkit.ErrorHandling
 open System
 open System.Text
 open System.Text.Json
+open System.Text.RegularExpressions
 
 /// `File` and each import are paths in `site/Widgets/dist/`, with `/`.
 type WidgetEntry = { File: string; Imports: string list }
@@ -20,6 +23,11 @@ type Widgets =
     HeadScript: string
     /// Each file at its site path, for example `_/widgets/chunk-1a2b3c4d.js`.
     Files: Map<string, byte array> }
+
+/// Each value is a URL path from the root, for example `/_/widgets/subscribe-1a2b3c4d.js`.
+type WidgetScripts =
+  { Preloads: string list
+    Entries: string list }
 
 [<RequireQualifiedAccess>]
 module WidgetManifest =
@@ -95,6 +103,18 @@ module Widgets =
 
       let! manifest = WidgetManifest.parse (Encoding.UTF8.GetString manifestBytes)
 
+      do!
+        match
+          [ for name in Contract.names do
+              if not (manifest.Entries.ContainsKey name) then
+                $"{WidgetManifest.file} has no entry for the widget '{name}'."
+            for name in manifest.Entries.Keys do
+              if not (List.contains name Contract.names) then
+                $"{WidgetManifest.file} has the entry '{name}', and the widget contract has no such widget." ]
+        with
+        | [] -> Ok()
+        | errors -> Error errors
+
       let named =
         [ manifest.Head
           manifest.DevReload
@@ -124,3 +144,16 @@ module Widgets =
             |> Seq.map (fun (KeyValue(name, bytes)) -> sitePath name, bytes)
             |> Map.ofSeq }
     }
+
+  let private mount = Regex("\\sdata-widget=\"([^\"]+)\"")
+
+  let scripts (widgets: Widgets) (html: string) : WidgetScripts =
+    let entries =
+      [ for found in mount.Matches html -> found.Groups[1].Value ]
+      |> List.distinct
+      |> List.choose widgets.Manifest.Entries.TryFind
+
+    let urlPath name = $"/{sitePath name}"
+
+    { Preloads = entries |> List.collect _.Imports |> List.distinct |> List.map urlPath
+      Entries = entries |> List.map (_.File >> urlPath) }

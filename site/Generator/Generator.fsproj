@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Widgets/Contract.fs" Link="Contract.fs" />
     <Compile Include="Stage.fs" />
     <Compile Include="Robots.fs" />
     <Compile Include="Slug.fs" />
@@ -26,10 +27,12 @@
     <Compile Include="Links.fs" />
     <Compile Include="Assets.fs" />
     <Compile Include="Widgets.fs" />
+    <Compile Include="Mount.fs" />
     <Compile Include="OgImages.fs" />
     <Compile Include="Blog.fs" />
     <Compile Include="Layout.fs" />
     <Compile Include="PostPage.fs" />
+    <Compile Include="SubscribePage.fs" />
     <Compile Include="RenderMap.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />

@@ -74,6 +74,29 @@ let tests =
         "The error gives the widget build commands"
     }
 
+    test "a manifest with no entry for a widget of the contract gives an error" {
+      let manifest = """{ "entries": {}, "head": "head-C.js", "devReload": "dev-reload-D.js" }"""
+
+      Expect.equal
+        (errorsOf (files |> Map.add "manifest.json" (bytes manifest)))
+        [ "site/Widgets/dist/manifest.json has no entry for the widget 'subscribe'." ]
+        "The error names the widget"
+    }
+
+    test "an entry that is not a widget of the contract gives an error" {
+      let manifest =
+        """{
+  "entries": { "subscribe": { "file": "subscribe-A.js", "imports": [] }, "search": { "file": "chunk-B.js", "imports": [] } },
+  "head": "head-C.js",
+  "devReload": "dev-reload-D.js"
+}"""
+
+      Expect.equal
+        (errorsOf (files |> Map.add "manifest.json" (bytes manifest)))
+        [ "site/Widgets/dist/manifest.json has the entry 'search', and the widget contract has no such widget." ]
+        "The error names the entry"
+    }
+
     test "a file that the manifest names and that does not exist gives an error" {
       Expect.equal
         (errorsOf (files |> Map.remove "chunk-B.js"))
@@ -107,5 +130,37 @@ let tests =
       let script = $"<script>{widgets.HeadScript}</script>"
       Expect.stringContains head script "The head has the script inline"
       Expect.isGreaterThan (head.IndexOf script) (head.IndexOf "rel=\"stylesheet\"") "The script comes after the stylesheet"
+    }
+  
+    test "a page with no mount loads no widget script" {
+      let created = Widgets.create files |> ok
+      let html = """<body><p>Text.</p><pre><code>&lt;div data-widget=&quot;subscribe&quot;&gt;</code></pre></body>"""
+      Expect.equal (Widgets.scripts created html) { Preloads = []; Entries = [] } "No entry and no preload"
+    }
+
+    test "a page loads the entry of each widget that it mounts, and the chunks of the entry, one time each" {
+      let created = Widgets.create files |> ok
+      let mount = """<div data-widget="subscribe" data-api="https://api.example"></div>"""
+
+      Expect.equal
+        (Widgets.scripts created $"<body>{mount}<main>{mount}</main></body>")
+        { Preloads = [ "/_/widgets/chunk-B.js" ]
+          Entries = [ "/_/widgets/subscribe-A.js" ] }
+        "One entry and one preload for two mounts"
+    }
+
+    test "the head preloads the chunks and loads the entry of the explorer mount, after the head script" {
+      let post = postWith "a-post" "2026-01-01T00:00:00Z" "One-offs" [] None
+      let map = RenderMap.create Stage.Production widgets (content [ post ])
+      let html = siteText map "posts/a-post/index.html"
+      let head = html.Substring(0, html.IndexOf "</head>")
+      let preload = """<link rel="modulepreload" href="/_/widgets/chunk-TEST.js">"""
+      let entry = """<script type="module" src="/_/widgets/subscribe-TEST.js"></script>"""
+      Expect.stringContains head preload "The head preloads the chunk"
+      Expect.stringContains head entry "The head loads the entry"
+      Expect.isGreaterThan (head.IndexOf preload) (head.IndexOf $"<script>{widgets.HeadScript}</script>") "The preload comes after the head script"
+      Expect.isGreaterThan (head.IndexOf entry) (head.IndexOf preload) "The entry comes after the preload"
+      Expect.isTrue (map.ContainsKey(SiteFile "_/widgets/subscribe-TEST.js")) "The entry is in the output"
+      Expect.isTrue (map.ContainsKey(SiteFile "_/widgets/chunk-TEST.js")) "The chunk is in the output"
     }
   ]

@@ -70,10 +70,18 @@ let siteText (map: RenderMap) path =
   | Some render -> Encoding.UTF8.GetString(render ())
   | None -> failtest $"The output has no '{path}'."
 
-/// The files of a widget build with no widget entry.
+let private widgetManifest =
+  """{
+  "entries": { "subscribe": { "file": "subscribe-TEST.js", "imports": [ "chunk-TEST.js" ] } },
+  "head": "head-TEST.js",
+  "devReload": "dev-reload-TEST.js"
+}"""
+
 let widgetFiles =
   Map
-    [ "manifest.json", Encoding.UTF8.GetBytes """{ "entries": {}, "head": "head-TEST.js", "devReload": "dev-reload-TEST.js" }"""
+    [ "manifest.json", Encoding.UTF8.GetBytes widgetManifest
+      "subscribe-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"
+      "chunk-TEST.js", Encoding.UTF8.GetBytes "export{};"
       "head-TEST.js", Encoding.UTF8.GetBytes "(()=>{document.documentElement.dataset.fixture=\"head\"})();"
       "dev-reload-TEST.js", Encoding.UTF8.GetBytes "(()=>{})();" ]
 

@@ -8,7 +8,8 @@ Azure Functions app for newsletter subscriptions, notifications, and posts.
 
 `site/` contains the F# generator that replaces the Astro site
 (`docs/spec/124-build-twopoint-dev-with-fsharp.md`). First run `npm ci` and `npm run build` in
-`site/Widgets/`. That build compiles the widgets with Fable and writes `site/Widgets/dist/`. Then run
+`site/Widgets/`. That build compiles the widgets with Fable and writes `site/Widgets/dist/`.
+`npm test` in `site/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
 `dotnet run --project site/Generator -- build --stage <local|staging|production>`. The command
 writes the site to `site/dist/website/`, the newsletters to `site/dist/newsletter/`, and the
 stage marker to `site/dist/stage`. The stage marker contains the stage name of the build.

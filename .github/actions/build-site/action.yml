@@ -36,11 +36,10 @@ runs:
       working-directory: site/Widgets
       run: npm run build
 
-    # TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/135): drop --if-present once the test script exists
     - name: Test the widget bundles
       shell: bash
       working-directory: site/Widgets
-      run: npm run --if-present test
+      run: npm test
 
     - name: Build the site
       shell: bash
