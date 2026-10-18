@@ -1,0 +1,11 @@
+{
+  "name": "twopoint-widgets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "dotnet fable Widgets.fsproj --outDir build/fable --extension .jsx --silent && node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

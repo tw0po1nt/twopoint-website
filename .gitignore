@@ -48,3 +48,6 @@ pnpm-lock.yaml
 # SageFs writes these files beside each init script
 **/.SageFs/.gitignore
 **/.SageFs/warmup-replay-cache.json
+
+# widget build output (dist/ is ignored above)
+site/Widgets/build/

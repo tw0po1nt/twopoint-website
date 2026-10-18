@@ -71,12 +71,30 @@ let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string lis
         OgImages = ogImages }
   }
 
+let loadWidgets (root: string) : Result<Widgets, string list> =
+  let folder = Path.Combine(root, WidgetManifest.folder)
+
+  let files =
+    if Directory.Exists folder then
+      Directory.GetFiles(folder, "*", SearchOption.AllDirectories)
+      |> Array.map (fun path -> Path.GetRelativePath(folder, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllBytes path)
+      |> Map.ofArray
+    else
+      Map.empty
+
+  Widgets.create files
+
+/// Gives an error for each internal link of the posts that has no target in the map.
+let renderMap (stage: Stage) (widgets: Widgets) (content: Content) : Result<RenderMap, string list> =
+  let map = RenderMap.create stage widgets content
+
+  match Links.check (RenderMap.sitePaths map) content.Posts with
+  | [] -> Ok map
+  | errors -> Error(List.map PostError.format errors)
+
 let load (fetch: IImageFetch) (root: string) (stage: Stage) : Result<RenderMap, string list> =
   result {
+    let! widgets = loadWidgets root
     let! content = loadContent fetch root
-    let map = RenderMap.create stage content
-
-    match Links.check (RenderMap.sitePaths map) content.Posts with
-    | [] -> return map
-    | errors -> return! Error(List.map PostError.format errors)
+    return! renderMap stage widgets content
   }

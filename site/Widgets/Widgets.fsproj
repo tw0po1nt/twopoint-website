@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Api/ApiTypes.fs" />
+    <Compile Include="Api/Comments.fs" />
+    <Compile Include="Api/Subscriptions.fs" />
+    <Compile Include="Head.fs" />
+    <Compile Include="HeadMain.fs" />
+    <Compile Include="DevReload.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.0.102" />
+    <PackageReference Include="Fable.Browser.Dom" Version="2.20.0" />
+    <PackageReference Include="Fable.Browser.MediaQueryList" Version="1.5.0" />
+    <PackageReference Include="Fable.Browser.WebStorage" Version="1.3.0" />
+    <PackageReference Include="Fable.Core" Version="5.2.0" />
+    <PackageReference Include="Fable.Promise" Version="3.2.0" />
+    <PackageReference Include="Fable.SimpleHttp" Version="3.6.0" />
+    <PackageReference Include="Thoth.Json" Version="10.4.1" />
+  </ItemGroup>
+
+</Project>

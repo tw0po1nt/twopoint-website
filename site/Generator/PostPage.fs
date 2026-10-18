@@ -132,7 +132,7 @@ let private outline (post: Post) =
       }
   }
 
-let render (config: StageConfig) (assets: Assets) (posts: Post list) (ogImage: OgImage) (post: Post) =
+let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (ogImage: OgImage) (post: Post) =
   let frontMatter = post.FrontMatter
   let position = Blog.seriesPosition posts post
 
@@ -162,4 +162,4 @@ let render (config: StageConfig) (assets: Assets) (posts: Post list) (ogImage: O
 
     outline post
   }
-  |> Layout.render config assets posts page
+  |> Layout.render config assets widgets posts page
