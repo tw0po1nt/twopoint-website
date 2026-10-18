@@ -30,7 +30,8 @@ Release PRs go to `prod` (`tw0po1nt/twopoint-website`). The default branch of ea
 PR to `main`.
 
 The `site` job in CI builds the full site with the `staging` stage, through the composite action
-in `.github/actions/build-site/`. A broken link or a failed image fetch fails the job.
+in `.github/actions/build-site/`. A broken link, a bad anchor, an unknown fence language, or a
+failed image fetch fails the job.
 
 ## Private links
 

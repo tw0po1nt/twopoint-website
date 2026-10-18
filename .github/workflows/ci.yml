@@ -27,8 +27,6 @@ jobs:
 
       - run: ./scripts/verify.sh
 
-  # Builds the full site, so a broken link, a bad anchor, an unknown fence
-  # language, or a failed image fetch fails the PR. Nothing deploys it.
   site:
     runs-on: ubuntu-latest
     timeout-minutes: 15

@@ -36,15 +36,12 @@ runs:
       working-directory: site/Widgets
       run: npm run build
 
-    # The bundle tests come with the first module widget. Until then, the
-    # widget package has no test script, and this step does nothing.
+    # TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/135): drop --if-present once the test script exists
     - name: Test the widget bundles
       shell: bash
       working-directory: site/Widgets
       run: npm run --if-present test
 
-    # The stage comes in through env, so the input never becomes part of the
-    # script.
     - name: Build the site
       shell: bash
       env:
