@@ -46,7 +46,7 @@ module ImageFetch =
 
           attempt 1 }
 
-  /// Keeps each image that downloads. A failure is not kept, so the next call tries again.
+  /// The cache keeps no failure, so the next call tries again.
   let memoize (fetch: IImageFetch) =
     let images = ConcurrentDictionary<string, byte array>()
 
@@ -90,7 +90,7 @@ module Images =
       { Width = source.Width
         Height = source.Width * ogSize.Height / ogSize.Width }
 
-  /// A JPEG of the center crop at 1.91:1. A crop larger than `ogSize` scales down to it. A smaller crop keeps its size.
+  /// A crop smaller than `ogSize` keeps its size.
   let ogCrop (bytes: byte array) : Result<byte array, string> =
     use source = SKImage.FromEncodedData bytes
 

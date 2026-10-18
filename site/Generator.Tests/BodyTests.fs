@@ -59,18 +59,24 @@ let tests =
       | other -> failtest $"%A{other}"
     }
 
-    test "an image that is not an https URL on Blob fails with its line" {
+    test "an image on any https host gets its size" {
+      Expect.stringContains
+        (html "![A cat](https://example.com/cat.jpg)")
+        "width=\"1600\" height=\"900\""
+        "An https image off Blob gets its size"
+    }
+
+    test "an image that is not an https URL fails with its line" {
       Expect.equal
-        (bodyErrors "![A](/cat.jpg)\n\n![B](http://twopointwebsite.blob.core.windows.net/cat.jpg)\n\n![C](https://example.com/cat.jpg)")
-        [ errorAt "a-post" 9 "Give the image '/cat.jpg' as an https URL on twopointwebsite.blob.core.windows.net."
-          errorAt "a-post" 11 "Give the image 'http://twopointwebsite.blob.core.windows.net/cat.jpg' as an https URL on twopointwebsite.blob.core.windows.net."
-          errorAt "a-post" 13 "Give the image 'https://example.com/cat.jpg' as an https URL on twopointwebsite.blob.core.windows.net." ]
-        "Each image that is not on Blob fails"
+        (bodyErrors "![A](/cat.jpg)\n\n![B](http://twopointwebsite.blob.core.windows.net/cat.jpg)")
+        [ errorAt "a-post" 9 "Give the image '/cat.jpg' as an https URL."
+          errorAt "a-post" 11 "Give the image 'http://twopointwebsite.blob.core.windows.net/cat.jpg' as an https URL." ]
+        "A root-relative image and an http image fail"
     }
 
     test "an img element in raw HTML fails with its line" {
       let message =
-        "Write the image as a Markdown image, for example ![A cat](https://twopointwebsite.blob.core.windows.net/posts/cat.jpg)."
+        "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
 
       Expect.equal
         (bodyErrors $"Text.\n\nA cat: <img src=\"{cat}\">.\n\n<div>\n<IMG SRC=\"{cat}\" />\n</div>")

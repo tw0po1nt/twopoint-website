@@ -42,7 +42,7 @@ module OgImages =
         match crops[url.AbsoluteUri] with
         | Ok(path, bytes, image) -> Ok(post.Slug, image, Some(path, bytes))
         | Error reason ->
-          Error $"The post {post.Slug} has the Open Graph image {url}, and the build cannot make its card: {reason}.")
+          Error $"The post {post.Slug} has the Open Graph image {url}, and the build cannot make its crop: {reason}.")
     |> Result.map (fun images ->
       { Files = images |> List.choose (fun (_, _, file) -> file) |> Map.ofList
         ByPost = images |> List.map (fun (slug, image, _) -> slug, image) |> Map.ofList })

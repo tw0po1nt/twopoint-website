@@ -98,8 +98,8 @@ let tests =
       Expect.equal
         (OgImages.create failing realContent.Value.Assets.DefaultImage [ post "part-1" None (Some seriesImage); post "part-2" None (Some seriesImage) ])
         (Error
-          [ $"The post part-1 has the Open Graph image {seriesImage}, and the build cannot make its card: HTTP 404, after 3 attempts."
-            $"The post part-2 has the Open Graph image {seriesImage}, and the build cannot make its card: HTTP 404, after 3 attempts." ])
+          [ $"The post part-1 has the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts."
+            $"The post part-2 has the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts." ])
         "Each post of the source fails"
     }
 
@@ -108,7 +108,7 @@ let tests =
 
       Expect.equal
         (OgImages.create page realContent.Value.Assets.DefaultImage [ post "a-post" (Some postImage) None ])
-        (Error [ $"The post a-post has the Open Graph image {postImage}, and the build cannot make its card: the file is not an image." ])
+        (Error [ $"The post a-post has the Open Graph image {postImage}, and the build cannot make its crop: the file is not an image." ])
         "A file that is not an image fails"
     }
 

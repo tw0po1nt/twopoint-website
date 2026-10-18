@@ -70,8 +70,6 @@ let private startTag = Regex("""<([A-Za-z][\w:-]*)((?:""" + attributePattern + "
 
 let private styleAttributes = set [ "class"; "style" ]
 
-let private blobHost = "twopointwebsite.blob.core.windows.net"
-
 let private rawHtmlErrors file (document: MarkdownDocument) =
   let errors line (html: string) =
     let lineAt index = line + html.AsSpan(0, index).Count '\n'
@@ -83,7 +81,7 @@ let private rawHtmlErrors file (document: MarkdownDocument) =
           errorAt file (lineAt tag.Index) "Write the link as a Markdown link, for example [the docs](https://example.com/)."
 
         if name.Equals("img", StringComparison.OrdinalIgnoreCase) then
-          errorAt file (lineAt tag.Index) $"Write the image as a Markdown image, for example ![A cat](https://{blobHost}/posts/cat.jpg)."
+          errorAt file (lineAt tag.Index) "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
 
         let attributes = tag.Groups[2]
 
@@ -209,14 +207,14 @@ let ofDocument (fetch: IImageFetch) (file: string) (document: MarkdownDocument) 
       attributes.AddPropertyIfNotExist("loading", "lazy")
 
       match Uri.TryCreate(image.Url, UriKind.Absolute) with
-      | true, url when url.Scheme = Uri.UriSchemeHttps && url.Host = blobHost ->
+      | true, url when url.Scheme = Uri.UriSchemeHttps ->
         match fetch.Get url |> Result.bind Images.size with
         | Ok size ->
           attributes.AddProperty("width", string size.Width)
           attributes.AddProperty("height", string size.Height)
           None
         | Error reason -> Some(errorAt file image.Line $"The build cannot read the size of the image {url}: {reason}.")
-      | _ -> Some(errorAt file image.Line $"Give the image '{image.Url}' as an https URL on {blobHost}."))
+      | _ -> Some(errorAt file image.Line $"Give the image '{image.Url}' as an https URL."))
 
   let links = links document
 

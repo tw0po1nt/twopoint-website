@@ -25,7 +25,6 @@ let anyImage =
     let hash = SHA256.HashData(Encoding.UTF8.GetBytes url.AbsoluteUri)
     Ok(jpeg 1600 900 (SKColor(hash[0], hash[1], hash[2]))))
 
-/// Records the URL of each call.
 let recording (fetch: IImageFetch) =
   let calls = ResizeArray<string>()
 

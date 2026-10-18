@@ -15,7 +15,6 @@ let private url = Uri "https://example.com/a.jpg"
 
 let private cropSize (bytes: byte array) = Images.ogCrop bytes |> Result.bind Images.size
 
-/// Gives the responses in order, one for each call.
 let private responses (results: Result<byte array, string> list) =
   let remaining = Collections.Generic.Queue results
   recording (fetchWith (fun _ -> remaining.Dequeue()))
