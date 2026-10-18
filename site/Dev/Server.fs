@@ -7,6 +7,7 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.StaticFiles
 open System
+open System.IO
 open System.Threading.Tasks
 
 let private stage = Stage.Local
@@ -23,9 +24,7 @@ let private respond (ctx: HttpContext) status path (render: Render) : Task =
   ctx.Response.ContentType <- contentType path
   ctx.Response.Body.WriteAsync(ReadOnlyMemory(render ())).AsTask()
 
-let serve (ctx: HttpContext) : Task =
-  let map = RenderMap.create stage
-
+let private serveMap (ctx: HttpContext) (map: RenderMap) : Task =
   match Lookup.find map ctx.Request.Path.Value with
   | Some (path, render) -> respond ctx StatusCodes.Status200OK path render
   | None ->
@@ -34,6 +33,21 @@ let serve (ctx: HttpContext) : Task =
     | None ->
       ctx.Response.StatusCode <- StatusCodes.Status404NotFound
       Task.CompletedTask
+
+let private serveErrors (ctx: HttpContext) (errors: string list) : Task =
+  ctx.Response.StatusCode <- StatusCodes.Status500InternalServerError
+  ctx.Response.ContentType <- "text/plain; charset=utf-8"
+  ctx.Response.WriteAsync(String.concat "\n" errors)
+
+let serve (ctx: HttpContext) : Task =
+  let map =
+    Site.root (Directory.GetCurrentDirectory())
+    |> Result.mapError List.singleton
+    |> Result.bind (fun root -> Site.load root stage)
+
+  match map with
+  | Ok map -> serveMap ctx map
+  | Error errors -> serveErrors ctx errors
 
 /// SageFs adds its reload script only to an app that `RunAsync` or `Run` starts.
 let start () =

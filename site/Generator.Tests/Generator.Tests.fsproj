@@ -13,12 +13,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="Fixture.fs" />
     <Compile Include="StageTests.fs" />
     <Compile Include="CliTests.fs" />
     <Compile Include="RobotsTests.fs" />
     <Compile Include="RenderMapTests.fs" />
+    <Compile Include="SlugTests.fs" />
+    <Compile Include="FrontMatterTests.fs" />
+    <Compile Include="BodyTests.fs" />
+    <Compile Include="DraftTests.fs" />
+    <Compile Include="LinkTests.fs" />
     <Compile Include="UrlParity.fs" />
     <Compile Include="UrlParityTests.fs" />
+    <Compile Include="LatestPostTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

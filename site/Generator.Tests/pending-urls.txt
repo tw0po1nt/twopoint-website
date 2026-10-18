@@ -6,7 +6,6 @@ category/talks/index.html
 index.html
 posts/2/index.html
 posts/contributing-to-the-fsharp-open-source-ecosystem/index.html
-posts/danger-lurks-in-system-linq-enumerable-or-default-functions/index.html
 posts/fable-reminders-part-1/index.html
 posts/fable-reminders-part-2/index.html
 posts/functional-architecture-in-csharp-a-case-study/index.html

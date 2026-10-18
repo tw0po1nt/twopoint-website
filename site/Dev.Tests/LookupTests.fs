@@ -6,7 +6,10 @@ open TwoPoint.Site.Generator
 open Expecto
 open System.Text
 
-let private map = RenderMap.create Stage.Local
+let private map =
+  match RenderMap.create Stage.Local [] with
+  | Ok map -> map
+  | Error errors -> failwith $"The render map has errors: %A{errors}"
 
 let private text (render: Render) = Encoding.UTF8.GetString(render ())
 

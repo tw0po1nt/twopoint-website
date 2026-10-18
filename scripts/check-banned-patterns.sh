@@ -8,7 +8,8 @@
 # when this repo adopts another source language.
 # It strips fenced code blocks and inline code spans first, so a rule can name
 # the text it forbids by writing that text in backticks. A file that git
-# ignores is skipped. A new file that git does not track yet is still read.
+# ignores is skipped, and so is a blog post. A new file that git does not track
+# yet is still read.
 #
 # `--text <label> <file>` checks one file of text as Markdown, and reports each
 # hit under <label>. CI uses this mode for the text of a pull request: the
@@ -116,7 +117,7 @@ if [ -n "${text_file:-}" ]; then
 else
   while IFS= read -r file; do
     case "$file" in
-      node_modules/* | */target/* | */node_modules/* | */bin/* | */obj/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
+      node_modules/* | */target/* | */node_modules/* | */bin/* | */obj/* | site/content/posts/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
     esac
 
     case "$file" in

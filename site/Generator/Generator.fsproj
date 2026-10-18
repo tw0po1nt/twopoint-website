@@ -6,9 +6,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="pending-posts.txt" LogicalName="pending-posts.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="Stage.fs" />
     <Compile Include="Robots.fs" />
+    <Compile Include="Slug.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="FrontMatter.fs" />
+    <Compile Include="Body.fs" />
+    <Compile Include="Post.fs" />
+    <Compile Include="PendingPosts.fs" />
+    <Compile Include="SitePath.fs" />
+    <Compile Include="Links.fs" />
+    <Compile Include="PostPage.fs" />
     <Compile Include="RenderMap.fs" />
+    <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />
     <Compile Include="Cli.fs" />
     <Compile Include="Program.fs" />
@@ -17,6 +31,9 @@
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="10.0.102" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
+    <PackageReference Include="Markdig" Version="1.4.1" />
+    <PackageReference Include="Oxpecker.ViewEngine" Version="2.1.0" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
 </Project>
