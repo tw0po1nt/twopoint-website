@@ -23,41 +23,29 @@ type Language =
   | Xml
   | Css
 
-/// Each fence language, by the name that the fence gives.
-let languages =
-  [ "fsharp", Fsharp
-    "csharp", Csharp
-    "swift", Swift
-    "sh", Sh
-    "diff", Diff
-    "json", Json
-    "xml", Xml
-    "css", Css ]
+type private Entry =
+  { Fence: string
+    Language: Language
+    Scope: string
+    File: string }
+
+let private entries =
+  [ { Fence = "fsharp"; Language = Fsharp; Scope = "source.fsharp"; File = "fsharp.json" }
+    { Fence = "csharp"; Language = Csharp; Scope = "source.cs"; File = "csharp.json" }
+    { Fence = "swift"; Language = Swift; Scope = "source.swift"; File = "swift.json" }
+    { Fence = "sh"; Language = Sh; Scope = "source.shell"; File = "shellscript.json" }
+    { Fence = "diff"; Language = Diff; Scope = "source.diff"; File = "diff.json" }
+    { Fence = "json"; Language = Json; Scope = "source.json"; File = "json.json" }
+    { Fence = "xml"; Language = Xml; Scope = "text.xml"; File = "xml.json" }
+    { Fence = "css"; Language = Css; Scope = "source.css"; File = "css.json" } ]
+
+let names = entries |> List.map _.Fence |> String.concat ", "
 
 let tryLanguage (fence: string) =
-  languages |> List.tryFind (fun (name, _) -> name = fence) |> Option.map snd
+  entries |> List.tryFind (fun entry -> entry.Fence = fence) |> Option.map _.Language
 
-let private grammarFile =
-  function
-  | Fsharp -> "fsharp.json"
-  | Csharp -> "csharp.json"
-  | Swift -> "swift.json"
-  | Sh -> "shellscript.json"
-  | Diff -> "diff.json"
-  | Json -> "json.json"
-  | Xml -> "xml.json"
-  | Css -> "css.json"
-
-let private scopeName =
-  function
-  | Fsharp -> "source.fsharp"
-  | Csharp -> "source.cs"
-  | Swift -> "source.swift"
-  | Sh -> "source.shell"
-  | Diff -> "source.diff"
-  | Json -> "source.json"
-  | Xml -> "text.xml"
-  | Css -> "source.css"
+let private scopeName language =
+  (entries |> List.find (fun entry -> entry.Language = language)).Scope
 
 /// The closed set of roles of the scope map. The name of a role is the end of its variable name in the map.
 let private roles =
@@ -108,7 +96,7 @@ let private paintOf (variable: string) =
     else
       failwith $"The scope map has the unknown color '{variable}'."
 
-let private rule (scope: JsonNode) paint =
+let private themeRule (scope: JsonNode) paint =
   let settings = JsonObject()
   settings["foreground"] <- JsonValue.Create(color paint)
   let rule = JsonObject()
@@ -116,7 +104,6 @@ let private rule (scope: JsonNode) paint =
   rule["settings"] <- settings
   rule :> JsonNode
 
-/// The scope map as a TextMate theme.
 let private theme () =
   use stream = resource "css-variables.json"
   let map = JsonNode.Parse stream
@@ -129,9 +116,9 @@ let private theme () =
          let settings = entry["settings"]
          let foreground = settings["foreground"].GetValue<string>()
          let scope = entry["scope"].DeepClone()
-         yield rule scope (paintOf foreground)
+         yield themeRule scope (paintOf foreground)
        for scope, paint in markScopes do
-         yield rule (JsonValue.Create scope) paint |]
+         yield themeRule (JsonValue.Create scope) paint |]
 
   let json = JsonObject()
   json["settings"] <- JsonArray rules
@@ -140,7 +127,7 @@ let private theme () =
 
 let private registry =
   lazy
-    (let files = languages |> List.map (fun (_, language) -> scopeName language, grammarFile language) |> dict
+    (let files = entries |> List.map (fun entry -> entry.Scope, entry.File) |> dict
      let theme = theme ()
 
      Registry(
@@ -229,6 +216,5 @@ let html (language: Language) (lines: string list) =
 
   output.ToString()
 
-/// Gives the HTML of the `code` element of a block with no language.
 let plain (lines: string list) =
   lines |> List.map (fun line -> escape line + "\n") |> String.concat ""

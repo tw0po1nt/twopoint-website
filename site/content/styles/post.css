@@ -227,6 +227,7 @@
 }
 
 .tk-diff-mark {
+  -webkit-user-select: none;
   user-select: none;
 }
 

@@ -141,7 +141,7 @@ let private links (document: MarkdownDocument) =
 let private lines (block: CodeBlock) =
   [ for index in 0 .. block.Lines.Count - 1 -> block.Lines.Lines[index].Slice.ToString() ]
 
-let private fence (block: CodeBlock) =
+let private tryFenceLanguage (block: CodeBlock) =
   match block with
   | :? FencedCodeBlock as fenced -> Highlight.tryLanguage fenced.Info |> Option.map (fun language -> fenced.Info, language)
   | _ -> None
@@ -152,7 +152,7 @@ type private CodeRenderer() =
   override _.Write(renderer: HtmlRenderer, block: CodeBlock) =
     renderer.EnsureLine() |> ignore
 
-    match fence block with
+    match tryFenceLanguage block with
     | Some(name, language) ->
       renderer
         .Write($"<pre data-lang=\"{name}\" tabindex=\"0\"><code>")
@@ -204,8 +204,7 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
     descendants<FencedCodeBlock> document
     |> List.filter (fun code -> not (String.IsNullOrEmpty code.Info) && (Highlight.tryLanguage code.Info).IsNone)
     |> List.map (fun code ->
-      let names = Highlight.languages |> List.map fst |> String.concat ", "
-      errorAt file code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {names}.")
+      errorAt file code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {Highlight.names}.")
 
   let errors =
     rawHtmlErrors file document @ linkErrors @ languageErrors |> List.sortBy _.Line

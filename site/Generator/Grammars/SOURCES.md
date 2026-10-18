@@ -1,7 +1,9 @@
 # Grammar sources
 
 The highlighter embeds the JSON files in this folder. Do not edit a file by hand. To update a
-file, copy the new version from its source. Then change the row of the file in this table.
+grammar file, copy the new version from its source. To update `css-variables.json`, apply the
+filter in the next section to the new version of its source. Then change the row of the file in
+this table.
 
 | File | Source | Version | License |
 | --- | --- | --- | --- |
@@ -17,8 +19,8 @@ file, copy the new version from its source. Then change the row of the file in t
 
 The commit is the commit of the grammar in its source repository.
 
-`css-variables.json` is the scope map. It contains each rule of the theme that sets a
-foreground color, and it omits each `fontStyle`. Each color is a CSS variable, and the end of the
+`css-variables.json` is the scope map. It is a filtered copy of its source: it contains each rule
+of the theme that sets a foreground color, and it omits each `fontStyle`. Each color is a CSS variable, and the end of the
 variable name is the role of the token. For example, `var(--shiki-token-keyword)` gives the role
 `keyword`. `var(--shiki-foreground)` gives no role.
 
