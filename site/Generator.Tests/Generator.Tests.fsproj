@@ -22,6 +22,7 @@
     <Compile Include="SlugTests.fs" />
     <Compile Include="FrontMatterTests.fs" />
     <Compile Include="BodyTests.fs" />
+    <Compile Include="HighlightTests.fs" />
     <Compile Include="DraftTests.fs" />
     <Compile Include="LinkTests.fs" />
     <Compile Include="UrlParity.fs" />

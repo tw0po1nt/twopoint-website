@@ -45,13 +45,6 @@ let tests =
         "Each heading gets the Astro id"
     }
 
-    test "a code block is a plain escaped block" {
-      Expect.equal
-        (html "```csharp\nif (a < b && c) { }\n```")
-        "<pre><code>if (a &lt; b &amp;&amp; c) { }\n</code></pre>\n"
-        "A code block has no class and escapes its text"
-    }
-
     test "raw HTML with no class or style stays" {
       Expect.equal (html "It is <u>**1000%**</u>.") "<p>It is <u><strong>1000%</strong></u>.</p>\n" "Raw HTML stays"
     }

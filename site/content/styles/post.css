@@ -181,6 +181,56 @@
   }
 }
 
+.tk-keyword {
+  color: light-dark(#c8251f, #ff7a6e);
+}
+
+.tk-string,
+.tk-string-expression {
+  color: light-dark(#2f6f4f, #9fdcae);
+}
+
+.tk-comment {
+  color: light-dark(#75726a, #80827e);
+}
+
+.tk-function {
+  color: light-dark(#6a3fb5, #c7a6ff);
+}
+
+.tk-constant {
+  color: light-dark(#a35a00, #f0b45a);
+}
+
+.tk-parameter {
+  color: light-dark(#1b1b1b, #e6e4dc);
+}
+
+.tk-punctuation {
+  color: light-dark(#6b6a63, #8b8a83);
+}
+
+.tk-link {
+  color: light-dark(#c8251f, #ff7a6e);
+}
+
+.tk-inserted {
+  color: light-dark(#2f6f4f, #7fd1a0);
+}
+
+.tk-deleted {
+  color: light-dark(#c8251f, #ff5a4e);
+}
+
+.tk-changed {
+  color: light-dark(#a35a00, #f0b45a);
+}
+
+.tk-diff-mark {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .prose table {
   border-collapse: collapse;
   font-size: 15px;
