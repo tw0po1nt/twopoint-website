@@ -60,7 +60,8 @@ let private frontMatterBlock (post: Post) (position: Blog.SeriesPosition option)
             a (href = $"/tag/{tag.Slug}/") { $"#{tag.Title}" }
         })
 
-    row "read" (Fragment() { $"{post.Body.ReadingTime} min" })
+    if post.Body.ReadingTime > 0 then
+      row "read" (Fragment() { $"{post.Body.ReadingTime} min" })
   }
 
 let private shareLinks (config: StageConfig) (post: Post) =

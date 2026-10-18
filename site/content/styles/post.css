@@ -127,6 +127,19 @@
   height: auto;
 }
 
+.prose iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 24px 0;
+  border: 1px solid var(--line);
+}
+
+.prose figure {
+  margin: 24px 0;
+  font-family: var(--mono);
+}
+
 .prose code {
   padding: 1px 4px;
   background: var(--bg-2);

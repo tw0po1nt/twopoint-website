@@ -2,8 +2,6 @@
 module TwoPoint.Site.Generator.Links
 
 let check (sitePaths: Set<string>) (posts: Post list) : PostError list =
-  let converted = posts |> List.map _.Slug |> Set.ofList
-
   let postAnchors =
     posts
     |> List.map (fun post -> SitePath.ofUrlPath (Post.urlPath post), post.Body.Anchors)
@@ -16,8 +14,7 @@ let check (sitePaths: Set<string>) (posts: Post list) : PostError list =
       None
 
   let pending (path: string) =
-    PendingPosts.slugs
-    |> Set.exists (fun slug -> not (converted.Contains slug) && path = $"/posts/{slug}/")
+    PendingPages.urlPaths.Contains path && not (sitePaths.Contains(SitePath.ofUrlPath path))
 
   let exists path = pending path || sitePaths.Contains(SitePath.ofUrlPath path)
 

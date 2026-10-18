@@ -10,6 +10,7 @@
   <ItemGroup>
     <EmbeddedResource Include="urls.txt" LogicalName="urls.txt" />
     <EmbeddedResource Include="pending-urls.txt" LogicalName="pending-urls.txt" />
+    <EmbeddedResource Include="astro-posts.json" LogicalName="astro-posts.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,11 +24,12 @@
     <Compile Include="FrontMatterTests.fs" />
     <Compile Include="BodyTests.fs" />
     <Compile Include="HighlightTests.fs" />
+    <Compile Include="DirectiveTests.fs" />
     <Compile Include="DraftTests.fs" />
     <Compile Include="LinkTests.fs" />
     <Compile Include="UrlParity.fs" />
     <Compile Include="UrlParityTests.fs" />
-    <Compile Include="LatestPostTests.fs" />
+    <Compile Include="PostsTests.fs" />
     <Compile Include="BlogTests.fs" />
     <Compile Include="AssetsTests.fs" />
     <Compile Include="PostPageTests.fs" />

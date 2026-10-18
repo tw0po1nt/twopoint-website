@@ -25,6 +25,10 @@ series.
 **Term**:
 A category or a tag of a post. Its slug comes from its title.
 
+**Directive**:
+A line of a post that embeds a video or the slides of a talk, for example `::youtube{id="…"}`. The
+build fails on a bad directive.
+
 **Upcoming post**:
 A post with a publish date in the future. Readers can open it before that date, but they cannot comment
 on it until that date.

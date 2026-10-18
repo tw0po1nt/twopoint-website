@@ -56,10 +56,8 @@ let tests =
         "A page link has a trailing slash"
     }
 
-    test "a link to a post that is not Markdown yet passes with its anchor" {
-      Expect.isEmpty
-        (check "Read [why](/posts/why-the-fsharp-would-i-write-real-code-like-this/#explicit-rather-than-implicit).")
-        "A pending post passes"
+    test "a link to a page that is not in the output yet passes" {
+      Expect.isEmpty (check "Read [the series](/series/fable-reminders/).") "A pending page passes"
     }
 
     test "a link to a draft fails" {
