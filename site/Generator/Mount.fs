@@ -1,4 +1,3 @@
-/// The mounts of the widgets.
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Mount
 

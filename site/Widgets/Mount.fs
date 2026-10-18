@@ -1,4 +1,3 @@
-/// Renders a widget into each of its mounts on the page.
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Widgets.Mount
 
@@ -11,7 +10,6 @@ let private attributes (element: Element) =
       let attribute = element.attributes.item index
       attribute.name, attribute.value ]
 
-/// A mount that `Contract.parse` refuses keeps its static HTML.
 let each (name: string) (view: Contract.Widget -> HtmlElement) =
   let mounts = document.querySelectorAll $"[data-widget=\"{name}\"]"
 

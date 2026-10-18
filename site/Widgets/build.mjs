@@ -17,7 +17,7 @@ const fail = (messages) => {
   process.exit(1);
 };
 
-// Fable writes the Solid views as JSX, and babel-preset-solid compiles that JSX to DOM calls.
+// esbuild cannot compile Solid JSX, so babel-preset-solid compiles the JSX that Fable writes.
 const solidJsx = {
   name: 'solid-jsx',
   setup(build) {
@@ -54,14 +54,12 @@ const iife = async (name, entry) => {
   return { file: path.relative(outDir, file), bytes: output.bytes, inputs: Object.keys(output.inputs) };
 };
 
-// Each file of Entries/ is the module entry of one widget: Entries/Subscribe.fs gives the entry `subscribe`.
 const widgetEntries = async () => {
   const files = (await readdir(entriesDir)).filter((file) => file.endsWith('.jsx')).sort();
 
   return Object.fromEntries(files.map((file) => [path.basename(file, '.jsx').toLowerCase(), path.join(entriesDir, file)]));
 };
 
-// Gives each chunk that `file` imports, also through another chunk, so that a page can preload each one.
 const staticImports = (outputs, file) => {
   const found = new Set();
 

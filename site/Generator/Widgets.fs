@@ -147,7 +147,6 @@ module Widgets =
 
   let private mount = Regex("\\sdata-widget=\"([^\"]+)\"")
 
-  /// Gives the entry of each widget that `html` mounts, and each chunk that the entries import, one time each.
   let scripts (widgets: Widgets) (html: string) : WidgetScripts =
     let entries =
       [ for found in mount.Matches html -> found.Groups[1].Value ]

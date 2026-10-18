@@ -1,3 +1,4 @@
+[<RequireQualifiedAccess>]
 module TwoPoint.Site.Widgets.SubscribeView
 
 open TwoPoint.Api.Subscriptions

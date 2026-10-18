@@ -1,4 +1,3 @@
-/// The mount of each widget is `<div data-widget="<name>" data-<prop>="…">`. The Generator and the Widgets both compile this file.
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Widgets.Contract
 
@@ -37,7 +36,6 @@ let private api (widget: string) (value: string) =
   else
     Error $"The 'data-api' of the {widget} mount is '{value}'. Give an http or https origin with no '/' at the end."
 
-/// `attributes` are the attributes of the mount element, by name.
 let parse (attributes: (string * string) list) : Result<Widget, string> =
   match find attributes "data-widget" with
   | Some "subscribe" ->

@@ -205,7 +205,7 @@ let private footer () =
     footerLinks ()
   }
 
-/// `posts` are the posts that the explorer lists. The head loads the script of each widget that the body mounts.
+/// `posts` are the posts that the explorer lists.
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (page: Page) (main: HtmlElement) =
   let body =
     body () {

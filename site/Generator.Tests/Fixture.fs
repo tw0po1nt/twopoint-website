@@ -77,7 +77,6 @@ let private widgetManifest =
   "devReload": "dev-reload-TEST.js"
 }"""
 
-/// The files of a widget build with one entry for each widget.
 let widgetFiles =
   Map
     [ "manifest.json", Encoding.UTF8.GetBytes widgetManifest

@@ -15,8 +15,7 @@ type Status =
 type Model =
   { Email: string
     Name: string
-    /// The form shows an error when the email address is not valid.
-    CheckEmail: bool
+    EmailTouched: bool
     Status: Status }
 
 type Msg =
@@ -25,7 +24,6 @@ type Msg =
   | EmailLeft
   | Submitted
   | Answered of ApiResponse<unit>
-  /// The request got no answer from the API.
   | Unanswered
 
 type Effect = Send of NewSubscription
@@ -33,7 +31,7 @@ type Effect = Send of NewSubscription
 let init =
   { Email = ""
     Name = ""
-    CheckEmail = false
+    EmailTouched = false
     Status = Editing }
 
 let private emailPattern = Regex "^\w+([-+.']\w+)*@(\[*\w+)([-.]\w+)*\.\w+([-.]\w+\])*$"
@@ -41,7 +39,7 @@ let private emailPattern = Regex "^\w+([-+.']\w+)*@(\[*\w+)([-.]\w+)*\.\w+([-.]\
 let isValidEmail (email: string) = emailPattern.IsMatch(email.Trim())
 
 let showsEmailError (model: Model) =
-  model.CheckEmail && not (isValidEmail model.Email)
+  model.EmailTouched && not (isValidEmail model.Email)
 
 let isSending (model: Model) =
   match model.Status with
@@ -58,9 +56,9 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | EmailChanged email -> { model with Email = email }, None
   | NameChanged name -> { model with Name = name }, None
-  | EmailLeft -> { model with CheckEmail = model.CheckEmail || model.Email.Trim() <> "" }, None
+  | EmailLeft -> { model with EmailTouched = model.EmailTouched || model.Email.Trim() <> "" }, None
   | Submitted when isSending model -> model, None
-  | Submitted when not (isValidEmail model.Email) -> { model with CheckEmail = true }, None
+  | Submitted when not (isValidEmail model.Email) -> { model with EmailTouched = true }, None
   | Submitted ->
     let name = model.Name.Trim()
 
