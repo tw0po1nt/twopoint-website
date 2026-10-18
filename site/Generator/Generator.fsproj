@@ -33,6 +33,7 @@
     <Compile Include="Layout.fs" />
     <Compile Include="PostPage.fs" />
     <Compile Include="SubscribePage.fs" />
+    <Compile Include="HomePage.fs" />
     <Compile Include="RenderMap.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />

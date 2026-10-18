@@ -88,4 +88,22 @@ let tests =
       for forced in forcedThemes do
         Head.write (fun _ _ -> throws ()) throws forced
     }
+
+    test "a publish date before now, or at now, is past" {
+      Expect.isTrue (Head.isPast "2026-10-29T13:00:00.001Z" "2026-10-29T13:00:00.000Z") "One millisecond after the publish date"
+      Expect.isTrue (Head.isPast "2026-10-29T13:00:00.000Z" "2026-10-29T13:00:00.000Z") "At the publish date"
+      Expect.isTrue (Head.isPast "2027-01-01T00:00:00.000Z" "2026-12-31T23:59:59.999Z") "A later year"
+    }
+
+    test "a publish date after now is not past" {
+      Expect.isFalse (Head.isPast "2026-10-29T12:59:59.999Z" "2026-10-29T13:00:00.000Z") "One millisecond before the publish date"
+      Expect.isFalse (Head.isPast "2026-09-30T23:00:00.000Z" "2026-10-01T00:00:00.000Z") "An earlier month"
+    }
+
+    test "a publish date of another form is never past" {
+      let now = "2030-01-01T00:00:00.000Z"
+      Expect.isFalse (Head.isPast now "2026-10-29T13:00:00Z") "A time with no milliseconds"
+      Expect.isFalse (Head.isPast now "2026-10-29T13:00:00.000+") "A time with no Z"
+      Expect.isFalse (Head.isPast now "") "An empty attribute"
+    }
   ]

@@ -3,7 +3,6 @@ about/index.html
 category/one-offs/index.html
 category/series/index.html
 category/talks/index.html
-index.html
 posts/2/index.html
 posts/index.html
 privacy/index.html

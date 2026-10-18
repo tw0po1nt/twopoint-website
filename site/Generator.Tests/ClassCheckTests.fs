@@ -11,18 +11,20 @@ let private text (map: RenderMap) path = Encoding.UTF8.GetString(map[SiteFile pa
 let private pages (map: RenderMap) =
   RenderMap.sitePaths map |> Seq.filter _.EndsWith(".html") |> Seq.map (text map)
 
-/// Posts that give each part of the post page: a talk, a post with no series and no tags, and posts with older and newer posts.
+/// Posts that give each part of the post page and the home page: a talk, a post with no series and no tags, posts with
+/// older and newer posts, and a post after the build time for the upcoming post banner.
 let private fixturePosts =
   [ postWith "a-talk" "2025-01-01T00:00:00Z" "Talks" [ "FSharp" ] None
     postWith "a-one-off" "2025-06-01T00:00:00Z" "One-offs" [] None
-    postWith "a-series-post" "2025-09-01T00:00:00Z" "Series" [ "FSharp" ] (Some "fable-reminders") ]
+    postWith "a-series-post" "2025-09-01T00:00:00Z" "Series" [ "FSharp" ] (Some "fable-reminders")
+    postWith "an-upcoming-post" "2027-01-01T00:00:00Z" "One-offs" [] None ]
 
 [<Tests>]
 let tests =
   testList "Class check" [
     test "each class of the real output and the fixture output has a rule, and each rule has a use" {
-      let real = RenderMap.create Stage.Production widgets realContent.Value
-      let fixture = RenderMap.create Stage.Production widgets (content fixturePosts)
+      let real = RenderMap.create Stage.Production buildTime widgets realContent.Value
+      let fixture = RenderMap.create Stage.Production buildTime widgets (content fixturePosts)
       let css = text real (realContent.Value.Assets.Stylesheet.TrimStart '/')
       Expect.isEmpty (ClassCheck.check css (Seq.append (pages real) (pages fixture))) "The site CSS agrees with the output"
     }

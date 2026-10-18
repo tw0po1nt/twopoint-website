@@ -7,7 +7,7 @@ open Expecto
 
 let private post = postWith "a-post" "2026-01-01T00:00:00Z" "One-offs" [] None
 
-let private map stage = RenderMap.create stage widgets (content [ post ])
+let private map stage = RenderMap.create stage buildTime widgets (content [ post ])
 
 let private mount api =
   $"""<div data-widget="subscribe" data-api="{api}"><p class="subscribe-fallback">The subscribe form needs JavaScript. You can also follow the <a href="/rss.xml">RSS feed</a>.</p></div>"""

@@ -2,6 +2,7 @@
 module TwoPoint.Site.Generator.Site
 
 open FsToolkit.ErrorHandling
+open System
 open System.IO
 
 let private postsFolder = Path.Combine("site", "content", "posts")
@@ -85,16 +86,16 @@ let loadWidgets (root: string) : Result<Widgets, string list> =
   Widgets.create files
 
 /// Gives an error for each internal link of the posts that has no target in the map.
-let renderMap (stage: Stage) (widgets: Widgets) (content: Content) : Result<RenderMap, string list> =
-  let map = RenderMap.create stage widgets content
+let renderMap (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : Result<RenderMap, string list> =
+  let map = RenderMap.create stage buildTime widgets content
 
   match Links.check (RenderMap.sitePaths map) content.Posts with
   | [] -> Ok map
   | errors -> Error(List.map PostError.format errors)
 
-let load (fetch: IImageFetch) (root: string) (stage: Stage) : Result<RenderMap, string list> =
+let load (fetch: IImageFetch) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap, string list> =
   result {
     let! widgets = loadWidgets root
     let! content = loadContent fetch root
-    return! renderMap stage widgets content
+    return! renderMap stage buildTime widgets content
   }

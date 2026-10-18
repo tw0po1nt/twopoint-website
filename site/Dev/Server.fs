@@ -45,7 +45,7 @@ let serve (ctx: HttpContext) : Task =
   let map =
     Site.root (Directory.GetCurrentDirectory())
     |> Result.mapError List.singleton
-    |> Result.bind (fun root -> Site.load fetch root stage)
+    |> Result.bind (fun root -> Site.load fetch root stage DateTimeOffset.UtcNow)
 
   match map with
   | Ok map -> serveMap ctx map

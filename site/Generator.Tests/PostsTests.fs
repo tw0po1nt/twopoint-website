@@ -43,7 +43,7 @@ let private post slug =
   realPosts.Value |> List.find (fun post -> post.Slug = slug)
 
 let private page slug =
-  siteText (RenderMap.create Stage.Production widgets realContent.Value) $"posts/{slug}/index.html"
+  siteText (RenderMap.create Stage.Production buildTime widgets realContent.Value) $"posts/{slug}/index.html"
 
 [<Tests>]
 let tests =
@@ -59,7 +59,7 @@ let tests =
 
     test "each post page is in the output of each stage" {
       for stage in Stage.all do
-        let map = RenderMap.create stage widgets realContent.Value
+        let map = RenderMap.create stage buildTime widgets realContent.Value
 
         for expected in astro do
           Expect.stringContains
@@ -70,7 +70,7 @@ let tests =
 
     test "each internal link of the posts goes to a page and a heading in the output" {
       for stage in Stage.all do
-        match Site.renderMap stage widgets realContent.Value with
+        match Site.renderMap stage buildTime widgets realContent.Value with
         | Ok _ -> ()
         | Error errors -> failtest (String.concat "\n" errors)
     }

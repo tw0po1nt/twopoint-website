@@ -11,7 +11,7 @@ let tests =
   testList "RenderMap" [
     test "the stage marker contains the stage name" {
       for stage in Stage.all do
-        let marker = RenderMap.create stage widgets (content []) |> Map.find StageMarker
+        let marker = RenderMap.create stage buildTime widgets (content []) |> Map.find StageMarker
         Expect.equal (Encoding.UTF8.GetString(marker ())) (Stage.name stage) "The marker contains the stage name"
     }
   ]

@@ -25,7 +25,9 @@ type Page =
     OgType: OgType
     OgImage: OgImage
     /// The post that the explorer marks.
-    Current: Post option }
+    Current: Post option
+    /// The strip above the header, for example the upcoming post banner.
+    Banner: HtmlElement option }
 
 let private emDash = string (char 0x2014)
 
@@ -209,6 +211,10 @@ let private footer () =
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (page: Page) (main: HtmlElement) =
   let body =
     body () {
+      match page.Banner with
+      | Some banner -> banner
+      | None -> ()
+
       header ()
       explorer config posts page.Current
       main

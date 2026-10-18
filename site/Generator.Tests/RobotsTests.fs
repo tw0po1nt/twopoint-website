@@ -7,7 +7,7 @@ open Expecto
 open System.Text
 
 let private robots stage =
-  RenderMap.create stage widgets (content [])
+  RenderMap.create stage buildTime widgets (content [])
   |> Map.find (SiteFile "robots.txt")
   |> fun render -> Encoding.UTF8.GetString(render ())
 

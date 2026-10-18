@@ -13,7 +13,8 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Pos
       Robots = Layout.Robots.Index
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
-      Current = None }
+      Current = None
+      Banner = None }
 
   main (class' = "page") {
     p (class' = "path") {

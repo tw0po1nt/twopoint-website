@@ -87,6 +87,9 @@ let widgetFiles =
 
 let widgets = Widgets.create widgetFiles |> ok
 
+/// The build time of each test map.
+let buildTime = DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero)
+
 let realRoot =
   lazy
     (match Site.root AppContext.BaseDirectory with

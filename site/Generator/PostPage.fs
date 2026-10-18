@@ -143,7 +143,8 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Pos
       Robots = Layout.Robots.Index
       OgType = Layout.OgType.Article
       OgImage = ogImage
-      Current = Some post }
+      Current = Some post
+      Banner = None }
 
   main (class' = "post-page") {
     article (class' = "post") {
