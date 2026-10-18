@@ -2,8 +2,10 @@ module TwoPoint.Site.Generator.Tests.HomePageTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Widgets
 
 open Expecto
+open System
 open System.Text.RegularExpressions
 
 let private hidden slug publishDate category =
@@ -93,11 +95,15 @@ let tests =
       Expect.isFalse ((home Stage.Local [ oneOff ]).Contains "series-list") "No series gives no series list"
     }
 
-    test "the page has a Subscribe mount with the API of the stage" {
+    test "the page has a Subscribe mount with the API of the stage, and a note" {
+      let subscribe = section "home-subscribe" (home Stage.Local posts)
+
+      Expect.stringContains subscribe """<div data-widget="subscribe" data-api="http://localhost:7071">""" "The mount"
+
       Expect.stringContains
-        (section "home-subscribe" (home Stage.Local posts))
-        """<div data-widget="subscribe" data-api="http://localhost:7071">"""
-        "The mount"
+        subscribe
+        """<p class="note">Get an email for each new post. Each email has a link to unsubscribe.</p>"""
+        "The note"
     }
 
     test "with no post after the build time, the page has no banner" {
@@ -118,6 +124,17 @@ let tests =
         "The banner of the first upcoming post"
 
       Expect.isFalse (html.Contains """data-hide-at="2026-12-01""") "One banner"
+    }
+
+    test "the head script hides the banner from the publish date on" {
+      let publishDate = DateTimeOffset(2026, 10, 29, 13, 0, 0, TimeSpan.Zero)
+      let hideAt = HomePage.hideAtTime publishDate
+
+      Expect.isTrue (HideAt.isPast (HomePage.hideAtTime publishDate) hideAt) "At the publish date"
+
+      Expect.isFalse
+        (HideAt.isPast (HomePage.hideAtTime (publishDate.AddMilliseconds -1.0)) hideAt)
+        "One millisecond before the publish date"
     }
 
     test "the build includes an upcoming post in the latest card and the log" {

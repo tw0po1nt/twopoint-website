@@ -11,7 +11,7 @@ One article on the blog. Its slug identifies it.
 _Avoid_: Article, entry
 
 **Latest post**:
-The post with the most recent created date.
+The post with the most recent publish date that does not set `showOnHomepage: false`. The home page shows it on the latest card.
 
 **Draft**:
 A post that is not ready to publish. The build checks its front matter and leaves it out of the

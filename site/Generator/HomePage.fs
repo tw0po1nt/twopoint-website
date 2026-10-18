@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.HomePage
 
+open TwoPoint.Site.Widgets
+
 open Oxpecker.ViewEngine
 open System
 open System.Globalization
@@ -24,7 +26,7 @@ let private banner (buildTime: DateTimeOffset) (posts: Post list) =
   |> Option.map (fun post ->
     let publishDate = post.FrontMatter.PublishDate
 
-    p(class' = "upcoming").data ("hide-at", hideAtTime publishDate) {
+    p(class' = "upcoming").attr (HideAt.attribute, hideAtTime publishDate) {
       span (class' = "badge") { "upcoming" }
       a (href = Post.urlPath post) { post.FrontMatter.Title }
       time (datetime = Layout.isoTime publishDate) { Layout.shownDate publishDate }
@@ -63,7 +65,6 @@ let private latestCard (posts: Post list) (post: Post) =
     }
   }
 
-/// `posts` are the posts of the log, by year.
 let private log (posts: Post list) =
   section (class' = "log") {
     prompt "ls -l posts --sort=date"
@@ -101,6 +102,7 @@ let private subscribe (config: StageConfig) =
   section (class' = "home-subscribe") {
     prompt "subscribe --email"
     Mount.subscribe config
+    p (class' = "note") { "Get an email for each new post. Each email has a link to unsubscribe." }
   }
 
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (buildTime: DateTimeOffset) (posts: Post list) =
@@ -123,7 +125,6 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (buildTime:
     | Some post -> latestCard posts post
     | None -> ()
 
-    // The latest card shows its post, so the log omits it.
     match posts |> List.filter (fun post -> Some post.Slug <> (latest |> Option.map _.Slug)) with
     | [] -> ()
     | logged -> log logged

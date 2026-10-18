@@ -134,3 +134,8 @@
 .home-subscribe .subscribe {
   max-width: 480px;
 }
+
+.home-subscribe .note {
+  font-size: 13px;
+  color: var(--muted);
+}

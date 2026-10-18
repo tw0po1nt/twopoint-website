@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <Compile Include="../Widgets/Contract.fs" Link="Contract.fs" />
+    <Compile Include="../Widgets/HideAt.fs" Link="HideAt.fs" />
     <Compile Include="Stage.fs" />
     <Compile Include="Robots.fs" />
     <Compile Include="Slug.fs" />
