@@ -1,0 +1,23 @@
+/* With no data-theme, the colors follow the system setting. data-theme="light" or "dark" forces one theme. */
+
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#fbfaf6, #0e0f0f);
+  --bg-2: light-dark(#f1efe8, #171919);
+  --fg: light-dark(#1b1b1b, #e6e4dc);
+  --muted: light-dark(#6b6a63, #8b8a83);
+  --line: light-dark(#dcd9cf, #2a2c2c);
+  --accent: light-dark(#c8251f, #ff5a4e);
+  --accent-2: light-dark(#2f6f4f, #7fd1a0);
+  --shadow: light-dark(rgb(0 0 0 / 12%), rgb(0 0 0 / 50%));
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

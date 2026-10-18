@@ -148,7 +148,8 @@ let private render (document: MarkdownDocument) =
 /// Changes the document in place.
 let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
   let headings = descendants<HeadingBlock> document
-  let ids = headings |> List.map (fun heading -> inlineText heading.Inline) |> Slug.headingIds
+  let texts = headings |> List.map (fun heading -> inlineText heading.Inline)
+  let ids = Slug.headingIds texts
 
   for heading, id in List.zip headings ids do
     heading.GetAttributes().Id <- id
@@ -182,6 +183,9 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
   if errors.IsEmpty then
     Ok
       { Html = render document
+        Headings =
+          List.zip3 headings ids texts
+          |> List.map (fun (heading, id, text) -> { Level = heading.Level; Id = id; Text = text })
         Anchors = Set.ofList ids
         Links = internalLinks
         ReadingTime = readingTime (blockText document) }

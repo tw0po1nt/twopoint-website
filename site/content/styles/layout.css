@@ -1,0 +1,185 @@
+/* The header, the explorer, and the footer of each page. */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px max(16px, calc(50% - 520px));
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+}
+
+.logo {
+  font: 800 18px var(--mono);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.logo span {
+  color: var(--accent);
+  margin: 0 2px;
+}
+
+.site-nav {
+  display: flex;
+  gap: 18px;
+  margin-left: auto;
+  font-size: 14px;
+}
+
+.site-nav a,
+.explorer-nav a {
+  text-decoration: none;
+}
+
+.site-nav a::before,
+.explorer-nav a::before {
+  content: './';
+  color: var(--muted);
+}
+
+.theme-toggle,
+.explorer-toggle,
+.explorer-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 14px var(--mono);
+}
+
+.theme-toggle {
+  color: var(--muted);
+}
+
+.theme-toggle::after {
+  content: '[dark]';
+}
+
+:root[data-theme='dark'] .theme-toggle::after {
+  content: '[light]';
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .theme-toggle::after {
+    content: '[light]';
+  }
+}
+
+.explorer-toggle {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .site-nav {
+    display: none;
+  }
+
+  .theme-toggle {
+    margin-left: auto;
+  }
+}
+
+.explorer {
+  inset: 0 0 0 auto;
+  width: min(340px, 92vw);
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 16px 20px 96px;
+  overflow-y: auto;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--fg);
+  box-shadow: -12px 0 40px var(--shadow);
+}
+
+.explorer::backdrop {
+  background: rgb(0 0 0 / 20%);
+}
+
+.explorer-close {
+  float: right;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.explorer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font: 13px var(--mono);
+}
+
+.tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.tree li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 -8px;
+  padding: 3px 8px;
+}
+
+.tree li a {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.tree time {
+  font: 12px var(--mono);
+  color: var(--muted);
+}
+
+.tree .dir {
+  padding-top: 10px;
+  font: 600 12px var(--mono);
+  color: var(--accent);
+}
+
+.tree .is-current {
+  background: var(--bg);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.tree .is-current a {
+  font-weight: 600;
+}
+
+.tree-series a {
+  font: 600 13px var(--mono);
+  color: var(--accent-2);
+}
+
+.explorer-foot {
+  display: flex;
+  gap: 14px;
+  margin-top: 24px;
+  font: 12px var(--mono);
+  color: var(--muted);
+}
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: baseline;
+  padding: 24px max(16px, calc(50% - 520px)) 96px;
+  border-top: 1px solid var(--line);
+  font: 13px var(--mono);
+  color: var(--muted);
+}
