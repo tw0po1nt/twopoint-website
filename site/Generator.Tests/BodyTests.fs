@@ -4,10 +4,16 @@ open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
+open SkiaSharp
+open System.Text
 
 let private html body = (published "a-post" (text frontMatter body)).Body.Html
 
 let private bodyErrors body = errors "a-post" (text frontMatter body)
+
+let private blob = "https://twopointwebsite.blob.core.windows.net/posts/a-post"
+
+let private cat = $"{blob}/cat.jpg"
 
 [<Tests>]
 let tests =
@@ -31,11 +37,73 @@ let tests =
         "An internal link and a mail link get no target"
     }
 
-    test "a body image loads lazily" {
+    test "a body image keeps its Blob URL, loads lazily, and gets its size" {
       Expect.equal
-        (html "![A cat](https://example.com/cat.jpg)")
-        "<p><img src=\"https://example.com/cat.jpg\" loading=\"lazy\" alt=\"A cat\" /></p>\n"
-        "An image gets loading=\"lazy\""
+        (html $"![A cat]({cat})")
+        $"<p><img src=\"{cat}\" loading=\"lazy\" width=\"1600\" height=\"900\" alt=\"A cat\" /></p>\n"
+        "An image gets loading=\"lazy\", and the width and height of the file"
+    }
+
+    test "the size of a WebP image is the size of its file" {
+      let webp =
+        use bitmap = new SKBitmap(1178, 2556)
+        use image = SKImage.FromBitmap bitmap
+        use data = image.Encode(SKEncodedImageFormat.Webp, 80)
+        data.ToArray()
+
+      let post =
+        Post.parse (fetchWith (fun _ -> Ok webp)) (file "a-post") (text frontMatter $"![A demo]({blob}/demo.webp)")
+
+      match post with
+      | Ok(Published post) -> Expect.stringContains post.Body.Html "width=\"1178\" height=\"2556\"" "The WebP size"
+      | other -> failtest $"%A{other}"
+    }
+
+    test "an image that is not an https URL on Blob fails with its line" {
+      Expect.equal
+        (bodyErrors "![A](/cat.jpg)\n\n![B](http://twopointwebsite.blob.core.windows.net/cat.jpg)\n\n![C](https://example.com/cat.jpg)")
+        [ errorAt "a-post" 9 "Give the image '/cat.jpg' as an https URL on twopointwebsite.blob.core.windows.net."
+          errorAt "a-post" 11 "Give the image 'http://twopointwebsite.blob.core.windows.net/cat.jpg' as an https URL on twopointwebsite.blob.core.windows.net."
+          errorAt "a-post" 13 "Give the image 'https://example.com/cat.jpg' as an https URL on twopointwebsite.blob.core.windows.net." ]
+        "Each image that is not on Blob fails"
+    }
+
+    test "an img element in raw HTML fails with its line" {
+      let message =
+        "Write the image as a Markdown image, for example ![A cat](https://twopointwebsite.blob.core.windows.net/posts/cat.jpg)."
+
+      Expect.equal
+        (bodyErrors $"Text.\n\nA cat: <img src=\"{cat}\">.\n\n<div>\n<IMG SRC=\"{cat}\" />\n</div>")
+        [ errorAt "a-post" 11 message; errorAt "a-post" 14 message ]
+        "An inline img element and an img element in an HTML block fail"
+    }
+
+    test "a body image that does not download fails with the post file and the line" {
+      let failing = fetchWith (fun _ -> Error "HTTP 404, after 3 attempts")
+
+      Expect.equal
+        (Post.parse failing (file "a-post") (text frontMatter $"Text.\n\n![A cat]({cat})"))
+        (Error [ errorAt "a-post" 11 $"The build cannot read the size of the image {cat}: HTTP 404, after 3 attempts." ])
+        "A failed download fails the build"
+    }
+
+    test "a body image that is not an image file fails with the post file and the line" {
+      let text' = fetchWith (fun _ -> Ok(Encoding.UTF8.GetBytes "<html>Not found</html>"))
+
+      Expect.equal
+        (Post.parse text' (file "a-post") (text frontMatter $"![A cat]({cat})"))
+        (Error [ errorAt "a-post" 9 $"The build cannot read the size of the image {cat}: the file is not an image." ])
+        "A file that is not an image fails the build"
+    }
+
+    test "two posts with one body image download it one time with a memoized fetch" {
+      let fetch, calls = recording anyImage
+      let fetch = ImageFetch.memoize fetch
+
+      for slug in [ "a-post"; "b-post" ] do
+        Post.parse fetch (file slug) (text frontMatter $"![A cat]({cat})") |> ignore
+
+      Expect.equal (List.ofSeq calls) [ cat ] "One download"
     }
 
     test "a heading gets its id" {

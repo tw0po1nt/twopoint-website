@@ -20,13 +20,13 @@ let root (start: string) =
 
   find (DirectoryInfo start)
 
-let loadPosts (root: string) : Result<Post list, PostError list> =
+let loadPosts (fetch: IImageFetch) (root: string) : Result<Post list, PostError list> =
   Directory.GetFiles(Path.Combine(root, postsFolder), "*.md")
   |> Array.sort
   |> List.ofArray
   |> List.traverseResultA (fun path ->
     let file = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/')
-    Post.parse file (File.ReadAllText path))
+    Post.parse fetch file (File.ReadAllText path))
   |> Result.mapError List.concat
   |> Result.map (
     List.choose (function
@@ -54,16 +54,26 @@ let loadAssets (root: string) : Result<Assets, string list> =
 
   Styles.join styles |> Result.bind (Assets.create assets)
 
-let loadContent (root: string) : Result<Content, string list> =
-  validation {
-    let! posts = loadPosts root |> Result.mapError (List.map PostError.format)
-    and! assets = loadAssets root
-    return { Posts = posts; Assets = assets }
+let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string list> =
+  result {
+    let! posts, assets =
+      validation {
+        let! posts = loadPosts fetch root |> Result.mapError (List.map PostError.format)
+        and! assets = loadAssets root
+        return posts, assets
+      }
+
+    let! ogImages = OgImages.create fetch assets.DefaultImage posts
+
+    return
+      { Posts = posts
+        Assets = assets
+        OgImages = ogImages }
   }
 
-let load (root: string) (stage: Stage) : Result<RenderMap, string list> =
+let load (fetch: IImageFetch) (root: string) (stage: Stage) : Result<RenderMap, string list> =
   result {
-    let! content = loadContent root
+    let! content = loadContent fetch root
     let map = RenderMap.create stage content
 
     match Links.check (RenderMap.sitePaths map) content.Posts with

@@ -132,7 +132,7 @@ let private outline (post: Post) =
       }
   }
 
-let render (config: StageConfig) (assets: Assets) (posts: Post list) (post: Post) =
+let render (config: StageConfig) (assets: Assets) (posts: Post list) (ogImage: OgImage) (post: Post) =
   let frontMatter = post.FrontMatter
   let position = Blog.seriesPosition posts post
 
@@ -142,6 +142,7 @@ let render (config: StageConfig) (assets: Assets) (posts: Post list) (post: Post
       UrlPath = Some(Post.urlPath post)
       Robots = Layout.Robots.Index
       OgType = Layout.OgType.Article
+      OgImage = ogImage
       Current = Some post }
 
   main (class' = "post-page") {

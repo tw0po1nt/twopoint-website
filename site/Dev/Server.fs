@@ -12,6 +12,8 @@ open System.Threading.Tasks
 
 let private stage = Stage.Local
 
+let private fetch = ImageFetch.create ()
+
 let private contentTypes = FileExtensionContentTypeProvider()
 
 let private contentType (path: string) =
@@ -43,7 +45,7 @@ let serve (ctx: HttpContext) : Task =
   let map =
     Site.root (Directory.GetCurrentDirectory())
     |> Result.mapError List.singleton
-    |> Result.bind (fun root -> Site.load root stage)
+    |> Result.bind (fun root -> Site.load fetch root stage)
 
   match map with
   | Ok map -> serveMap ctx map

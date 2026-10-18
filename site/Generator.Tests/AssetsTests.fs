@@ -4,6 +4,7 @@ open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
+open SkiaSharp
 open System.Text
 open System.Text.RegularExpressions
 
@@ -15,10 +16,15 @@ let private asset name (text: string) : Asset =
   { Name = name
     Bytes = Encoding.UTF8.GetBytes text }
 
-let private favicons =
+let private defaultImage: Asset =
+  { Name = "images/default.jpg"
+    Bytes = jpeg 1200 630 SKColors.Black }
+
+let private required =
   [ asset "favicons/favicon.ico" "ico"
     asset "favicons/favicon.svg" "svg"
-    asset "favicons/apple-touch-icon.png" "png" ]
+    asset "favicons/apple-touch-icon.png" "png"
+    defaultImage ]
 
 let private create assets css =
   match Assets.create assets css with
@@ -54,7 +60,7 @@ let tests =
 
     test "each asset goes under /_/ with a hash of its content" {
       let font = asset "fonts/mono.woff2" "font"
-      let assets = create (font :: favicons) ""
+      let assets = create (font :: required) ""
       let path = Assets.sitePath font.Name font.Bytes
       Expect.isMatch path "^_/mono-[0-9a-f]{8}\\.woff2$" "The name has the hash"
       Expect.equal assets.Files[path] font.Bytes "The file has the asset bytes"
@@ -66,7 +72,7 @@ let tests =
 
     test "a CSS reference to an asset gives the hashed URL" {
       let font = asset "fonts/mono.woff2" "font"
-      let assets = create (font :: favicons) "@font-face { src: url(\"../assets/fonts/mono.woff2\") format('woff2'); }"
+      let assets = create (font :: required) "@font-face { src: url(\"../assets/fonts/mono.woff2\") format('woff2'); }"
 
       Expect.equal
         (stylesheet assets)
@@ -76,16 +82,42 @@ let tests =
 
     test "a CSS reference to a missing asset fails the build" {
       Expect.equal
-        (Assets.create favicons "a { background: url('../assets/missing.png'); }")
+        (Assets.create required "a { background: url('../assets/missing.png'); }")
         (Error [ "The site CSS refers to ../assets/missing.png, and site/content/assets/ has no such file." ])
         "A missing asset fails"
     }
 
     test "a missing favicon fails the build" {
       Expect.equal
-        (Assets.create (List.tail favicons) "")
+        (Assets.create (List.tail required) "")
         (Error [ "site/content/assets/favicons/ has no favicon.ico." ])
         "Each favicon is necessary"
+    }
+
+    test "the default image goes under /_/ with a hash, and its size comes from the file" {
+      let assets = create required ""
+
+      Expect.equal
+        assets.DefaultImage
+        { UrlPath = $"/{Assets.sitePath defaultImage.Name defaultImage.Bytes}"
+          Size = { Width = 1200; Height = 630 } }
+        "The default image has its hashed path and its size"
+    }
+
+    test "a missing default image fails the build" {
+      Expect.equal
+        (Assets.create (List.take 3 required) "")
+        (Error [ "site/content/assets/ has no images/default.jpg." ])
+        "The default image is necessary"
+
+      Expect.equal
+        (Assets.create (List.take 3 required @ [ asset "images/default.jpg" "text" ]) "")
+        (Error [ "site/content/assets/images/default.jpg cannot be read: the file is not an image." ])
+        "The default image is an image"
+    }
+
+    test "the real default image is 1200×630" {
+      Expect.equal realContent.Value.Assets.DefaultImage.Size Images.ogSize "The default image has the Open Graph size"
     }
 
     test "each URL in the real site CSS is a file in the output" {

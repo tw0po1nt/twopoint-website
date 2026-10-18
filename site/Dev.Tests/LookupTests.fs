@@ -9,9 +9,15 @@ open System.Text
 let private noAssets =
   { Files = Map.empty
     Stylesheet = ""
-    Favicons = { Ico = ""; Svg = ""; AppleTouch = "" } }
+    Favicons = { Ico = ""; Svg = ""; AppleTouch = "" }
+    DefaultImage = { UrlPath = ""; Size = { Width = 0; Height = 0 } } }
 
-let private map = RenderMap.create Stage.Local { Posts = []; Assets = noAssets }
+let private map =
+  RenderMap.create
+    Stage.Local
+    { Posts = []
+      Assets = noAssets
+      OgImages = { Files = Map.empty; ByPost = Map.empty } }
 
 let private text (render: Render) = Encoding.UTF8.GetString(render ())
 
