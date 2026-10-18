@@ -1,6 +1,7 @@
 module TwoPoint.Site.Generator.Program
 
 open FsToolkit.ErrorHandling
+open System
 open System.IO
 
 [<EntryPoint>]
@@ -9,7 +10,7 @@ let main argv =
     result {
       let! (Cli.Build stage) = Cli.parse (List.ofArray argv) |> Result.mapError List.singleton
       let! root = Site.root (Directory.GetCurrentDirectory()) |> Result.mapError List.singleton
-      let! map = Site.load (ImageFetch.create ()) root stage
+      let! map = Site.load (ImageFetch.create ()) root stage DateTimeOffset.UtcNow
       let folder = Path.Combine(root, "site", "dist")
       Disk.write folder map
       return $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}"

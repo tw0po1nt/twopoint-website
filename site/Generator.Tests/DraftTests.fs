@@ -28,8 +28,8 @@ let tests =
 
     test "a published post has a page, and a draft has none" {
       let post = published "a-post" (text frontMatter "Text.")
-      let map = RenderMap.create Stage.Production widgets (content [ post ])
+      let map = RenderMap.create Stage.Production buildTime widgets (content [ post ])
       Expect.contains (pagePaths map) "posts/a-post/index.html" "The published post has a page"
-      Expect.equal (pagePaths map) (set [ "posts/a-post/index.html"; "robots.txt"; "subscribe/index.html" ]) "The output has no other post page"
+      Expect.equal (pagePaths map) (set [ "index.html"; "posts/a-post/index.html"; "robots.txt"; "subscribe/index.html" ]) "The output has no other post page"
     }
   ]

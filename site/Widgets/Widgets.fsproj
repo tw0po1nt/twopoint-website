@@ -9,6 +9,7 @@
     <Compile Include="Api/ApiTypes.fs" />
     <Compile Include="Api/Comments.fs" />
     <Compile Include="Api/Subscriptions.fs" />
+    <Compile Include="HideAt.fs" />
     <Compile Include="Head.fs" />
     <Compile Include="HeadMain.fs" />
     <Compile Include="DevReload.fs" />

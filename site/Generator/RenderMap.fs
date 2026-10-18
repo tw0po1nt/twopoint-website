@@ -1,5 +1,6 @@
 namespace TwoPoint.Site.Generator
 
+open System
 open System.Text
 
 type Output =
@@ -24,12 +25,15 @@ module RenderMap =
 
   let private postFile (post: Post) = SiteFile(SitePath.ofUrlPath (Post.urlPath post))
 
-  let create (stage: Stage) (widgets: Widgets) (content: Content) : RenderMap =
+  /// `buildTime` decides which post the upcoming post banner shows.
+  let create (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : RenderMap =
     let config = Stage.config stage
 
     Map
       [ SiteFile "robots.txt", text (fun () -> Robots.render config)
         StageMarker, text (fun () -> Stage.name stage)
+        SiteFile(SitePath.ofUrlPath HomePage.urlPath),
+        (fun () -> HomePage.render config content.Assets widgets buildTime content.Posts)
         SiteFile(SitePath.ofUrlPath SubscribePage.urlPath),
         (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
         for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do

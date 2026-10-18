@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Blog
 
+open System
+
 let newestFirst (posts: Post list) =
   posts |> List.sortBy (fun post -> -post.FrontMatter.PublishDate.UtcTicks, post.Slug)
 
@@ -66,3 +68,17 @@ let tags (posts: Post list) =
   |> List.groupBy _.Slug
   |> List.map (fun (_, uses) -> List.head uses, uses.Length)
   |> List.sortBy (fun (tag, count) -> -count, tag.Slug)
+
+let latest (posts: Post list) =
+  newestFirst posts |> List.tryFind _.FrontMatter.ShowOnHomepage
+
+let upcoming (buildTime: DateTimeOffset) (posts: Post list) =
+  posts
+  |> List.filter (fun post -> post.FrontMatter.PublishDate > buildTime)
+  |> List.sortBy (fun post -> post.FrontMatter.PublishDate.UtcTicks, post.Slug)
+  |> List.tryHead
+
+let kind (post: Post) =
+  if post.FrontMatter.Category.Slug = "talks" then "talk"
+  elif post.FrontMatter.Series.IsSome then "series"
+  else "post"

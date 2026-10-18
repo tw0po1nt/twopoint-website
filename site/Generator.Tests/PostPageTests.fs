@@ -21,7 +21,7 @@ let private newest = postWith "smatterings-of-fsharp" "2025-11-14T00:00:00Z" "Ta
 let private posts = [ oldest; middle; newest ]
 
 let private page stage (post: Post) =
-  siteText (RenderMap.create stage widgets (content posts)) $"posts/{post.Slug}/index.html"
+  siteText (RenderMap.create stage buildTime widgets (content posts)) $"posts/{post.Slug}/index.html"
 
 let private robots stage =
   Regex.Match(page stage middle, """<meta name="robots" content="([^"]+)">""").Groups[1].Value
@@ -50,7 +50,7 @@ let tests =
     }
 
     test "the stylesheet and the favicons are files in the output" {
-      let map = RenderMap.create Stage.Production widgets (content posts)
+      let map = RenderMap.create Stage.Production buildTime widgets (content posts)
       let html = siteText map "posts/fable-reminders-part-2/index.html"
 
       for found in Regex.Matches(html, """<link rel="(?:stylesheet|icon|apple-touch-icon)"[^>]* href="([^"]+)""") do

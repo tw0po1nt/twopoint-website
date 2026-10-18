@@ -1,0 +1,141 @@
+/* The home page, and the upcoming post banner above its header. */
+
+.upcoming {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+  margin: 0;
+  padding: 8px max(16px, calc(50% - 520px));
+  border-bottom: 1px dashed var(--line);
+  font: 13px var(--mono);
+}
+
+/* The head script sets `hidden` after the publish date. */
+.upcoming[hidden] {
+  display: none;
+}
+
+.upcoming time {
+  color: var(--muted);
+}
+
+.badge {
+  padding: 0 6px;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.home > section {
+  margin: 0 0 56px;
+}
+
+.prompt {
+  margin: 0 0 12px;
+  font: 13px var(--mono);
+  color: var(--muted);
+}
+
+.prompt span {
+  color: var(--accent-2);
+}
+
+.intro h1 {
+  font-size: clamp(28px, 5vw, 40px);
+}
+
+.byline {
+  margin: 0;
+  color: var(--muted);
+}
+
+.latest article {
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  background: var(--bg-2);
+}
+
+.latest h2 {
+  margin: 6px 0 10px;
+  font: 700 clamp(20px, 5vw, 24px)/1.25 var(--mono);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.latest h2 a,
+.meta a,
+.log li a,
+.series-list a {
+  text-decoration: none;
+}
+
+.latest article p {
+  margin: 0 0 12px;
+}
+
+.latest .meta {
+  margin: 0;
+  font: 13px var(--mono);
+  color: var(--muted);
+}
+
+.read {
+  font: 600 14px var(--mono);
+}
+
+.log h2 {
+  margin: 20px 0 6px;
+  font: 600 13px var(--mono);
+  color: var(--accent);
+}
+
+.log ol,
+.series-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log li {
+  display: grid;
+  grid-template-columns: 52px 72px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.log time,
+.log .kind {
+  font: 13px var(--mono);
+  color: var(--muted);
+}
+
+.series-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 6px 0;
+  font: 15px var(--mono);
+}
+
+.series-list a {
+  font-weight: 600;
+  color: var(--accent-2);
+}
+
+.series-list li span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.home-subscribe .subscribe {
+  max-width: 480px;
+}
+
+.home-subscribe .note {
+  font-size: 13px;
+  color: var(--muted);
+}

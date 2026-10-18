@@ -2,6 +2,7 @@ module TwoPoint.Site.Widgets.HeadMain
 
 open Browser
 open Browser.Types
+open Fable.Core
 
 let private root = document.documentElement
 
@@ -28,3 +29,19 @@ document.addEventListener (
       apply forced
       Head.write (fun key value -> localStorage.setItem (key, value)) (fun key -> localStorage.removeItem key) forced
 )
+
+[<Emit "new Date().toISOString()">]
+let private now () : string = jsNative
+
+let private hidePast () =
+  let now = now ()
+  let elements = document.querySelectorAll ("[" + HideAt.attribute + "]")
+
+  for index in 0 .. elements.length - 1 do
+    let element = elements.item index :?> HTMLElement
+
+    if HideAt.isPast now (element.getAttribute HideAt.attribute) then
+      element.hidden <- true
+
+// The script runs in the head, before the parser gets to the body.
+document.addEventListener ("DOMContentLoaded", fun _ -> hidePast ())

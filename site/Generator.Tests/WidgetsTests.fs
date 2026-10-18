@@ -118,14 +118,14 @@ let tests =
     }
 
     test "the render map has each widget file" {
-      let map = RenderMap.create Stage.Production (Widgets.create files |> ok) (content [])
+      let map = RenderMap.create Stage.Production buildTime (Widgets.create files |> ok) (content [])
       Expect.isTrue (map.ContainsKey(SiteFile "_/widgets/chunk-B.js")) "The map has the chunk"
       Expect.isFalse (map.ContainsKey(SiteFile "_/widgets/head-C.js")) "The map has no head script file"
     }
 
     test "each page head has the head script inline, after the stylesheet" {
       let post = postWith "a-post" "2026-01-01T00:00:00Z" "One-offs" [] None
-      let html = siteText (RenderMap.create Stage.Production widgets (content [ post ])) "posts/a-post/index.html"
+      let html = siteText (RenderMap.create Stage.Production buildTime widgets (content [ post ])) "posts/a-post/index.html"
       let head = html.Substring(0, html.IndexOf "</head>")
       let script = $"<script>{widgets.HeadScript}</script>"
       Expect.stringContains head script "The head has the script inline"
@@ -151,7 +151,7 @@ let tests =
 
     test "the head preloads the chunks and loads the entry of the explorer mount, after the head script" {
       let post = postWith "a-post" "2026-01-01T00:00:00Z" "One-offs" [] None
-      let map = RenderMap.create Stage.Production widgets (content [ post ])
+      let map = RenderMap.create Stage.Production buildTime widgets (content [ post ])
       let html = siteText map "posts/a-post/index.html"
       let head = html.Substring(0, html.IndexOf "</head>")
       let preload = """<link rel="modulepreload" href="/_/widgets/chunk-TEST.js">"""

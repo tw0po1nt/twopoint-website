@@ -51,7 +51,7 @@ let tests =
 
     test "the head gives the absolute URL of the crop and the size of the written file" {
       let small = fetchWith (fun _ -> Ok(jpeg 320 180 SKColors.Gray))
-      let map = RenderMap.create Stage.Staging widgets (contentWith small [ post "a-post" (Some postImage) None ])
+      let map = RenderMap.create Stage.Staging buildTime widgets (contentWith small [ post "a-post" (Some postImage) None ])
       let tags = tags map "a-post"
       let path = Expect.wantSome (Set.toList (ogFiles map) |> List.tryExactlyOne) "The output has one crop"
       Expect.isMatch path "^_/og-[0-9a-f]{8}\\.jpg$" "The crop has a hash in its name"
@@ -67,7 +67,7 @@ let tests =
     }
 
     test "a post with no image gets the default image and its size" {
-      let map = RenderMap.create Stage.Production widgets (content [ post "a-post" None None ])
+      let map = RenderMap.create Stage.Production buildTime widgets (content [ post "a-post" None None ])
       let image = realContent.Value.Assets.DefaultImage
       let tags = tags map "a-post"
       Expect.equal tags[""] $"https://twopoint.dev{image.UrlPath}" "og:image is the default image"
@@ -78,7 +78,7 @@ let tests =
 
     test "the posts of a series share one file" {
       let fetch, calls = recording anyImage
-      let map = RenderMap.create Stage.Local widgets (contentWith fetch [ post "part-1" None (Some seriesImage); post "part-2" None (Some seriesImage) ])
+      let map = RenderMap.create Stage.Local buildTime widgets (contentWith fetch [ post "part-1" None (Some seriesImage); post "part-2" None (Some seriesImage) ])
       Expect.equal calls.Count 1 "One download"
       Expect.equal (ogFiles map).Count 1 "One file"
       Expect.equal (tags map "part-1") (tags map "part-2") "Both posts have the same tags"
@@ -114,7 +114,7 @@ let tests =
 
     test "the real posts give one crop for each distinct source" {
       let sources = realPosts.Value |> List.choose OgImages.source |> List.distinctBy _.AbsoluteUri
-      let map = RenderMap.create Stage.Production widgets realContent.Value
+      let map = RenderMap.create Stage.Production buildTime widgets realContent.Value
       Expect.isNonEmpty sources "The posts have images"
       Expect.equal (ogFiles map).Count sources.Length "One crop for each source"
     }

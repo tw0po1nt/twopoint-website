@@ -4,6 +4,7 @@ open TwoPoint.Site.Dev
 open TwoPoint.Site.Generator
 
 open Expecto
+open System
 open System.Text
 
 let private noAssets =
@@ -23,6 +24,7 @@ let private noWidgets =
 let private map =
   RenderMap.create
     Stage.Local
+    DateTimeOffset.UnixEpoch
     noWidgets
     { Posts = []
       Assets = noAssets
