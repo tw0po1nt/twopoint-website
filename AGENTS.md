@@ -42,10 +42,10 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips blog posts,
-  because they are MDX. The hook also checks the text of `git commit` and of `gh` issue and PR
-  commands. `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each
-  PR.
+  reads Markdown files, and the comments and strings of F# files. The check skips blog posts:
+  the MDX files in `frontend/` and the Markdown files in `site/content/posts/`. The hook also
+  checks the text of `git commit` and of `gh` issue and PR commands.
+  `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - Code: `docs/standards/coding-standards.md`.
 
 ## Agent skills

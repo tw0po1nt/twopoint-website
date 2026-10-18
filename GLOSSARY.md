@@ -13,6 +13,18 @@ _Avoid_: Article, entry
 **Latest post**:
 The post with the most recent created date.
 
+**Draft**:
+A post that is not ready to publish. The build checks its front matter and leaves it out of the
+output.
+_Avoid_: Unpublished post
+
+**Series**:
+A group of posts in order. Each post in a series has the slug, the title, and the excerpt of the
+series.
+
+**Term**:
+A category or a tag of a post. Its slug comes from its title.
+
 **Upcoming post**:
 A post with a publish date in the future. Readers can open it before that date, but they cannot comment
 on it until that date.

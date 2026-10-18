@@ -1,12 +1,13 @@
 module TwoPoint.Site.Generator.Tests.RobotsTests
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
 open System.Text
 
 let private robots stage =
-  RenderMap.create stage
+  RenderMap.create stage []
   |> Map.find (SiteFile "robots.txt")
   |> fun render -> Encoding.UTF8.GetString(render ())
 

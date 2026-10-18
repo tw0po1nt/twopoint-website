@@ -164,9 +164,11 @@ A value that does not change by stage is a constant, for example the Google site
 ### Posts
 
 - A post is Markdown with YAML front matter and raw HTML. The slug is the file name.
-- Fields: `publishDate` (UTC), `updateDate`, `draft`, `title`, `excerpt`, `author`, `category`, `tags`, `series` (`slug`, `title`, `excerpt`, `image`), `image`, and `showOnHomepage` (default `true`). The build fails on an unknown field.
+- Fields: `publishDate` (UTC), `updateDate` (UTC), `draft`, `title`, `excerpt`, `author`, `category`, `tags`, `series` (`slug`, `title`, `excerpt`, `image`), `image`, and `showOnHomepage` (default `true`). The build fails on an unknown field.
+- Required fields: `publishDate`, `title`, `excerpt`, `author`, and `category`, and `series.slug`, `series.title`, and `series.excerpt` in a series. The build fails on a missing required field.
 - These fields go: `showHeroImage`, `metadata`, `series.next`, and `series.previous`.
 - The build omits a draft. It includes an upcoming post in each list, page, feed, and sitemap.
+- The build checks only the front matter of a draft.
 - Category, tag, and series slugs and tag titles keep their current values. For example, `.NET` gives `net`, and the tag `fsharp` shows as `F#`.
 - Reading time: `Math.ceil` of the minutes at 200 words a minute, on the whole post text, code included.
 - Lists sort by `publishDate`, the newest first.
@@ -184,6 +186,7 @@ A value that does not change by stage is a constant, for example the Google site
 - The newsletter makes each root-relative `href` and `src` absolute with the site URL of the stage.
 - Each body image is a Markdown image with `loading="lazy"`, `width`, and `height`.
 - The build fails on a `class` or `style` attribute in the raw HTML of a post.
+- The build fails on an `a` element in the raw HTML of a post. Each link is a Markdown link.
 
 ### Code highlighting
 

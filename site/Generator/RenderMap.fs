@@ -17,12 +17,16 @@ module RenderMap =
 
   let private text (render: unit -> string) : Render = fun () -> Encoding.UTF8.GetBytes(render ())
 
-  let create (stage: Stage) : RenderMap =
+  let private postFile (post: Post) = SiteFile(SitePath.ofUrlPath (Post.urlPath post))
+
+  let create (stage: Stage) (posts: Post list) : RenderMap =
     let config = Stage.config stage
 
     Map
       [ SiteFile "robots.txt", text (fun () -> Robots.render config)
-        StageMarker, text (fun () -> Stage.name stage) ]
+        StageMarker, text (fun () -> Stage.name stage)
+        for post in posts do
+          postFile post, (fun () -> PostPage.render config post) ]
 
   let sitePaths (map: RenderMap) =
     map

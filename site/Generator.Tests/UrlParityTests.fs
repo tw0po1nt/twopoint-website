@@ -1,6 +1,7 @@
 module TwoPoint.Site.Generator.Tests.UrlParityTests
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
 
@@ -13,12 +14,12 @@ let tests =
 
     test "the output of each stage has each listed path that is not pending" {
       for stage in Stage.all do
-        let output = RenderMap.create stage |> RenderMap.sitePaths
+        let output = RenderMap.create stage realPosts.Value |> RenderMap.sitePaths
         Expect.isEmpty (UrlParity.check output) $"The {Stage.name stage} output agrees"
     }
 
     test "the check fails when robots.txt is missing" {
-      let output = RenderMap.create Stage.Production |> RenderMap.sitePaths |> Set.remove "robots.txt"
+      let output = RenderMap.create Stage.Production realPosts.Value |> RenderMap.sitePaths |> Set.remove "robots.txt"
 
       Expect.equal
         (UrlParity.check output)
@@ -27,7 +28,7 @@ let tests =
     }
 
     test "the check fails when a pending path is in the output" {
-      let output = RenderMap.create Stage.Production |> RenderMap.sitePaths |> Set.add "rss.xml"
+      let output = RenderMap.create Stage.Production realPosts.Value |> RenderMap.sitePaths |> Set.add "rss.xml"
 
       Expect.equal
         (UrlParity.check output)
