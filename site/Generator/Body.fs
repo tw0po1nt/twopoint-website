@@ -11,6 +11,11 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 
+type private DirectiveExtension() =
+  interface IMarkdownExtension with
+    member _.Setup(pipeline: MarkdownPipelineBuilder) = pipeline.BlockParsers.Add(Directive.DirectiveParser())
+    member _.Setup(_: MarkdownPipeline, _: IMarkdownRenderer) = ()
+
 let pipeline =
   MarkdownPipelineBuilder()
     .UseYamlFrontMatter()
@@ -19,6 +24,7 @@ let pipeline =
     .UsePipeTables()
     .UseEmphasisExtras(Extensions.EmphasisExtras.EmphasisExtraOptions.Strikethrough)
     .UseAutoLinks()
+    .Use(DirectiveExtension())
     .Build()
 
 let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
@@ -162,11 +168,20 @@ type private CodeRenderer() =
 
     renderer.WriteLine "</code></pre>" |> ignore
 
+type private DirectiveRenderer() =
+  inherit HtmlObjectRenderer<Directive.DirectiveBlock>()
+
+  override _.Write(renderer: HtmlRenderer, block: Directive.DirectiveBlock) =
+    match block.Directive with
+    | Ok directive -> renderer.EnsureLine().Write(Directive.html directive) |> ignore
+    | Error _ -> ()
+
 let private render (document: MarkdownDocument) =
   use writer = new StringWriter()
   let renderer = HtmlRenderer(writer)
   pipeline.Setup renderer
   renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeRenderer()) |> ignore
+  renderer.ObjectRenderers.Add(DirectiveRenderer())
   renderer.Render document |> ignore
   writer.ToString()
 
@@ -206,8 +221,16 @@ let ofDocument (file: string) (document: MarkdownDocument) : Result<Body, PostEr
     |> List.map (fun code ->
       errorAt file code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {Highlight.names}.")
 
+  let directiveErrors =
+    descendants<Directive.DirectiveBlock> document
+    |> List.choose (fun block ->
+      match block.Directive with
+      | Ok _ -> None
+      | Error message -> Some(errorAt file block.Line message))
+
   let errors =
-    rawHtmlErrors file document @ linkErrors @ languageErrors |> List.sortBy _.Line
+    rawHtmlErrors file document @ linkErrors @ languageErrors @ directiveErrors
+    |> List.sortBy _.Line
 
   if errors.IsEmpty then
     Ok
