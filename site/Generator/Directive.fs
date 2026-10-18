@@ -81,7 +81,6 @@ type DirectiveBlock(parser: BlockParser, directive: Result<Directive, string>) =
   inherit LeafBlock(parser)
   member _.Directive = directive
 
-/// Each line that starts with `::` is a directive, so a bad directive fails the build and never shows as text.
 type DirectiveParser() as this =
   inherit BlockParser()
   do this.OpeningCharacters <- [| ':' |]
