@@ -12,13 +12,17 @@ GlobalRegistrator.register({ url: 'http://localhost:4321/' });
 document.body.innerHTML = `
   <p id="past" data-hide-at="2000-01-01T00:00:00.000Z">past</p>
   <p id="future" data-hide-at="9999-12-31T23:59:59.999Z">future</p>
-  <p id="bad" data-hide-at="2000-01-01T00:00:00Z">bad</p>`;
+  <p id="bad" data-hide-at="2000-01-01T00:00:00Z">bad</p>
+  <details id="open-past" hidden data-show-at="2000-01-01T00:00:00.000Z"></details>
+  <details id="open-future" hidden data-show-at="9999-12-31T23:59:59.999Z"></details>
+  <details id="open-bad" hidden data-show-at="2000-01-01T00:00:00Z"></details>`;
 
 // The page runs the head script inline, before the parser gets to the body.
 new Function(head)();
 
-test('before DOMContentLoaded, the script hides no element', () => {
+test('before DOMContentLoaded, the script hides and shows no element', () => {
   assert.equal(document.getElementById('past').hidden, false);
+  assert.equal(document.getElementById('open-past').hidden, true);
 });
 
 test('after DOMContentLoaded, the script hides each element with a past date, and only those elements', () => {
@@ -26,4 +30,10 @@ test('after DOMContentLoaded, the script hides each element with a past date, an
   assert.equal(document.getElementById('past').hidden, true, 'The past date hides its element');
   assert.equal(document.getElementById('future').hidden, false, 'The future date keeps its element');
   assert.equal(document.getElementById('bad').hidden, false, 'A date of another form keeps its element');
+});
+
+test('after DOMContentLoaded, the script shows each hidden element with a past show date, and only those elements', () => {
+  assert.equal(document.getElementById('open-past').hidden, false, 'The past date shows its element');
+  assert.equal(document.getElementById('open-future').hidden, true, 'The future date keeps its element hidden');
+  assert.equal(document.getElementById('open-bad').hidden, true, 'A date of another form keeps its element hidden');
 });

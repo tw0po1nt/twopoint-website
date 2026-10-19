@@ -72,7 +72,10 @@ let siteText (map: RenderMap) path =
 
 let private widgetManifest =
   """{
-  "entries": { "subscribe": { "file": "subscribe-TEST.js", "imports": [ "chunk-TEST.js" ] } },
+  "entries": {
+    "comments": { "file": "comments-TEST.js", "imports": [ "chunk-TEST.js" ] },
+    "subscribe": { "file": "subscribe-TEST.js", "imports": [ "chunk-TEST.js" ] }
+  },
   "head": "head-TEST.js",
   "devReload": "dev-reload-TEST.js"
 }"""
@@ -80,6 +83,7 @@ let private widgetManifest =
 let widgetFiles =
   Map
     [ "manifest.json", Encoding.UTF8.GetBytes widgetManifest
+      "comments-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"
       "subscribe-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"
       "chunk-TEST.js", Encoding.UTF8.GetBytes "export{};"
       "head-TEST.js", Encoding.UTF8.GetBytes "(()=>{document.documentElement.dataset.fixture=\"head\"})();"

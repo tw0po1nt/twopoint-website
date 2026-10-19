@@ -41,7 +41,7 @@ let private notePrefix = "The site uses your email address only to send the news
 
 [<SolidComponent>]
 let view (api: string) =
-  let model, dispatch = Mvu.run Subscribe.init Subscribe.update (perform api)
+  let model, dispatch = Mvu.run (Subscribe.init, None) Subscribe.update (perform api)
 
   form (
     class' = "subscribe",

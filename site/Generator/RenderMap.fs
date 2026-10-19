@@ -25,7 +25,7 @@ module RenderMap =
 
   let private postFile (post: Post) = SiteFile(SitePath.ofUrlPath (Post.urlPath post))
 
-  /// `buildTime` decides which post the upcoming post banner shows.
+  /// `buildTime` decides which post the upcoming post banner shows, and which Comments panels are hidden.
   let create (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : RenderMap =
     let config = Stage.config stage
 
@@ -41,7 +41,7 @@ module RenderMap =
             SiteFile path, (fun () -> bytes)
         for post in content.Posts do
           postFile post,
-          (fun () -> PostPage.render config content.Assets widgets content.Posts content.OgImages.ByPost[post.Slug] post) ]
+          (fun () -> PostPage.render config content.Assets widgets buildTime content.Posts content.OgImages.ByPost[post.Slug] post) ]
 
   let sitePaths (map: RenderMap) =
     map

@@ -6,7 +6,9 @@ open System.Text.RegularExpressions
 
 /// The widgets write these classes in the browser, so the static output does not contain them.
 let widgetClasses =
-  set [ "subscribe"; "subscribe-field"; "subscribe-error"; "subscribe-status"; "is-failed"; "is-subscribed"; "subscribe-note" ]
+  set [ "subscribe"; "subscribe-field"; "subscribe-error"; "subscribe-status"; "is-failed"; "is-subscribed"; "subscribe-note"
+        "comments"; "comments-count"; "comments-list"; "comment"; "comment-meta"; "comment-text"; "comment-form"
+        "comment-field"; "comment-error"; "comment-status"; "is-done"; "comment-note" ]
 
 let private classAttribute = Regex("""\sclass="([^"]*)""")
 

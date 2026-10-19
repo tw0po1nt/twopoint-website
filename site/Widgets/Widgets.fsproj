@@ -14,10 +14,14 @@
     <Compile Include="HeadMain.fs" />
     <Compile Include="DevReload.fs" />
     <Compile Include="Mvu.fs" />
+    <Compile Include="Mounts.fs" />
     <Compile Include="Mount.fs" />
     <Compile Include="Subscribe.fs" />
     <Compile Include="SubscribeView.fs" />
+    <Compile Include="Comments.fs" />
+    <Compile Include="CommentsView.fs" />
     <Compile Include="Entries/Subscribe.fs" />
+    <Compile Include="Entries/Comments.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,7 +32,6 @@
     <PackageReference Include="Fable.Core" Version="5.2.0" />
     <PackageReference Include="Fable.Fetch" Version="2.7.0" />
     <PackageReference Include="Fable.Promise" Version="3.2.0" />
-    <PackageReference Include="Fable.SimpleHttp" Version="3.6.0" />
     <PackageReference Include="Oxpecker.Solid" Version="1.1.0" />
     <PackageReference Include="Thoth.Json" Version="10.4.1" />
   </ItemGroup>

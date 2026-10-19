@@ -15,18 +15,13 @@ let private prompt (command: string) =
     $" $ {command}"
   }
 
-/// The head script hides the banner after this time. It is the form of `Date.toISOString`, for example
-/// `2026-10-29T13:00:00.000Z`, so that the script can compare it with the current time as text.
-let hideAtTime (time: DateTimeOffset) =
-  time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
-
 /// The banner for the first post after `buildTime`. The head script hides it after the publish date.
 let private banner (buildTime: DateTimeOffset) (posts: Post list) =
   Blog.upcoming buildTime posts
   |> Option.map (fun post ->
     let publishDate = post.FrontMatter.PublishDate
 
-    p(class' = "upcoming").attr (HideAt.attribute, hideAtTime publishDate) {
+    p(class' = "upcoming").attr (HideAt.attribute, Layout.scriptTime publishDate) {
       span (class' = "badge") { "upcoming" }
       a (href = Post.urlPath post) { post.FrontMatter.Title }
       time (datetime = Layout.isoTime publishDate) { Layout.shownDate publishDate }
