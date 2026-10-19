@@ -10,6 +10,8 @@ const entriesDir = path.join(fableDir, 'Entries');
 const outDir = 'dist';
 const headLimit = 2048;
 const pdfWorker = 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs';
+const dev = process.argv.includes('--dev');
+const sourcemap = dev ? 'linked' : false;
 
 const fail = (messages) => {
   for (const message of messages) {
@@ -31,6 +33,7 @@ const solidJsx = {
         presets: [solid],
         babelrc: false,
         configFile: false,
+        sourceMaps: dev ? 'inline' : false,
       });
 
       return { contents: result.code, loader: 'js' };
@@ -39,7 +42,7 @@ const solidJsx = {
 };
 
 // A classic IIFE has no `import` or `export`, so a page can run it inline while the parser waits.
-const iife = async (name, entry) => {
+const iife = async (name, entry, { sourcemap = false } = {}) => {
   const result = await esbuild.build({
     entryPoints: { [name]: path.join(fableDir, entry) },
     outdir: outDir,
@@ -48,12 +51,13 @@ const iife = async (name, entry) => {
     format: 'iife',
     minify: true,
     target: 'es2022',
+    sourcemap,
     metafile: true,
     logLevel: 'warning',
   });
 
-  const [[file, output]] = Object.entries(result.metafile.outputs);
-  return { file: path.relative(outDir, file), bytes: output.bytes, inputs: Object.keys(output.inputs) };
+  const [[file, output]] = Object.entries(result.metafile.outputs).filter(([item]) => !item.endsWith('.map'));
+  return { file: path.relative(outDir, file), bytes: output.bytes, inputs: Object.keys(output.inputs), written: Object.keys(result.metafile.outputs) };
 };
 
 const widgetEntries = async () => {
@@ -98,6 +102,7 @@ const modules = async (entries, workerFile) => {
     format: 'esm',
     minify: true,
     target: 'es2022',
+    sourcemap,
     metafile: true,
     logLevel: 'warning',
     define: { PDF_WORKER_FILE: JSON.stringify(`./${workerFile}`) },
@@ -107,17 +112,30 @@ const modules = async (entries, workerFile) => {
   const outputs = result.metafile.outputs;
   const names = Object.fromEntries(Object.entries(entries).map(([name, entry]) => [entry, name]));
 
-  return Object.fromEntries(
+  const entryFiles = Object.fromEntries(
     Object.entries(outputs)
       .filter(([, output]) => names[output.entryPoint])
       .map(([file, output]) => [names[output.entryPoint], { file: path.relative(outDir, file), imports: staticImports(outputs, file) }])
       .sort(([a], [b]) => a.localeCompare(b)),
   );
+
+  return { entries: entryFiles, written: Object.keys(outputs) };
 };
 
-await rm(outDir, { recursive: true, force: true });
+// The dev server watches this folder, so the build writes each new file first and deletes the old files last.
+const prune = async (kept) => {
+  const keep = new Set(kept.map((file) => path.relative(outDir, file)));
+
+  for (const file of await readdir(outDir)) {
+    if (!keep.has(file)) {
+      await rm(path.join(outDir, file), { recursive: true, force: true });
+    }
+  }
+};
+
 await mkdir(outDir, { recursive: true });
 
+// A page has the head script inline, so a relative source map URL cannot resolve.
 const head = await iife('head', 'HeadMain.jsx');
 
 const library = head.inputs.filter((input) => input.includes('fable-library'));
@@ -131,13 +149,15 @@ if (headErrors.length > 0) {
   fail(headErrors);
 }
 
-const devReload = await iife('dev-reload', 'DevReload.jsx');
+const devReload = await iife('dev-reload', 'DevReload.jsx', { sourcemap });
 
 const workerFile = await copyPdfWorker();
 
-const entries = await modules(await widgetEntries(), workerFile);
+const { entries, written } = await modules(await widgetEntries(), workerFile);
 
 const manifest = { entries, head: head.file, devReload: devReload.file };
 await writeFile(path.join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
-console.log(`build.mjs: wrote ${outDir}/ (head script ${head.bytes} bytes, entries: ${Object.keys(entries).join(', ')}, PDF worker: ${workerFile})`);
+await prune([...head.written, ...devReload.written, ...written, path.join(outDir, workerFile), path.join(outDir, 'manifest.json')]);
+
+console.log(`build.mjs: wrote ${outDir}/${dev ? ' with source maps' : ''} (head script ${head.bytes} bytes, entries: ${Object.keys(entries).join(', ')}, PDF worker: ${workerFile})`);

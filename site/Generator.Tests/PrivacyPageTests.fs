@@ -7,7 +7,7 @@ open Expecto
 
 let private privacyFile = "site/content/privacy.md"
 
-let private parse text = MarkdownPage.parse anyImage privacyFile text
+let private parse text = MarkdownPage.parse anyImages privacyFile text
 
 let private privacyText (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
 

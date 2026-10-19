@@ -12,7 +12,10 @@ open System.Threading.Tasks
 
 let private stage = Stage.Local
 
-let private fetch = ImageFetch.create ()
+let reloadPath = "/__dev/reload"
+
+let private watchedFolders (root: string) =
+  [ Path.Combine(root, "site", "content"); Path.Combine(root, WidgetManifest.folder) ]
 
 let private contentTypes = FileExtensionContentTypeProvider()
 
@@ -21,45 +24,79 @@ let private contentType (path: string) =
   | true, value -> value
   | false, _ -> "application/octet-stream"
 
-let private respond (ctx: HttpContext) status path (render: Render) : Task =
-  ctx.Response.StatusCode <- status
-  ctx.Response.ContentType <- contentType path
-  ctx.Response.Body.WriteAsync(ReadOnlyMemory(render ())).AsTask()
-
-let private serveMap (ctx: HttpContext) (map: RenderMap) : Task =
-  let redirect =
-    Lookup.trailingSlashRedirect map ctx.Request.Path.Value ctx.Request.QueryString.Value
-
-  match Lookup.find map ctx.Request.Path.Value, redirect with
-  | Some (path, render), _ -> respond ctx StatusCodes.Status200OK path render
-  | None, Some target ->
+let serve (site: unit -> DevSite) (ctx: HttpContext) : Task =
+  match DevSite.reply (site ()) ctx.Request.Path.Value ctx.Request.QueryString.Value with
+  | Content(status, path, bytes) ->
+    ctx.Response.StatusCode <- status
+    ctx.Response.ContentType <- contentType path
+    ctx.Response.Body.WriteAsync(ReadOnlyMemory bytes).AsTask()
+  | Redirect target ->
     ctx.Response.Redirect(target, true)
     Task.CompletedTask
-  | None, None ->
-    match Lookup.find map "/404.html" with
-    | Some (path, notFound) -> respond ctx StatusCodes.Status404NotFound path notFound
-    | None ->
-      ctx.Response.StatusCode <- StatusCodes.Status404NotFound
-      Task.CompletedTask
 
-let private serveErrors (ctx: HttpContext) (errors: string list) : Task =
-  ctx.Response.StatusCode <- StatusCodes.Status500InternalServerError
-  ctx.Response.ContentType <- "text/plain; charset=utf-8"
-  ctx.Response.WriteAsync(String.concat "\n" errors)
+let events (reloads: Watch.Reloads) (ctx: HttpContext) : Task =
+  task {
+    ctx.Response.ContentType <- "text/event-stream"
+    ctx.Response.Headers.CacheControl <- "no-cache"
+    do! ctx.Response.Body.FlushAsync ctx.RequestAborted
 
-let serve (ctx: HttpContext) : Task =
-  let map =
-    Site.root (Directory.GetCurrentDirectory())
-    |> Result.mapError List.singleton
-    |> Result.bind (fun root -> Site.load fetch root stage DateTimeOffset.UtcNow)
+    try
+      while not ctx.RequestAborted.IsCancellationRequested do
+        do! reloads.Next.WaitAsync ctx.RequestAborted
+        do! ctx.Response.WriteAsync("data: reload\n\n", ctx.RequestAborted)
+        do! ctx.Response.Body.FlushAsync ctx.RequestAborted
+    with :? OperationCanceledException ->
+      ()
+  }
+  :> Task
 
-  match map with
-  | Ok map -> serveMap ctx map
-  | Error errors -> serveErrors ctx errors
+let private report (site: DevSite) =
+  match site.Render with
+  | Ok map -> printfn "dev: loaded the site, %d files" map.Count
+  | Error errors ->
+    eprintfn "dev: the site has %d errors" errors.Length
+
+    for error in errors do
+      eprintfn "  %s" error
+
+let private findRoot () =
+  match Site.root (Directory.GetCurrentDirectory()) with
+  | Ok root -> root
+  | Error message -> failwith message
+
+let startWidgetWatch () =
+  match Watch.widgets (Path.Combine(findRoot (), "site", "Widgets")) with
+  | Ok watch -> Some watch
+  | Error message ->
+    eprintfn "dev: the widget watch did not start: %s" message
+    eprintfn "  Run 'npm run watch' in site/Widgets, or put npm and node on the PATH of the SageFs daemon."
+    None
 
 /// SageFs adds its reload script only to an app that `RunAsync` or `Run` starts.
 let start () =
+  let root = findRoot ()
+
+  let images =
+    ImageFetch.create ()
+    |> ImageCache.disk (Path.Combine(root, ImageCache.folder))
+    |> Images.ofFetch
+    |> ImageCache.memoize
+
+  let site = ref DevSite.empty
+  let reloads = Watch.Reloads()
+
+  let load () =
+    site.Value <-
+      DevSite.load site.Value stage DateTimeOffset.UtcNow (fun () -> Site.loadWidgets root) (fun () -> Site.loadContent images root)
+    report site.Value
+    reloads.Send()
+
+  load ()
+  let watch = Watch.folders (TimeSpan.FromMilliseconds 200.0) (watchedFolders root) load
+
   let app = WebApplication.CreateSlimBuilder().Build()
-  app.MapGet("/{**path}", RequestDelegate serve) |> ignore
+  app.MapGet(reloadPath, RequestDelegate(events reloads)) |> ignore
+  app.MapGet("/{**path}", RequestDelegate(serve (fun () -> site.Value))) |> ignore
+  app.Lifetime.ApplicationStopping.Register(fun () -> watch.Dispose()) |> ignore
   app.RunAsync((Stage.config stage).SiteUrl.GetLeftPart UriPartial.Authority) |> ignore
   app

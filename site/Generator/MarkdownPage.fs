@@ -16,14 +16,14 @@ type MarkdownPage =
 module MarkdownPage =
 
   /// `file` is the path from the repo root.
-  let parse (fetch: IImageFetch) (file: string) (text: string) : Result<MarkdownPage, PostError list> =
+  let parse (images: IImages) (file: string) (text: string) : Result<MarkdownPage, PostError list> =
     let document = Markdown.Parse(text, Body.pipeline)
 
     match Seq.tryHead document with
     | Some(:? YamlFrontMatterBlock as block) when block.Line = 0 ->
       result {
         let! title, description = FrontMatter.parsePage file (block.Line + 1) (block.Lines.ToString())
-        let! body = Body.ofDocument fetch file document
+        let! body = Body.ofDocument images file document
 
         return
           { File = file

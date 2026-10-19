@@ -191,7 +191,7 @@ let private render (directiveHtml: Directive.Directive -> string) (document: Mar
   writer.ToString()
 
 /// Changes the document in place.
-let ofDocument (fetch: IImageFetch) (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
+let ofDocument (images: IImages) (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
   let headings = descendants<HeadingBlock> document
   let texts = headings |> List.map (fun heading -> inlineText heading.Inline)
   let ids = Slug.headingIds texts
@@ -208,7 +208,7 @@ let ofDocument (fetch: IImageFetch) (file: string) (document: MarkdownDocument) 
 
       match Uri.TryCreate(image.Url, UriKind.Absolute) with
       | true, url when url.Scheme = Uri.UriSchemeHttps ->
-        match fetch.Get url |> Result.bind Images.size with
+        match images.Size url with
         | Ok size ->
           attributes.AddProperty("width", string size.Width)
           attributes.AddProperty("height", string size.Height)

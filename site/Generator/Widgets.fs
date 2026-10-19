@@ -22,7 +22,9 @@ type Widgets =
   { Manifest: WidgetManifest
     HeadScript: string
     /// Each file at its site path, for example `_/widgets/chunk-1a2b3c4d.js`.
-    Files: Map<string, byte array> }
+    Files: Map<string, byte array>
+    /// The dev reload script and each source map, at its site path. Only the dev server serves them.
+    DevFiles: Map<string, byte array> }
 
 /// Each value is a URL path from the root, for example `/_/widgets/subscribe-1a2b3c4d.js`.
 type WidgetScripts =
@@ -133,16 +135,22 @@ module Widgets =
         headScript.Contains("</script", StringComparison.OrdinalIgnoreCase)
         |> Result.requireFalse [ $"{WidgetManifest.folder}/{manifest.Head} contains '</script', so a page cannot put it inline." ]
 
-      let excluded = set [ "manifest.json"; manifest.Head; manifest.DevReload ]
+      let isDevFile (name: string) =
+        name = manifest.DevReload || name.EndsWith ".map"
+
+      let atSitePaths (files: Map<string, byte array>) =
+        files |> Seq.map (fun (KeyValue(name, bytes)) -> sitePath name, bytes) |> Map.ofSeq
+
+      let siteFiles, devFiles =
+        files
+        |> Map.filter (fun name _ -> name <> "manifest.json" && name <> manifest.Head)
+        |> Map.partition (fun name _ -> not (isDevFile name))
 
       return
         { Manifest = manifest
           HeadScript = headScript
-          Files =
-            files
-            |> Map.filter (fun name _ -> not (excluded.Contains name))
-            |> Seq.map (fun (KeyValue(name, bytes)) -> sitePath name, bytes)
-            |> Map.ofSeq }
+          Files = atSitePaths siteFiles
+          DevFiles = atSitePaths devFiles }
     }
 
   let private mount = Regex("\\sdata-widget=\"([^\"]+)\"")

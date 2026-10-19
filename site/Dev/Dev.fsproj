@@ -6,6 +6,10 @@
 
   <ItemGroup>
     <Compile Include="Lookup.fs" />
+    <Compile Include="ErrorPage.fs" />
+    <Compile Include="DevSite.fs" />
+    <Compile Include="ImageCache.fs" />
+    <Compile Include="Watch.fs" />
     <Compile Include="Server.fs" />
   </ItemGroup>
 

@@ -51,3 +51,6 @@ pnpm-lock.yaml
 
 # widget build output (dist/ is ignored above)
 site/Widgets/build/
+
+# dev server image cache
+site/.cache/

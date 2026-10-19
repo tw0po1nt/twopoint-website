@@ -16,22 +16,19 @@ module OgImages =
     |> Option.bind _.Image
     |> Option.orElse post.FrontMatter.Image
 
-  let private crop (fetch: IImageFetch) url =
-    result {
-      let! source = fetch.Get url
-      let! bytes = Images.ogCrop source
-      let! size = Images.size bytes
+  let private crop (images: IImages) url =
+    images.OgCrop url
+    |> Result.map (fun (bytes, size) ->
       let path = Assets.sitePath "og.jpg" bytes
-      return path, bytes, { UrlPath = $"/{path}"; Size = size }
-    }
+      path, bytes, { UrlPath = $"/{path}"; Size = size })
 
   /// `defaultImage` is the image of a post with no series image and no post image.
-  let create (fetch: IImageFetch) (defaultImage: SizedImage) (posts: Post list) : Result<OgImages, string list> =
+  let create (images: IImages) (defaultImage: SizedImage) (posts: Post list) : Result<OgImages, string list> =
     let crops =
       posts
       |> List.choose source
       |> List.distinctBy _.AbsoluteUri
-      |> List.map (fun url -> url.AbsoluteUri, crop fetch url)
+      |> List.map (fun url -> url.AbsoluteUri, crop images url)
       |> Map.ofList
 
     posts
@@ -42,7 +39,10 @@ module OgImages =
         match crops[url.AbsoluteUri] with
         | Ok(path, bytes, image) -> Ok(post.Slug, image, Some(path, bytes))
         | Error reason ->
-          Error $"The post {post.Slug} has the Open Graph image {url}, and the build cannot make its crop: {reason}.")
+          $"The front matter gives the Open Graph image {url}, and the build cannot make its crop: {reason}."
+          |> PostError.at post.File 1
+          |> PostError.format
+          |> Error)
     |> Result.map (fun images ->
       { Files = images |> List.choose (fun (_, _, file) -> file) |> Map.ofList
         ByPost = images |> List.map (fun (slug, image, _) -> slug, image) |> Map.ofList })

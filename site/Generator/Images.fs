@@ -1,5 +1,6 @@
 namespace TwoPoint.Site.Generator
 
+open FsToolkit.ErrorHandling
 open SkiaSharp
 open System
 open System.Collections.Concurrent
@@ -11,6 +12,22 @@ type ImageSize = { Width: int; Height: int }
 
 /// `UrlPath` is from the root, for example `/_/og-1a2b3c4d.jpg`.
 type SizedImage = { UrlPath: string; Size: ImageSize }
+
+[<RequireQualifiedAccess>]
+module Memo =
+
+  /// The cache keeps no failure, so the next call tries again.
+  let byUrl (work: Uri -> Result<'T, string>) : Uri -> Result<'T, string> =
+    let cache = ConcurrentDictionary<string, 'T>()
+
+    fun url ->
+      match cache.TryGetValue url.AbsoluteUri with
+      | true, value -> Ok value
+      | false, _ ->
+        work url
+        |> Result.map (fun value ->
+          cache[url.AbsoluteUri] <- value
+          value)
 
 /// An error gives the reason in words, for example `HTTP 404`.
 type IImageFetch =
@@ -46,24 +63,22 @@ module ImageFetch =
 
           attempt 1 }
 
-  /// The cache keeps no failure, so the next call tries again.
   let memoize (fetch: IImageFetch) =
-    let images = ConcurrentDictionary<string, byte array>()
+    let get = Memo.byUrl fetch.Get
 
     { new IImageFetch with
-        member _.Get url =
-          match images.TryGetValue url.AbsoluteUri with
-          | true, bytes -> Ok bytes
-          | false, _ ->
-            fetch.Get url
-            |> Result.map (fun bytes ->
-              images[url.AbsoluteUri] <- bytes
-              bytes) }
+        member _.Get url = get url }
 
   let create () =
     http (new HttpClient(Timeout = TimeSpan.FromSeconds 30.0))
     |> withRetries 3 (TimeSpan.FromSeconds 1.0)
     |> memoize
+
+/// The image work of a run, by the URL of the source image.
+type IImages =
+  abstract Size: Uri -> Result<ImageSize, string>
+  /// A JPEG crop for `og:image`, and its size.
+  abstract OgCrop: Uri -> Result<byte array * ImageSize, string>
 
 [<RequireQualifiedAccess>]
 module Images =
@@ -112,3 +127,16 @@ module Images =
       use image = surface.Snapshot()
       use data = image.Encode(SKEncodedImageFormat.Jpeg, 85)
       Ok(data.ToArray())
+
+  /// Each call downloads the source and does the image work again.
+  let ofFetch (fetch: IImageFetch) =
+    { new IImages with
+        member _.Size url = fetch.Get url |> Result.bind size
+
+        member _.OgCrop url =
+          result {
+            let! source = fetch.Get url
+            let! bytes = ogCrop source
+            let! size = size bytes
+            return bytes, size
+          } }
