@@ -31,6 +31,10 @@ let tests =
       Expect.equal (Pdf.update Pdf.Previous (showing 3 12)) (showing 2 12, Some(Pdf.Draw 2)) "Previous"
     }
 
+    test "a change of width draws the current page again" {
+      Expect.equal (Pdf.update Pdf.Resized (showing 3 12)) (showing 3 12, Some(Pdf.Draw 3)) "Page 3 draws again"
+    }
+
     test "previous on the first page and next on the last page do nothing" {
       Expect.equal (Pdf.update Pdf.Previous (showing 1 12)) (showing 1 12, None) "No page before the first"
       Expect.equal (Pdf.update Pdf.Next (showing 12 12)) (showing 12 12, None) "No page after the last"
@@ -48,10 +52,10 @@ let tests =
     }
 
     test "no message changes the error, and a page message does nothing before the PDF opens" {
-      for msg in [ Pdf.Opened 3; Pdf.Failed; Pdf.Previous; Pdf.Next ] do
+      for msg in [ Pdf.Opened 3; Pdf.Failed; Pdf.Previous; Pdf.Next; Pdf.Resized ] do
         Expect.equal (Pdf.update msg Pdf.Broken) (Pdf.Broken, None) $"%A{msg} keeps the error"
 
-      for msg in [ Pdf.Previous; Pdf.Next ] do
+      for msg in [ Pdf.Previous; Pdf.Next; Pdf.Resized ] do
         Expect.equal (Pdf.update msg Pdf.Opening) (Pdf.Opening, None) $"%A{msg} waits for the PDF"
     }
   ]

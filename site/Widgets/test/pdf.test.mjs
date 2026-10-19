@@ -33,6 +33,39 @@ const canvasAdapter = {
 GlobalRegistrator.register({ url: 'http://localhost:4321/posts/a-talk/', settings: { canvasAdapter } });
 globalThis.Path2D = Path2D;
 
+// happy-dom has no layout and its ResizeObserver does nothing, so the test sets the size of an element and calls each observer of it.
+const observers = [];
+globalThis.ResizeObserver = class {
+  constructor(callback) {
+    this.callback = callback;
+    this.targets = [];
+    observers.push(this);
+  }
+
+  observe(target) {
+    this.targets.push(target);
+  }
+
+  unobserve(target) {
+    this.targets = this.targets.filter((item) => item !== target);
+  }
+
+  disconnect() {
+    this.targets = [];
+  }
+};
+
+const resize = (element, width, height) => {
+  Object.defineProperty(element, 'clientWidth', { configurable: true, value: width });
+  Object.defineProperty(element, 'clientHeight', { configurable: true, value: height });
+
+  for (const observer of observers.filter((item) => item.targets.includes(element))) {
+    observer.callback([{ target: element, contentRect: { width, height } }], observer);
+  }
+};
+
+const setPixelRatio = (ratio) => Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: ratio });
+
 const errors = [];
 console.error = (...args) => errors.push(args.map(String).join(' '));
 
@@ -166,6 +199,42 @@ test('two fast clicks draw the last page that the reader asked for', async () =>
   await until(isColor(blue), 'the last page');
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(isColor(blue)(), true, 'An earlier page does not draw over the last page');
+  assert.deepEqual(errors, []);
+});
+
+test('a change of width draws the current page again at the new width', async (context) => {
+  context.after(() => setPixelRatio(1));
+  answer = pdfAnswer(stubPdf([red, blue]));
+  await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
+  await until(isColor(red), 'the first page');
+  button('[next]').click();
+  await until(isColor(blue), 'the second page');
+
+  setPixelRatio(2);
+  resize(page(), 320.5, 160);
+  await until(() => page().width === 641, 'the new width');
+
+  assert.equal(page().height, 320, 'The page keeps the shape of the PDF page');
+  await until(isColor(blue), 'the second page at the new width');
+  assert.equal(count(), 'page 2 of 2', 'The page number does not change');
+  assert.deepEqual(errors, []);
+});
+
+test('a change of height only does not draw the page again', async (context) => {
+  context.after(() => setPixelRatio(1));
+  answer = pdfAnswer(stubPdf([red, blue]));
+  await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
+  await until(isColor(red), 'the first page');
+  resize(page(), 200, 100);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // A draw now gives a bitmap of twice the width, so a bitmap of the old width shows that no draw occurred.
+  setPixelRatio(2);
+  resize(page(), 200, 150);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  assert.equal(page().width, 200, 'The page does not draw again');
+  assert.equal(isColor(red)(), true, 'The first page stays');
   assert.deepEqual(errors, []);
 });
 

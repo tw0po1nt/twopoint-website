@@ -13,6 +13,8 @@ type Msg =
   | Failed
   | Previous
   | Next
+  /// The width of the page changed, so the bitmap of the page is not sharp.
+  | Resized
 
 type Effect =
   | Open of file: string
@@ -41,4 +43,5 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | (Opening | Showing _), Failed -> Broken, None
   | Showing page, Previous when hasPrevious model -> show { page with Number = page.Number - 1 }
   | Showing page, Next when hasNext model -> show { page with Number = page.Number + 1 }
+  | Showing page, Resized -> show page
   | _ -> model, None
