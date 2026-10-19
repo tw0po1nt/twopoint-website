@@ -10,7 +10,6 @@ let prompt (command: string) =
     $" $ {command}"
   }
 
-/// A heading for each year, and a line for each post with its date, its kind, and its title.
 let years (posts: Post list) =
   Fragment() {
     for year, posts in Blog.byYear posts do

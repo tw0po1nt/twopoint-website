@@ -40,10 +40,9 @@ module RenderMap =
         (fun () -> UnsubscribePage.render config content.Assets widgets content.Posts)
         SiteFile(SitePath.ofUrlPath ListPage.seriesUrlPath),
         (fun () -> ListPage.renderSeries config content.Assets widgets content.Posts)
-        for list in ListPage.all content.Posts do
-          for number in 1 .. (ListPage.pages content.Posts list).Length do
-            SiteFile(SitePath.ofUrlPath (Blog.pageUrlPath (ListPage.basePath list) number)),
-            (fun () -> ListPage.render config content.Assets widgets content.OgImages content.Posts list number)
+        for page in ListPage.all content.Posts do
+          SiteFile(SitePath.ofUrlPath (ListPage.urlPath page)),
+          (fun () -> ListPage.render config content.Assets widgets content.OgImages content.Posts page)
         for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do
           for KeyValue(path, bytes) in files do
             SiteFile path, (fun () -> bytes)
