@@ -119,6 +119,25 @@ let tests =
         "Each heading gets the Astro id"
     }
 
+    test "each quote mark is curly, two hyphens give an em dash, and three dots give an ellipsis" {
+      Expect.equal
+        (html "We'll see C#'s `Option`'s case -- \"[a talk](/posts/a-post/)\". It works...mostly.")
+        "<p>We’ll see C#’s <code>Option</code>’s case &mdash; “<a href=\"/posts/a-post/\">a talk</a>”. It works…mostly.</p>\n"
+        "A quote mark with no pair curls by its position"
+
+      Expect.equal
+        (html "A 'pair', (\"a\"), *\"b*, and the '90s.")
+        "<p>A &lsquo;pair&rsquo;, (&ldquo;a&rdquo;), <em>“b</em>, and the ’90s.</p>\n"
+        "A quote mark after a space, an opening bracket, or the start of an inline opens, but an apostrophe before a decade closes"
+    }
+
+    test "a quote mark in code stays straight" {
+      Expect.equal
+        (html "Use `it's \"x\"...`.\n\n```\nlet c = 'a' // \"x\"...\n```")
+        "<p>Use <code>it's &quot;x&quot;...</code>.</p>\n<pre tabindex=\"0\"><code>let c = 'a' // &quot;x&quot;...\n</code></pre>\n"
+        "Code keeps its quote marks and dots"
+    }
+
     test "raw HTML with no class or style stays" {
       Expect.equal (html "It is <u>**1000%**</u>.") "<p>It is <u><strong>1000%</strong></u>.</p>\n" "Raw HTML stays"
     }

@@ -3,12 +3,15 @@ module TwoPoint.Site.Generator.Body
 
 open Markdig
 open Markdig.Extensions.SmartyPants
+open Markdig.Helpers
+open Markdig.Parsers
 open Markdig.Renderers
 open Markdig.Renderers.Html
 open Markdig.Syntax
 open Markdig.Syntax.Inlines
 open System
 open System.IO
+open System.Text
 open System.Text.RegularExpressions
 
 type private DirectiveExtension() =
@@ -16,19 +19,74 @@ type private DirectiveExtension() =
     member _.Setup(pipeline: MarkdownPipelineBuilder) = pipeline.BlockParsers.Add(Directive.DirectiveParser())
     member _.Setup(_: MarkdownPipeline, _: IMarkdownRenderer) = ()
 
+let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
+  MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
+
+let rec private endsInSpace (node: Inline) =
+  match node with
+  | null
+  | :? LineBreakInline -> true
+  | :? LiteralInline as literal when literal.Content.IsEmpty -> endsInSpace literal.PreviousSibling
+  | :? LiteralInline as literal -> Char.IsWhiteSpace literal.Content.Text[literal.Content.End]
+  | _ -> false
+
+let private isDecade (text: string) index =
+  index + 3 < text.Length
+  && Char.IsDigit text[index + 1]
+  && Char.IsDigit text[index + 2]
+  && text[index + 3] = 's'
+
+/// Curls each quote mark that SmartyPants leaves straight, because Markdig curls a quote only in a pair.
+let private educate (literal: LiteralInline) =
+  let text = literal.Content.ToString().Replace("...", "…")
+  let result = StringBuilder(text.Length)
+
+  let lookahead =
+    match literal.NextSibling with
+    | :? LiteralInline as next -> text + next.Content.ToString()
+    | _ -> text
+
+  for index in 0 .. text.Length - 1 do
+    let opens =
+      if index = 0 then
+        endsInSpace literal.PreviousSibling
+      else
+        Char.IsWhiteSpace text[index - 1] || "([{".Contains text[index - 1]
+
+    match text[index] with
+    | '\'' -> result.Append(if opens && not (isDecade lookahead index) then '‘' else '’') |> ignore
+    | '"' -> result.Append(if opens then '“' else '”') |> ignore
+    | c -> result.Append c |> ignore
+
+  literal.Content <- StringSlice(result.ToString())
+
+type private TypographyExtension() =
+  interface IMarkdownExtension with
+    member _.Setup(pipeline: MarkdownPipelineBuilder) =
+      pipeline.add_DocumentProcessed (
+        ProcessDocumentDelegate(fun document ->
+          for literal in descendants<LiteralInline> document do
+            educate literal)
+      )
+
+    member _.Setup(_: MarkdownPipeline, _: IMarkdownRenderer) = ()
+
+let private smartyPants =
+  let options = SmartyPantOptions()
+  options.Mapping[SmartyPantType.Dash2] <- "&mdash;"
+  options
+
 let pipeline =
   MarkdownPipelineBuilder()
     .UseYamlFrontMatter()
     .UsePreciseSourceLocation()
-    .UseSmartyPants()
+    .UseSmartyPants(smartyPants)
     .UsePipeTables()
     .UseEmphasisExtras(Extensions.EmphasisExtras.EmphasisExtraOptions.Strikethrough)
     .UseAutoLinks()
     .Use(DirectiveExtension())
+    .Use(TypographyExtension())
     .Build()
-
-let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
-  MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
 
 let rec private inlineText (node: Inline) =
   match node with
