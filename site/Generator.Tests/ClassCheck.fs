@@ -9,7 +9,8 @@ let widgetClasses =
   set [ "subscribe"; "subscribe-field"; "subscribe-error"; "subscribe-status"; "is-failed"; "is-subscribed"; "subscribe-note"
         "comments"; "comments-count"; "comments-list"; "comment"; "comment-meta"; "comment-text"; "comment-form"
         "comment-field"; "comment-error"; "comment-status"; "is-done"; "comment-note"
-        "unsubscribe"; "unsubscribe-status"; "unsubscribe-note" ]
+        "unsubscribe"; "unsubscribe-status"; "unsubscribe-note"
+        "pdf-viewer"; "pdf-page"; "pdf-nav"; "pdf-count"; "pdf-status" ]
 
 let private classAttribute = Regex("""\sclass="([^"]*)""")
 

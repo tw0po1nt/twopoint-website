@@ -240,3 +240,66 @@
 .unsubscribe-help {
   margin-top: 24px;
 }
+
+.pdf {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-page {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+}
+
+.pdf-page[hidden] {
+  display: none;
+}
+
+.pdf-nav {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: center;
+  font: 13px var(--mono);
+}
+
+.pdf-nav button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 13px var(--mono);
+  color: var(--accent);
+}
+
+.pdf-nav button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.pdf-count {
+  color: var(--muted);
+}
+
+.pdf-status,
+.pdf-download {
+  margin: 0;
+  font: 13px/1.5 var(--mono);
+}
+
+.pdf-status {
+  color: var(--muted);
+}
+
+.pdf-status.is-failed {
+  color: var(--accent);
+}

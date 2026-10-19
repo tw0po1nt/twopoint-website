@@ -1,13 +1,15 @@
 import { transformAsync } from '@babel/core';
 import solid from 'babel-preset-solid';
 import * as esbuild from 'esbuild';
-import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const fableDir = 'build/fable';
 const entriesDir = path.join(fableDir, 'Entries');
 const outDir = 'dist';
 const headLimit = 2048;
+const pdfWorker = 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs';
 
 const fail = (messages) => {
   for (const message of messages) {
@@ -76,7 +78,16 @@ const staticImports = (outputs, file) => {
   return [...found].map((item) => path.relative(outDir, item)).sort();
 };
 
-const modules = async (entries) => {
+// The worker gets the `.js` extension, because each host serves `.js` as JavaScript.
+const copyPdfWorker = async () => {
+  const bytes = await readFile(pdfWorker);
+  const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 8).toUpperCase();
+  const file = `pdf.worker-${hash}.js`;
+  await writeFile(path.join(outDir, file), bytes);
+  return file;
+};
+
+const modules = async (entries, workerFile) => {
   const result = await esbuild.build({
     entryPoints: entries,
     outdir: outDir,
@@ -89,6 +100,7 @@ const modules = async (entries) => {
     target: 'es2022',
     metafile: true,
     logLevel: 'warning',
+    define: { PDF_WORKER_FILE: JSON.stringify(`./${workerFile}`) },
     plugins: [solidJsx],
   });
 
@@ -104,6 +116,7 @@ const modules = async (entries) => {
 };
 
 await rm(outDir, { recursive: true, force: true });
+await mkdir(outDir, { recursive: true });
 
 const head = await iife('head', 'HeadMain.jsx');
 
@@ -120,9 +133,11 @@ if (headErrors.length > 0) {
 
 const devReload = await iife('dev-reload', 'DevReload.jsx');
 
-const entries = await modules(await widgetEntries());
+const workerFile = await copyPdfWorker();
+
+const entries = await modules(await widgetEntries(), workerFile);
 
 const manifest = { entries, head: head.file, devReload: devReload.file };
 await writeFile(path.join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
-console.log(`build.mjs: wrote ${outDir}/ (head script ${head.bytes} bytes, entries: ${Object.keys(entries).join(', ')})`);
+console.log(`build.mjs: wrote ${outDir}/ (head script ${head.bytes} bytes, entries: ${Object.keys(entries).join(', ')}, PDF worker: ${workerFile})`);

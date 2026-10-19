@@ -12,8 +12,10 @@ let private comments =
 
 let private unsubscribe = Contract.Widget.Unsubscribe { Api = "https://api.example" }
 
+let private pdf = Contract.Widget.Pdf { File = "https://files.example/talks/slides.pdf" }
+
 /// One value of each case of `Contract.Widget`.
-let private widgets = [ subscribe; comments; unsubscribe ]
+let private widgets = [ subscribe; comments; unsubscribe; pdf ]
 
 [<Tests>]
 let tests =
@@ -38,6 +40,11 @@ let tests =
         (Contract.toAttributes unsubscribe)
         [ "data-widget", "unsubscribe"; "data-api", "https://api.example" ]
         "The Unsubscribe mount has its name and the API origin"
+
+      Expect.equal
+        (Contract.toAttributes pdf)
+        [ "data-widget", "pdf"; "data-file", "https://files.example/talks/slides.pdf" ]
+        "The Pdf mount has its name and the file"
     }
 
     test "the names list each widget one time" {
@@ -57,7 +64,7 @@ let tests =
 
       Expect.equal
         (Contract.parse [ "data-widget", "search" ])
-        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe.")
+        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe, pdf.")
         "An unknown name"
     }
 
@@ -113,5 +120,22 @@ let tests =
         (Contract.parse [ "data-widget", "unsubscribe"; "data-api", "https://api.example/" ])
         (Error "The 'data-api' of the unsubscribe mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
         "A '/' at the end"
+    }
+
+    test "a Pdf mount with no file gives an error" {
+      Expect.equal (Contract.parse [ "data-widget", "pdf" ]) (Error "The pdf mount has no 'data-file' attribute.") "No data-file"
+    }
+
+    test "a Pdf mount with a file that is not the https URL of a .pdf file gives an error" {
+      for value in [ ""; "http://files.example/slides.pdf"; "/slides.pdf"; "https://files.example/slides.png"; "https://files.example/slides.png?x=.pdf" ] do
+        Expect.equal
+          (Contract.parse [ "data-widget", "pdf"; "data-file", value ])
+          (Error $"The 'data-file' of the pdf mount is '{value}'. Give the https URL of a .pdf file.")
+          $"'{value}' is not valid"
+    }
+
+    test "a Pdf mount with a query or a fragment after the .pdf path is valid" {
+      for value in [ "https://files.example/slides.pdf?v=2"; "https://files.example/slides.pdf#page=3" ] do
+        Expect.equal (Contract.parse [ "data-widget", "pdf"; "data-file", value ]) (Ok(Contract.Widget.Pdf { File = value })) $"'{value}' is valid"
     }
   ]
