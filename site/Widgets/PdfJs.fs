@@ -1,4 +1,3 @@
-/// The part of `pdfjs-dist` that the Pdf widget uses.
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Widgets.PdfJs
 
@@ -37,6 +36,6 @@ let getDocument (source: {| url: string |}) : LoadingTask = jsNative
 [<Literal>]
 let canceledName = "RenderingCancelledException"
 
-/// `build.mjs` replaces `PDF_WORKER_FILE` with the name of the hashed worker file, next to the widget files.
+/// The build replaces `PDF_WORKER_FILE` with the hashed worker file name, next to the widget files.
 [<Emit "new URL(PDF_WORKER_FILE, import.meta.url).href">]
 let workerUrl () : string = jsNative

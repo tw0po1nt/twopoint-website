@@ -8,8 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 const manifest = JSON.parse(await readFile('dist/manifest.json', 'utf8'));
 
-// happy-dom has no canvas drawing and no Path2D. This adapter gives each canvas a @napi-rs/canvas context of the
-// canvas size.
+// happy-dom has no canvas drawing and no Path2D, so each canvas gets a @napi-rs/canvas context of its size.
 const contexts = new WeakMap();
 const canvasAdapter = {
   getContext: ({ canvas }, type) => {
@@ -37,7 +36,7 @@ globalThis.Path2D = Path2D;
 const errors = [];
 console.error = (...args) => errors.push(args.map(String).join(' '));
 
-// A PDF of 200×100 pages. Each page is one color, so a pixel tells the page.
+// One color per page, so a pixel identifies the page.
 const stubPdf = (colors) => {
   const pages = colors.map((_, index) => 3 + index * 2);
 

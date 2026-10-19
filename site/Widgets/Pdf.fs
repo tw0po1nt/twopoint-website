@@ -22,15 +22,6 @@ let init (file: string) : Model * Effect option = Opening, Some(Open file)
 
 let private show (page: Page) = Showing page, Some(Draw page.Number)
 
-let update (msg: Msg) (model: Model) : Model * Effect option =
-  match model, msg with
-  | Opening, Opened count when count > 0 -> show { Number = 1; Count = count }
-  | Opening, Opened _ -> Broken, None
-  | (Opening | Showing _), Failed -> Broken, None
-  | Showing page, Previous when page.Number > 1 -> show { page with Number = page.Number - 1 }
-  | Showing page, Next when page.Number < page.Count -> show { page with Number = page.Number + 1 }
-  | _ -> model, None
-
 let hasPrevious (model: Model) =
   match model with
   | Showing page -> page.Number > 1
@@ -42,3 +33,12 @@ let hasNext (model: Model) =
   | Showing page -> page.Number < page.Count
   | Opening
   | Broken -> false
+
+let update (msg: Msg) (model: Model) : Model * Effect option =
+  match model, msg with
+  | Opening, Opened count when count > 0 -> show { Number = 1; Count = count }
+  | Opening, Opened _ -> Broken, None
+  | (Opening | Showing _), Failed -> Broken, None
+  | Showing page, Previous when hasPrevious model -> show { page with Number = page.Number - 1 }
+  | Showing page, Next when hasNext model -> show { page with Number = page.Number + 1 }
+  | _ -> model, None

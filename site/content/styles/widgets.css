@@ -241,12 +241,7 @@
   margin-top: 24px;
 }
 
-.pdf {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
+.pdf,
 .pdf-viewer {
   display: flex;
   flex-direction: column;
