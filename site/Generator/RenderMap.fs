@@ -79,3 +79,11 @@ module RenderMap =
       | SiteFile path -> Some path
       | _ -> None)
     |> Set.ofSeq
+
+  let newsletterSlugs (map: RenderMap) : string list =
+    map
+    |> Map.keys
+    |> Seq.choose (function
+      | Newsletter slug -> Some slug
+      | _ -> None)
+    |> List.ofSeq

@@ -8,7 +8,6 @@ open AngleSharp.Html.Parser
 open Expecto
 open System
 
-/// The body starts on line 9.
 let private body =
   "Read [the other post](/posts/a-one-off/) and [the heading](#a-heading).\n\n\
    ## A heading\n\n\
@@ -51,21 +50,14 @@ let private isAbsolute (value: string) =
 let tests =
   testList "Newsletter" [
     test "the render map has one newsletter for each post" {
-      let newsletters =
-        map Stage.Production [ post; oneOff ]
-        |> Map.keys
-        |> Seq.choose (function
-          | Newsletter slug -> Some slug
-          | _ -> None)
-        |> List.ofSeq
-
+      let newsletters = RenderMap.newsletterSlugs (map Stage.Production [ post; oneOff ])
       Expect.equal newsletters [ "a-one-off"; "a-post" ] "One newsletter for each post"
     }
 
     test "the newsletter keeps the slots that the backend fills" {
       let html = newsletterText (map Stage.Production [ post; oneOff ]) post.Slug
       Expect.stringContains html Newsletter.introSlot "The intro slot"
-      Expect.equal ((one "a[href='%%TWOPOINT_UNSUBSCRIBE_URL%%']" (parse html)).TextContent) "$ unsubscribe" "The unsubscribe slot"
+      Expect.equal ((one $"a[href='{Newsletter.unsubscribeUrlSlot}']" (parse html)).TextContent) "$ unsubscribe" "The unsubscribe slot"
     }
 
     test "the newsletter has no script and no site stylesheet" {
@@ -115,8 +107,8 @@ let tests =
 
     test "::pdf gives one link to the post, and no Pdf mount" {
       let document = newsletter Stage.Production
-      let link = all ".tp-post a" document |> List.filter (fun link -> link.TextContent = "See the PDF in the post")
-      Expect.equal [ for link in link -> link.GetAttribute "href" ] [ "https://twopoint.dev/posts/a-post/" ] "One link to the post"
+      let links = all ".tp-post a" document |> List.filter (fun link -> link.TextContent = "See the PDF in the post")
+      Expect.equal [ for link in links -> link.GetAttribute "href" ] [ "https://twopoint.dev/posts/a-post/" ] "One link to the post"
       Expect.isEmpty (all "[data-widget], figure" document) "No mount"
     }
 

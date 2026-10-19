@@ -7,7 +7,6 @@ open System
 open System.Text
 open System.Text.RegularExpressions
 
-/// The two CSS files in `site/content/email/`.
 type EmailStyles =
   { /// The build moves each rule into the `style` attribute of each element that it selects.
     Inline: string
@@ -17,9 +16,8 @@ type EmailStyles =
 [<RequireQualifiedAccess>]
 module Newsletter =
 
-  /// The backend fills these slots for each delivery, and refuses a newsletter that does not contain them.
+  // The backend fills these slots for each delivery, and refuses a newsletter that does not contain them.
   let introSlot = "%%TWOPOINT_INTRO%%"
-
   let unsubscribeUrlSlot = "%%TWOPOINT_UNSUBSCRIBE_URL%%"
 
   let private fonts =
@@ -126,7 +124,6 @@ module Newsletter =
 
   let private scheme = Regex("^[A-Za-z][A-Za-z0-9+.-]*:")
 
-  /// The inliner ignores the embed `style` block and the font `link`, so that it neither inlines nor downloads them.
   let render (config: StageConfig) (styles: EmailStyles) (post: Post) : byte array =
     let postUrl = Uri(Stage.url config (Post.urlPath post))
     use premailer = new PreMailer(view config styles post)
@@ -143,5 +140,6 @@ module Newsletter =
       image.RemoveAttribute "width" |> ignore
       image.RemoveAttribute "height" |> ignore
 
+    // Otherwise the inliner inlines the embed `style` block and downloads the font `link`.
     let result = premailer.MoveCssInline(ignoreElements = "style, link", css = styles.Inline)
     Encoding.UTF8.GetBytes result.Html

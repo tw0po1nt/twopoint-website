@@ -11,14 +11,6 @@ let private newsletterPrefix = "/__dev/newsletter/"
 
 let newsletterPath (slug: string) = $"{newsletterPrefix}{slug}/"
 
-let private newsletterSlugs (map: RenderMap) =
-  map
-  |> Map.keys
-  |> Seq.choose (function
-    | Newsletter slug -> Some slug
-    | _ -> None)
-  |> List.ofSeq
-
 let private index (slugs: string list) : Render =
   fun () ->
     html (lang = "en") {
@@ -41,7 +33,7 @@ let private index (slugs: string list) : Render =
 /// The site path gives the content type, so each dev page gets a path that ends in `index.html`.
 let find (map: RenderMap) (requestPath: string) : (string * Render) option =
   if requestPath = indexPath then
-    Some("__dev/index.html", index (newsletterSlugs map))
+    Some("__dev/index.html", index (RenderMap.newsletterSlugs map))
   elif requestPath.StartsWith newsletterPrefix && requestPath.EndsWith '/' then
     let slug = requestPath.Substring(newsletterPrefix.Length).TrimEnd '/'
 
