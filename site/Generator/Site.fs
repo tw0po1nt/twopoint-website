@@ -9,6 +9,7 @@ let private postsFolder = Path.Combine("site", "content", "posts")
 let private assetsFolder = Path.Combine("site", "content", "assets")
 let private stylesFolder = Path.Combine("site", "content", "styles")
 let private privacyFile = "site/content/privacy.md"
+let private emailFolder = Path.Combine("site", "content", "email")
 
 /// Gives the folder of `TwoPoint.slnx`, from `start` or a parent folder of it.
 let root (start: string) =
@@ -59,6 +60,10 @@ let loadAssets (root: string) : Result<Assets, string list> =
 let loadPrivacy (fetch: IImageFetch) (root: string) : Result<MarkdownPage, PostError list> =
   MarkdownPage.parse fetch privacyFile (File.ReadAllText(Path.Combine(root, privacyFile)))
 
+let loadEmail (root: string) : EmailStyles =
+  let read name = File.ReadAllText(Path.Combine(root, emailFolder, name))
+  { Inline = read "inline.css"; Embed = read "embed.css" }
+
 let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string list> =
   result {
     let! posts, privacy, assets =
@@ -75,7 +80,8 @@ let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string lis
       { Posts = posts
         Privacy = privacy
         Assets = assets
-        OgImages = ogImages }
+        OgImages = ogImages
+        Email = loadEmail root }
   }
 
 let loadWidgets (root: string) : Result<Widgets, string list> =

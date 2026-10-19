@@ -52,6 +52,8 @@ type Heading = { Level: int; Id: string; Text: string }
 
 type Body =
   { Html: string
+    /// The body of the newsletter. The newsletter resolves its relative links against the post URL.
+    EmailHtml: string
     Headings: Heading list
     Anchors: Set<string>
     Links: InternalLink list

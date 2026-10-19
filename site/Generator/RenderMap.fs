@@ -17,7 +17,8 @@ type Content =
   { Posts: Post list
     Privacy: MarkdownPage
     Assets: Assets
-    OgImages: OgImages }
+    OgImages: OgImages
+    Email: EmailStyles }
 
 [<RequireQualifiedAccess>]
 module RenderMap =
@@ -65,6 +66,8 @@ module RenderMap =
         file Sitemap.urlPath, (fun () -> Sitemap.render config [ for urlPath, robots, _ in pages -> urlPath, robots ])
         for urlPath, _, render in pages do
           file urlPath, render
+        for post in content.Posts do
+          Newsletter post.Slug, (fun () -> Newsletter.render config content.Email post)
         for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do
           for KeyValue(path, bytes) in files do
             SiteFile path, (fun () -> bytes) ]

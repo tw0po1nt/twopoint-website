@@ -1,0 +1,303 @@
+/* The build moves these rules into a style attribute on each element, because many email clients ignore a style block. */
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+.tp-canvas {
+  background-color: #ebebee;
+}
+
+.tp-preheader {
+  display: none;
+  max-height: 0;
+  overflow: hidden;
+  mso-hide: all;
+  font-size: 1px;
+  line-height: 1px;
+  color: transparent;
+}
+
+.tp-outer {
+  padding: 32px 16px;
+}
+
+.tp-container {
+  width: 600px;
+  max-width: 600px;
+}
+
+.tp-card {
+  background-color: #ffffff;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tp-term {
+  background-color: #24292e;
+}
+
+.tp-title-bar {
+  padding: 14px 20px 0;
+  font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tp-dot-red {
+  color: #ff5f57;
+}
+
+.tp-dot-yellow {
+  color: #febc2e;
+}
+
+.tp-dot-green {
+  color: #28c840;
+}
+
+.tp-path {
+  padding-left: 8px;
+  color: #8b949e;
+}
+
+.tp-term-end {
+  padding: 0 0 14px;
+}
+
+.tp-header {
+  padding: 34px 40px 6px;
+}
+
+.tp-label {
+  margin: 0 0 12px;
+  font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.tp-h1 {
+  margin: 0 0 14px;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #16181d;
+}
+
+.tp-meta {
+  margin: 0 0 18px;
+  font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #6a6f7a;
+}
+
+.tp-excerpt {
+  margin: 0 0 6px;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  color: #6a6f7a;
+}
+
+.tp-post {
+  padding: 18px 40px 12px;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #2a2d34;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.tp-post p {
+  margin: 0 0 18px;
+}
+
+.tp-post h2 {
+  font-size: 24px;
+  line-height: 1.3;
+  margin: 40px 0 14px;
+  color: #16181d;
+}
+
+.tp-post h3 {
+  font-size: 20px;
+  line-height: 1.35;
+  margin: 32px 0 12px;
+  color: #16181d;
+}
+
+.tp-post h4 {
+  font-size: 18px;
+  line-height: 1.35;
+  margin: 28px 0 10px;
+  color: #16181d;
+}
+
+.tp-post a {
+  color: #b91c1c;
+  text-decoration: underline;
+}
+
+.tp-post ul,
+.tp-post ol {
+  margin: 0 0 18px;
+  padding-left: 24px;
+}
+
+.tp-post li {
+  margin: 6px 0;
+}
+
+.tp-post code {
+  font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+  font-size: 14px;
+}
+
+.tp-post p code,
+.tp-post li code {
+  background-color: #eef0f3;
+  color: #b4232f;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.tp-post pre {
+  margin: 22px 0;
+  padding: 16px 18px;
+  border-radius: 8px;
+  background-color: #24292e;
+  color: #e1e4e8;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.tp-post pre code {
+  font-size: 13px;
+}
+
+.tp-post blockquote {
+  margin: 22px 0;
+  padding: 2px 0 2px 18px;
+  border-left: 3px solid #24292e;
+  color: #4b4f58;
+}
+
+.tp-post table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 22px 0;
+}
+
+.tp-post th {
+  border: 1px solid #e3e4e8;
+  padding: 10px 12px;
+  background-color: #f7f7f9;
+  font-weight: 700;
+  text-align: left;
+}
+
+.tp-post td {
+  border: 1px solid #e3e4e8;
+  padding: 10px 12px;
+}
+
+.tp-post img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 22px 0;
+}
+
+/* The github-dark colors of each code role. */
+
+.tk-keyword {
+  color: #f97583;
+}
+
+.tk-string,
+.tk-string-expression {
+  color: #9ecbff;
+}
+
+.tk-comment {
+  color: #6a737d;
+}
+
+.tk-function {
+  color: #b392f0;
+}
+
+.tk-constant {
+  color: #79b8ff;
+}
+
+.tk-parameter,
+.tk-punctuation {
+  color: #e1e4e8;
+}
+
+.tk-link {
+  color: #dbedff;
+}
+
+.tk-inserted {
+  color: #85e89d;
+}
+
+.tk-deleted {
+  color: #fdaeb7;
+}
+
+.tk-changed {
+  color: #ffab70;
+}
+
+.tk-diff-mark {
+  user-select: none;
+}
+
+.tp-action {
+  padding: 4px 40px 34px;
+}
+
+.tp-button {
+  border: 1px solid #16181d;
+  border-radius: 6px;
+}
+
+.tp-button a {
+  display: inline-block;
+  padding: 10px 16px;
+  font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+  font-size: 13px;
+  color: #16181d;
+  text-decoration: none;
+}
+
+.tp-footer {
+  padding: 22px 40px;
+  border-top: 1px solid #e3e4e8;
+  background-color: #f7f7f9;
+  font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #6a6f7a;
+}
+
+.tp-footer p {
+  margin: 0;
+}
+
+.tp-footer a {
+  color: #6a6f7a;
+}
