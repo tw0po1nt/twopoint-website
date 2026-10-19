@@ -33,6 +33,7 @@
     <Compile Include="XmlFile.fs" />
     <Compile Include="Feed.fs" />
     <Compile Include="Layout.fs" />
+    <Compile Include="Newsletter.fs" />
     <Compile Include="PostPage.fs" />
     <Compile Include="SubscribePage.fs" />
     <Compile Include="UnsubscribePage.fs" />
@@ -55,6 +56,7 @@
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
     <PackageReference Include="Markdig" Version="1.4.1" />
     <PackageReference Include="Oxpecker.ViewEngine" Version="2.1.0" />
+    <PackageReference Include="PreMailer.Net" Version="2.7.4" />
     <PackageReference Include="SkiaSharp" Version="4.153.1" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
     <PackageReference Include="TextMateSharp" Version="2.0.4" />

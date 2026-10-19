@@ -86,6 +86,14 @@ let html (directive: Directive) =
       allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" \
       referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen loading=\"lazy\"></iframe>\n"
 
+/// An email client runs no widget and no iframe. The PDF link is relative to the post URL.
+let emailHtml (directive: Directive) =
+  match directive with
+  | Pdf _ -> "<p><a href=\"./\">See the PDF in the post</a></p>\n"
+  | YouTube id ->
+    $"<p><a href=\"https://www.youtube.com/watch?v={id}\">\
+      <img src=\"https://img.youtube.com/vi/{id}/hqdefault.jpg\" alt=\"Play the video on YouTube\"></a></p>\n"
+
 type DirectiveBlock(parser: BlockParser, directive: Result<Directive, string>) =
   inherit LeafBlock(parser)
   member _.Directive = directive

@@ -11,6 +11,13 @@ let private text (map: RenderMap) path = Encoding.UTF8.GetString(map[SiteFile pa
 let private pages (map: RenderMap) =
   RenderMap.sitePaths map |> Seq.filter _.EndsWith(".html") |> Seq.map (text map)
 
+let private newsletters (map: RenderMap) =
+  map
+  |> Map.toSeq
+  |> Seq.choose (function
+    | Newsletter _, render -> Some(Encoding.UTF8.GetString(render ()))
+    | _ -> None)
+
 /// Posts that give each part of the post page and the home page: a talk, a post with no series and no tags, posts with
 /// older and newer posts, and a post after the build time for the upcoming post banner.
 let private fixturePosts =
@@ -27,6 +34,17 @@ let tests =
       let fixture = RenderMap.create Stage.Production buildTime widgets (content fixturePosts)
       let css = text real (realContent.Value.Assets.Stylesheet.TrimStart '/')
       Expect.isEmpty (ClassCheck.check css (Seq.append (pages real) (pages fixture))) "The site CSS agrees with the output"
+    }
+
+    test "each class of the real newsletters and the fixture newsletters has a rule in the email CSS, and each rule has a use" {
+      let real = RenderMap.create Stage.Production buildTime widgets realContent.Value
+      let fixture = RenderMap.create Stage.Production buildTime widgets (content fixturePosts)
+      let email = realContent.Value.Email
+      let css = $"{email.Inline}\n{email.Embed}"
+
+      Expect.isEmpty
+        (ClassCheck.check css (Seq.append (newsletters real) (newsletters fixture)))
+        "The email CSS agrees with the newsletters"
     }
 
     test "a class with no rule fails" {

@@ -70,6 +70,11 @@ let siteText (map: RenderMap) path =
   | Some render -> Encoding.UTF8.GetString(render ())
   | None -> failtest $"The output has no '{path}'."
 
+let newsletterText (map: RenderMap) slug =
+  match map.TryFind(Newsletter slug) with
+  | Some render -> Encoding.UTF8.GetString(render ())
+  | None -> failtest $"The output has no newsletter for '{slug}'."
+
 let private widgetManifest =
   """{
   "entries": {
@@ -118,7 +123,8 @@ let contentWith (fetch: IImageFetch) (posts: Post list) =
   { Posts = posts
     Privacy = realContent.Value.Privacy
     Assets = assets
-    OgImages = OgImages.create fetch assets.DefaultImage posts |> ok }
+    OgImages = OgImages.create fetch assets.DefaultImage posts |> ok
+    Email = realContent.Value.Email }
 
 let content (posts: Post list) = contentWith anyImage posts
 

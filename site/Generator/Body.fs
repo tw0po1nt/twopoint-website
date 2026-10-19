@@ -173,20 +173,20 @@ type private CodeRenderer() =
 
     renderer.WriteLine "</code></pre>" |> ignore
 
-type private DirectiveRenderer() =
+type private DirectiveRenderer(html: Directive.Directive -> string) =
   inherit HtmlObjectRenderer<Directive.DirectiveBlock>()
 
   override _.Write(renderer: HtmlRenderer, block: Directive.DirectiveBlock) =
     match block.Directive with
-    | Ok directive -> renderer.EnsureLine().Write(Directive.html directive) |> ignore
+    | Ok directive -> renderer.EnsureLine().Write(html directive) |> ignore
     | Error _ -> ()
 
-let private render (document: MarkdownDocument) =
+let private render (directiveHtml: Directive.Directive -> string) (document: MarkdownDocument) =
   use writer = new StringWriter()
   let renderer = HtmlRenderer(writer)
   pipeline.Setup renderer
   renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeRenderer()) |> ignore
-  renderer.ObjectRenderers.Add(DirectiveRenderer())
+  renderer.ObjectRenderers.Add(DirectiveRenderer directiveHtml)
   renderer.Render document |> ignore
   writer.ToString()
 
@@ -253,7 +253,8 @@ let ofDocument (fetch: IImageFetch) (file: string) (document: MarkdownDocument) 
 
   if errors.IsEmpty then
     Ok
-      { Html = render document
+      { Html = render Directive.html document
+        EmailHtml = render Directive.emailHtml document
         Headings =
           List.zip3 headings ids texts
           |> List.map (fun (heading, id, text) -> { Level = heading.Level; Id = id; Text = text })
