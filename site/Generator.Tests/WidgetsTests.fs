@@ -17,6 +17,7 @@ let private manifest =
   """{
   "entries": {
     "comments": { "file": "comments-E.js", "imports": [ "chunk-B.js" ] },
+    "pdf": { "file": "pdf-G.js", "imports": [ "chunk-B.js" ] },
     "subscribe": { "file": "subscribe-A.js", "imports": [ "chunk-B.js" ] },
     "unsubscribe": { "file": "unsubscribe-F.js", "imports": [ "chunk-B.js" ] }
   },
@@ -28,6 +29,8 @@ let private files =
   Map
     [ "manifest.json", bytes manifest
       "comments-E.js", bytes "export{};"
+      "pdf-G.js", bytes "export{};"
+      "pdf.worker-H.js", bytes "export{};"
       "subscribe-A.js", bytes "export{};"
       "unsubscribe-F.js", bytes "export{};"
       "chunk-B.js", bytes "export{};"
@@ -45,6 +48,7 @@ let tests =
         { Entries =
             Map
               [ "comments", { File = "comments-E.js"; Imports = [ "chunk-B.js" ] }
+                "pdf", { File = "pdf-G.js"; Imports = [ "chunk-B.js" ] }
                 "subscribe", { File = "subscribe-A.js"; Imports = [ "chunk-B.js" ] }
                 "unsubscribe", { File = "unsubscribe-F.js"; Imports = [ "chunk-B.js" ] } ]
           Head = "head-C.js"
@@ -91,7 +95,8 @@ let tests =
         (errorsOf (files |> Map.add "manifest.json" (bytes manifest)))
         [ "site/Widgets/dist/manifest.json has no entry for the widget 'subscribe'."
           "site/Widgets/dist/manifest.json has no entry for the widget 'comments'."
-          "site/Widgets/dist/manifest.json has no entry for the widget 'unsubscribe'." ]
+          "site/Widgets/dist/manifest.json has no entry for the widget 'unsubscribe'."
+          "site/Widgets/dist/manifest.json has no entry for the widget 'pdf'." ]
         "The error names each widget"
     }
 
@@ -100,6 +105,7 @@ let tests =
         """{
   "entries": {
     "comments": { "file": "comments-E.js", "imports": [] },
+    "pdf": { "file": "pdf-G.js", "imports": [] },
     "subscribe": { "file": "subscribe-A.js", "imports": [] },
     "unsubscribe": { "file": "unsubscribe-F.js", "imports": [] },
     "search": { "file": "chunk-B.js", "imports": [] }
@@ -132,7 +138,12 @@ let tests =
       let created = Widgets.create files |> ok
       Expect.equal
         (created.Files |> Map.keys |> List.ofSeq)
-        [ "_/widgets/chunk-B.js"; "_/widgets/comments-E.js"; "_/widgets/subscribe-A.js"; "_/widgets/unsubscribe-F.js" ]
+        [ "_/widgets/chunk-B.js"
+          "_/widgets/comments-E.js"
+          "_/widgets/pdf-G.js"
+          "_/widgets/pdf.worker-H.js"
+          "_/widgets/subscribe-A.js"
+          "_/widgets/unsubscribe-F.js" ]
         "Only the bundles go to the site"
       Expect.equal created.HeadScript "(()=>{})();" "The head script is the text of its file"
     }

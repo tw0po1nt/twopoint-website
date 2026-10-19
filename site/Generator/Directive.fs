@@ -2,6 +2,8 @@
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module TwoPoint.Site.Generator.Directive
 
+open TwoPoint.Site.Widgets
+
 open Markdig.Parsers
 open Markdig.Syntax
 open System
@@ -71,7 +73,14 @@ let html (directive: Directive) =
   match directive with
   | Pdf file ->
     let href = WebUtility.HtmlEncode file.AbsoluteUri
-    $"<figure><a href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" download>Download</a></figure>\n"
+
+    let mount =
+      Contract.toAttributes (Contract.Widget.Pdf { File = file.AbsoluteUri })
+      |> List.map (fun (name, value) -> $" {name}=\"{WebUtility.HtmlEncode value}\"")
+      |> String.concat ""
+
+    $"<figure class=\"pdf\"><div{mount}></div>\
+      <a class=\"pdf-download\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" download>Download the PDF</a></figure>\n"
   | YouTube id ->
     $"<iframe src=\"https://www.youtube-nocookie.com/embed/{id}\" title=\"YouTube video player\" \
       allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" \

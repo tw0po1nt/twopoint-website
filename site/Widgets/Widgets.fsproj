@@ -22,9 +22,13 @@
     <Compile Include="CommentsView.fs" />
     <Compile Include="Unsubscribe.fs" />
     <Compile Include="UnsubscribeView.fs" />
+    <Compile Include="PdfJs.fs" />
+    <Compile Include="Pdf.fs" />
+    <Compile Include="PdfView.fs" />
     <Compile Include="Entries/Subscribe.fs" />
     <Compile Include="Entries/Comments.fs" />
     <Compile Include="Entries/Unsubscribe.fs" />
+    <Compile Include="Entries/Pdf.fs" />
   </ItemGroup>
 
   <ItemGroup>

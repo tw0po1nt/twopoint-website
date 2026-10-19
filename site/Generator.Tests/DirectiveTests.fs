@@ -30,10 +30,11 @@ let tests =
         "The video plays from youtube-nocookie.com"
     }
 
-    test "::pdf gives a figure with the static download link" {
+    test "::pdf gives a figure with the Pdf mount and the static download link" {
       Expect.equal
         (html $"#### Slides\n\n::pdf{{file=\"{slides}\"}}")
-        $"<h4 id=\"slides\">Slides</h4>\n<figure><a href=\"{slides}\" target=\"_blank\" rel=\"noopener noreferrer\" download>Download</a></figure>\n"
+        $"<h4 id=\"slides\">Slides</h4>\n<figure class=\"pdf\"><div data-widget=\"pdf\" data-file=\"{slides}\"></div>\
+          <a class=\"pdf-download\" href=\"{slides}\" target=\"_blank\" rel=\"noopener noreferrer\" download>Download the PDF</a></figure>\n"
         "The download link works with no script"
     }
 

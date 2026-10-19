@@ -115,8 +115,26 @@ let tests =
 
       Expect.stringContains
         (page slidesPost)
-        "<figure><a href=\"https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf\""
+        "<a class=\"pdf-download\" href=\"https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf\""
         "The talk links its slides"
+
+      Expect.stringContains
+        (page slidesPost)
+        "<div data-widget=\"pdf\" data-file=\"https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf\"></div>"
+        "The talk has the Pdf mount"
+    }
+
+    test "only a post with a ::pdf directive loads the Pdf entry" {
+      let pdfEntry = """<script type="module" src="/_/widgets/pdf-TEST.js"></script>"""
+      Expect.stringContains (page slidesPost) pdfEntry "The talk with slides loads the Pdf entry"
+
+      for post in realPosts.Value do
+        if post.Slug <> slidesPost then
+          Expect.isFalse ((page post.Slug).Contains "/_/widgets/pdf") $"{post.Slug} loads no Pdf code"
+
+      for urlPath in [ "index.html"; "subscribe/index.html"; "unsubscribe/index.html" ] do
+        let html = siteText (RenderMap.create Stage.Production buildTime widgets realContent.Value) urlPath
+        Expect.isFalse (html.Contains "/_/widgets/pdf") $"{urlPath} loads no Pdf code and no worker"
     }
 
     test "each pending page is on the pending URL list" {
