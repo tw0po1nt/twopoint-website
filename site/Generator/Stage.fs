@@ -30,6 +30,8 @@ module Stage =
 
   let parse (text: string) = all |> List.tryFind (fun stage -> name stage = text)
 
+  let url (config: StageConfig) (urlPath: string) = Uri(config.SiteUrl, urlPath).AbsoluteUri
+
   let private description = "A blog about programming, mostly functional"
 
   let private apiUrl = Uri "https://func-twopoint-website-api.azurewebsites.net"

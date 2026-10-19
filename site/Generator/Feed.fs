@@ -1,7 +1,6 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Feed
 
-open System
 open System.Globalization
 
 let urlPath = "/rss.xml"
@@ -19,7 +18,7 @@ let render (config: StageConfig) (posts: Post list) =
     writer.WriteElementString("link", config.SiteUrl.AbsoluteUri)
 
     for post in Blog.newestFirst posts do
-      let link = Uri(config.SiteUrl, Post.urlPath post).AbsoluteUri
+      let link = Stage.url config (Post.urlPath post)
       writer.WriteStartElement "item"
       writer.WriteElementString("title", post.FrontMatter.Title)
       writer.WriteElementString("link", link)

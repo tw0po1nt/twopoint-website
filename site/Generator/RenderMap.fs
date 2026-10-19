@@ -26,7 +26,6 @@ module RenderMap =
 
   let private file (urlPath: string) = SiteFile(SitePath.ofUrlPath urlPath)
 
-  /// Each HTML page, at its URL path.
   let private pages (config: StageConfig) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) =
     [ HomePage.urlPath, HomePage.robots, (fun () -> HomePage.render config content.Assets widgets buildTime content.Posts)
       SubscribePage.urlPath, SubscribePage.robots, (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
@@ -59,7 +58,7 @@ module RenderMap =
     let pages = pages config buildTime widgets content
 
     Map
-      [ SiteFile "robots.txt", text (fun () -> Robots.render config)
+      [ SiteFile "robots.txt", text (fun () -> Robots.render config Sitemap.indexUrlPath)
         StageMarker, text (fun () -> Stage.name stage)
         file Feed.urlPath, (fun () -> Feed.render config content.Posts)
         file Sitemap.indexUrlPath, (fun () -> Sitemap.renderIndex config)

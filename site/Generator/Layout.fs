@@ -53,8 +53,6 @@ let scriptTime (time: DateTimeOffset) =
 let shownDate (time: DateTimeOffset) =
   time.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
 
-let url (config: StageConfig) (urlPath: string) = Uri(config.SiteUrl, urlPath).AbsoluteUri
-
 let private robots (config: StageConfig) (page: Page) =
   match config.Indexable, page.Robots with
   | false, _ -> "noindex,nofollow"
@@ -80,17 +78,17 @@ let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (scri
     meta (name = "robots", content = robots config page)
 
     match page.UrlPath with
-    | Some urlPath -> link (rel = "canonical", href = url config urlPath)
+    | Some urlPath -> link (rel = "canonical", href = Stage.url config urlPath)
     | None -> ()
 
     meta().attr("property", "og:title").attr ("content", page.Title |> Option.defaultValue config.SiteTitle)
     meta().attr("property", "og:description").attr ("content", page.Description)
 
     match page.UrlPath with
-    | Some urlPath -> meta().attr("property", "og:url").attr ("content", url config urlPath)
+    | Some urlPath -> meta().attr("property", "og:url").attr ("content", Stage.url config urlPath)
     | None -> ()
 
-    meta().attr("property", "og:image").attr ("content", url config page.OgImage.UrlPath)
+    meta().attr("property", "og:image").attr ("content", Stage.url config page.OgImage.UrlPath)
     meta().attr("property", "og:image:width").attr ("content", string page.OgImage.Size.Width)
     meta().attr("property", "og:image:height").attr ("content", string page.OgImage.Size.Height)
     meta().attr("property", "og:type").attr ("content", ogType)
