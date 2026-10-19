@@ -5,6 +5,7 @@ open TwoPoint.Site.Generator
 
 open Expecto
 open System
+open System.IO
 open System.Text
 
 let private bytes (text: string) = Encoding.UTF8.GetBytes text
@@ -47,12 +48,14 @@ let private content =
 
 let private postError = "site/content/posts/a-post.md:12: The front matter has no 'title'."
 
-let private create previous widgets content =
-  DevSite.create previous Stage.Local DateTimeOffset.UnixEpoch widgets content
+let private load previous widgets content =
+  DevSite.load previous Stage.Local DateTimeOffset.UnixEpoch (fun () -> widgets) (fun () -> content)
 
-let private good = create DevSite.empty (Ok widgets) (Ok content)
+let private thrown () : Result<'T, string list> = raise (IOException "The file is in use.")
 
-let private failed = create good (Ok widgets) (Error [ postError; "The site has no <b>stylesheet</b>." ])
+let private good = load DevSite.empty (Ok widgets) (Ok content)
+
+let private failed = load good (Ok widgets) (Error [ postError; "The site has no <b>stylesheet</b>." ])
 
 let private reloadTag = "<script src=\"/_/widgets/dev-reload-D.js\"></script>"
 
@@ -89,7 +92,7 @@ let tests =
       Expect.equal (status, map) (200, "{}") "The source map loads"
     }
 
-    test "a model with errors gives a 500 error page for each path" {
+    test "a site with errors gives a 500 error page for each path" {
       for requestPath in [ "/"; "/privacy/"; "/robots.txt"; "/missing/" ] do
         let status, path, _ = wantContent (DevSite.reply failed requestPath "")
         Expect.equal status 500 $"{requestPath} gives the error status"
@@ -112,13 +115,13 @@ let tests =
       Expect.stringContains html $"{reloadTag}</body>" "The page reloads after a fix"
     }
 
-    test "the dev reload script still loads while the model has errors" {
+    test "the dev reload script still loads while the site has errors" {
       let status, _, _ = wantContent (DevSite.reply failed "/_/widgets/dev-reload-D.js" "")
       Expect.equal status 200 "The error page can reload"
     }
 
     test "a failed widget load keeps the dev files of the last good load" {
-      let broken = create good (Error [ "site/Widgets/dist/manifest.json does not exist." ]) (Ok content)
+      let broken = load good (Error [ "site/Widgets/dist/manifest.json does not exist." ]) (Ok content)
       Expect.equal broken.ReloadScript good.ReloadScript "The script stays"
       Expect.equal broken.DevFiles good.DevFiles "The files stay"
       let _, _, html = wantContent (DevSite.reply broken "/" "")
@@ -127,12 +130,30 @@ let tests =
     }
 
     test "a failed widget load and a failed content load give each error" {
-      let broken = create good (Error [ "A widget error." ]) (Error [ postError ])
-      Expect.equal (Expect.wantError broken.Map "The load fails") [ "A widget error."; postError ] "Both errors show"
+      let broken = load good (Error [ "A widget error." ]) (Error [ postError ])
+      Expect.equal (Expect.wantError broken.Render "The load fails") [ "A widget error."; postError ] "Both errors show"
+    }
+
+    test "a content load that throws gives the error page" {
+      let broken =
+        DevSite.load good Stage.Local DateTimeOffset.UnixEpoch (fun () -> Ok widgets) thrown
+
+      let status, _, html = wantContent (DevSite.reply broken "/" "")
+      Expect.equal status 500 "The page gives the error status"
+      Expect.stringContains html "<li>The file is in use.</li>" "The exception message shows"
+      Expect.stringContains html reloadTag "The page reloads after a fix"
+    }
+
+    test "a widget load that throws keeps the dev files of the last good load" {
+      let broken =
+        DevSite.load good Stage.Local DateTimeOffset.UnixEpoch thrown (fun () -> Ok content)
+
+      Expect.equal (Expect.wantError broken.Render "The load fails") [ "The file is in use." ] "The exception message shows"
+      Expect.equal broken.DevFiles good.DevFiles "The files stay"
     }
 
     test "the next good load shows the site again" {
-      let fixedSite = create failed (Ok widgets) (Ok content)
+      let fixedSite = load failed (Ok widgets) (Ok content)
       let status, _, _ = wantContent (DevSite.reply fixedSite "/privacy/" "")
       Expect.equal status 200 "The page loads"
     }

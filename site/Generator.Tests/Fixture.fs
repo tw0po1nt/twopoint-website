@@ -25,6 +25,8 @@ let anyImage =
     let hash = SHA256.HashData(Encoding.UTF8.GetBytes url.AbsoluteUri)
     Ok(jpeg 1600 900 (SKColor(hash[0], hash[1], hash[2]))))
 
+let anyImages = Images.ofFetch anyImage
+
 let recording (fetch: IImageFetch) =
   let calls = ResizeArray<string>()
 
@@ -51,7 +53,7 @@ let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{bo
 
 let file slug = $"site/content/posts/{slug}.md"
 
-let parse slug text = Post.parse (Images.ofFetch anyImage) (file slug) text
+let parse slug text = Post.parse anyImages (file slug) text
 
 let published slug text =
   match parse slug text with
@@ -111,7 +113,7 @@ let realRoot =
 
 let realContent =
   lazy
-    (match Site.loadContent (Images.ofFetch anyImage) realRoot.Value with
+    (match Site.loadContent anyImages realRoot.Value with
      | Ok content -> content
      | Error errors -> failtest (String.concat "\n" errors))
 

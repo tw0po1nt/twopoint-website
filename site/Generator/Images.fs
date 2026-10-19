@@ -13,6 +13,22 @@ type ImageSize = { Width: int; Height: int }
 /// `UrlPath` is from the root, for example `/_/og-1a2b3c4d.jpg`.
 type SizedImage = { UrlPath: string; Size: ImageSize }
 
+[<RequireQualifiedAccess>]
+module Memo =
+
+  /// The cache keeps no failure, so the next call tries again.
+  let byUrl (work: Uri -> Result<'T, string>) : Uri -> Result<'T, string> =
+    let cache = ConcurrentDictionary<string, 'T>()
+
+    fun url ->
+      match cache.TryGetValue url.AbsoluteUri with
+      | true, value -> Ok value
+      | false, _ ->
+        work url
+        |> Result.map (fun value ->
+          cache[url.AbsoluteUri] <- value
+          value)
+
 /// An error gives the reason in words, for example `HTTP 404`.
 type IImageFetch =
   abstract Get: Uri -> Result<byte array, string>
@@ -47,19 +63,11 @@ module ImageFetch =
 
           attempt 1 }
 
-  /// The cache keeps no failure, so the next call tries again.
   let memoize (fetch: IImageFetch) =
-    let images = ConcurrentDictionary<string, byte array>()
+    let get = Memo.byUrl fetch.Get
 
     { new IImageFetch with
-        member _.Get url =
-          match images.TryGetValue url.AbsoluteUri with
-          | true, bytes -> Ok bytes
-          | false, _ ->
-            fetch.Get url
-            |> Result.map (fun bytes ->
-              images[url.AbsoluteUri] <- bytes
-              bytes) }
+        member _.Get url = get url }
 
   let create () =
     http (new HttpClient(Timeout = TimeSpan.FromSeconds 30.0))

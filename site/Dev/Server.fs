@@ -51,7 +51,7 @@ let events (reloads: Watch.Reloads) (ctx: HttpContext) : Task =
   :> Task
 
 let private report (site: DevSite) =
-  match site.Map with
+  match site.Render with
   | Ok map -> printfn "dev: loaded the site, %d files" map.Count
   | Error errors ->
     eprintfn "dev: the site has %d errors" errors.Length
@@ -81,7 +81,8 @@ let start () =
   let reloads = Watch.Reloads()
 
   let load () =
-    site.Value <- DevSite.create site.Value stage DateTimeOffset.UtcNow (Site.loadWidgets root) (Site.loadContent images root)
+    site.Value <-
+      DevSite.load site.Value stage DateTimeOffset.UtcNow (fun () -> Site.loadWidgets root) (fun () -> Site.loadContent images root)
     report site.Value
     reloads.Send()
 

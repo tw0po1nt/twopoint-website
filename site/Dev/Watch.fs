@@ -8,13 +8,13 @@ open System.Threading
 open System.Threading.Tasks
 
 /// Calls `onChange` when a burst of changes in the folders stops for `delay`. Two calls never overlap.
-let folders (delay: TimeSpan) (folders: string list) (onChange: unit -> unit) : IDisposable =
+let folders (delay: TimeSpan) (paths: string list) (onChange: unit -> unit) : IDisposable =
   let gate = obj ()
   let timer = new Timer((fun _ -> lock gate onChange), null, Timeout.Infinite, Timeout.Infinite)
   let changed _ = timer.Change(delay, Timeout.InfiniteTimeSpan) |> ignore
 
   let watchers =
-    [ for folder in folders do
+    [ for folder in paths do
         Directory.CreateDirectory folder |> ignore
         let watcher = new FileSystemWatcher(folder, IncludeSubdirectories = true)
         watcher.Changed.Add changed

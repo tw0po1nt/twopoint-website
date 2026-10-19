@@ -92,23 +92,23 @@ let tests =
       Expect.notEqual (urlOf SKColors.Red) (urlOf SKColors.Blue) "New bytes give a new name"
     }
 
-    test "a source that does not download fails the build with the post slug and the URL" {
+    test "a source that does not download fails the build with the post file and the URL" {
       let failing = fetchWith (fun _ -> Error "HTTP 404, after 3 attempts")
 
       Expect.equal
         (OgImages.create (Images.ofFetch failing) realContent.Value.Assets.DefaultImage [ post "part-1" None (Some seriesImage); post "part-2" None (Some seriesImage) ])
         (Error
-          [ $"The post part-1 has the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts."
-            $"The post part-2 has the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts." ])
+          [ $"""{file "part-1"}:1: The front matter gives the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts."""
+            $"""{file "part-2"}:1: The front matter gives the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts.""" ])
         "Each post of the source fails"
     }
 
-    test "a source that is not an image fails the build with the post slug and the URL" {
+    test "a source that is not an image fails the build with the post file and the URL" {
       let page = fetchWith (fun _ -> Ok(Encoding.UTF8.GetBytes "<html>Not found</html>"))
 
       Expect.equal
         (OgImages.create (Images.ofFetch page) realContent.Value.Assets.DefaultImage [ post "a-post" (Some postImage) None ])
-        (Error [ $"The post a-post has the Open Graph image {postImage}, and the build cannot make its crop: the file is not an image." ])
+        (Error [ $"""{file "a-post"}:1: The front matter gives the Open Graph image {postImage}, and the build cannot make its crop: the file is not an image.""" ])
         "A file that is not an image fails"
     }
 
