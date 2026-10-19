@@ -38,6 +38,12 @@ module RenderMap =
         (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
         SiteFile(SitePath.ofUrlPath UnsubscribePage.urlPath),
         (fun () -> UnsubscribePage.render config content.Assets widgets content.Posts)
+        SiteFile(SitePath.ofUrlPath ListPage.seriesUrlPath),
+        (fun () -> ListPage.renderSeries config content.Assets widgets content.Posts)
+        for list in ListPage.all content.Posts do
+          for number in 1 .. (ListPage.pages content.Posts list).Length do
+            SiteFile(SitePath.ofUrlPath (Blog.pageUrlPath (ListPage.basePath list) number)),
+            (fun () -> ListPage.render config content.Assets widgets content.OgImages content.Posts list number)
         for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do
           for KeyValue(path, bytes) in files do
             SiteFile path, (fun () -> bytes)

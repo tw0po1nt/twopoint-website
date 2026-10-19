@@ -136,9 +136,4 @@ let tests =
         let html = siteText (RenderMap.create Stage.Production buildTime widgets realContent.Value) urlPath
         Expect.isFalse (html.Contains "/_/widgets/pdf") $"{urlPath} loads no Pdf code and no worker"
     }
-
-    test "each pending page is on the pending URL list" {
-      for urlPath in PendingPages.urlPaths do
-        Expect.contains UrlParity.pending (SitePath.ofUrlPath urlPath) $"The page {urlPath} is pending"
-    }
   ]

@@ -30,7 +30,7 @@ type Assets =
 module Styles =
 
   /// The site CSS is these files, in this order.
-  let order = [ "fonts.css"; "theme.css"; "base.css"; "layout.css"; "post.css"; "home.css"; "widgets.css" ]
+  let order = [ "fonts.css"; "theme.css"; "base.css"; "layout.css"; "post.css"; "home.css"; "list.css"; "widgets.css" ]
 
   let join (files: StyleFile list) : Result<string, string list> =
     let names = files |> List.map _.Name |> Set.ofList
