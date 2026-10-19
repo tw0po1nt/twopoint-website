@@ -48,8 +48,7 @@ let private links =
 let isoTime (time: DateTimeOffset) =
   time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
 
-/// A time for the head script, in the form of `Date.toISOString`, for example `2026-10-29T13:00:00.000Z`, so that the
-/// script can compare it with the current time as text.
+/// The form of `Date.toISOString`, so that the head script can compare the time with the current time as text.
 let scriptTime (time: DateTimeOffset) =
   time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
 

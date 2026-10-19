@@ -72,9 +72,11 @@ let tags (posts: Post list) =
 let latest (posts: Post list) =
   newestFirst posts |> List.tryFind _.FrontMatter.ShowOnHomepage
 
+let isUpcoming (buildTime: DateTimeOffset) (post: Post) = post.FrontMatter.PublishDate > buildTime
+
 let upcoming (buildTime: DateTimeOffset) (posts: Post list) =
   posts
-  |> List.filter (fun post -> post.FrontMatter.PublishDate > buildTime)
+  |> List.filter (isUpcoming buildTime)
   |> List.sortBy (fun post -> post.FrontMatter.PublishDate.UtcTicks, post.Slug)
   |> List.tryHead
 

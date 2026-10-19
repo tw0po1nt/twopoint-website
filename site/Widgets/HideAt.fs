@@ -6,8 +6,7 @@ module TwoPoint.Site.Widgets.HideAt
 /// The attribute of an element that the head script hides after a publish date, for example the upcoming post banner.
 let attribute = "data-hide-at"
 
-/// The attribute of a hidden element that the head script shows after a publish date, for example the Comments panel
-/// of an upcoming post.
+/// The attribute of a hidden element that the head script shows after a publish date, for example the Comments panel.
 let showAttribute = "data-show-at"
 
 /// `publishDate` and `now` are ISO 8601 UTC times in the form of `Date.toISOString`, for example

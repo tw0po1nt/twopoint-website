@@ -28,7 +28,6 @@ let private perform (props: Contract.CommentsProps) (effect: Comments.Effect) (d
     |> Promise.catch (fun _ -> dispatch Comments.Unanswered)
     |> Promise.start
 
-/// A storage call that throws, or a stored value that is not valid, gives no validations.
 let private readValidations () =
   try
     match localStorage.getItem Comments.storageKey with
@@ -37,7 +36,6 @@ let private readValidations () =
   with _ ->
     Map.empty
 
-/// A storage call that throws stores nothing.
 let private writeValidations (validations: Map<string, string>) =
   try
     let json = validations |> Map.map (fun _ id -> Encode.string id) |> Encode.dict |> Encode.toString 0
@@ -155,6 +153,7 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
           autocomplete = "name",
           placeholder = "optional",
           maxlength = 256,
+          disabled = Comments.isLocked (model ()),
           value = model().Name,
           onInput = fun event -> dispatch (Comments.NameChanged(text event))
         )
@@ -168,6 +167,7 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
           name = "email",
           autocomplete = "email",
           placeholder = "only to verify you",
+          disabled = Comments.isLocked (model ()),
           value = model().Email,
           onInput = (fun event -> dispatch (Comments.EmailChanged(text event))),
           onBlur = fun _ -> dispatch Comments.EmailLeft
@@ -185,6 +185,7 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
           name = "comment",
           rows = 4,
           maxlength = 1000,
+          disabled = Comments.isLocked (model ()),
           onInput = (fun event -> dispatch (Comments.CommentChanged(text event))),
           onBlur = fun _ -> dispatch Comments.CommentLeft
         )
@@ -195,7 +196,7 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
         p (class' = "comment-error", role = "alert") { "Write a comment." }
       }
 
-      button (type' = "submit", disabled = Comments.isSending (model ())) { buttonText (model ()) }
+      button (type' = "submit", disabled = Comments.isLocked (model ())) { buttonText (model ()) }
       p(class' = statusClass (model ())).attr ("aria-live", "polite") { statusText (model ()) }
 
       p (class' = "comment-note") {

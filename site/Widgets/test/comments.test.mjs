@@ -116,31 +116,10 @@ test('a submit with no comment shows the errors and sends nothing', async () => 
   );
 });
 
-test('a new email address gets a validation email that links back to the panel', async () => {
-  answer = () => json(200, { success: true, message: null, data: null });
-  type(field('name'), ' Reader ');
-  type(field('email'), 'reader@example.com');
-  type(field('comment'), ' Nice post & thanks ');
-  submit();
-  await settle();
-
-  const sent = callsTo('https://api.test/api/blog/commenters');
-  assert.equal(sent.length, 1, 'One validation request');
-  assert.equal(sent[0].init.method, 'POST');
-
-  assert.deepEqual(JSON.parse(sent[0].init.body), {
-    EmailAddress: 'reader@example.com',
-    Name: 'Reader',
-    RedirectUri: 'http://localhost:4321/posts/a-post/?email=reader%40example.com&name=Reader&comment=Nice%20post%20%26%20thanks#comments',
-  });
-
-  assert.equal(status().className, 'comment-status is-done');
-  assert.match(status().textContent, /sent an email to reader@example\.com/);
-});
-
 test('a refused comment shows the message of the API', async () => {
   answer = () => json(400, { success: false, message: 'The commenter is banned', data: null });
   type(field('email'), 'known@example.com');
+  type(field('comment'), ' Nice post & thanks ');
   submit();
   await settle();
   assert.equal(callsTo(listUrl).filter((call) => call.init.method === 'POST').length, 1, 'One post request');
@@ -169,4 +148,38 @@ test('a request with no answer shows that the site cannot get to the server', as
   submit();
   await settle();
   assert.match(status().textContent, /cannot get to the server/);
+});
+
+test('a new email address gets a validation email that links back to the panel, and the form locks', async () => {
+  answer = () => json(200, { success: true, message: null, data: null });
+  type(field('name'), ' Reader ');
+  type(field('email'), 'reader@example.com');
+  type(field('comment'), ' Nice post & thanks ');
+  submit();
+  await settle();
+
+  const sent = callsTo('https://api.test/api/blog/commenters');
+  assert.equal(sent.length, 1, 'One validation request');
+  assert.equal(sent[0].init.method, 'POST');
+
+  assert.deepEqual(JSON.parse(sent[0].init.body), {
+    EmailAddress: 'reader@example.com',
+    Name: 'Reader',
+    RedirectUri: 'http://localhost:4321/posts/a-post/?email=reader%40example.com&name=Reader&comment=Nice%20post%20%26%20thanks#comments',
+  });
+
+  assert.equal(status().className, 'comment-status is-done');
+  assert.match(status().textContent, /sent an email to reader@example\.com/);
+
+  assert.deepEqual(
+    ['name', 'email', 'comment'].map((name) => field(name).disabled),
+    [true, true, true],
+    'Each field is locked',
+  );
+  assert.equal(mount.querySelector('button[type="submit"]').disabled, true, 'The button is locked');
+
+  const before = calls.length;
+  submit();
+  await settle();
+  assert.equal(calls.length, before, 'A second submit sends nothing');
 });

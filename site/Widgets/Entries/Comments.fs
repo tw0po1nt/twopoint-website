@@ -33,7 +33,10 @@ let private watch (mount: HTMLElement) (props: Contract.CommentsProps) =
     panel.addEventListener ("toggle", fun _ -> loadOnce ())
   | None -> load mount props
 
-for mount, widget in Mounts.find "comments" do
+let private comments widget =
   match widget with
-  | Contract.Widget.Comments props -> watch mount props
-  | Contract.Widget.Subscribe _ -> ()
+  | Contract.Widget.Comments props -> Some props
+  | _ -> None
+
+for mount, props in Mounts.find "comments" comments do
+  watch mount props

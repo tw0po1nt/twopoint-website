@@ -9,7 +9,7 @@ open System
 /// The privacy policy names this `localStorage` key.
 let storageKey = "commenterValidations"
 
-/// The backend sets this query key. As a literal, it gets to the Comments entry with no import of this module.
+/// The backend sets this query key.
 [<Literal>]
 let validationIdKey = "commenterValidationId"
 
@@ -121,6 +121,17 @@ let isSending (model: Model) =
   | Posted
   | Failed _ -> false
 
+/// After a sent validation, the form stays locked until the reader comes back through the link in the email.
+let isLocked (model: Model) =
+  match model.Status with
+  | Validating
+  | Posting
+  | ValidationSent _ -> true
+  | Editing
+  | Validated
+  | Posted
+  | Failed _ -> false
+
 /// The backend adds the validation ID to the query of this URL.
 let redirectUri (model: Model) =
   let name = model.Name.Trim()
@@ -181,7 +192,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | CommentChanged comment -> { model with Comment = comment }, None
   | EmailLeft -> { model with EmailTouched = model.EmailTouched || model.Email.Trim() <> "" }, None
   | CommentLeft -> { model with CommentTouched = model.CommentTouched || model.Comment <> "" }, None
-  | Submitted when isSending model -> model, None
+  | Submitted when isLocked model -> model, None
   | Submitted when not (Subscribe.isValidEmail model.Email && isValidComment model.Comment) ->
     { model with
         EmailTouched = true

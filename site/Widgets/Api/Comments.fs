@@ -27,50 +27,26 @@ module Comments =
 
   let private invalid = { Success = false; Message = Some "An invalid response was received"; Data = None }
 
-  let getCommentsForPost uri slug : Promise<ApiResponse<Comment list>> = promise {
-    let! response =
-      fetchUnsafe $"{uri}/api/blog/posts/{slug}/comments" [
-        Method HttpMethod.GET
-        requestHeaders [ Accept "application/json" ]
-      ]
-
+  let inline private request<'T> (url: string) (properties: RequestProperties list) : Promise<ApiResponse<'T>> = promise {
+    let! response = fetchUnsafe url (requestHeaders [ Accept "application/json" ] :: properties)
     let! text = response.text ()
 
     return
-      Decode.Auto.fromString<ApiResponse<Comment list>>(text, caseStrategy = CamelCase)
+      Decode.Auto.fromString<ApiResponse<'T>>(text, caseStrategy = CamelCase)
       |> Result.defaultValue invalid
   }
 
-  let validateCommenter uri (commenterValidation: CommenterValidation) : Promise<ApiResponse<unit>> = promise {
-    let body = Encode.Auto.toString commenterValidation
+  let getCommentsForPost uri slug : Promise<ApiResponse<Comment list>> =
+    request $"{uri}/api/blog/posts/{slug}/comments" [ Method HttpMethod.GET ]
 
-    let! response =
-      fetchUnsafe $"{uri}/api/blog/commenters" [
-        Method HttpMethod.POST
-        requestHeaders [ Accept "application/json" ]
-        Body (U3.Case3 body)
-      ]
+  let validateCommenter uri (commenterValidation: CommenterValidation) : Promise<ApiResponse<unit>> =
+    request $"{uri}/api/blog/commenters" [
+      Method HttpMethod.POST
+      Body(U3.Case3(Encode.Auto.toString commenterValidation))
+    ]
 
-    let! text = response.text ()
-
-    return
-      Decode.Auto.fromString<ApiResponse<unit>>(text, caseStrategy = CamelCase)
-      |> Result.defaultValue invalid
-  }
-
-  let postComment uri slug (newComment: NewComment) : Promise<ApiResponse<unit>> = promise {
-    let body = Encode.Auto.toString newComment
-
-    let! response =
-      fetchUnsafe $"{uri}/api/blog/posts/{slug}/comments" [
-        Method HttpMethod.POST
-        requestHeaders [ Accept "application/json" ]
-        Body (U3.Case3 body)
-      ]
-
-    let! text = response.text ()
-
-    return
-      Decode.Auto.fromString<ApiResponse<unit>>(text, caseStrategy = CamelCase)
-      |> Result.defaultValue invalid
-  }
+  let postComment uri slug (newComment: NewComment) : Promise<ApiResponse<unit>> =
+    request $"{uri}/api/blog/posts/{slug}/comments" [
+      Method HttpMethod.POST
+      Body(U3.Case3(Encode.Auto.toString newComment))
+    ]

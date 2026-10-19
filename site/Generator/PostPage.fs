@@ -134,14 +134,13 @@ let private outline (post: Post) =
       }
   }
 
-/// For an upcoming post, the panel is hidden until the publish date, and the head script shows it from that date on.
+/// The head script shows the panel of an upcoming post from the publish date on.
 let private commentsPanel (config: StageConfig) (buildTime: DateTimeOffset) (post: Post) =
-  let publishDate = post.FrontMatter.PublishDate
   let panel = details (class' = "panel", id = "comments")
 
   let panel =
-    if publishDate > buildTime then
-      panel.attr("hidden", "").attr (HideAt.showAttribute, Layout.scriptTime publishDate)
+    if Blog.isUpcoming buildTime post then
+      panel.attr("hidden", "").attr (HideAt.showAttribute, Layout.scriptTime post.FrontMatter.PublishDate)
     else
       panel
 

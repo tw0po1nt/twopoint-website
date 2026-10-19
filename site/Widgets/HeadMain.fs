@@ -33,19 +33,19 @@ document.addEventListener (
 [<Emit "new Date().toISOString()">]
 let private now () : string = jsNative
 
-let private setHiddenAfter (attribute: string) (hidden: bool) (now: string) =
+let private forEachPast (attribute: string) (now: string) (change: HTMLElement -> unit) =
   let elements = document.querySelectorAll ("[" + attribute + "]")
 
   for index in 0 .. elements.length - 1 do
     let element = elements.item index :?> HTMLElement
 
     if HideAt.isPast now (element.getAttribute attribute) then
-      element.hidden <- hidden
+      change element
 
 let private applyPublishDates () =
   let now = now ()
-  setHiddenAfter HideAt.attribute true now
-  setHiddenAfter HideAt.showAttribute false now
+  forEachPast HideAt.attribute now (fun element -> element.hidden <- true)
+  forEachPast HideAt.showAttribute now (fun element -> element.hidden <- false)
 
 // The script runs in the head, before the parser gets to the body.
 document.addEventListener ("DOMContentLoaded", fun _ -> applyPublishDates ())

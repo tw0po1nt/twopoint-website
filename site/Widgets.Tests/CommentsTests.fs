@@ -187,6 +187,22 @@ let tests =
         Expect.equal model.Comment " Nice post & thanks " "The form keeps the comment"
       }
 
+      test "the form is locked while a request is open, and after a validation goes through" {
+        let validating, _ = run (filled "reader@example.com" @ [ Comments.Submitted ])
+        let posting, _ = run (filled "known@example.com" @ [ Comments.Submitted ])
+        let sent, _ = Comments.update (Comments.ValidationAnswered(answer true None)) validating
+
+        for name, model in [ "Validating", validating; "Posting", posting; "Validation sent", sent ] do
+          Expect.isTrue (Comments.isLocked model) $"{name}: the form is locked"
+          let again, effect = Comments.update Comments.Submitted model
+          Expect.isNone effect $"{name}: a submit sends nothing"
+          Expect.equal again model $"{name}: the model does not change"
+
+        let failed, _ = Comments.update Comments.Unanswered posting
+        Expect.isFalse (Comments.isLocked failed) "After a failed request, the form is not locked"
+        Expect.isFalse (Comments.isLocked start) "A new form is not locked"
+      }
+
       test "a post that goes through empties the form, and keeps the list and the validations" {
         let model, effect =
           run (
