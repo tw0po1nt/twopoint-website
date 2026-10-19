@@ -20,11 +20,16 @@ let private defaultImage: Asset =
   { Name = "images/default.jpg"
     Bytes = jpeg 1200 630 SKColors.Black }
 
-let private required =
+let private aboutPhoto: Asset =
+  { Name = "images/about.jpg"
+    Bytes = jpeg 800 1020 SKColors.Gray }
+
+let private favicons =
   [ asset "favicons/favicon.ico" "ico"
     asset "favicons/favicon.svg" "svg"
-    asset "favicons/apple-touch-icon.png" "png"
-    defaultImage ]
+    asset "favicons/apple-touch-icon.png" "png" ]
+
+let private required = favicons @ [ defaultImage; aboutPhoto ]
 
 let private create assets css =
   match Assets.create assets css with
@@ -106,14 +111,31 @@ let tests =
 
     test "a missing default image fails the build" {
       Expect.equal
-        (Assets.create (List.take 3 required) "")
+        (Assets.create (favicons @ [ aboutPhoto ]) "")
         (Error [ "site/content/assets/ has no images/default.jpg." ])
         "The default image is necessary"
 
       Expect.equal
-        (Assets.create (List.take 3 required @ [ asset "images/default.jpg" "text" ]) "")
+        (Assets.create (favicons @ [ asset "images/default.jpg" "text"; aboutPhoto ]) "")
         (Error [ "site/content/assets/images/default.jpg cannot be read: the file is not an image." ])
         "The default image is an image"
+    }
+
+    test "the About photo goes under /_/ with a hash, and its size comes from the file" {
+      let assets = create required ""
+
+      Expect.equal
+        assets.AboutPhoto
+        { UrlPath = $"/{Assets.sitePath aboutPhoto.Name aboutPhoto.Bytes}"
+          Size = { Width = 800; Height = 1020 } }
+        "The About photo has its hashed path and its size"
+    }
+
+    test "a missing About photo fails the build" {
+      Expect.equal
+        (Assets.create (favicons @ [ defaultImage ]) "")
+        (Error [ "site/content/assets/ has no images/about.jpg." ])
+        "The About photo is necessary"
     }
 
     test "the real default image is 1200×630" {

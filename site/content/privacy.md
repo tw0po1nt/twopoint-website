@@ -1,8 +1,9 @@
 ---
 title: Privacy policy
+description: The data that TwoPoint collects, why it collects the data, and how long it keeps the data.
 ---
 
-_Last updated: October 14, 2026_
+_Last updated: October 19, 2026_
 
 This page tells you what data twopoint.dev collects, why it collects the data, and how long it keeps the data.
 
@@ -47,6 +48,15 @@ email to your address before it accepts comments from you.
 
 The site keeps your commenter record and your comments until you ask for deletion. To delete them, send an email to
 [matt@twopoint.dev](mailto:matt@twopoint.dev).
+
+## Embedded videos
+
+A post can embed a YouTube video. The site embeds each video from `youtube-nocookie.com`, the privacy-enhanced mode of
+YouTube. When a video comes into view, your browser loads the YouTube player from Google, and Google gets your IP
+address, the video ID, and the domain of the site. In this mode, YouTube does not use cookies to track the videos that
+you watch. When you play a video, Google can store data in your browser and collect data about the view. The
+[Google privacy policy](https://policies.google.com/privacy) applies to this data. A page with no video loads nothing
+from YouTube.
 
 ## Browser storage
 

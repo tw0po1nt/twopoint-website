@@ -11,7 +11,19 @@ let private noAssets =
   { Files = Map.empty
     Stylesheet = ""
     Favicons = { Ico = ""; Svg = ""; AppleTouch = "" }
-    DefaultImage = { UrlPath = ""; Size = { Width = 0; Height = 0 } } }
+    DefaultImage = { UrlPath = ""; Size = { Width = 0; Height = 0 } }
+    AboutPhoto = { UrlPath = ""; Size = { Width = 0; Height = 0 } } }
+
+let private noPrivacy =
+  { File = "site/content/privacy.md"
+    Title = "Privacy policy"
+    Description = ""
+    Body =
+      { Html = ""
+        Headings = []
+        Anchors = Set.empty
+        Links = []
+        ReadingTime = 0 } }
 
 let private noWidgets =
   { Manifest =
@@ -27,6 +39,7 @@ let private map =
     DateTimeOffset.UnixEpoch
     noWidgets
     { Posts = []
+      Privacy = noPrivacy
       Assets = noAssets
       OgImages = { Files = Map.empty; ByPost = Map.empty } }
 

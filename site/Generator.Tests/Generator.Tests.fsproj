@@ -40,6 +40,9 @@
     <Compile Include="UnsubscribePageTests.fs" />
     <Compile Include="HomePageTests.fs" />
     <Compile Include="ListPageTests.fs" />
+    <Compile Include="AboutPageTests.fs" />
+    <Compile Include="PrivacyPageTests.fs" />
+    <Compile Include="NotFoundPageTests.fs" />
     <Compile Include="ClassCheck.fs" />
     <Compile Include="ClassCheckTests.fs" />
     <Compile Include="Main.fs" />

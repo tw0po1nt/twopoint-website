@@ -15,6 +15,7 @@ type RenderMap = Map<Output, Render>
 
 type Content =
   { Posts: Post list
+    Privacy: MarkdownPage
     Assets: Assets
     OgImages: OgImages }
 
@@ -38,6 +39,10 @@ module RenderMap =
         (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
         SiteFile(SitePath.ofUrlPath UnsubscribePage.urlPath),
         (fun () -> UnsubscribePage.render config content.Assets widgets content.Posts)
+        SiteFile(SitePath.ofUrlPath AboutPage.urlPath), (fun () -> AboutPage.render config content.Assets widgets content.Posts)
+        SiteFile(SitePath.ofUrlPath PrivacyPage.urlPath),
+        (fun () -> PrivacyPage.render config content.Assets widgets content.Posts content.Privacy)
+        SiteFile NotFoundPage.sitePath, (fun () -> NotFoundPage.render config content.Assets widgets content.Posts)
         SiteFile(SitePath.ofUrlPath ListPage.seriesUrlPath),
         (fun () -> ListPage.renderSeries config content.Assets widgets content.Posts)
         for page in ListPage.all content.Posts do

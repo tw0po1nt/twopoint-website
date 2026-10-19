@@ -40,7 +40,10 @@ let tests =
             "series/index.html"
             "robots.txt"
             "subscribe/index.html"
-            "unsubscribe/index.html" ])
+            "unsubscribe/index.html"
+            "about/index.html"
+            "privacy/index.html"
+            "404.html" ])
         "The output has no other post page"
     }
   ]

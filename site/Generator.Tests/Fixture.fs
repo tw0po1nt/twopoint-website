@@ -116,6 +116,7 @@ let contentWith (fetch: IImageFetch) (posts: Post list) =
   let assets = realContent.Value.Assets
 
   { Posts = posts
+    Privacy = realContent.Value.Privacy
     Assets = assets
     OgImages = OgImages.create fetch assets.DefaultImage posts |> ok }
 

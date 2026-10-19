@@ -10,7 +10,7 @@ open System.Threading.Tasks
 type ImageSize = { Width: int; Height: int }
 
 /// `UrlPath` is from the root, for example `/_/og-1a2b3c4d.jpg`.
-type OgImage = { UrlPath: string; Size: ImageSize }
+type SizedImage = { UrlPath: string; Size: ImageSize }
 
 /// An error gives the reason in words, for example `HTTP 404`.
 type IImageFetch =

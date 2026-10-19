@@ -11,7 +11,7 @@ let private target = post "b-post" "## First step\n\nText."
 
 let private check body =
   let posts = [ post "a-post" body; target ]
-  Links.check (RenderMap.create Stage.Production buildTime widgets (content posts) |> RenderMap.sitePaths) posts
+  Links.check (RenderMap.create Stage.Production buildTime widgets (content posts) |> RenderMap.sitePaths) (List.map Links.ofPost posts)
 
 [<Tests>]
 let tests =
@@ -45,7 +45,7 @@ let tests =
     test "a link to a heading that is not on the same post fails" {
       Expect.equal
         (check "Go to [the end](#end).")
-        [ errorAt "a-post" 9 "The post has no heading with the id 'end'." ]
+        [ errorAt "a-post" 9 "The page has no heading with the id 'end'." ]
         "The anchor must be on the same page"
     }
 
