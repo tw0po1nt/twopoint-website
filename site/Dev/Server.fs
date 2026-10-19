@@ -65,7 +65,12 @@ let private findRoot () =
   | Error message -> failwith message
 
 let startWidgetWatch () =
-  Watch.widgets (Path.Combine(findRoot (), "site", "Widgets"))
+  match Watch.widgets (Path.Combine(findRoot (), "site", "Widgets")) with
+  | Ok watch -> Some watch
+  | Error message ->
+    eprintfn "dev: the widget watch did not start: %s" message
+    eprintfn "  Run 'npm run watch' in site/Widgets, or put npm and node on the PATH of the SageFs daemon."
+    None
 
 /// SageFs adds its reload script only to an app that `RunAsync` or `Run` starts.
 let start () =

@@ -11,6 +11,7 @@
     <Compile Include="LookupTests.fs" />
     <Compile Include="DevSiteTests.fs" />
     <Compile Include="ImageCacheTests.fs" />
+    <Compile Include="WatchTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

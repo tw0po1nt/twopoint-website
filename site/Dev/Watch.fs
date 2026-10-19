@@ -2,6 +2,7 @@
 module TwoPoint.Site.Dev.Watch
 
 open System
+open System.ComponentModel
 open System.Diagnostics
 open System.IO
 open System.Threading
@@ -48,12 +49,15 @@ type Reloads() =
     previous.TrySetResult() |> ignore
 
 /// The process tree stops when the dev process stops.
-let widgets (widgetsFolder: string) : Process =
-  let watch =
-    Process.Start(ProcessStartInfo("npm", "run watch", WorkingDirectory = widgetsFolder, UseShellExecute = false))
+let widgets (widgetsFolder: string) : Result<Process, string> =
+  try
+    let watch =
+      Process.Start(ProcessStartInfo("npm", "run watch", WorkingDirectory = widgetsFolder, UseShellExecute = false))
 
-  AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
-    if not watch.HasExited then
-      watch.Kill true)
+    AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
+      if not watch.HasExited then
+        watch.Kill true)
 
-  watch
+    Ok watch
+  with :? Win32Exception as error ->
+    Error error.Message
