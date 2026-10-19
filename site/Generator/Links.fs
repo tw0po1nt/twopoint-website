@@ -13,16 +13,12 @@ let check (sitePaths: Set<string>) (posts: Post list) : PostError list =
     else
       None
 
-  let pending (path: string) =
-    PendingPages.urlPaths.Contains path && not (sitePaths.Contains(SitePath.ofUrlPath path))
-
-  let exists path = pending path || sitePaths.Contains(SitePath.ofUrlPath path)
+  let exists path = sitePaths.Contains(SitePath.ofUrlPath path)
 
   let problem (post: Post) target =
     match target with
     | SamePage anchor when post.Body.Anchors.Contains anchor -> None
     | SamePage anchor -> Some $"The post has no heading with the id '{anchor}'."
-    | Page(path, _) when pending path -> None
     | Page(path, _) when not (exists path) && exists $"{path}/" -> Some $"Add the trailing slash: {path}/"
     | Page(path, anchor) ->
       match anchorsAt (SitePath.ofUrlPath path), anchor with

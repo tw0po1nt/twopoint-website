@@ -56,8 +56,8 @@ let tests =
         "A page link has a trailing slash"
     }
 
-    test "a link to a page that is not in the output yet passes" {
-      Expect.isEmpty (check "Read [the series](/series/fable-reminders/).") "A pending page passes"
+    test "a link to a list page passes" {
+      Expect.isEmpty (check "Read [the one-offs](/category/one-offs/) and [page 1](/posts/).") "The list pages are in the output"
     }
 
     test "a link to a draft fails" {

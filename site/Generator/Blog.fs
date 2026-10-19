@@ -69,6 +69,22 @@ let tags (posts: Post list) =
   |> List.map (fun (_, uses) -> List.head uses, uses.Length)
   |> List.sortBy (fun (tag, count) -> -count, tag.Slug)
 
+/// Each category, in the order of its newest post.
+let categories (posts: Post list) =
+  newestFirst posts |> List.map _.FrontMatter.Category |> List.distinctBy _.Slug
+
+let pageSize = 6
+
+/// The newest posts are on page 1. With no post, the list has one empty page.
+let pages (posts: Post list) =
+  match newestFirst posts |> List.chunkBySize pageSize with
+  | [] -> [ [] ]
+  | pages -> pages
+
+/// `number` counts from 1. Page 1 has no number in its path.
+let pageUrlPath (basePath: string) (number: int) =
+  if number = 1 then basePath else $"{basePath}{number}/"
+
 let latest (posts: Post list) =
   newestFirst posts |> List.tryFind _.FrontMatter.ShowOnHomepage
 

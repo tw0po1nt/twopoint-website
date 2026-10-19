@@ -5,15 +5,8 @@ open TwoPoint.Site.Widgets
 
 open Oxpecker.ViewEngine
 open System
-open System.Globalization
 
 let urlPath = "/"
-
-let private prompt (command: string) =
-  p (class' = "prompt") {
-    span () { "~/twopoint" }
-    $" $ {command}"
-  }
 
 /// The banner for the first post after `buildTime`. The head script hides it after the publish date.
 let private banner (buildTime: DateTimeOffset) (posts: Post list) =
@@ -30,7 +23,7 @@ let private banner (buildTime: DateTimeOffset) (posts: Post list) =
 
 let private intro () =
   section (class' = "intro") {
-    prompt "cat README"
+    PostLog.prompt "cat README"
     h1 () { "A blog about programming, mostly functional." }
     p (class' = "byline") { "By Matthew Watt. F#, C#, Swift, and the odd conference talk." }
   }
@@ -39,7 +32,7 @@ let private latestCard (posts: Post list) (post: Post) =
   let frontMatter = post.FrontMatter
 
   section (class' = "latest") {
-    prompt "head -n 1 posts"
+    PostLog.prompt "head -n 1 posts"
 
     article () {
       p (class' = "meta") {
@@ -62,40 +55,19 @@ let private latestCard (posts: Post list) (post: Post) =
 
 let private log (posts: Post list) =
   section (class' = "log") {
-    prompt "ls -l posts --sort=date"
-
-    for year, posts in Blog.byYear posts do
-      h2 () { string year }
-
-      ol () {
-        for post in posts do
-          li () {
-            time (datetime = Layout.isoTime post.FrontMatter.PublishDate) {
-              post.FrontMatter.PublishDate.UtcDateTime.ToString("MM-dd", CultureInfo.InvariantCulture)
-            }
-
-            span (class' = "kind") { Blog.kind post }
-            a (href = Post.urlPath post) { post.FrontMatter.Title }
-          }
-      }
+    PostLog.prompt "ls -l posts --sort=date"
+    PostLog.years posts
   }
 
 let private seriesList (series: (Series * int) list) =
   section (class' = "series-list") {
-    prompt "ls series/"
-
-    ul () {
-      for series, count in series do
-        li () {
-          a (href = $"/series/{series.Slug}/") { $"{series.Slug}/" }
-          span () { $"""{count} {if count = 1 then "post" else "posts"} · {series.Excerpt}""" }
-        }
-    }
+    PostLog.prompt "ls series/"
+    PostLog.series series
   }
 
 let private subscribe (config: StageConfig) =
   section (class' = "home-subscribe") {
-    prompt "subscribe --email"
+    PostLog.prompt "subscribe --email"
     Mount.subscribe config
     p (class' = "note") { "Get an email for each new post. Each email has a link to unsubscribe." }
   }

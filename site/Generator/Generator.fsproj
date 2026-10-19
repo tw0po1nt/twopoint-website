@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="pending-pages.txt" LogicalName="pending-pages.txt" />
     <EmbeddedResource Include="Grammars/*.json" LogicalName="Grammars/%(Filename)%(Extension)" />
   </ItemGroup>
 
@@ -23,7 +22,6 @@
     <Compile Include="Images.fs" />
     <Compile Include="Body.fs" />
     <Compile Include="Post.fs" />
-    <Compile Include="PendingPages.fs" />
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
     <Compile Include="Assets.fs" />
@@ -35,6 +33,8 @@
     <Compile Include="PostPage.fs" />
     <Compile Include="SubscribePage.fs" />
     <Compile Include="UnsubscribePage.fs" />
+    <Compile Include="PostLog.fs" />
+    <Compile Include="ListPage.fs" />
     <Compile Include="HomePage.fs" />
     <Compile Include="RenderMap.fs" />
     <Compile Include="Site.fs" />
