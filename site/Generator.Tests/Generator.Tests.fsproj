@@ -48,6 +48,7 @@
     <Compile Include="NewsletterTests.fs" />
     <Compile Include="ClassCheck.fs" />
     <Compile Include="ClassCheckTests.fs" />
+    <Compile Include="UploadTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

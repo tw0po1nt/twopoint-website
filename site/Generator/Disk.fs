@@ -28,3 +28,23 @@ let write (outputFolder: string) (map: RenderMap) =
     let path = filePath outputFolder output
     Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
     File.WriteAllBytes(path, render ())
+
+let readStageMarker (outputFolder: string) =
+  let path = filePath outputFolder StageMarker
+  if File.Exists path then Some(File.ReadAllText path) else None
+
+type NewsletterFile = { Slug: string; Html: byte array }
+
+/// Gives the newsletters in slug order.
+let readNewsletters (outputFolder: string) =
+  let folder = newsletterDir outputFolder
+
+  if Directory.Exists folder then
+    Directory.GetFiles(folder, "*.html")
+    |> Array.sort
+    |> Array.map (fun path ->
+      { Slug = Path.GetFileNameWithoutExtension path
+        Html = File.ReadAllBytes path })
+    |> List.ofArray
+  else
+    []
