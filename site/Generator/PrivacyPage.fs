@@ -5,12 +5,14 @@ open Oxpecker.ViewEngine
 
 let urlPath = "/privacy/"
 
+let robots = Layout.Robots.Index
+
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) (privacy: MarkdownPage) =
   let page: Layout.Page =
     { Title = Some privacy.Title
       Description = privacy.Description
       UrlPath = Some urlPath
-      Robots = Layout.Robots.Index
+      Robots = robots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None

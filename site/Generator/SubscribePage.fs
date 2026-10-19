@@ -5,12 +5,14 @@ open Oxpecker.ViewEngine
 
 let urlPath = "/subscribe/"
 
+let robots = Layout.Robots.Index
+
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "Subscribe"
       Description = "Get an email for each new post on TwoPoint."
       UrlPath = Some urlPath
-      Robots = Layout.Robots.Index
+      Robots = robots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None

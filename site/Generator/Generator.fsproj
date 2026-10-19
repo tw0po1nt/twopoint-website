@@ -30,6 +30,8 @@
     <Compile Include="Mount.fs" />
     <Compile Include="OgImages.fs" />
     <Compile Include="Blog.fs" />
+    <Compile Include="XmlFile.fs" />
+    <Compile Include="Feed.fs" />
     <Compile Include="Layout.fs" />
     <Compile Include="PostPage.fs" />
     <Compile Include="SubscribePage.fs" />
@@ -40,6 +42,7 @@
     <Compile Include="PostLog.fs" />
     <Compile Include="ListPage.fs" />
     <Compile Include="HomePage.fs" />
+    <Compile Include="Sitemap.fs" />
     <Compile Include="RenderMap.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />

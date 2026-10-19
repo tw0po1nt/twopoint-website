@@ -87,7 +87,7 @@ The map [Wayfinder: convert twopoint.dev to F#](https://github.com/tw0po1nt/twop
 
 56. As a search engine, I want each canonical URL, sitemap entry, and RSS link to give a `200` with no redirect, so that I index the correct URL.
 57. As a search engine, I want a sitemap that lists only indexable pages, so that I do not crawl a `404` or a duplicate.
-58. As a search engine, I want `noindex` on staging, on `404.html`, and on `/category/series/`, so that I do not index duplicates.
+58. As a search engine, I want `noindex` on staging, on each tag page, on `404.html`, and on `/category/series/`, so that I do not index duplicates.
 59. As a social platform, I want the correct `og:image` size and a new image URL when the image changes, so that the card shows the current image.
 
 ### The developer and the agents
@@ -212,7 +212,7 @@ A value that does not change by stage is a constant, for example the Google site
 ### SEO, feed, and sitemap
 
 - The canonical URL of a post comes from its slug.
-- The robots meta is `index,follow`, or `noindex,follow` for `/category/series/` and `404.html`. When `Indexable` is false, each page gets `noindex,nofollow`.
+- The robots meta is `index,follow`, or `noindex,follow` for each tag page, `/category/series/`, and `404.html`. When `Indexable` is false, each page gets `noindex,nofollow`.
 - The sitemap lists each page with `index`, and no other page. The staging sitemap lists the same pages as the production sitemap.
 - `robots.txt` has `User-agent: *` and an empty `Disallow:`. When `Indexable` is true, it also has the `Sitemap` line.
 - The RSS feed keeps its shape: the channel title `TwoPoint’s Blog`, and for each post `title`, `link`, `guid`, `description`, and `pubDate`.

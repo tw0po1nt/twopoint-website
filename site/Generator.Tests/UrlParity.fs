@@ -16,7 +16,7 @@ let urls = readList "urls.txt"
 
 let pending = readList "pending-urls.txt"
 
-let check (output: Set<string>) =
+let checkWith (pending: Set<string>) (output: Set<string>) =
   let missing =
     Set.difference (Set.difference urls pending) output
     |> Seq.map (fun path -> $"The output has no '{path}'.")
@@ -26,3 +26,5 @@ let check (output: Set<string>) =
     |> Seq.map (fun path -> $"The output has '{path}'. Remove it from the pending list.")
 
   Seq.append missing written |> List.ofSeq
+
+let check = checkWith pending

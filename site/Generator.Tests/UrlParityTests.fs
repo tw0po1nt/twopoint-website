@@ -28,10 +28,10 @@ let tests =
     }
 
     test "the check fails when a pending path is in the output" {
-      let output = RenderMap.create Stage.Production buildTime widgets realContent.Value |> RenderMap.sitePaths |> Set.add "rss.xml"
+      let output = RenderMap.create Stage.Production buildTime widgets realContent.Value |> RenderMap.sitePaths
 
       Expect.equal
-        (UrlParity.check output)
+        (UrlParity.checkWith (set [ "rss.xml" ]) output)
         [ "The output has 'rss.xml'. Remove it from the pending list." ]
         "A pending path in the output fails"
     }

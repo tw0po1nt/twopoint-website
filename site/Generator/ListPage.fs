@@ -61,6 +61,14 @@ let all (posts: Post list) =
 let urlPath (page: Page) =
   Blog.pageUrlPath (basePath page.List) page.Number
 
+let robots (page: Page) =
+  match page.List with
+  | PostList.Tag _ -> Layout.Robots.NoIndex
+  | list when isSeriesCategory list -> Layout.Robots.NoIndex
+  | _ -> Layout.Robots.Index
+
+let seriesRobots = Layout.Robots.Index
+
 let private heading (list: PostList) =
   match list with
   | PostList.Posts -> "Posts"
@@ -116,7 +124,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (ogImages: 
       Description = description list
       // `/category/series/` lists the posts of the series pages, so it sends search engines to `/series/`.
       UrlPath = Some(if isSeriesCategory list then seriesUrlPath else urlPath page)
-      Robots = if isSeriesCategory list then Layout.Robots.NoIndex else Layout.Robots.Index
+      Robots = robots page
       OgType = Layout.OgType.Website
       OgImage = ogImage
       Current = None
@@ -143,7 +151,7 @@ let renderSeries (config: StageConfig) (assets: Assets) (widgets: Widgets) (post
     { Title = Some "Series"
       Description = description
       UrlPath = Some seriesUrlPath
-      Robots = Layout.Robots.Index
+      Robots = seriesRobots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None

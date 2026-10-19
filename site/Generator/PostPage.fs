@@ -67,7 +67,7 @@ let private frontMatterBlock (post: Post) (position: Blog.SeriesPosition option)
   }
 
 let private shareLinks (config: StageConfig) (post: Post) =
-  let url = Uri.EscapeDataString(Layout.url config (Post.urlPath post))
+  let url = Uri.EscapeDataString(Stage.url config (Post.urlPath post))
   let text = Uri.EscapeDataString post.FrontMatter.Title
 
   let newTab =
@@ -149,6 +149,8 @@ let private commentsPanel (config: StageConfig) (buildTime: DateTimeOffset) (pos
     Mount.comments config post.Slug
   }
 
+let robots = Layout.Robots.Index
+
 let render
   (config: StageConfig)
   (assets: Assets)
@@ -165,7 +167,7 @@ let render
     { Title = Some frontMatter.Title
       Description = frontMatter.Excerpt
       UrlPath = Some(Post.urlPath post)
-      Robots = Layout.Robots.Index
+      Robots = robots
       OgType = Layout.OgType.Article
       OgImage = ogImage
       Current = Some post

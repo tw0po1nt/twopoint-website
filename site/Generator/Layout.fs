@@ -33,8 +33,6 @@ let private emDash = string (char 0x2014)
 
 let private googleSiteVerification = "Ej-5oQD6F_zuV5I59TTGQwLOdR6h4mpj6Fe-uZlX38k"
 
-let private feedTitle = $"TwoPoint{char 0x2019}s Blog"
-
 let githubUrl = "https://github.com/tw0po1nt"
 
 let private links =
@@ -54,8 +52,6 @@ let scriptTime (time: DateTimeOffset) =
 
 let shownDate (time: DateTimeOffset) =
   time.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-
-let url (config: StageConfig) (urlPath: string) = Uri(config.SiteUrl, urlPath).AbsoluteUri
 
 let private robots (config: StageConfig) (page: Page) =
   match config.Indexable, page.Robots with
@@ -82,17 +78,17 @@ let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (scri
     meta (name = "robots", content = robots config page)
 
     match page.UrlPath with
-    | Some urlPath -> link (rel = "canonical", href = url config urlPath)
+    | Some urlPath -> link (rel = "canonical", href = Stage.url config urlPath)
     | None -> ()
 
     meta().attr("property", "og:title").attr ("content", page.Title |> Option.defaultValue config.SiteTitle)
     meta().attr("property", "og:description").attr ("content", page.Description)
 
     match page.UrlPath with
-    | Some urlPath -> meta().attr("property", "og:url").attr ("content", url config urlPath)
+    | Some urlPath -> meta().attr("property", "og:url").attr ("content", Stage.url config urlPath)
     | None -> ()
 
-    meta().attr("property", "og:image").attr ("content", url config page.OgImage.UrlPath)
+    meta().attr("property", "og:image").attr ("content", Stage.url config page.OgImage.UrlPath)
     meta().attr("property", "og:image:width").attr ("content", string page.OgImage.Size.Width)
     meta().attr("property", "og:image:height").attr ("content", string page.OgImage.Size.Height)
     meta().attr("property", "og:type").attr ("content", ogType)
@@ -100,7 +96,7 @@ let private head (config: StageConfig) (assets: Assets) (widgets: Widgets) (scri
     meta().attr("property", "og:site_name").attr ("content", config.OgSiteName)
     meta (name = "twitter:card", content = "summary_large_image")
     meta (name = "google-site-verification", content = googleSiteVerification)
-    link (rel = "alternate", type' = "application/rss+xml", title = feedTitle, href = "/rss.xml")
+    link (rel = "alternate", type' = "application/rss+xml", title = Feed.title, href = Feed.urlPath)
     link(rel = "icon", href = assets.Favicons.Ico).attr ("sizes", "32x32")
     link (rel = "icon", type' = "image/svg+xml", href = assets.Favicons.Svg)
     link (rel = "apple-touch-icon", href = assets.Favicons.AppleTouch)
@@ -142,7 +138,7 @@ let private footerLinks () =
   Fragment() {
     a (href = "/privacy/") { "/privacy" }
     a (href = githubUrl) { "github" }
-    a (href = "/rss.xml") { "rss.xml" }
+    a (href = Feed.urlPath) { "rss.xml" }
   }
 
 let private explorer (config: StageConfig) (posts: Post list) (current: Post option) =
