@@ -26,7 +26,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 const entry = pathToFileURL(path.resolve('dist', manifest.entries.unsubscribe.file)).href;
 let loads = 0;
 
-// Each page load runs the entry again, so the import URL is new each time.
+// The module loader runs a module only one time for each URL.
 const open = async (search) => {
   calls.length = 0;
   history.replaceState(null, '', `/unsubscribe/${search}`);

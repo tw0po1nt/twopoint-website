@@ -17,9 +17,10 @@ type Msg =
 
 type Effect = Cancel of SubscriptionCancellation
 
-let subscriptionIdKey = "subscriptionId"
+/// The backend sets this query key.
+[<Literal>]
+let private subscriptionIdKey = "subscriptionId"
 
-/// `query` is the list of the name and value pairs of the query string of the page.
 let init (query: (string * string) list) : Model * Effect option =
   match query |> List.tryFind (fun (name, _) -> name = subscriptionIdKey) with
   | Some(_, id) when id.Trim() <> "" -> Sending, Some(Cancel { SubscriptionId = id.Trim() })

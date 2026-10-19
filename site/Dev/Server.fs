@@ -27,10 +27,13 @@ let private respond (ctx: HttpContext) status path (render: Render) : Task =
   ctx.Response.Body.WriteAsync(ReadOnlyMemory(render ())).AsTask()
 
 let private serveMap (ctx: HttpContext) (map: RenderMap) : Task =
-  match Lookup.find map ctx.Request.Path.Value, Lookup.folder map ctx.Request.Path.Value with
+  let redirect =
+    Lookup.trailingSlashRedirect map ctx.Request.Path.Value ctx.Request.QueryString.Value
+
+  match Lookup.find map ctx.Request.Path.Value, redirect with
   | Some (path, render), _ -> respond ctx StatusCodes.Status200OK path render
-  | None, Some folder ->
-    ctx.Response.Redirect(folder + ctx.Request.QueryString.Value, true)
+  | None, Some target ->
+    ctx.Response.Redirect(target, true)
     Task.CompletedTask
   | None, None ->
     match Lookup.find map "/404.html" with
