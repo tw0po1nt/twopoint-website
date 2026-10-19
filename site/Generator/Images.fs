@@ -1,5 +1,6 @@
 namespace TwoPoint.Site.Generator
 
+open FsToolkit.ErrorHandling
 open SkiaSharp
 open System
 open System.Collections.Concurrent
@@ -65,6 +66,12 @@ module ImageFetch =
     |> withRetries 3 (TimeSpan.FromSeconds 1.0)
     |> memoize
 
+/// The image work of a run, by the URL of the source image.
+type IImages =
+  abstract Size: Uri -> Result<ImageSize, string>
+  /// A JPEG crop for `og:image`, and its size.
+  abstract OgCrop: Uri -> Result<byte array * ImageSize, string>
+
 [<RequireQualifiedAccess>]
 module Images =
 
@@ -112,3 +119,16 @@ module Images =
       use image = surface.Snapshot()
       use data = image.Encode(SKEncodedImageFormat.Jpeg, 85)
       Ok(data.ToArray())
+
+  /// Each call downloads the source and does the image work again.
+  let ofFetch (fetch: IImageFetch) =
+    { new IImages with
+        member _.Size url = fetch.Get url |> Result.bind size
+
+        member _.OgCrop url =
+          result {
+            let! source = fetch.Get url
+            let! bytes = ogCrop source
+            let! size = size bytes
+            return bytes, size
+          } }

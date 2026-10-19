@@ -8,7 +8,7 @@ let private outputFolder (root: string) = Path.Combine(root, "site", "dist")
 
 let private build (root: string) (stage: Stage) =
   result {
-    let! map = Site.load (ImageFetch.create ()) root stage DateTimeOffset.UtcNow
+    let! map = Site.load (Images.ofFetch (ImageFetch.create ())) root stage DateTimeOffset.UtcNow
     let folder = outputFolder root
     Disk.write folder map
     return $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}"

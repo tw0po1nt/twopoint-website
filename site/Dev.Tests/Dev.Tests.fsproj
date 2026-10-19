@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <Compile Include="LookupTests.fs" />
+    <Compile Include="DevSiteTests.fs" />
+    <Compile Include="ImageCacheTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

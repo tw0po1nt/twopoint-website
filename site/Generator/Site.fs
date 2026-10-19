@@ -23,13 +23,13 @@ let root (start: string) =
 
   find (DirectoryInfo start)
 
-let loadPosts (fetch: IImageFetch) (root: string) : Result<Post list, PostError list> =
+let loadPosts (images: IImages) (root: string) : Result<Post list, PostError list> =
   Directory.GetFiles(Path.Combine(root, postsFolder), "*.md")
   |> Array.sort
   |> List.ofArray
   |> List.traverseResultA (fun path ->
     let file = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/')
-    Post.parse fetch file (File.ReadAllText path))
+    Post.parse images file (File.ReadAllText path))
   |> Result.mapError List.concat
   |> Result.map (
     List.choose (function
@@ -57,24 +57,24 @@ let loadAssets (root: string) : Result<Assets, string list> =
 
   Styles.join styles |> Result.bind (Assets.create assets)
 
-let loadPrivacy (fetch: IImageFetch) (root: string) : Result<MarkdownPage, PostError list> =
-  MarkdownPage.parse fetch privacyFile (File.ReadAllText(Path.Combine(root, privacyFile)))
+let loadPrivacy (images: IImages) (root: string) : Result<MarkdownPage, PostError list> =
+  MarkdownPage.parse images privacyFile (File.ReadAllText(Path.Combine(root, privacyFile)))
 
 let loadEmail (root: string) : EmailStyles =
   let read name = File.ReadAllText(Path.Combine(root, emailFolder, name))
   { Inline = read "inline.css"; Embed = read "embed.css" }
 
-let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string list> =
+let loadContent (images: IImages) (root: string) : Result<Content, string list> =
   result {
     let! posts, privacy, assets =
       validation {
-        let! posts = loadPosts fetch root |> Result.mapError (List.map PostError.format)
-        and! privacy = loadPrivacy fetch root |> Result.mapError (List.map PostError.format)
+        let! posts = loadPosts images root |> Result.mapError (List.map PostError.format)
+        and! privacy = loadPrivacy images root |> Result.mapError (List.map PostError.format)
         and! assets = loadAssets root
         return posts, privacy, assets
       }
 
-    let! ogImages = OgImages.create fetch assets.DefaultImage posts
+    let! ogImages = OgImages.create images assets.DefaultImage posts
 
     return
       { Posts = posts
@@ -106,9 +106,9 @@ let renderMap (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (con
   | [] -> Ok map
   | errors -> Error(List.map PostError.format errors)
 
-let load (fetch: IImageFetch) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap, string list> =
+let load (images: IImages) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap, string list> =
   result {
     let! widgets = loadWidgets root
-    let! content = loadContent fetch root
+    let! content = loadContent images root
     return! renderMap stage buildTime widgets content
   }

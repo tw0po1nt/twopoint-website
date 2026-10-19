@@ -148,6 +148,27 @@ let tests =
       Expect.equal created.HeadScript "(()=>{})();" "The head script is the text of its file"
     }
 
+    test "the dev reload script and each source map are dev files, and the site gets none of them" {
+      let created =
+        files
+        |> Map.add "subscribe-A.js.map" (bytes "{}")
+        |> Map.add "dev-reload-D.js.map" (bytes "{}")
+        |> Widgets.create
+        |> ok
+
+      Expect.equal
+        (created.DevFiles |> Map.keys |> List.ofSeq)
+        [ "_/widgets/dev-reload-D.js"; "_/widgets/dev-reload-D.js.map"; "_/widgets/subscribe-A.js.map" ]
+        "The dev server gets the dev files"
+
+      let map = RenderMap.create Stage.Production buildTime created (content [])
+
+      Expect.isEmpty
+        [ for KeyValue(path, _) in created.DevFiles do
+            if map.ContainsKey(SiteFile path) then path ]
+        "The build writes no dev file"
+    }
+
     test "the render map has each widget file" {
       let map = RenderMap.create Stage.Production buildTime (Widgets.create files |> ok) (content [])
       Expect.isTrue (map.ContainsKey(SiteFile "_/widgets/chunk-B.js")) "The map has the chunk"

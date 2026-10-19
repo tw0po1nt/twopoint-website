@@ -51,7 +51,7 @@ let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{bo
 
 let file slug = $"site/content/posts/{slug}.md"
 
-let parse slug text = Post.parse anyImage (file slug) text
+let parse slug text = Post.parse (Images.ofFetch anyImage) (file slug) text
 
 let published slug text =
   match parse slug text with
@@ -111,7 +111,7 @@ let realRoot =
 
 let realContent =
   lazy
-    (match Site.loadContent anyImage realRoot.Value with
+    (match Site.loadContent (Images.ofFetch anyImage) realRoot.Value with
      | Ok content -> content
      | Error errors -> failtest (String.concat "\n" errors))
 
@@ -123,7 +123,7 @@ let contentWith (fetch: IImageFetch) (posts: Post list) =
   { Posts = posts
     Privacy = realContent.Value.Privacy
     Assets = assets
-    OgImages = OgImages.create fetch assets.DefaultImage posts |> ok
+    OgImages = OgImages.create (Images.ofFetch fetch) assets.DefaultImage posts |> ok
     Email = realContent.Value.Email }
 
 let content (posts: Post list) = contentWith anyImage posts

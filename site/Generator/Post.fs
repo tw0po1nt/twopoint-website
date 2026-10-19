@@ -6,7 +6,7 @@ open Markdig.Extensions.Yaml
 open System.IO
 
 /// `file` is the path from the repo root.
-let parse (fetch: IImageFetch) (file: string) (text: string) : Result<ParsedPost, PostError list> =
+let parse (images: IImages) (file: string) (text: string) : Result<ParsedPost, PostError list> =
   let slug = Path.GetFileNameWithoutExtension file
   let document = Markdown.Parse(text, Body.pipeline)
 
@@ -19,7 +19,7 @@ let parse (fetch: IImageFetch) (file: string) (text: string) : Result<ParsedPost
       if frontMatter.Draft then
         Ok Draft
       else
-        Body.ofDocument fetch file document
+        Body.ofDocument images file document
         |> Result.map (fun body ->
           Published
             { File = file

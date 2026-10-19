@@ -96,7 +96,7 @@ let tests =
       let failing = fetchWith (fun _ -> Error "HTTP 404, after 3 attempts")
 
       Expect.equal
-        (OgImages.create failing realContent.Value.Assets.DefaultImage [ post "part-1" None (Some seriesImage); post "part-2" None (Some seriesImage) ])
+        (OgImages.create (Images.ofFetch failing) realContent.Value.Assets.DefaultImage [ post "part-1" None (Some seriesImage); post "part-2" None (Some seriesImage) ])
         (Error
           [ $"The post part-1 has the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts."
             $"The post part-2 has the Open Graph image {seriesImage}, and the build cannot make its crop: HTTP 404, after 3 attempts." ])
@@ -107,7 +107,7 @@ let tests =
       let page = fetchWith (fun _ -> Ok(Encoding.UTF8.GetBytes "<html>Not found</html>"))
 
       Expect.equal
-        (OgImages.create page realContent.Value.Assets.DefaultImage [ post "a-post" (Some postImage) None ])
+        (OgImages.create (Images.ofFetch page) realContent.Value.Assets.DefaultImage [ post "a-post" (Some postImage) None ])
         (Error [ $"The post a-post has the Open Graph image {postImage}, and the build cannot make its crop: the file is not an image." ])
         "A file that is not an image fails"
     }

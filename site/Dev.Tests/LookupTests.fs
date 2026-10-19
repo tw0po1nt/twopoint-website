@@ -32,7 +32,8 @@ let private noWidgets =
         Head = ""
         DevReload = "" }
     HeadScript = ""
-    Files = Map.empty }
+    Files = Map.empty
+    DevFiles = Map.empty }
 
 let private post slug =
   { File = $"site/content/posts/{slug}.md"
