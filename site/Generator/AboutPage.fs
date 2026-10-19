@@ -5,12 +5,14 @@ open Oxpecker.ViewEngine
 
 let urlPath = "/about/"
 
+let robots = Layout.Robots.Index
+
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "About"
       Description = "Matthew Watt is a full-stack software engineer who writes about functional programming."
       UrlPath = Some urlPath
-      Robots = Layout.Robots.Index
+      Robots = robots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None

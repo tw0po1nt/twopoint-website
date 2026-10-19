@@ -18,6 +18,8 @@
     <Compile Include="StageTests.fs" />
     <Compile Include="CliTests.fs" />
     <Compile Include="RobotsTests.fs" />
+    <Compile Include="FeedTests.fs" />
+    <Compile Include="SitemapTests.fs" />
     <Compile Include="RenderMapTests.fs" />
     <Compile Include="SitePathTests.fs" />
     <Compile Include="SlugTests.fs" />

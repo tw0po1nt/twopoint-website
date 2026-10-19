@@ -212,7 +212,7 @@ A value that does not change by stage is a constant, for example the Google site
 ### SEO, feed, and sitemap
 
 - The canonical URL of a post comes from its slug.
-- The robots meta is `index,follow`, or `noindex,follow` for `/category/series/` and `404.html`. When `Indexable` is false, each page gets `noindex,nofollow`.
+- The robots meta is `index,follow`, or `noindex,follow` for each tag page, `/category/series/`, and `404.html`. When `Indexable` is false, each page gets `noindex,nofollow`.
 - The sitemap lists each page with `index`, and no other page. The staging sitemap lists the same pages as the production sitemap.
 - `robots.txt` has `User-agent: *` and an empty `Disallow:`. When `Indexable` is true, it also has the `Sitemap` line.
 - The RSS feed keeps its shape: the channel title `TwoPoint’s Blog`, and for each post `title`, `link`, `guid`, `description`, and `pubDate`.

@@ -5,12 +5,14 @@ open Oxpecker.ViewEngine
 
 let urlPath = "/unsubscribe/"
 
+let robots = Layout.Robots.Index
+
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "Unsubscribe"
       Description = "Stop the emails of new posts on TwoPoint."
       UrlPath = Some urlPath
-      Robots = Layout.Robots.Index
+      Robots = robots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None

@@ -5,13 +5,15 @@ open Oxpecker.ViewEngine
 
 let sitePath = "404.html"
 
+let robots = Layout.Robots.NoIndex
+
 /// GitHub Pages serves this page at each path with no file, so each link and asset path of the page starts at the root.
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "Page not found"
       Description = "The page does not exist on TwoPoint."
       UrlPath = None
-      Robots = Layout.Robots.NoIndex
+      Robots = robots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None

@@ -164,11 +164,16 @@ let tests =
         [ "posts/index.html", "/posts/"
           "category/talks/index.html", "/category/talks/"
           "series/fable-reminders/index.html", "/series/fable-reminders/"
-          "tag/net/index.html", "/tag/net/"
           "series/index.html", "/series/" ] do
         let html = page posts path
         Expect.stringContains html """<meta name="robots" content="index,follow">""" $"{path} is indexable"
         Expect.stringContains html $"""<link rel="canonical" href="https://twopoint.dev{url}">""" $"{path} has its own canonical URL"
+    }
+
+    test "a tag page has noindex,follow and its own canonical URL" {
+      let html = page [ partOne; talk ] "tag/net/index.html"
+      Expect.stringContains html """<meta name="robots" content="noindex,follow">""" "Search engines do not index the page"
+      Expect.stringContains html """<link rel="canonical" href="https://twopoint.dev/tag/net/">""" "The canonical URL is the tag page"
     }
 
     test "a tag page shows the tag title, so that fsharp shows as F#" {

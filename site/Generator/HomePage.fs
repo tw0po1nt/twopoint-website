@@ -8,6 +8,8 @@ open System
 
 let urlPath = "/"
 
+let robots = Layout.Robots.Index
+
 /// The banner for the first post after `buildTime`. The head script hides it after the publish date.
 let private banner (buildTime: DateTimeOffset) (posts: Post list) =
   Blog.upcoming buildTime posts
@@ -79,7 +81,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (buildTime:
     { Title = None
       Description = config.Description
       UrlPath = Some urlPath
-      Robots = Layout.Robots.Index
+      Robots = robots
       OgType = Layout.OgType.Website
       OgImage = assets.DefaultImage
       Current = None
