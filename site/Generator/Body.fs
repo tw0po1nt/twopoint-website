@@ -19,6 +19,9 @@ type private DirectiveExtension() =
     member _.Setup(pipeline: MarkdownPipelineBuilder) = pipeline.BlockParsers.Add(Directive.DirectiveParser())
     member _.Setup(_: MarkdownPipeline, _: IMarkdownRenderer) = ()
 
+let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
+  MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
+
 let rec private endsInSpace (node: Inline) =
   match node with
   | null
@@ -27,10 +30,21 @@ let rec private endsInSpace (node: Inline) =
   | :? LiteralInline as literal -> Char.IsWhiteSpace literal.Content.Text[literal.Content.End]
   | _ -> false
 
+let private isDecade (text: string) index =
+  index + 3 < text.Length
+  && Char.IsDigit text[index + 1]
+  && Char.IsDigit text[index + 2]
+  && text[index + 3] = 's'
+
 /// Curls each quote mark that SmartyPants leaves straight, because Markdig curls a quote only in a pair.
 let private educate (literal: LiteralInline) =
   let text = literal.Content.ToString().Replace("...", "…")
   let result = StringBuilder(text.Length)
+
+  let lookahead =
+    match literal.NextSibling with
+    | :? LiteralInline as next -> text + next.Content.ToString()
+    | _ -> text
 
   for index in 0 .. text.Length - 1 do
     let opens =
@@ -40,7 +54,7 @@ let private educate (literal: LiteralInline) =
         Char.IsWhiteSpace text[index - 1] || "([{".Contains text[index - 1]
 
     match text[index] with
-    | '\'' -> result.Append(if opens then '‘' else '’') |> ignore
+    | '\'' -> result.Append(if opens && not (isDecade lookahead index) then '‘' else '’') |> ignore
     | '"' -> result.Append(if opens then '“' else '”') |> ignore
     | c -> result.Append c |> ignore
 
@@ -51,7 +65,7 @@ type private TypographyExtension() =
     member _.Setup(pipeline: MarkdownPipelineBuilder) =
       pipeline.add_DocumentProcessed (
         ProcessDocumentDelegate(fun document ->
-          for literal in MarkdownObjectExtensions.Descendants<LiteralInline>(document :> MarkdownObject) |> List.ofSeq do
+          for literal in descendants<LiteralInline> document do
             educate literal)
       )
 
@@ -73,9 +87,6 @@ let pipeline =
     .Use(DirectiveExtension())
     .Use(TypographyExtension())
     .Build()
-
-let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
-  MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
 
 let rec private inlineText (node: Inline) =
   match node with

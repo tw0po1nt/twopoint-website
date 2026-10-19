@@ -126,9 +126,9 @@ let tests =
         "A quote mark with no pair curls by its position"
 
       Expect.equal
-        (html "A 'pair', (\"a\") and *'tis*.")
-        "<p>A &lsquo;pair&rsquo;, (&ldquo;a&rdquo;) and <em>‘tis</em>.</p>\n"
-        "A quote mark after a space, an opening bracket, or the start of an inline opens"
+        (html "A 'pair', (\"a\"), *\"b*, and the '90s.")
+        "<p>A &lsquo;pair&rsquo;, (&ldquo;a&rdquo;), <em>“b</em>, and the ’90s.</p>\n"
+        "A quote mark after a space, an opening bracket, or the start of an inline opens, but an apostrophe before a decade closes"
     }
 
     test "a quote mark in code stays straight" {

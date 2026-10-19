@@ -109,8 +109,6 @@ let diff (before: 'a list) (after: 'a list) =
 
   walk 0 0 []
 
-/// Groups the word edits into runs, each with up to five same words of
-/// context on each side.
 let wordRuns (edits: Choice<string, string, string> list) =
   let edits = List.toArray edits
   let changed = edits |> Array.map (function Choice1Of3 _ -> false | _ -> true)
