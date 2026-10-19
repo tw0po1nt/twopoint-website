@@ -8,7 +8,7 @@
       "rollForward": false
     },
     "sagefs": {
-      "version": "0.6.908",
+      "version": "0.6.910",
       "commands": ["sagefs"],
       "rollForward": false
     }
