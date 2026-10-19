@@ -12,18 +12,24 @@ type CommentsProps =
     Api: string
     Slug: string }
 
+type UnsubscribeProps =
+  { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
+    Api: string }
+
 [<RequireQualifiedAccess>]
 type Widget =
   | Subscribe of SubscribeProps
   | Comments of CommentsProps
+  | Unsubscribe of UnsubscribeProps
 
 /// The name of each case of `Widget`.
-let names = [ "subscribe"; "comments" ]
+let names = [ "subscribe"; "comments"; "unsubscribe" ]
 
 let name (widget: Widget) =
   match widget with
   | Widget.Subscribe _ -> "subscribe"
   | Widget.Comments _ -> "comments"
+  | Widget.Unsubscribe _ -> "unsubscribe"
 
 let toAttributes (widget: Widget) : (string * string) list =
   [ "data-widget", name widget
@@ -31,7 +37,8 @@ let toAttributes (widget: Widget) : (string * string) list =
     | Widget.Subscribe props -> "data-api", props.Api
     | Widget.Comments props ->
       "data-api", props.Api
-      "data-slug", props.Slug ]
+      "data-slug", props.Slug
+    | Widget.Unsubscribe props -> "data-api", props.Api ]
 
 let private find (attributes: (string * string) list) (key: string) =
   attributes |> List.tryFind (fun (name, _) -> name = key) |> Option.map snd
@@ -69,6 +76,10 @@ let parse (attributes: (string * string) list) : Result<Widget, string> =
       required attributes "comments" "data-slug"
       |> Result.bind (slug "comments")
       |> Result.map (fun slug -> Widget.Comments { Api = api; Slug = slug }))
+  | Some "unsubscribe" ->
+    required attributes "unsubscribe" "data-api"
+    |> Result.bind (api "unsubscribe")
+    |> Result.map (fun api -> Widget.Unsubscribe { Api = api })
   | Some other ->
     let known = String.concat ", " names
     Error $"The widget '{other}' is unknown. Use one of these names: {known}."

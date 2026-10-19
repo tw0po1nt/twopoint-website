@@ -36,6 +36,8 @@ module RenderMap =
         (fun () -> HomePage.render config content.Assets widgets buildTime content.Posts)
         SiteFile(SitePath.ofUrlPath SubscribePage.urlPath),
         (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
+        SiteFile(SitePath.ofUrlPath UnsubscribePage.urlPath),
+        (fun () -> UnsubscribePage.render config content.Assets widgets content.Posts)
         for files in [ content.Assets.Files; content.OgImages.Files; widgets.Files ] do
           for KeyValue(path, bytes) in files do
             SiteFile path, (fun () -> bytes)

@@ -8,7 +8,8 @@ open System.Text.RegularExpressions
 let widgetClasses =
   set [ "subscribe"; "subscribe-field"; "subscribe-error"; "subscribe-status"; "is-failed"; "is-subscribed"; "subscribe-note"
         "comments"; "comments-count"; "comments-list"; "comment"; "comment-meta"; "comment-text"; "comment-form"
-        "comment-field"; "comment-error"; "comment-status"; "is-done"; "comment-note" ]
+        "comment-field"; "comment-error"; "comment-status"; "is-done"; "comment-note"
+        "unsubscribe"; "unsubscribe-status"; "unsubscribe-note" ]
 
 let private classAttribute = Regex("""\sclass="([^"]*)""")
 

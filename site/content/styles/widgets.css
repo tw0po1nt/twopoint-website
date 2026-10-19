@@ -208,3 +208,35 @@
 .comment-note {
   color: var(--muted);
 }
+
+.unsubscribe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.unsubscribe-status,
+.unsubscribe-note,
+.unsubscribe-fallback,
+.unsubscribe-help {
+  margin: 0;
+  font: 14px/1.5 var(--mono);
+}
+
+.unsubscribe-status.is-failed {
+  color: var(--accent);
+}
+
+.unsubscribe-status.is-done {
+  color: var(--accent-2);
+}
+
+.unsubscribe-note,
+.unsubscribe-fallback,
+.unsubscribe-help {
+  color: var(--muted);
+}
+
+.unsubscribe-help {
+  margin-top: 24px;
+}
