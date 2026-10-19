@@ -12,8 +12,13 @@ type private Viewer =
   { mutable Canvas: HTMLCanvasElement option
     mutable Document: PdfJs.PdfDocument option
     mutable Task: PdfJs.RenderTask option
+    /// The width in CSS pixels of the last draw.
+    mutable Width: float option
     /// The page of the last `Draw`. A page that loads after a later `Draw` does not draw.
     mutable Wanted: int }
+
+[<Emit "new ResizeObserver($0)">]
+let private resizeObserver (callback: unit -> unit) : obj = jsNative
 
 let private failed (dispatch: Pdf.Msg -> unit) (what: string) (error: exn) =
   if error?name <> PdfJs.canceledName then
@@ -27,6 +32,7 @@ let private drawOn (viewer: Viewer) (canvas: HTMLCanvasElement) (pageNumber: int
     viewer.Task |> Option.iter _.cancel()
     let natural = page.getViewport {| scale = 1.0 |}
     let width = if canvas.clientWidth > 0.0 then canvas.clientWidth else natural.width
+    viewer.Width <- Some width
     let viewport = page.getViewport {| scale = width * window.devicePixelRatio / natural.width |}
     canvas.width <- floor viewport.width
     canvas.height <- floor viewport.height
@@ -53,6 +59,17 @@ let private perform (viewer: Viewer) (effect: Pdf.Effect) (dispatch: Pdf.Msg -> 
       |> Promise.catch (failed dispatch "the page did not draw.")
       |> Promise.start
     | _ -> ()
+
+/// A change of width draws the page again, so that the bitmap stays sharp. A change of height does not.
+let private watchWidth (viewer: Viewer) (dispatch: Pdf.Msg -> unit) (canvas: HTMLCanvasElement) =
+  let observer =
+    resizeObserver (fun () ->
+      match viewer.Width with
+      | Some width when canvas.clientWidth > 0.0 && canvas.clientWidth <> width -> dispatch Pdf.Resized
+      | _ -> ())
+
+  observer?observe canvas
+  onCleanup (fun () -> observer?disconnect ())
 
 let private countText (model: Pdf.Model) =
   match model with
@@ -84,6 +101,7 @@ let view (props: Contract.PdfProps) =
     { Canvas = None
       Document = None
       Task = None
+      Width = None
       Wanted = 0 }
 
   let model, dispatch = Mvu.run (Pdf.init props.File) Pdf.update (perform viewer)
@@ -91,7 +109,9 @@ let view (props: Contract.PdfProps) =
   div (class' = "pdf-viewer") {
     canvas(class' = "pdf-page", role = "img", ariaLabel = countText (model ()))
       .bool("hidden", not (isShowing (model ())))
-      .ref (fun element -> viewer.Canvas <- Some element)
+      .ref (fun element ->
+        viewer.Canvas <- Some element
+        watchWidth viewer dispatch element)
 
     Show(when' = isShowing (model ())) {
       nav (class' = "pdf-nav", ariaLabel = "PDF pages") {
