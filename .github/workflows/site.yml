@@ -1,0 +1,73 @@
+name: Deploy the site to Pages
+
+# Both repos have this file. The repo name sets the stage, so no workflow must
+# be disabled by hand.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# A queued deploy waits for the running deploy, and does not cancel it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set the stage from the repo name
+        id: stage
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          case "$REPO" in
+            tw0po1nt/twopoint-website) stage=production ;;
+            tw0po1nt/twopoint-website-staging) stage=staging ;;
+            *) echo "::error::The repo $REPO has no stage." && exit 1 ;;
+          esac
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/build-site
+        with:
+          stage: ${{ steps.stage.outputs.stage }}
+
+      # The upload has no continue-on-error. If it fails, the site does not
+      # deploy, so rss.xml never shows a post that has no newsletter blob.
+      - name: Sign in to Azure
+        if: steps.stage.outputs.stage == 'production'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload the newsletters
+        if: steps.stage.outputs.stage == 'production'
+        env:
+          CONTAINER: ${{ secrets.NEWSLETTER_CONTAINER_URI }}
+        run: dotnet run --project site/Generator -- upload --container "$CONTAINER"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist/website
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

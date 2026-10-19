@@ -3,8 +3,12 @@
 Instructions for agents in this repo.
 
 This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an Astro site on the
-AstroWind template. Each post is an MDX file in `frontend/src/content/post/`. `backend/` is an F#
-Azure Functions app for newsletter subscriptions, notifications, and posts.
+AstroWind template. `backend/` is an F# Azure Functions app for newsletter subscriptions,
+notifications, and posts.
+
+Each post is a Markdown file in `site/content/posts/`. Make a post change only in that Markdown
+copy. Do not change the MDX copy in `frontend/src/content/post/`. The PR that deletes Astro also
+deletes the MDX copies.
 
 `site/` contains the F# generator that replaces the Astro site
 (`docs/spec/124-build-twopoint-dev-with-fsharp.md`). First run `npm ci` and `npm run build` in
@@ -15,6 +19,11 @@ writes the site to `site/dist/website/`, the newsletters to `site/dist/newslette
 stage marker to `site/dist/stage`. The stage marker contains the stage name of the build.
 After a production build, `dotnet run --project site/Generator -- upload --container <uri>`
 sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
+
+`.github/workflows/site.yml` builds the F# site and deploys `site/dist/website/` to GitHub Pages
+on each push to `main`. The repo name sets the stage: the `prod` repo is `production`, and the
+`staging` repo is `staging`. On `production`, the workflow uploads the newsletters before the
+deploy.
 
 ## Setup
 
