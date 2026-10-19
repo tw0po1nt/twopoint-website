@@ -10,8 +10,10 @@ let private subscribe = Contract.Widget.Subscribe { Api = "http://localhost:7071
 let private comments =
   Contract.Widget.Comments { Api = "https://api.example"; Slug = "fable-reminders-part-1" }
 
+let private unsubscribe = Contract.Widget.Unsubscribe { Api = "https://api.example" }
+
 /// One value of each case of `Contract.Widget`.
-let private widgets = [ subscribe; comments ]
+let private widgets = [ subscribe; comments; unsubscribe ]
 
 [<Tests>]
 let tests =
@@ -31,6 +33,11 @@ let tests =
         (Contract.toAttributes comments)
         [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "fable-reminders-part-1" ]
         "The Comments mount has its name, the API origin, and the slug"
+
+      Expect.equal
+        (Contract.toAttributes unsubscribe)
+        [ "data-widget", "unsubscribe"; "data-api", "https://api.example" ]
+        "The Unsubscribe mount has its name and the API origin"
     }
 
     test "the names list each widget one time" {
@@ -50,7 +57,7 @@ let tests =
 
       Expect.equal
         (Contract.parse [ "data-widget", "search" ])
-        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments.")
+        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe.")
         "An unknown name"
     }
 
@@ -94,5 +101,17 @@ let tests =
           (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", value ])
           (Error $"The 'data-slug' of the comments mount is '{value}'. Give a post slug of lowercase letters, digits, and '-'.")
           $"'{value}' is not valid"
+    }
+
+    test "an Unsubscribe mount with no API origin or a bad one gives an error" {
+      Expect.equal
+        (Contract.parse [ "data-widget", "unsubscribe" ])
+        (Error "The unsubscribe mount has no 'data-api' attribute.")
+        "No data-api"
+
+      Expect.equal
+        (Contract.parse [ "data-widget", "unsubscribe"; "data-api", "https://api.example/" ])
+        (Error "The 'data-api' of the unsubscribe mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
+        "A '/' at the end"
     }
   ]

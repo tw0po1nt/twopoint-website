@@ -21,6 +21,11 @@ let comments (config: StageConfig) (slug: string) =
     (Contract.Widget.Comments { Api = apiOrigin config; Slug = slug })
     (p (class' = "comments-fallback") { "The comments need JavaScript." })
 
+let unsubscribe (config: StageConfig) =
+  view
+    (Contract.Widget.Unsubscribe { Api = apiOrigin config })
+    (p (class' = "unsubscribe-fallback") { "The unsubscribe link needs JavaScript." })
+
 let subscribe (config: StageConfig) =
   view
     (Contract.Widget.Subscribe { Api = apiOrigin config })

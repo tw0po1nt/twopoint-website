@@ -45,6 +45,17 @@ let tests =
       Expect.isNone (Lookup.find map "/missing.txt") "A path with no entry gives nothing"
     }
 
+    test "a folder path with no '/' at the end gives the folder path" {
+      Expect.isNone (Lookup.find map "/unsubscribe") "The path itself is not in the site"
+      Expect.equal (Lookup.folder map "/unsubscribe") (Some "/unsubscribe/") "The redirect adds the '/'"
+    }
+
+    test "a path with a '/' at the end, or with no folder in the site, gives no folder path" {
+      Expect.isNone (Lookup.folder map "/unsubscribe/") "The path is already a folder path"
+      Expect.isNone (Lookup.folder map "/missing") "The site has no such folder"
+      Expect.isNone (Lookup.folder map "/robots.txt") "A file gives no folder path"
+    }
+
     test "the stage marker is not a site path" {
       Expect.isNone (Lookup.find map "/stage") "The dev server serves only the site files"
     }

@@ -33,4 +33,3 @@ tag/swift/index.html
 tag/swiftui/index.html
 tag/web-development/index.html
 tag/zcash/index.html
-unsubscribe/index.html

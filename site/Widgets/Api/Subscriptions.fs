@@ -6,6 +6,9 @@ type NewSubscription =
   { EmailAddress : string
     Name : string option }
 
+type SubscriptionCancellation =
+  { SubscriptionId : string }
+
 [<RequireQualifiedAccess>]
 module Subscriptions =
 
@@ -14,11 +17,9 @@ module Subscriptions =
   open Fetch
   open Thoth.Json
 
-  let subscribe uri (newSubscription: NewSubscription) : Promise<ApiResponse<unit>> = promise {
-    let body = Encode.Auto.toString newSubscription
-
+  let private post (url: string) (body: string) : Promise<ApiResponse<unit>> = promise {
     let! response =
-      fetchUnsafe $"{uri}/api/blog/subscriptions" [
+      fetchUnsafe url [
         Method HttpMethod.POST
         requestHeaders [ Accept "application/json" ]
         Body (U3.Case3 body)
@@ -30,3 +31,9 @@ module Subscriptions =
       Decode.Auto.fromString<ApiResponse<unit>>(text, caseStrategy = CamelCase)
       |> Result.defaultValue { Success = false; Message = Some "An invalid response was received"; Data = None }
   }
+
+  let subscribe uri (newSubscription: NewSubscription) : Promise<ApiResponse<unit>> =
+    post $"{uri}/api/blog/subscriptions" (Encode.Auto.toString newSubscription)
+
+  let cancel uri (cancellation: SubscriptionCancellation) : Promise<ApiResponse<unit>> =
+    post $"{uri}/api/blog/subscriptions/cancellations" (Encode.Auto.toString cancellation)

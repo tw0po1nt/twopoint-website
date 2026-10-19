@@ -37,6 +37,7 @@
     <Compile Include="OgImagesTests.fs" />
     <Compile Include="PostPageTests.fs" />
     <Compile Include="SubscribePageTests.fs" />
+    <Compile Include="UnsubscribePageTests.fs" />
     <Compile Include="HomePageTests.fs" />
     <Compile Include="ClassCheck.fs" />
     <Compile Include="ClassCheckTests.fs" />

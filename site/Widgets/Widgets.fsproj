@@ -20,8 +20,11 @@
     <Compile Include="SubscribeView.fs" />
     <Compile Include="Comments.fs" />
     <Compile Include="CommentsView.fs" />
+    <Compile Include="Unsubscribe.fs" />
+    <Compile Include="UnsubscribeView.fs" />
     <Compile Include="Entries/Subscribe.fs" />
     <Compile Include="Entries/Comments.fs" />
+    <Compile Include="Entries/Unsubscribe.fs" />
   </ItemGroup>
 
   <ItemGroup>
