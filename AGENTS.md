@@ -13,6 +13,8 @@ Azure Functions app for newsletter subscriptions, notifications, and posts.
 `dotnet run --project site/Generator -- build --stage <local|staging|production>`. The command
 writes the site to `site/dist/website/`, the newsletters to `site/dist/newsletter/`, and the
 stage marker to `site/dist/stage`. The stage marker contains the stage name of the build.
+After a production build, `dotnet run --project site/Generator -- upload --container <uri>`
+sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
 
 ## Setup
 

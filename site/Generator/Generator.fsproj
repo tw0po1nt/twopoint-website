@@ -47,12 +47,16 @@
     <Compile Include="RenderMap.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />
+    <Compile Include="Upload.fs" />
     <Compile Include="Cli.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="10.0.102" />
+    <!-- In 1.21.0, DefaultAzureCredential stops at the managed identity credential when there is no IMDS. -->
+    <PackageReference Include="Azure.Identity" Version="1.20.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.30.1" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
     <PackageReference Include="Markdig" Version="1.4.1" />
     <PackageReference Include="Oxpecker.ViewEngine" Version="2.1.0" />
