@@ -6,7 +6,7 @@ type OgImages =
   { /// Each crop at its site path, for example `_/og-1a2b3c4d.jpg`.
     Files: Map<string, byte array>
     /// By post slug. Each post has one.
-    ByPost: Map<string, OgImage> }
+    ByPost: Map<string, SizedImage> }
 
 [<RequireQualifiedAccess>]
 module OgImages =
@@ -26,7 +26,7 @@ module OgImages =
     }
 
   /// `defaultImage` is the image of a post with no series image and no post image.
-  let create (fetch: IImageFetch) (defaultImage: OgImage) (posts: Post list) : Result<OgImages, string list> =
+  let create (fetch: IImageFetch) (defaultImage: SizedImage) (posts: Post list) : Result<OgImages, string list> =
     let crops =
       posts
       |> List.choose source

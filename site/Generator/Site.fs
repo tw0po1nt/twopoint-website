@@ -8,6 +8,7 @@ open System.IO
 let private postsFolder = Path.Combine("site", "content", "posts")
 let private assetsFolder = Path.Combine("site", "content", "assets")
 let private stylesFolder = Path.Combine("site", "content", "styles")
+let private privacyFile = "site/content/privacy.md"
 
 /// Gives the folder of `TwoPoint.slnx`, from `start` or a parent folder of it.
 let root (start: string) =
@@ -55,19 +56,24 @@ let loadAssets (root: string) : Result<Assets, string list> =
 
   Styles.join styles |> Result.bind (Assets.create assets)
 
+let loadPrivacy (fetch: IImageFetch) (root: string) : Result<MarkdownPage, PostError list> =
+  MarkdownPage.parse fetch privacyFile (File.ReadAllText(Path.Combine(root, privacyFile)))
+
 let loadContent (fetch: IImageFetch) (root: string) : Result<Content, string list> =
   result {
-    let! posts, assets =
+    let! posts, privacy, assets =
       validation {
         let! posts = loadPosts fetch root |> Result.mapError (List.map PostError.format)
+        and! privacy = loadPrivacy fetch root |> Result.mapError (List.map PostError.format)
         and! assets = loadAssets root
-        return posts, assets
+        return posts, privacy, assets
       }
 
     let! ogImages = OgImages.create fetch assets.DefaultImage posts
 
     return
       { Posts = posts
+        Privacy = privacy
         Assets = assets
         OgImages = ogImages }
   }
@@ -85,11 +91,12 @@ let loadWidgets (root: string) : Result<Widgets, string list> =
 
   Widgets.create files
 
-/// Gives an error for each internal link of the posts that has no target in the map.
+/// Gives an error for each internal link of the posts and the privacy page that has no target in the map.
 let renderMap (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : Result<RenderMap, string list> =
   let map = RenderMap.create stage buildTime widgets content
+  let sources = Links.ofPage PrivacyPage.urlPath content.Privacy :: List.map Links.ofPost content.Posts
 
-  match Links.check (RenderMap.sitePaths map) content.Posts with
+  match Links.check (RenderMap.sitePaths map) sources with
   | [] -> Ok map
   | errors -> Error(List.map PostError.format errors)
 

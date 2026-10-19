@@ -1,6 +1,3 @@
-404.html
-about/index.html
-privacy/index.html
 rss.xml
 sitemap-0.xml
 sitemap-index.xml

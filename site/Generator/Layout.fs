@@ -23,7 +23,7 @@ type Page =
     UrlPath: string option
     Robots: Robots
     OgType: OgType
-    OgImage: OgImage
+    OgImage: SizedImage
     /// The post that the explorer marks.
     Current: Post option
     /// The strip above the header, for example the upcoming post banner.
@@ -35,7 +35,7 @@ let private googleSiteVerification = "Ej-5oQD6F_zuV5I59TTGQwLOdR6h4mpj6Fe-uZlX38
 
 let private feedTitle = $"TwoPoint{char 0x2019}s Blog"
 
-let private githubUrl = "https://github.com/tw0po1nt"
+let githubUrl = "https://github.com/tw0po1nt"
 
 let private links =
   [ "posts", "/posts/"

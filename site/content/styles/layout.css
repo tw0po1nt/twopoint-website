@@ -189,3 +189,33 @@
   margin: 0 auto;
   padding: 40px 16px 96px;
 }
+
+.about {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.about-photo {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 720px) {
+  .about {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about-photo {
+    max-width: 220px;
+  }
+}
+
+.page-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font: 14px var(--mono);
+}

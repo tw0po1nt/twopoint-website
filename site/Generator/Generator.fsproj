@@ -22,6 +22,7 @@
     <Compile Include="Images.fs" />
     <Compile Include="Body.fs" />
     <Compile Include="Post.fs" />
+    <Compile Include="MarkdownPage.fs" />
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
     <Compile Include="Assets.fs" />
@@ -33,6 +34,9 @@
     <Compile Include="PostPage.fs" />
     <Compile Include="SubscribePage.fs" />
     <Compile Include="UnsubscribePage.fs" />
+    <Compile Include="AboutPage.fs" />
+    <Compile Include="PrivacyPage.fs" />
+    <Compile Include="NotFoundPage.fs" />
     <Compile Include="PostLog.fs" />
     <Compile Include="ListPage.fs" />
     <Compile Include="HomePage.fs" />

@@ -24,7 +24,8 @@ type Assets =
     Files: Map<string, byte array>
     Stylesheet: string
     Favicons: Favicons
-    DefaultImage: OgImage }
+    DefaultImage: SizedImage
+    AboutPhoto: SizedImage }
 
 [<RequireQualifiedAccess>]
 module Styles =
@@ -93,9 +94,7 @@ module Assets =
           AppleTouch = appleTouch }
     }
 
-  let private defaultImage (assets: Asset list) (urls: Map<string, string>) =
-    let name = "images/default.jpg"
-
+  let private image (assets: Asset list) (urls: Map<string, string>) (name: string) =
     match assets |> List.tryFind (fun asset -> asset.Name = name) with
     | Some asset ->
       Images.size asset.Bytes
@@ -111,7 +110,8 @@ module Assets =
     validation {
       let! css = resolve urls css
       and! favicons = favicons urls
-      and! defaultImage = defaultImage assets urls
+      and! defaultImage = image assets urls "images/default.jpg"
+      and! aboutPhoto = image assets urls "images/about.jpg"
       let bytes = Encoding.UTF8.GetBytes css
       let stylesheet = sitePath "site.css" bytes
 
@@ -123,5 +123,6 @@ module Assets =
                 stylesheet, bytes ]
           Stylesheet = $"/{stylesheet}"
           Favicons = favicons
-          DefaultImage = defaultImage }
+          DefaultImage = defaultImage
+          AboutPhoto = aboutPhoto }
     }

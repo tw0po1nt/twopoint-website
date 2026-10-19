@@ -179,8 +179,7 @@ let private ofRoot context (root: YamlNode) =
       }
   }
 
-/// `startLine` is the file line of the opening `---`.
-let parse (file: string) (startLine: int) (yaml: string) : Result<FrontMatter, PostError list> =
+let private load (file: string) (startLine: int) (yaml: string) (ofRoot: Context -> YamlNode -> Result<'a, PostError list>) =
   let context = { File = file; StartLine = startLine }
 
   try
@@ -192,3 +191,24 @@ let parse (file: string) (startLine: int) (yaml: string) : Result<FrontMatter, P
     | _ -> Error [ errorAt context 0L "The front matter is not one YAML mapping." ]
   with :? YamlException as error ->
     Error [ errorAt context error.Start.Line error.Message ]
+
+/// `startLine` is the file line of the opening `---`.
+let parse (file: string) (startLine: int) (yaml: string) : Result<FrontMatter, PostError list> =
+  load file startLine yaml ofRoot
+
+let private ofPageRoot context (root: YamlNode) =
+  result {
+    let! fields = mapping context "" root [ "title"; "description" ]
+    let required name parse = required context 0L fields "" name parse
+
+    return!
+      validation {
+        let! title = required "title" text
+        and! description = required "description" text
+        return title, description
+      }
+  }
+
+/// The title and the description of a page that is not a post. `startLine` is the file line of the opening `---`.
+let parsePage (file: string) (startLine: int) (yaml: string) : Result<string * string, PostError list> =
+  load file startLine yaml ofPageRoot

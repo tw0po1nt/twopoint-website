@@ -155,7 +155,7 @@ let render
   (widgets: Widgets)
   (buildTime: DateTimeOffset)
   (posts: Post list)
-  (ogImage: OgImage)
+  (ogImage: SizedImage)
   (post: Post)
   =
   let frontMatter = post.FrontMatter
