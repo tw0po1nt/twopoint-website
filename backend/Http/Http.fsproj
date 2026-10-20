@@ -26,8 +26,10 @@
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
     <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
+    <Compile Include="Endpoints\Admin\StartNewPostDelivery.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
+    <Compile Include="Endpoints\Queues\ProcessNewPostDeliveryMessage.fs" />
     <Compile Include="Endpoints\Health.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

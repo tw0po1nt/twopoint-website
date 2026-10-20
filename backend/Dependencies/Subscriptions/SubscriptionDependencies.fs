@@ -22,15 +22,14 @@ type SubscriptionDependencies(
 
   let source = Dependency.Database
 
-  // todo
-  // member _.GetActiveSubscriptions () = cancellableTaskResult {
-  //   let! (dbSubscriptions: DbSubscription list) = subscriptionDb.GetAllSubscriptions()
+  member _.GetAllSubscriptions () = cancellableTaskResult {
+    let! (dbSubscriptions: DbSubscription list) = subscriptionDb.GetAllSubscriptions()
 
-  //   return!
-  //     dbSubscriptions
-  //     |> List.traverseValidationA _.ToSubscription()
-  //     |> DependencyError.ofValidation source
-  // }
+    return!
+      dbSubscriptions
+      |> List.traverseValidationA _.ToSubscription()
+      |> DependencyError.ofValidation source
+  }
 
   member _.GetSubscriptionByEmail emailAddress = cancellableTaskResult {
     let! dbSubscription = subscriptionDb.GetSubscriptionByEmail (emailAddress |> EmailAddress.value)

@@ -4,6 +4,7 @@
     <File Path="backend/FIREBASE_SETUP.md" />
     <Project Path="backend/Core.Tests/Core.Tests.fsproj" />
     <Project Path="backend/Core/Core.fsproj" />
+    <Project Path="backend/Dependencies.Tests/Dependencies.Tests.fsproj" />
     <Project Path="backend/Dependencies/Dependencies.fsproj" />
     <Project Path="backend/Http/Http.fsproj" />
   </Folder>

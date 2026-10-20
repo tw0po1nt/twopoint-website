@@ -205,6 +205,20 @@ module CancelSubscription =
     }
 
 
+module internal NewsletterPreparation =
+
+  let prepare notFound invalid (post : Post) (html : string option) =
+    html
+    |> Result.requireSome (notFound post)
+    |> Result.bind (Newsletter.create >> Result.mapError (fun reason -> invalid (post, reason)))
+
+module internal IntroText =
+
+  let create (text : string option) =
+    text
+    |> Option.map _.Trim()
+    |> Option.bind (NonEmptyString.create None >> Result.toOption)
+
 // ========================================================================================
 // Send welcome
 // ========================================================================================
@@ -270,9 +284,7 @@ module SendWelcome =
       }
 
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
-      html
-      |> Result.requireSome (NewsletterNotFound post)
-      |> Result.bind (Newsletter.create >> Result.mapError (fun reason -> NewsletterInvalid (post, reason)))
+      NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
 
   // Action
 
@@ -334,6 +346,273 @@ module SendWelcome =
       // makes sure that each subscription gets its welcome.
       let! delivery =
         dependencies.CreateDelivery subscription Welcome post operationId (dependencies.GetUtcNow())
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return Event.Sent (subscription, delivery)
+    }
+
+
+// ========================================================================================
+// Start new-post delivery
+// ========================================================================================
+
+// Input
+
+type NewPostDeliveryStart =
+  { Post : Slug
+    Intro : NonEmptyString option }
+
+module NewPostDeliveryStart =
+
+  type Post = Post of string
+  type Intro = Intro of string
+
+  type Dto =
+    { Post : Post
+      Intro : Intro option }
+
+  let create (dto : Dto) = validation {
+    let (Post post) = dto.Post
+
+    let! post = post |> Slug.create
+
+    return
+      { NewPostDeliveryStart.Post = post
+        Intro = dto.Intro |> Option.map (fun (Intro intro) -> intro) |> IntroText.create }
+  }
+
+[<RequireQualifiedAccess>]
+module StartNewPostDelivery =
+
+  // Output
+
+  type Error =
+    | PostNotFound of Slug
+    | PostUpcoming of Post
+    | NewsletterNotFound of Post
+    | NewsletterInvalid of Post * reason : string
+  type Success = Start of Post
+  type Decision = Decision<Success, Error>
+  type Event = Started of Post * recipients : Subscription list
+
+  // Logic
+
+  type Logic =
+    DateTime
+      -> Slug
+      -> Post option
+      -> Decision
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic =
+      fun utcNow slug post -> result {
+        let! post = post |> Result.requireSome (PostNotFound slug)
+        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
+        return Start post
+      }
+
+    let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
+      NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
+
+    let recipients (subscriptions : Subscription list) = subscriptions |> List.filter _.IsActive
+
+  // Action
+
+  type Action = NewPostDeliveryStart.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetPostBySlug: Slug -> DependencyResult<Post option>
+    abstract member GetNewsletter: Post -> DependencyResult<string option>
+    abstract member GetAllSubscriptions: unit -> DependencyResult<Subscription list>
+    abstract member GetUtcNow: unit -> DateTime
+    abstract member QueueDeliveries:
+      post: Post
+        -> intro: NonEmptyString option
+        -> recipients: Subscription list
+        -> DependencyResult<unit>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun start -> cancellableTaskResult {
+      let! start =
+        start
+        |> NewPostDeliveryStart.create
+        |> Result.mapError ActionError<Error>.Validation
+
+      let! post =
+        dependencies.GetPostBySlug start.Post
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! (Start post) =
+        Logic.decide (dependencies.GetUtcNow()) start.Post post
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! html =
+        dependencies.GetNewsletter post
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      do!
+        Logic.prepareNewsletter post html
+        |> Result.ignore
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! subscriptions =
+        dependencies.GetAllSubscriptions()
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let recipients = Logic.recipients subscriptions
+
+      do!
+        dependencies.QueueDeliveries post start.Intro recipients
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return Event.Started (post, recipients)
+    }
+
+
+// ========================================================================================
+// Send new-post delivery
+// ========================================================================================
+
+// Input
+
+type NewPostDeliveryRequest =
+  { SubscriptionId : SubscriptionId
+    Post : Slug
+    Intro : NonEmptyString option }
+
+module NewPostDeliveryRequest =
+
+  type SubscriptionId = SubscriptionId of string
+  type Post = Post of string
+  type Intro = Intro of string
+
+  type Dto =
+    { SubscriptionId : SubscriptionId
+      Post : Post
+      Intro : Intro option }
+
+  let create (dto : Dto) = validation {
+    let (SubscriptionId subscriptionId) = dto.SubscriptionId
+    let (Post post) = dto.Post
+
+    let! subscriptionId = subscriptionId |> SubscriptionId.create
+    and! post = post |> Slug.create
+
+    return
+      { NewPostDeliveryRequest.SubscriptionId = subscriptionId
+        Post = post
+        Intro = dto.Intro |> Option.map (fun (Intro intro) -> intro) |> IntroText.create }
+  }
+
+[<RequireQualifiedAccess>]
+module SendNewPostDelivery =
+
+  // Output
+
+  type Error =
+    | SubscriptionNotFound of SubscriptionId
+    | SubscriptionInactive of Subscription
+    | PostNotFound of Slug
+    | AlreadySent of Subscription * SubscriptionDelivery
+    | NewsletterNotFound of Post
+    | NewsletterInvalid of Post * reason : string
+  type Success = Send of Subscription * Post
+  type Decision = Decision<Success, Error>
+  type Event = Sent of Subscription * SubscriptionDelivery
+
+  // Logic
+
+  type Logic =
+    SubscriptionId
+      -> Subscription option
+      -> SubscriptionDelivery list
+      -> Slug
+      -> Post option
+      -> Decision
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic =
+      fun subscriptionId subscription deliveries slug post -> result {
+        let! subscription = subscription |> Result.requireSome (SubscriptionNotFound subscriptionId)
+        do! subscription.IsActive |> Result.requireTrue (SubscriptionInactive subscription)
+        let! post = post |> Result.requireSome (PostNotFound slug)
+        // A delivery of any type counts, so a subscription that got the post in its welcome does not get it again.
+        do!
+          deliveries
+          |> List.tryFind (fun delivery -> delivery.Post = post.Id)
+          |> Result.requireNoneWith (fun delivery -> AlreadySent (subscription, delivery))
+        return Send (subscription, post)
+      }
+
+    let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
+      NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
+
+  // Action
+
+  type Action = NewPostDeliveryRequest.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<SubscriptionDelivery list>
+    abstract member GetPostBySlug: Slug -> DependencyResult<Post option>
+    abstract member GetNewsletter: Post -> DependencyResult<string option>
+    abstract member GetUtcNow: unit -> DateTime
+    abstract member SendNewPost:
+      subscription: Subscription
+        -> post: Post
+        -> intro: NonEmptyString option
+        -> newsletter: Newsletter
+        -> DependencyResult<OperationId>
+    abstract member CreateDelivery:
+      subscription: Subscription
+        -> deliveryType: SubscriptionDeliveryType
+        -> post: Post
+        -> operationId: OperationId
+        -> createdDateUtc: DateTime
+        -> DependencyResult<SubscriptionDelivery>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun request -> cancellableTaskResult {
+      let! request =
+        request
+        |> NewPostDeliveryRequest.create
+        |> Result.mapError ActionError<Error>.Validation
+
+      let! subscription =
+        dependencies.GetSubscriptionById request.SubscriptionId
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! deliveries =
+        subscription
+        |> Option.traverseCancellableTaskResult dependencies.GetDeliveriesForSubscription
+        |> CancellableTaskResult.map (Option.defaultValue [])
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! post =
+        dependencies.GetPostBySlug request.Post
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! (Send (subscription, post)) =
+        Logic.decide request.SubscriptionId subscription deliveries request.Post post
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! html =
+        dependencies.GetNewsletter post
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! newsletter =
+        Logic.prepareNewsletter post html
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! operationId =
+        dependencies.SendNewPost subscription post request.Intro newsletter
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      // Record the delivery after the send, as a welcome does, so that each subscription gets the post.
+      let! delivery =
+        dependencies.CreateDelivery subscription NewPost post operationId (dependencies.GetUtcNow())
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       return Event.Sent (subscription, delivery)

@@ -51,7 +51,7 @@ type ProcessWelcomeMessage(
 
       // Dependencies
       let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, logger)
-      let welcomeDependencies = WelcomeDependencies(
+      let deliveryDependencies = DeliveryDependencies(
         emailClient,
         config.Azure.EmailSender,
         messaging,
@@ -66,10 +66,10 @@ type ProcessWelcomeMessage(
         member _.GetSubscriptionById id = subscriptionDependencies.GetSubscriptionById id
         member _.GetDeliveriesForSubscription subscription =
           subscriptionDependencies.GetDeliveriesForSubscription subscription
-        member _.GetLatestPost () = welcomeDependencies.GetLatestPost()
-        member _.GetNewsletter post = welcomeDependencies.GetNewsletter post
+        member _.GetLatestPost () = deliveryDependencies.GetLatestPost()
+        member _.GetNewsletter post = deliveryDependencies.GetNewsletter post
         member _.GetUtcNow () = DateTime.UtcNow
-        member _.SendWelcome subscription newsletter = welcomeDependencies.SendWelcome subscription newsletter
+        member _.SendWelcome subscription newsletter = deliveryDependencies.SendWelcome subscription newsletter
         member _.CreateDelivery subscription deliveryType post operationId createdDateUtc =
           subscriptionDependencies.CreateDelivery subscription deliveryType post operationId createdDateUtc
       }
