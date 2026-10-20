@@ -27,7 +27,7 @@ let private intro () =
   section (class' = "intro") {
     PostLog.prompt "cat README"
     h1 () { "A blog about programming, mostly functional." }
-    p (class' = "byline") { "By Matthew Watt. F#, C#, Swift, and the odd conference talk." }
+    p (class' = "byline") { "By Matthew Watt. I write about F#, functional programming, and whatever else I find interesting." }
   }
 
 let private latestCard (posts: Post list) (post: Post) =
