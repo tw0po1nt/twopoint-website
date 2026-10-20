@@ -19,11 +19,6 @@ open Microsoft.Extensions.Logging
 open System
 open System.Threading
 
-type NewPostDeliveryJson =
-  { SubscriptionId : string
-    Post : string
-    Intro : string }
-
 type ProcessNewPostDeliveryMessage(
   config: Config,
   credential: TokenCredential,

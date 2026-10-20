@@ -60,6 +60,22 @@ let tests =
       Expect.equal ((one $"a[href='{Newsletter.unsubscribeUrlSlot}']" (parse html)).TextContent) "$ unsubscribe" "The unsubscribe slot"
     }
 
+    test "the intro panel markers enclose the whole panel and nothing else" {
+      let html = newsletterText (map Stage.Production [ post; oneOff ]) post.Slug
+      let start = html.IndexOf Newsletter.introPanelStart
+      let finish = html.IndexOf Newsletter.introPanelEnd
+      Expect.isGreaterThan start -1 "The start marker"
+      Expect.isGreaterThan finish start "The end marker follows the start marker"
+
+      let panel = html.Substring(start, finish + Newsletter.introPanelEnd.Length - start)
+      Expect.stringContains panel Newsletter.introSlot "The intro slot is in the panel"
+
+      let withoutPanel = parse (html.Remove(start, panel.Length))
+      Expect.isEmpty (all ".tp-term" withoutPanel) "No part of the panel remains"
+      Expect.equal (all "h1" withoutPanel).Length 1 "The post header remains"
+      Expect.equal (all $"a[href='{Newsletter.unsubscribeUrlSlot}']" withoutPanel).Length 1 "The footer remains"
+    }
+
     test "the newsletter has no script and no site stylesheet" {
       let document = newsletter Stage.Production
       Expect.isEmpty (all "script" document) "No script"

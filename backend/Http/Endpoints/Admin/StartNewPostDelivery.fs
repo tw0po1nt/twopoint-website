@@ -31,7 +31,7 @@ type StartNewPostDeliveryJson =
   { Intro : string option }
 
 type StartNewPostDeliveryResponse =
-  { Messages : int }
+  { Queued : int }
 
 type StartNewPostDelivery(
   config: Config,
@@ -53,9 +53,9 @@ type StartNewPostDelivery(
         recipients
         |> List.map (fun subscription ->
           JsonSerializer.Serialize
-            {| subscriptionId = subscription.Id.ToString()
-               post = Slug.value post.Id
-               intro = intro |> Option.map NonEmptyString.value |> Option.toObj |}
+            { NewPostDeliveryJson.SubscriptionId = subscription.Id.ToString()
+              Post = Slug.value post.Id
+              Intro = intro |> Option.map NonEmptyString.value |> Option.toObj }
           |> ServiceBusMessage
         )
 
@@ -136,7 +136,7 @@ type StartNewPostDelivery(
                 post.Id
               )
               let apiResponse =
-                { Success = true; Message = None; Data = Some { Messages = recipients.Length } }
+                { Success = true; Message = None; Data = Some { Queued = recipients.Length } }
               return apiResponse, HttpStatusCode.OK
             | Error (ActionError.Logic error) ->
               let message, statusCode =

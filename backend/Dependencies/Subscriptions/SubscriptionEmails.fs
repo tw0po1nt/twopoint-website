@@ -49,9 +49,6 @@ module internal SubscriptionEmails =
 
   let newPostSubject (post : Post) = post.Info.Title |> NonEmptyString.value
 
-  /// <summary>
-  /// The intro that goes above the post in a new-post delivery
-  /// </summary>
   /// <param name="text">Plain text from the author. A blank line starts a new paragraph. <c>None</c> gives an empty
   /// intro slot.</param>
   let newPostIntro (text : NonEmptyString option) =

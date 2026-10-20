@@ -68,8 +68,7 @@ type ProcessNewPostMessage(
           NewPost.Dto.Slug = NewPost.Slug newPostJson.Slug
           NewPost.Dto.CreatedDate = NewPost.CreatedDate newPostJson.CreatedDate }
 
-      // No email goes out here. The feed contains upcoming posts, and a first sync creates each old post, so the
-      // author starts each new-post delivery.
+      // The author starts each new-post delivery, because the feed contains upcoming posts and each old post.
       let! newPostResult = (newPost, ct) ||> createPost
 
       match newPostResult with

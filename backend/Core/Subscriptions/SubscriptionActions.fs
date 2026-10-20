@@ -610,7 +610,6 @@ module SendNewPostDelivery =
         dependencies.SendNewPost subscription post request.Intro newsletter
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      // Record the delivery after the send, as a welcome does, so that each subscription gets the post.
       let! delivery =
         dependencies.CreateDelivery subscription NewPost post operationId (dependencies.GetUtcNow())
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
