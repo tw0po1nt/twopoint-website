@@ -205,7 +205,7 @@ TOTAL_STAGES=7
 TENANT_ID="cdf89f94-8c88-48fc-b11c-dd24af4380b4"
 FUNCTION_APP="func-twopoint-website-api"
 QUEUE_NAME="subscription_welcome"
-UNSUBSCRIBE_URI="https://twopoint.dev/unsubscribe"
+UNSUBSCRIBE_URI="https://twopoint.dev/unsubscribe/"
 
 banner "Welcome email: Azure setup"
 

@@ -32,6 +32,6 @@
   "Welcome": {
     "Enabled": false,
     "NewsletterContainerUri": "https://<storage_account_name>.blob.core.windows.net/<newsletter_container>",
-    "UnsubscribeUri": "http://localhost:4321/unsubscribe"
+    "UnsubscribeUri": "http://localhost:4321/unsubscribe/"
   }
 }
