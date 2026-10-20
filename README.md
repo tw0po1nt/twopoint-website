@@ -33,7 +33,7 @@ git clone https://github.com/tw0po1nt/twopoint-website.git
 - The .NET SDK in `global.json`
 - The Node.js version in `frontend/Widgets/.node-version`
 
-Then restore the .NET tools (Fable and SageFs) from the root of the repository:
+Then restore the .NET tools (Fable, SageFs, and dotnet-serve) from the root of the repository:
 
 ```sh
 dotnet tool restore
@@ -74,10 +74,10 @@ Use this path to see the files that a deploy sends to GitHub Pages.
    dotnet run --project frontend/Generator -- build --stage local
    ```
 
-3. Serve the site with a static file server:
+3. Serve the site from the root of the repository:
 
    ```sh
-   python3 -m http.server 4321 --directory frontend/dist/website
+   dotnet serve -d frontend/dist/website -p 4321
    ```
 
 The build writes the site to `frontend/dist/website/` and the newsletters to `frontend/dist/newsletter/`.

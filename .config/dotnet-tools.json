@@ -4,12 +4,23 @@
   "tools": {
     "fable": {
       "version": "5.22.0",
-      "commands": ["fable"],
+      "commands": [
+        "fable"
+      ],
       "rollForward": false
     },
     "sagefs": {
       "version": "0.6.910",
-      "commands": ["sagefs"],
+      "commands": [
+        "sagefs"
+      ],
+      "rollForward": false
+    },
+    "dotnet-serve": {
+      "version": "1.10.194",
+      "commands": [
+        "dotnet-serve"
+      ],
       "rollForward": false
     }
   }
