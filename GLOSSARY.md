@@ -76,6 +76,15 @@ _Avoid_: Announcement, broadcast, blast
 
 ### Admin
 
+**Author**:
+The one person who writes the blog and uses the admin.
+_Avoid_: Owner, editor, admin
+
+**Admin**:
+The web app where the author moderates comments, writes and publishes posts, and starts deliveries.
+One admin serves all stages.
+_Avoid_: CMS, back office, admin app
+
 **Notification**:
-A push message to a device that an admin registered.
+A push message to a device that the author registered.
 _Avoid_: Alert. Do not use this term for an email to a subscription.
