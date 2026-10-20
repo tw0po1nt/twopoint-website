@@ -11,6 +11,7 @@ open Markdig.Syntax
 open Markdig.Syntax.Inlines
 open System
 open System.IO
+open System.Net
 open System.Text
 open System.Text.RegularExpressions
 
@@ -22,23 +23,32 @@ type private DirectiveExtension() =
 let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
   MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
 
-let rec private endsInSpace (node: Inline) =
+let private enDash = '\u2013'
+
+let private emDash = '\u2014'
+
+let private opensAfter (c: char) =
+  Char.IsWhiteSpace c || "([{".Contains c || c = enDash || c = emDash
+
+let rec private opensAfterInline (node: Inline) =
   match node with
   | null
   | :? LineBreakInline -> true
-  | :? LiteralInline as literal when literal.Content.IsEmpty -> endsInSpace literal.PreviousSibling
-  | :? LiteralInline as literal -> Char.IsWhiteSpace literal.Content.Text[literal.Content.End]
+  | :? SmartyPant as smartyPant -> smartyPant.Type = SmartyPantType.Dash2 || smartyPant.Type = SmartyPantType.Dash3
+  | :? HtmlEntityInline as entity when entity.Transcoded.IsEmpty -> opensAfterInline entity.PreviousSibling
+  | :? HtmlEntityInline as entity -> opensAfter entity.Transcoded.Text[entity.Transcoded.End]
+  | :? LiteralInline as literal when literal.Content.IsEmpty -> opensAfterInline literal.PreviousSibling
+  | :? LiteralInline as literal -> opensAfter literal.Content.Text[literal.Content.End]
   | _ -> false
 
-let private isDecade (text: string) index =
-  index + 3 < text.Length
-  && Char.IsDigit text[index + 1]
-  && Char.IsDigit text[index + 2]
-  && text[index + 3] = 's'
+let private closingApostrophe =
+  Regex(@"\G'(?:\d\ds|(?:tis|twas|em|til|cause)(?!\p{L}))", RegexOptions.IgnoreCase)
 
 /// Curls each quote mark that SmartyPants leaves straight, because Markdig curls a quote only in a pair.
 let private educate (literal: LiteralInline) =
-  let text = literal.Content.ToString().Replace("...", "…")
+  let source = literal.Content.ToString()
+  let escapedLength = if literal.IsFirstCharacterEscaped then 1 else 0
+  let text = source.Substring(0, escapedLength) + source.Substring(escapedLength).Replace("...", "…")
   let result = StringBuilder(text.Length)
 
   let lookahead =
@@ -49,12 +59,13 @@ let private educate (literal: LiteralInline) =
   for index in 0 .. text.Length - 1 do
     let opens =
       if index = 0 then
-        endsInSpace literal.PreviousSibling
+        opensAfterInline literal.PreviousSibling
       else
-        Char.IsWhiteSpace text[index - 1] || "([{".Contains text[index - 1]
+        opensAfter text[index - 1]
 
     match text[index] with
-    | '\'' -> result.Append(if opens && not (isDecade lookahead index) then '‘' else '’') |> ignore
+    | c when index < escapedLength -> result.Append c |> ignore
+    | '\'' -> result.Append(if opens && not (closingApostrophe.IsMatch(lookahead, index)) then '‘' else '’') |> ignore
     | '"' -> result.Append(if opens then '“' else '”') |> ignore
     | c -> result.Append c |> ignore
 
@@ -66,7 +77,9 @@ type private TypographyExtension() =
       pipeline.add_DocumentProcessed (
         ProcessDocumentDelegate(fun document ->
           for literal in descendants<LiteralInline> document do
-            educate literal)
+            match literal.Parent with
+            | :? LinkInline as link when link.IsAutoLink -> ()
+            | _ -> educate literal)
       )
 
     member _.Setup(_: MarkdownPipeline, _: IMarkdownRenderer) = ()
@@ -88,15 +101,20 @@ let pipeline =
     .Use(TypographyExtension())
     .Build()
 
-let rec private inlineText (node: Inline) =
+let private sourceText (smartyPant: SmartyPant) = string smartyPant.OpeningCharacter
+
+let private shownText (smartyPant: SmartyPant) =
+  WebUtility.HtmlDecode smartyPants.Mapping[smartyPant.Type]
+
+let rec private inlineText (smartyPantText: SmartyPant -> string) (node: Inline) =
   match node with
   | :? LiteralInline as literal -> literal.Content.ToString()
   | :? CodeInline as code -> code.Content
   | :? LineBreakInline as lineBreak -> if lineBreak.IsHard then "" else "\n"
   | :? HtmlEntityInline as entity -> entity.Transcoded.ToString()
-  | :? SmartyPant as smartyPant -> string smartyPant.OpeningCharacter
+  | :? SmartyPant as smartyPant -> smartyPantText smartyPant
   | :? AutolinkInline as autolink -> autolink.Url
-  | :? ContainerInline as container -> container |> Seq.map inlineText |> String.concat ""
+  | :? ContainerInline as container -> container |> Seq.map (inlineText smartyPantText) |> String.concat ""
   | _ -> ""
 
 let private leafText (leaf: LeafBlock) =
@@ -104,7 +122,7 @@ let private leafText (leaf: LeafBlock) =
   | :? CodeBlock as code -> code.Lines.ToString()
   | :? HtmlBlock -> ""
   | _ when isNull leaf.Inline -> ""
-  | _ -> inlineText leaf.Inline
+  | _ -> inlineText shownText leaf.Inline
 
 /// The text that the `reading-time` count of the Astro build sees: each node, code included.
 let rec private blockText (block: Block) =
@@ -251,8 +269,8 @@ let private render (directiveHtml: Directive.Directive -> string) (document: Mar
 /// Changes the document in place.
 let ofDocument (images: IImages) (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
   let headings = descendants<HeadingBlock> document
-  let texts = headings |> List.map (fun heading -> inlineText heading.Inline)
-  let ids = Slug.headingIds texts
+  let texts = headings |> List.map (fun heading -> inlineText shownText heading.Inline)
+  let ids = headings |> List.map (fun heading -> inlineText sourceText heading.Inline) |> Slug.headingIds
 
   for heading, id in List.zip headings ids do
     heading.GetAttributes().Id <- id
