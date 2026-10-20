@@ -144,6 +144,9 @@ let tests =
         (html "a \u2013'b and a \u2014\"c")
         "<p>a \u2013‘b and a \u2014“c</p>\n"
         "After an en dash or an em dash character"
+
+      Expect.stringContains (html "a&nbsp;\"quote") "“quote" "After an entity for a space"
+      Expect.stringContains (html "a &ndash;\"quote") "“quote" "After an entity for a dash"
     }
 
     test "the text of a bare-URL autolink stays as the author wrote it" {
@@ -159,6 +162,15 @@ let tests =
         (post.Body.Headings |> List.map (fun heading -> heading.Id, heading.Text))
         [ "its-a-test", "It’s a “test”" ]
         "The text has curly marks, and the id has none"
+    }
+
+    test "the id of a heading with a SmartyPants dash comes from the source characters" {
+      let post = published "a-post" (text frontMatter "## A -- B")
+
+      Expect.equal
+        (post.Body.Headings |> List.map (fun heading -> heading.Id, heading.Text))
+        [ "a---b", "A \u2014 B" ]
+        "The text has the dash of the heading HTML, and the id keeps the source dash"
     }
 
     test "an apostrophe at the start of an elided word closes" {
