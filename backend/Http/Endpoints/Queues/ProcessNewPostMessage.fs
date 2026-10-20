@@ -68,6 +68,7 @@ type ProcessNewPostMessage(
           NewPost.Dto.Slug = NewPost.Slug newPostJson.Slug
           NewPost.Dto.CreatedDate = NewPost.CreatedDate newPostJson.CreatedDate }
 
+      // The author starts each new-post delivery, because the feed contains upcoming posts and each old post.
       let! newPostResult = (newPost, ct) ||> createPost
 
       match newPostResult with

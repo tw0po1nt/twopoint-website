@@ -4,15 +4,16 @@
     <File Path="backend/FIREBASE_SETUP.md" />
     <Project Path="backend/Core.Tests/Core.Tests.fsproj" />
     <Project Path="backend/Core/Core.fsproj" />
+    <Project Path="backend/Dependencies.Tests/Dependencies.Tests.fsproj" />
     <Project Path="backend/Dependencies/Dependencies.fsproj" />
     <Project Path="backend/Http/Http.fsproj" />
   </Folder>
-  <Folder Name="/site/">
-    <Project Path="site/Dev.Tests/Dev.Tests.fsproj" />
-    <Project Path="site/Dev/Dev.fsproj" />
-    <Project Path="site/Generator.Tests/Generator.Tests.fsproj" />
-    <Project Path="site/Generator/Generator.fsproj" />
-    <Project Path="site/Widgets.Tests/Widgets.Tests.fsproj" />
-    <Project Path="site/Widgets/Widgets.fsproj" />
+  <Folder Name="/frontend/">
+    <Project Path="frontend/Dev.Tests/Dev.Tests.fsproj" />
+    <Project Path="frontend/Dev/Dev.fsproj" />
+    <Project Path="frontend/Generator.Tests/Generator.Tests.fsproj" />
+    <Project Path="frontend/Generator/Generator.fsproj" />
+    <Project Path="frontend/Widgets.Tests/Widgets.Tests.fsproj" />
+    <Project Path="frontend/Widgets/Widgets.fsproj" />
   </Folder>
 </Solution>

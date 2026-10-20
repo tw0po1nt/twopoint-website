@@ -33,4 +33,32 @@ let tests =
       Expect.isFalse (html.Contains Newsletter.IntroSlot) "No intro slot remains"
       Expect.isFalse (html.Contains Newsletter.UnsubscribeUrlSlot) "No unsubscribe slot remains"
     }
+
+    test "fill with no intro removes the intro panel" {
+      let newsletter = Newsletter.create panelHtml |> ok
+
+      let html = newsletter |> Newsletter.fill "" (Uri "https://twopoint.dev/unsubscribe/")
+
+      Expect.isFalse (html.Contains "~/twopoint") "The title bar of the panel is gone"
+      Expect.isFalse (html.Contains Newsletter.IntroPanelStart) "The start marker is gone"
+      Expect.isFalse (html.Contains Newsletter.IntroPanelEnd) "The end marker is gone"
+      Expect.stringContains html "<h1>A post</h1>" "The post remains"
+    }
+
+    test "fill with an intro keeps the intro panel" {
+      let newsletter = Newsletter.create panelHtml |> ok
+
+      let html = newsletter |> Newsletter.fill "<p>Hey there!</p>" (Uri "https://twopoint.dev/unsubscribe/")
+
+      Expect.stringContains html "~/twopoint" "The title bar of the panel remains"
+      Expect.stringContains html "<p>Hey there!</p>" "The intro goes into the panel"
+    }
+
+    test "fill with no intro empties the slot of a newsletter with no panel markers" {
+      let newsletter = Newsletter.create slottedHtml |> ok
+
+      let html = newsletter |> Newsletter.fill "" (Uri "https://twopoint.dev/unsubscribe/")
+
+      Expect.stringContains html "<td></td>" "The slot is empty"
+    }
   ]

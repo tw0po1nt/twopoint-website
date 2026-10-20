@@ -15,12 +15,24 @@ type Newsletter =
 
 module Newsletter =
 
-  /// The frontend newsletter layout writes these tokens. Keep them identical to `EmailBlogLayout.astro`.
+  /// The frontend newsletter writes these tokens. Keep them identical to `frontend/Generator/Newsletter.fs`.
   [<Literal>]
   let IntroSlot = "%%TWOPOINT_INTRO%%"
 
   [<Literal>]
   let UnsubscribeUrlSlot = "%%TWOPOINT_UNSUBSCRIBE_URL%%"
+
+  /// The frontend newsletter writes these markers around the intro panel. A newsletter from an older build has none.
+  [<Literal>]
+  let IntroPanelStart = "<!--TWOPOINT_INTRO_PANEL-->"
+
+  [<Literal>]
+  let IntroPanelEnd = "<!--/TWOPOINT_INTRO_PANEL-->"
+
+  let private removeIntroPanel (html : string) =
+    let start = html.IndexOf(IntroPanelStart, StringComparison.Ordinal)
+    let finish = if start < 0 then -1 else html.IndexOf(IntroPanelEnd, start, StringComparison.Ordinal)
+    if finish < 0 then html else html.Remove(start, finish + IntroPanelEnd.Length - start)
 
   let create (html : string) =
     let missing =
@@ -33,10 +45,10 @@ module Newsletter =
   /// <summary>
   /// Fill the slots of a newsletter for one delivery
   /// </summary>
-  /// <param name="intro">HTML to put above the post. Use an empty string for no intro.</param>
+  /// <param name="intro">HTML to put above the post. An empty string removes the intro panel.</param>
   /// <param name="unsubscribeUrl">The URL that cancels the subscription of the recipient</param>
   /// <param name="newsletter">The newsletter to fill</param>
   let fill (intro : string) (unsubscribeUrl : Uri) (Newsletter html) =
-    html
+    (if String.IsNullOrEmpty intro then removeIntroPanel html else html)
       .Replace(IntroSlot, intro, StringComparison.Ordinal)
       .Replace(UnsubscribeUrlSlot, WebUtility.HtmlEncode unsubscribeUrl.AbsoluteUri, StringComparison.Ordinal)
