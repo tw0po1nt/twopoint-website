@@ -131,6 +131,43 @@ let tests =
         "A quote mark after a space, an opening bracket, or the start of an inline opens, but an apostrophe before a decade closes"
     }
 
+    test "an escaped quote mark stays straight" {
+      Expect.equal (html "a 5\\\" screen and \\'x") "<p>a 5&quot; screen and 'x</p>\n" "A backslash keeps the mark straight"
+      Expect.equal (html "a \\...") "<p>a ...</p>\n" "A backslash keeps three dots"
+    }
+
+    test "a quote mark after a dash or a bracket opens in each literal" {
+      Expect.equal (html "a --\"quote") "<p>a &mdash;“quote</p>\n" "After a SmartyPants dash"
+      Expect.equal (html "a \\[\"quote") "<p>a [“quote</p>\n" "After an escaped bracket"
+
+      Expect.equal
+        (html "a \u2013'b and a \u2014\"c")
+        "<p>a \u2013‘b and a \u2014“c</p>\n"
+        "After an en dash or an em dash character"
+    }
+
+    test "the text of a bare-URL autolink stays as the author wrote it" {
+      let url = "https://en.wikipedia.org/wiki/Hitchhiker's_Guide"
+
+      Expect.stringContains (html $"See {url} now.") $">{url}</a>" "The link text keeps its apostrophe"
+    }
+
+    test "the text of a heading has the marks of the heading HTML" {
+      let post = published "a-post" (text frontMatter "## It's a \"test\"")
+
+      Expect.equal
+        (post.Body.Headings |> List.map (fun heading -> heading.Id, heading.Text))
+        [ "its-a-test", "It’s a “test”" ]
+        "The text has curly marks, and the id has none"
+    }
+
+    test "an apostrophe at the start of an elided word closes" {
+      Expect.equal
+        (html "'tis, 'Tis, 'twas, 'em, 'til, 'cause, and 'tisane")
+        "<p>’tis, ’Tis, ’twas, ’em, ’til, ’cause, and ‘tisane</p>\n"
+        "Each word in the list closes, and a longer word opens"
+    }
+
     test "a quote mark in code stays straight" {
       Expect.equal
         (html "Use `it's \"x\"...`.\n\n```\nlet c = 'a' // \"x\"...\n```")
