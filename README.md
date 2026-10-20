@@ -8,7 +8,7 @@
 
 # Overview
 
-This website is a static site using Astro, based on the AstroWind template. There is no CMS, the content for each post is written as an MDX file. Maybe one day if I write enough posts, I'll refactor it to use a CMS. But for now, this is sufficient.
+This website is a static site. An F# generator in `frontend/` builds the site from the Markdown posts in `frontend/content/posts/`. Fable compiles the interactive widgets to JavaScript. `backend/` is an F# Azure Functions app for comments, newsletter subscriptions, and notifications.
 <br />
 
 ## Getting started
@@ -19,21 +19,23 @@ This website is a static site using Astro, based on the AstroWind template. Ther
 git clone https://github.com/tw0po1nt/twopoint-website.git
 ```
 
-### 2. Install dependencies
+### 2. Build the widgets
 
 ```sh
-npm install
+cd frontend/Widgets
+npm ci
+npm run build
 ```
 
-### 3. Build and run the site
+### 3. Build the site
+
+Run this command from the root of the repository:
 
 ```sh
-npm run dev
+dotnet run --project frontend/Generator -- build --stage local
 ```
 
-### 4. See running app in browser
-
-See your running application [here](http://localhost:4321)
+The site is in `frontend/dist/website/`.
 
 ## Live site
 

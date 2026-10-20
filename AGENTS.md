@@ -2,25 +2,23 @@
 
 Instructions for agents in this repo.
 
-This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an Astro site on the
-AstroWind template. `backend/` is an F# Azure Functions app for newsletter subscriptions,
-notifications, and posts.
+This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an F# static site
+generator with F# widgets that Fable compiles to JavaScript
+(`docs/spec/124-build-twopoint-dev-with-fsharp.md`). `backend/` is an F# Azure Functions app for
+newsletter subscriptions, notifications, and posts.
 
-Each post is a Markdown file in `site/content/posts/`. Make a post change only in that Markdown
-copy. Do not change the MDX copy in `frontend/src/content/post/`. The PR that deletes Astro also
-deletes the MDX copies.
+Each post is a Markdown file in `frontend/content/posts/`.
 
-`site/` contains the F# generator that replaces the Astro site
-(`docs/spec/124-build-twopoint-dev-with-fsharp.md`). First run `npm ci` and `npm run build` in
-`site/Widgets/`. That build compiles the widgets with Fable and writes `site/Widgets/dist/`.
-`npm test` in `site/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
-`dotnet run --project site/Generator -- build --stage <local|staging|production>`. The command
-writes the site to `site/dist/website/`, the newsletters to `site/dist/newsletter/`, and the
-stage marker to `site/dist/stage`. The stage marker contains the stage name of the build.
-After a production build, `dotnet run --project site/Generator -- upload --container <uri>`
+To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
+compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in
+`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
+`dotnet run --project frontend/Generator -- build --stage <local|staging|production>`. The command
+writes the site to `frontend/dist/website/`, the newsletters to `frontend/dist/newsletter/`, and
+the stage marker to `frontend/dist/stage`. The stage marker contains the stage name of the build.
+After a production build, `dotnet run --project frontend/Generator -- upload --container <uri>`
 sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
 
-`.github/workflows/site.yml` builds the F# site and deploys `site/dist/website/` to GitHub Pages
+`.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main`. The repo name sets the stage: the `prod` repo is `production`, and the
 `staging` repo is `staging`. On `production`, the workflow uploads the newsletters before the
 deploy.
@@ -59,8 +57,8 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips blog posts:
-  the MDX files in `frontend/` and the Markdown files in `site/content/posts/`. The hook also
+  reads Markdown files, and the comments and strings of F# files. The check skips the blog posts
+  in `frontend/content/posts/`. The hook also
   checks the text of `git commit` and of `gh` issue and PR commands.
   `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - Code: `docs/standards/coding-standards.md`.

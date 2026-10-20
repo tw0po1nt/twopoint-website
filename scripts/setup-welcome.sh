@@ -286,9 +286,9 @@ pause
 # ── 5 ─────────────────────────────────────────────────────────────────────
 stage "Let the identity read newsletters"
 say "The prod frontend deploy uploads each newsletter to blob storage."
-say "It uses the GitHub secrets AZURE_STORAGE_ACCOUNT_NAME and AZURE_STORAGE_CONTAINER_NAME."
+say "It uses the GitHub secret NEWSLETTER_CONTAINER_URI."
 note "Storage accounts in this subscription: $(az storage account list --query "[].name" -o tsv | tr '\n' ' ')"
-ask STORAGE_ACCOUNT "Storage account name (value of AZURE_STORAGE_ACCOUNT_NAME):"
+ask STORAGE_ACCOUNT "Storage account name (the host of NEWSLETTER_CONTAINER_URI):"
 ask NEWSLETTER_CONTAINER "Container name (Enter for 'newsletter'):"
 NEWSLETTER_CONTAINER="${NEWSLETTER_CONTAINER:-newsletter}"
 STORAGE_ID=$(az storage account show -n "$STORAGE_ACCOUNT" --query id -o tsv)
