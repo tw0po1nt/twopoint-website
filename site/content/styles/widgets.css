@@ -1,0 +1,382 @@
+/* The widgets. A widget script writes most of these classes in the browser. */
+
+.subscribe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font: 14px var(--mono);
+}
+
+.explorer .subscribe {
+  font-size: 13px;
+}
+
+.subscribe-field {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--muted);
+}
+
+.subscribe-field span {
+  min-width: 6ch;
+}
+
+.subscribe-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--fg);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+
+.subscribe-field input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.subscribe button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.subscribe button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.subscribe-error,
+.subscribe-status,
+.subscribe-note,
+.subscribe-fallback {
+  margin: 0;
+  font: 13px/1.5 var(--mono);
+}
+
+.subscribe-error,
+.subscribe-status.is-failed {
+  color: var(--accent);
+}
+
+.subscribe-status.is-subscribed {
+  color: var(--accent-2);
+}
+
+.subscribe-status:empty {
+  display: none;
+}
+
+.subscribe-note,
+.subscribe-fallback {
+  color: var(--muted);
+}
+
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  font: 14px var(--mono);
+}
+
+.comments-count,
+.comments-fallback {
+  margin: 0;
+  color: var(--muted);
+  font: 13px/1.5 var(--mono);
+}
+
+.comments-fallback {
+  padding: 16px;
+}
+
+.comments-count.is-failed {
+  color: var(--accent);
+}
+
+.comments-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comments-list:empty {
+  display: none;
+}
+
+.comment {
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.comment-meta,
+.comment-text {
+  margin: 0;
+}
+
+.comment-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.comment-text {
+  margin-top: 4px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comment-field {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.comment-field span {
+  min-width: 8ch;
+}
+
+.comment-field input,
+.comment-field textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--fg);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: 14px var(--mono);
+  resize: vertical;
+}
+
+.comment-field input:focus,
+.comment-field textarea:focus {
+  border-bottom-color: var(--accent);
+}
+
+.comment-form button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 13px var(--mono);
+  color: var(--accent);
+}
+
+.comment-form button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.comment-error,
+.comment-status,
+.comment-note {
+  margin: 0;
+  font: 13px/1.5 var(--mono);
+}
+
+.comment-error,
+.comment-status.is-failed {
+  color: var(--accent);
+}
+
+.comment-status.is-done {
+  color: var(--accent-2);
+}
+
+.comment-status:empty {
+  display: none;
+}
+
+.comment-note {
+  color: var(--muted);
+}
+
+.unsubscribe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.unsubscribe-status,
+.unsubscribe-note,
+.unsubscribe-fallback,
+.unsubscribe-help {
+  margin: 0;
+  font: 14px/1.5 var(--mono);
+}
+
+.unsubscribe-status.is-failed {
+  color: var(--accent);
+}
+
+.unsubscribe-status.is-done {
+  color: var(--accent-2);
+}
+
+.unsubscribe-note,
+.unsubscribe-fallback,
+.unsubscribe-help {
+  color: var(--muted);
+}
+
+.unsubscribe-help {
+  margin-top: 24px;
+}
+
+.pdf,
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-frame {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  position: relative;
+  border: 1px solid var(--line);
+}
+
+.pdf-frame[hidden] {
+  display: none;
+}
+
+.pdf-page {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* pdf.js finds the layers by these class names, and sets the size of each item from --total-scale-factor. */
+.textLayer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+}
+
+.textLayer span,
+.textLayer br {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+.textLayer ::selection {
+  background: color-mix(in srgb, AccentColor, transparent 50%);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+.annotationLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+
+.annotationLayer section {
+  position: absolute;
+  box-sizing: border-box;
+  text-align: initial;
+  pointer-events: auto;
+  transform-origin: 0 0;
+  user-select: none;
+}
+
+.annotationLayer .linkAnnotation > a {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  font-size: 1em;
+}
+
+.pdf-nav {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: center;
+  font: 13px var(--mono);
+}
+
+.pdf-nav button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 13px var(--mono);
+  color: var(--accent);
+}
+
+.pdf-nav button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.pdf-count {
+  color: var(--muted);
+}
+
+.pdf-status,
+.pdf-download {
+  margin: 0;
+  font: 13px/1.5 var(--mono);
+}
+
+.pdf-status {
+  color: var(--muted);
+}
+
+.pdf-status.is-failed {
+  color: var(--accent);
+}

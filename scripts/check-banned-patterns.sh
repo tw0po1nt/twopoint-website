@@ -2,13 +2,14 @@
 # Fails when a banned pattern reaches the prose of this repo. The pattern list is
 # `.banned-patterns` at the repo root.
 #
-# Each list line holds an extended regular expression, a tab, and the message to
+# Each list line has an extended regular expression, a tab, and the message to
 # report. The check reads Markdown files and F# source files. In F#, it reads
 # comments and string literals. Add a case arm under the LANGUAGE marker below
 # when this repo adopts another source language.
 # It strips fenced code blocks and inline code spans first, so a rule can name
 # the text it forbids by writing that text in backticks. A file that git
-# ignores is skipped. A new file that git does not track yet is still read.
+# ignores is skipped, and so is a blog post. A new file that git does not track
+# yet is still read.
 #
 # `--text <label> <file>` checks one file of text as Markdown, and reports each
 # hit under <label>. CI uses this mode for the text of a pull request: the
@@ -32,7 +33,7 @@ while IFS=$'\t' read -r pattern message; do
 done < .banned-patterns
 
 if [ ${#patterns[@]} -eq 0 ]; then
-  echo "check-banned-patterns: .banned-patterns holds no pattern. Nothing to check."
+  echo "check-banned-patterns: .banned-patterns has no pattern. Nothing to check."
   exit 0
 fi
 
@@ -53,7 +54,7 @@ strip_markdown='
 
 # F#: keep the text of `//` and `(* *)` comments and of string literals. A
 # block comment and a triple-quoted string can span lines, so the state
-# carries from one line to the next. `(*)` is the multiplication operator.
+# continues from one line to the next. `(*)` is the multiplication operator.
 strip_fsharp='
   BEGIN { q = sprintf("%c", 39); dq = sprintf("%c", 34) }
   {
@@ -116,7 +117,7 @@ if [ -n "${text_file:-}" ]; then
 else
   while IFS= read -r file; do
     case "$file" in
-      node_modules/* | */target/* | */node_modules/* | */bin/* | */obj/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
+      node_modules/* | */target/* | */node_modules/* | */bin/* | */obj/* | site/content/posts/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
     esac
 
     case "$file" in

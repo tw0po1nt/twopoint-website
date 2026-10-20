@@ -1,0 +1,36 @@
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+
+@media (max-width: 620px) {
+  .tp-container { width: 100% !important; }
+  .tp-outer { padding: 0 !important; }
+  .tp-px { padding-left: 20px !important; padding-right: 20px !important; }
+  .tp-h1 { font-size: 26px !important; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .tp-canvas { background-color: #010409 !important; }
+  .tp-card { background-color: #0d1117 !important; }
+  .tp-term { background-color: #161b22 !important; }
+  .tp-term-end { border-bottom: 1px solid #30363d !important; }
+  .tp-ink { color: #f0f3f6 !important; }
+  .tp-muted, .tp-muted a { color: #8b949e !important; }
+  .tp-accent { color: #ff7b72 !important; }
+  .tp-button { border-color: #8b949e !important; }
+  .tp-button a { color: #f0f3f6 !important; }
+  .tp-footer { background-color: #0d1117 !important; border-top-color: #30363d !important; }
+  .tp-post { color: #c9d1d9 !important; }
+  .tp-post h2, .tp-post h3, .tp-post h4 { color: #f0f3f6 !important; }
+  .tp-post a { color: #ff7b72 !important; }
+  .tp-post p code, .tp-post li code { background-color: #1f242c !important; color: #ff7b72 !important; }
+  .tp-post blockquote { border-left-color: #8b949e !important; color: #a8b1bb !important; }
+  .tp-post th { background-color: #161b22 !important; }
+  .tp-post th, .tp-post td { border-color: #30363d !important; }
+}
+
+/* Outlook.com marks the elements it recolors in dark mode with these attributes. */
+[data-ogsb] .tp-canvas { background-color: #010409 !important; }
+[data-ogsb] .tp-card, [data-ogsb] .tp-footer { background-color: #0d1117 !important; }
+[data-ogsb] .tp-term { background-color: #161b22 !important; }
+[data-ogsc] .tp-ink, [data-ogsc] .tp-post h2, [data-ogsc] .tp-post h3, [data-ogsc] .tp-post h4 { color: #f0f3f6 !important; }
+[data-ogsc] .tp-post { color: #c9d1d9 !important; }
+[data-ogsc] .tp-accent, [data-ogsc] .tp-post a { color: #ff7b72 !important; }

@@ -41,3 +41,16 @@ pnpm-lock.yaml
 .agents/skills/
 .claude/skills/
 .scratch/
+
+# agent worktrees (made by Claude Code subagents)
+.claude/worktrees/
+
+# SageFs writes these files beside each init script
+**/.SageFs/.gitignore
+**/.SageFs/warmup-replay-cache.json
+
+# widget build output (dist/ is ignored above)
+site/Widgets/build/
+
+# dev server image cache
+site/.cache/

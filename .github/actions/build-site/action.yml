@@ -1,0 +1,48 @@
+name: Build the site
+description: >-
+  Builds the widgets and the F# site for one stage. The site goes to
+  site/dist/website/, the newsletters to site/dist/newsletter/, and the stage
+  marker to site/dist/stage.
+
+inputs:
+  stage:
+    description: "The stage of the build: local, staging, or production."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: site/Widgets/.node-version
+        cache: npm
+        cache-dependency-path: site/Widgets/package-lock.json
+
+    - name: Restore the .NET tools
+      shell: bash
+      run: dotnet tool restore
+
+    - name: Install the widget packages
+      shell: bash
+      working-directory: site/Widgets
+      run: npm ci
+
+    - name: Build the widgets
+      shell: bash
+      working-directory: site/Widgets
+      run: npm run build
+
+    - name: Test the widget bundles
+      shell: bash
+      working-directory: site/Widgets
+      run: npm test
+
+    - name: Build the site
+      shell: bash
+      env:
+        STAGE: ${{ inputs.stage }}
+      run: dotnet run --project site/Generator -- build --stage "$STAGE"

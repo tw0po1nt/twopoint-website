@@ -11,11 +11,42 @@ One article on the blog. Its slug identifies it.
 _Avoid_: Article, entry
 
 **Latest post**:
-The post with the most recent created date.
+The post with the most recent publish date that does not set `showOnHomepage: false`. The home page shows it on the latest card.
+
+**Draft**:
+A post that is not ready to publish. The build checks its front matter and leaves it out of the
+output.
+_Avoid_: Unpublished post
+
+**Series**:
+A group of posts in order. Each post in a series has the slug, the title, and the excerpt of the
+series.
+
+**Term**:
+A category or a tag of a post. Its slug comes from its title.
+
+**Directive**:
+A line of a post that embeds a video or the slides of a talk, for example `::youtube{id="…"}`. The
+build fails on a bad directive.
+
+**Upcoming post**:
+A post with a publish date in the future. Readers can open it before that date, but they cannot comment
+on it until that date.
+_Avoid_: Scheduled post, future post
 
 **Newsletter**:
 The email version of a post. The build makes one newsletter for each post.
 _Avoid_: Email post
+
+### Build
+
+**Stage**:
+A place where the site runs: local, staging, or production. Each stage has its own site URL and its own
+values.
+_Avoid_: Environment
+
+**Stage marker**:
+The file that the build writes next to the site output. It contains the stage name of the build.
 
 ### Subscriptions
 

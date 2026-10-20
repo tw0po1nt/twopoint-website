@@ -23,6 +23,16 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0'
+          global-json-file: global.json
 
       - run: ./scripts/verify.sh
+
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-site
+        with:
+          stage: staging

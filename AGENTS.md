@@ -2,9 +2,28 @@
 
 Instructions for agents in this repo.
 
-This repo holds the code for twopoint.dev, a technical blog. `frontend/` is an Astro site on the
-AstroWind template. Each post is an MDX file in `frontend/src/content/post/`. `backend/` is an F#
-Azure Functions app for newsletter subscriptions, notifications, and posts.
+This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an Astro site on the
+AstroWind template. `backend/` is an F# Azure Functions app for newsletter subscriptions,
+notifications, and posts.
+
+Each post is a Markdown file in `site/content/posts/`. Make a post change only in that Markdown
+copy. Do not change the MDX copy in `frontend/src/content/post/`. The PR that deletes Astro also
+deletes the MDX copies.
+
+`site/` contains the F# generator that replaces the Astro site
+(`docs/spec/124-build-twopoint-dev-with-fsharp.md`). First run `npm ci` and `npm run build` in
+`site/Widgets/`. That build compiles the widgets with Fable and writes `site/Widgets/dist/`.
+`npm test` in `site/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
+`dotnet run --project site/Generator -- build --stage <local|staging|production>`. The command
+writes the site to `site/dist/website/`, the newsletters to `site/dist/newsletter/`, and the
+stage marker to `site/dist/stage`. The stage marker contains the stage name of the build.
+After a production build, `dotnet run --project site/Generator -- upload --container <uri>`
+sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
+
+`.github/workflows/site.yml` builds the F# site and deploys `site/dist/website/` to GitHub Pages
+on each push to `main`. The repo name sets the stage: the `prod` repo is `production`, and the
+`staging` repo is `staging`. On `production`, the workflow uploads the newsletters before the
+deploy.
 
 ## Setup
 
@@ -18,9 +37,13 @@ Release PRs go to `prod` (`tw0po1nt/twopoint-website`). The default branch of ea
 
 ## Gate
 
-`scripts/verify.sh` is the gate. It runs the prose check, `dotnet build TwoPoint.sln`, and
-`dotnet test TwoPoint.sln`. Its last line is `verify: green` or `verify: red`. CI runs it on each
+`scripts/verify.sh` is the gate. It runs the prose check, `dotnet build TwoPoint.slnx`, and
+`dotnet test TwoPoint.slnx`. Its last line is `verify: green` or `verify: red`. CI runs it on each
 PR to `main`.
+
+The `site` job in CI builds the full site with the `staging` stage, through the composite action
+in `.github/actions/build-site/`. A broken link, a bad anchor, an unknown fence language, or a
+failed image fetch fails the job.
 
 ## Private links
 
@@ -35,11 +58,11 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 ## Standards
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
-  all prose. `.banned-patterns` holds the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips blog posts,
-  because they are MDX. The hook also checks the text of `git commit` and of `gh` issue and PR
-  commands. `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each
-  PR.
+  all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
+  reads Markdown files, and the comments and strings of F# files. The check skips blog posts:
+  the MDX files in `frontend/` and the Markdown files in `site/content/posts/`. The hook also
+  checks the text of `git commit` and of `gh` issue and PR commands.
+  `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - Code: `docs/standards/coding-standards.md`.
 
 ## Agent skills

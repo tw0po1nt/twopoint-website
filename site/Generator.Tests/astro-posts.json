@@ -1,0 +1,234 @@
+[
+  {
+    "slug": "contributing-to-the-fsharp-open-source-ecosystem",
+    "readingTime": 1,
+    "category": "talks",
+    "tags": [
+      "fsharp",
+      "functional-programming",
+      "open-source",
+      "amplifying-fsharp",
+      "2025"
+    ],
+    "series": null,
+    "headingIds": []
+  },
+  {
+    "slug": "danger-lurks-in-system-linq-enumerable-or-default-functions",
+    "readingTime": 11,
+    "category": "series",
+    "tags": [
+      "footguns",
+      "csharp",
+      "linq",
+      "net",
+      "functional-programming",
+      "2026"
+    ],
+    "series": "matts-footgun-collection",
+    "headingIds": [
+      "linq",
+      "systemlinqenumerable",
+      "ordefault-functions-in-systemlinqenumerable",
+      "the-symptoms",
+      "combining-maybe-and-systemlinqenumerable",
+      "the-footgun-nullable-value-types-and-nullable-reference-types-are-overloaded",
+      "value-types",
+      "reference-types",
+      "default-values",
+      "what-about-nullable-value-types",
+      "the-solution",
+      "attempt-1",
+      "what-actually-works"
+    ]
+  },
+  {
+    "slug": "fable-reminders-part-1",
+    "readingTime": 8,
+    "category": "series",
+    "tags": [
+      "fsharp",
+      "web-development",
+      "functional-programming",
+      "2024"
+    ],
+    "series": "fable-reminders",
+    "headingIds": [
+      "overview",
+      "disclaimer",
+      "our-toolkit",
+      "dependencies",
+      "note-for-vscode-users",
+      "scaffolding-the-project",
+      "the-javascript-side",
+      "the-net-side",
+      "gluing-it-together",
+      "conclusion"
+    ]
+  },
+  {
+    "slug": "fable-reminders-part-2",
+    "readingTime": 16,
+    "category": "series",
+    "tags": [
+      "fsharp",
+      "web-development",
+      "functional-programming",
+      "2024"
+    ],
+    "series": "fable-reminders",
+    "headingIds": [
+      "overview",
+      "the-plan",
+      "modeling-our-domain-with-f-types",
+      "the-reminder-type",
+      "functional-sidebar-strongly-typed-identifiers",
+      "the-reminderlist-type",
+      "functional-sidebar-making-invalid-states-unrepresentable",
+      "elmish",
+      "state",
+      "message",
+      "initial-state-function",
+      "update-function",
+      "render-function",
+      "bringing-it-all-together",
+      "preparing-our-layout",
+      "conclusion"
+    ]
+  },
+  {
+    "slug": "functional-architecture-in-csharp-a-case-study",
+    "readingTime": 29,
+    "category": "one-offs",
+    "tags": [
+      "csharp",
+      "functional-programming",
+      "domain-driven-design",
+      "net-conf",
+      "2025"
+    ],
+    "series": null,
+    "headingIds": [
+      "background",
+      "architecture",
+      "atoms",
+      "atom-1-a-functional-microlibrary",
+      "but-thats-not-idiomatic-c",
+      "libraries-for-this-already-exist-why-re-invent-the-wheel",
+      "atom-2-cs-standard-functional-toolkit",
+      "molecules-functional-core",
+      "inputs",
+      "a-quick-note-about-the-nesting-of-map-within-bind",
+      "outputs",
+      "composing-purely-functional-business-logic",
+      "too-simple",
+      "cells-or-sandwiches-depending-on-your-metaphor-imperative-shell",
+      "types",
+      "domain-driven-design-a-quick-primer",
+      "an-example",
+      "the-sandwich-implementation",
+      "organism-ora-three-course-meal",
+      "conclusion"
+    ]
+  },
+  {
+    "slug": "functional-programming-more-than-just-a-coding-style",
+    "readingTime": 1,
+    "category": "talks",
+    "tags": [
+      "fsharp",
+      "functional-programming",
+      "2025"
+    ],
+    "series": null,
+    "headingIds": [
+      "slides"
+    ]
+  },
+  {
+    "slug": "nighthawks-roadmap-for-zcash-with-aditya-bharadwaj-and-matthew-watt-zcon4",
+    "readingTime": 0,
+    "category": "talks",
+    "tags": [
+      "zcash",
+      "cryptocurrency",
+      "open-source",
+      "2023"
+    ],
+    "series": null,
+    "headingIds": []
+  },
+  {
+    "slug": "securely-save-a-swiftui-view-as-a-password-protected-pdf",
+    "readingTime": 7,
+    "category": "one-offs",
+    "tags": [
+      "swift",
+      "swiftui",
+      "2023"
+    ],
+    "series": null,
+    "headingIds": [
+      "overview",
+      "our-super-secret-content",
+      "get-password-from-user-input",
+      "render-the-view-to-a-pdf-file-sharable-via-a-share-sheet",
+      "password-protect-the-pdf-file",
+      "a-problem-lurking-in-the-shadows",
+      "a-subtle-security-vulnerability",
+      "patching-the-vulnerability",
+      "applying-the-fix"
+    ]
+  },
+  {
+    "slug": "smatterings-of-fsharp",
+    "readingTime": 1,
+    "category": "talks",
+    "tags": [
+      "fsharp",
+      "functional-programming",
+      "open-source",
+      "net-conf",
+      "2025"
+    ],
+    "series": null,
+    "headingIds": [
+      "net-conf-2025"
+    ]
+  },
+  {
+    "slug": "why-the-fsharp-would-i-write-real-code-like-this",
+    "readingTime": 21,
+    "category": "one-offs",
+    "tags": [
+      "fsadvent",
+      "fsharp",
+      "functional-programming",
+      "2024"
+    ],
+    "series": null,
+    "headingIds": [
+      "once-upon-a-time",
+      "the-grid",
+      "stacks-of-butter",
+      "the-professor",
+      "the-winds-of-change",
+      "the-book",
+      "key-learnings",
+      "immutability-as-a-default",
+      "explicit-rather-than-implicit",
+      "domain-modeling-with-algebraic-data-types",
+      "making-invalid-states-unrepresentable",
+      "nonsensical-state-1-empty-name-empty-task",
+      "nonsensical-state-2-invalid-colors",
+      "separating-effectful-code-from-pure-code",
+      "the-pits-of-success",
+      "why-f",
+      "philosophy-and-language-design",
+      "jobs",
+      "ecosystem",
+      "community-and-opportunities-to-contribute",
+      "happy-holidays"
+    ]
+  }
+]

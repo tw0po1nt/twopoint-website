@@ -5,7 +5,7 @@ type ApiResponse<'data> =
     Message : string option
     Data : 'data option }
 
-/// The Service Bus queue that holds a message for each welcome to send
+/// The Service Bus queue that contains a message for each welcome to send
 module WelcomeQueue =
   [<Literal>]
   let Name = "subscription_welcome"

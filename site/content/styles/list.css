@@ -1,0 +1,27 @@
+.pager {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: baseline;
+  margin: 32px 0 0;
+  font: 13px var(--mono);
+  color: var(--muted);
+}
+
+.pager a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pager .newer {
+  grid-column: 1;
+}
+
+.pager span {
+  grid-column: 2;
+}
+
+.pager .older {
+  grid-column: 3;
+  justify-self: end;
+}
