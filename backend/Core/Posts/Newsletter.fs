@@ -15,7 +15,7 @@ type Newsletter =
 
 module Newsletter =
 
-  /// The frontend newsletter layout writes these tokens. Keep them identical to `EmailBlogLayout.astro`.
+  /// The frontend newsletter writes these tokens. Keep them identical to `frontend/Generator/Newsletter.fs`.
   [<Literal>]
   let IntroSlot = "%%TWOPOINT_INTRO%%"
 

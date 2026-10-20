@@ -51,7 +51,7 @@ type WelcomeDependencies(
       |> DependencyError.ofValidation Dependency.Database
   }
 
-  /// The frontend upload script stores the newsletter of each post at this path.
+  /// The `upload` command of the frontend generator stores the newsletter of each post at this path.
   member _.GetNewsletter (post : Post) =
     let blobName = $"posts/{Slug.value post.Id}/index"
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof WelcomeDependencies}.GetNewsletter"

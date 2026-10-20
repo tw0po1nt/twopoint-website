@@ -52,11 +52,11 @@ jobs:
         if: steps.stage.outputs.stage == 'production'
         env:
           CONTAINER: ${{ secrets.NEWSLETTER_CONTAINER_URI }}
-        run: dotnet run --project site/Generator -- upload --container "$CONTAINER"
+        run: dotnet run --project frontend/Generator -- upload --container "$CONTAINER"
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site/dist/website
+          path: frontend/dist/website
 
   deploy:
     needs: build
