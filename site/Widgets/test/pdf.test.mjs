@@ -69,17 +69,21 @@ const setPixelRatio = (ratio) => Object.defineProperty(window, 'devicePixelRatio
 const errors = [];
 console.error = (...args) => errors.push(args.map(String).join(' '));
 
-// One color per page, so a pixel identifies the page.
-const stubPdf = (colors) => {
-  const pages = colors.map((_, index) => 3 + index * 2);
+const pageObject = (index) => 3 + index * 2;
+
+// One color per page, so a pixel identifies the page. A page can also have a text and link annotations.
+const stubPdf = (colors, { texts = [], links = [] } = {}) => {
+  const font = '/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >>';
 
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    `<< /Type /Pages /Kids [${pages.map((page) => `${page} 0 R`).join(' ')}] /Count ${colors.length} >>`,
+    `<< /Type /Pages /Kids [${colors.map((_, index) => `${pageObject(index)} 0 R`).join(' ')}] /Count ${colors.length} >>`,
     ...colors.flatMap((color, index) => {
-      const content = `${color.join(' ')} rg 0 0 200 100 re f`;
+      const text = texts[index] ? ` BT /F1 12 Tf 10 40 Td (${texts[index]}) Tj ET` : '';
+      const content = `${color.join(' ')} rg 0 0 200 100 re f${text}`;
+      const annots = links[index] ? ` /Annots [${links[index].join(' ')}]` : '';
       return [
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents ${pages[index] + 1} 0 R >>`,
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] ${font}${annots} /Contents ${pageObject(index) + 1} 0 R >>`,
         `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
       ];
     }),
@@ -98,6 +102,9 @@ const stubPdf = (colors) => {
   text += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return new TextEncoder().encode(text);
 };
+
+const uriLink = (url) => `<< /Type /Annot /Subtype /Link /Rect [0 0 100 50] /Border [0 0 0] /A << /S /URI /URI (${url}) >> >>`;
+const pageLink = (index) => `<< /Type /Annot /Subtype /Link /Rect [100 50 200 100] /Border [0 0 0] /Dest [${pageObject(index)} 0 R /Fit] >>`;
 
 const red = [1, 0, 0];
 const blue = [0, 0, 1];
@@ -138,7 +145,11 @@ const open = async (mount) => {
 };
 
 const mount = () => document.getElementById('mount');
+const frame = () => mount().querySelector('.pdf-frame');
 const page = () => mount().querySelector('canvas.pdf-page');
+const textLayer = () => mount().querySelector('.textLayer');
+const links = () => [...mount().querySelectorAll('.annotationLayer a')];
+const scale = () => frame().style.getPropertyValue('--total-scale-factor');
 const count = () => mount().querySelector('.pdf-count')?.textContent;
 const status = () => mount().querySelector('.pdf-status');
 const button = (text) => [...mount().querySelectorAll('.pdf-nav button')].find((item) => item.textContent === text);
@@ -161,7 +172,7 @@ test('the viewer draws the first page of the PDF, and the download link stays', 
   await until(isColor(red), 'the first page');
 
   assert.deepEqual(calls, [file], 'The viewer gets the file of the mount');
-  assert.equal(page().hidden, false, 'The page shows');
+  assert.equal(frame().hidden, false, 'The page shows');
   assert.equal(page().width, 200, 'The page has the width of the PDF page');
   assert.equal(page().height, 100, 'The page has the height of the PDF page');
   assert.equal(button('[previous]').disabled, true, 'No page comes before the first page');
@@ -238,13 +249,64 @@ test('a change of height only does not draw the page again', async (context) => 
   assert.deepEqual(errors, []);
 });
 
+test('the text of the page is on the page for the reader to select, and changes with the page', async () => {
+  answer = pdfAnswer(stubPdf([red, blue], { texts: ['First slide', 'Second slide'] }));
+  await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
+  await until(() => textLayer().textContent === 'First slide', 'the text of the first page');
+
+  assert.equal(textLayer().parentElement, frame(), 'The text is in the frame of the page');
+  assert.equal(textLayer().querySelector('span').textContent, 'First slide', 'Each run of text is a span');
+
+  button('[next]').click();
+  await until(() => textLayer().textContent === 'Second slide', 'the text of the second page');
+  assert.deepEqual(errors, []);
+});
+
+test('a link to a URL opens the URL, and a link to a page shows that page', async () => {
+  const target = 'https://example.com/talk';
+  answer = pdfAnswer(stubPdf([red, blue], { links: [[uriLink(target), pageLink(1)]] }));
+  await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
+  await until(() => links().length === 2, 'the links of the first page');
+
+  const external = links().find((link) => link.getAttribute('href') === target);
+  assert.ok(external, 'The link has the URL');
+  assert.match(external.rel, /noopener/, 'The target gets no access to the post');
+
+  links().find((link) => link.getAttribute('href') === '#').click();
+  await until(() => count() === 'page 2 of 2', 'the page of the link');
+  await until(isColor(blue), 'the second page');
+  await until(() => links().length === 0, 'no links on the second page');
+
+  button('[previous]').click();
+  await until(isColor(red), 'the first page again');
+  await until(() => links().length === 2, 'the links of the first page again');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(links().length, 2, 'A link does not show two times');
+  assert.deepEqual(errors, []);
+});
+
+test('a change of width scales the text and the links to the new width', async () => {
+  answer = pdfAnswer(stubPdf([red], { texts: ['First slide'], links: [[uriLink('https://example.com/talk')]] }));
+  await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
+  await until(() => links().length === 1 && textLayer().textContent === 'First slide', 'the text and the link');
+  assert.equal(scale(), '1', 'The layers have the scale of the PDF page');
+
+  resize(page(), 400, 200);
+  await until(() => scale() === '2', 'the scale of the new width');
+  await until(() => links().length === 1 && textLayer().textContent === 'First slide', 'the text and the link again');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(textLayer().textContent, 'First slide', 'The text does not show two times');
+  assert.equal(links().length, 1, 'The link does not show two times');
+  assert.deepEqual(errors, []);
+});
+
 test('a PDF that does not load shows the error, and the download link stays', async () => {
   answer = () => new Response('Not found', { status: 404 });
   await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
   await until(() => status()?.classList.contains('is-failed'), 'the error');
 
   assert.match(status().textContent, /did not load/);
-  assert.equal(page().hidden, true, 'No page shows');
+  assert.equal(frame().hidden, true, 'No page shows');
   assert.equal(mount().querySelector('.pdf-nav'), null, 'No page buttons');
   assert.equal(document.getElementById('download').getAttribute('href'), file, 'The download link stays');
   assert.equal(errors.length, 1, 'The viewer logs the error');

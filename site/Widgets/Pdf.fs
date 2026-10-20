@@ -15,6 +15,8 @@ type Msg =
   | Next
   /// The width of the page changed, so the bitmap of the page is not sharp.
   | Resized
+  /// The reader clicked a link to a page of the PDF.
+  | GoTo of pageNumber: int
 
 type Effect =
   | Open of file: string
@@ -44,4 +46,6 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Showing page, Previous when hasPrevious model -> show { page with Number = page.Number - 1 }
   | Showing page, Next when hasNext model -> show { page with Number = page.Number + 1 }
   | Showing page, Resized -> show page
+  | Showing page, GoTo number when number >= 1 && number <= page.Count && number <> page.Number ->
+    show { page with Number = number }
   | _ -> model, None

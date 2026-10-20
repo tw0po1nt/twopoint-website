@@ -10,7 +10,8 @@ let widgetClasses =
         "comments"; "comments-count"; "comments-list"; "comment"; "comment-meta"; "comment-text"; "comment-form"
         "comment-field"; "comment-error"; "comment-status"; "is-done"; "comment-note"
         "unsubscribe"; "unsubscribe-status"; "unsubscribe-note"
-        "pdf-viewer"; "pdf-page"; "pdf-nav"; "pdf-count"; "pdf-status" ]
+        "pdf-viewer"; "pdf-frame"; "pdf-page"; "pdf-nav"; "pdf-count"; "pdf-status"
+        "textLayer"; "markedContent"; "annotationLayer"; "linkAnnotation" ]
 
 let private classAttribute = Regex("""\sclass="([^"]*)""")
 
