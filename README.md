@@ -39,27 +39,48 @@ Then restore the .NET tools (Fable and SageFs) from the root of the repository:
 dotnet tool restore
 ```
 
-### 3. Build the widgets
+### 3. Install the widget packages
 
 ```sh
 cd frontend/Widgets
 npm ci
-npm run build
 ```
 
-### 4. Build the site
+### 4. Run the site locally
 
-Run this command from the root of the repository:
+Use one of these two paths. Each path gives the site at [http://localhost:4321](http://localhost:4321).
 
-```sh
-dotnet run --project frontend/Generator -- build --stage local
-```
+#### Path A: the dev server
 
-The site is in `frontend/dist/website/`, and the newsletters are in `frontend/dist/newsletter/`.
+Use this path to write posts or change the site. The dev server renders each page in memory, so it needs no build first.
 
-### 5. Run the dev server
+Start a SageFs session in `frontend/Dev/`. The init script starts the dev server and the widget watch. A save of a post, a style, or a widget reloads the page.
 
-Start a SageFs session in `frontend/Dev/`. The init script starts the dev server at [http://localhost:4321](http://localhost:4321) and the widget watch. A save of a post, a style, or a widget reloads the page.
+On the first start, the page shows an error until the widget watch writes `frontend/Widgets/dist/`. Then the page reloads.
+
+#### Path B: the static build
+
+Use this path to see the files that a deploy sends to GitHub Pages.
+
+1. Build the widgets in `frontend/Widgets/`:
+
+   ```sh
+   npm run build
+   ```
+
+2. Build the site from the root of the repository:
+
+   ```sh
+   dotnet run --project frontend/Generator -- build --stage local
+   ```
+
+3. Serve the site with a static file server:
+
+   ```sh
+   python3 -m http.server 4321 --directory frontend/dist/website
+   ```
+
+The build writes the site to `frontend/dist/website/` and the newsletters to `frontend/dist/newsletter/`.
 
 ## Tests
 
