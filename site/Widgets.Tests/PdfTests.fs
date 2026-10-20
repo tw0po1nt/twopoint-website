@@ -35,6 +35,17 @@ let tests =
       Expect.equal (Pdf.update Pdf.Resized (showing 3 12)) (showing 3 12, Some(Pdf.Draw 3)) "Page 3 draws again"
     }
 
+    test "a link to a page shows and draws that page" {
+      Expect.equal (Pdf.update (Pdf.GoTo 7) (showing 3 12)) (showing 7 12, Some(Pdf.Draw 7)) "Page 7 draws"
+    }
+
+    test "a link to the current page or to no page of the PDF does nothing" {
+      Expect.equal (Pdf.update (Pdf.GoTo 3) (showing 3 12)) (showing 3 12, None) "The current page"
+      Expect.equal (Pdf.update (Pdf.GoTo 0) (showing 3 12)) (showing 3 12, None) "Before the first page"
+      Expect.equal (Pdf.update (Pdf.GoTo 13) (showing 3 12)) (showing 3 12, None) "After the last page"
+      Expect.equal (Pdf.update (Pdf.GoTo 2) Pdf.Opening) (Pdf.Opening, None) "No page shows"
+    }
+
     test "previous on the first page and next on the last page do nothing" {
       Expect.equal (Pdf.update Pdf.Previous (showing 1 12)) (showing 1 12, None) "No page before the first"
       Expect.equal (Pdf.update Pdf.Next (showing 12 12)) (showing 12 12, None) "No page after the last"
