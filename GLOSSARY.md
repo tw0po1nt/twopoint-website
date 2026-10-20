@@ -14,9 +14,21 @@ _Avoid_: Article, entry
 The post with the most recent publish date that does not set `showOnHomepage: false`. The home page shows it on the latest card.
 
 **Draft**:
-A post that is not ready to publish. The build checks its front matter and leaves it out of the
-output.
+A post that the author has not published. The site does not show it. A draft has no publish date.
 _Avoid_: Unpublished post
+
+**Published post**:
+A post that the author published. The site shows it from the next deploy. Its slug does not change.
+_Avoid_: Live post
+
+**Pending edit**:
+A saved change to a published post that the site does not show yet. The author publishes it or
+discards it.
+_Avoid_: Working copy, unpublished changes
+
+**Revision**:
+The content of a post at one publish. The author can restore a revision as a pending edit.
+_Avoid_: Version, snapshot
 
 **Series**:
 A group of posts in order. Each post in a series has the slug, the title, and the excerpt of the
@@ -30,8 +42,8 @@ A line of a post that embeds a video or the slides of a talk, for example `::you
 build fails on a bad directive.
 
 **Upcoming post**:
-A post with a publish date in the future. Readers can open it before that date, but they cannot comment
-on it until that date.
+A published post with a publish date in the future. Readers can open it before that date, but they
+cannot comment on it until that date.
 _Avoid_: Scheduled post, future post
 
 **Newsletter**:
