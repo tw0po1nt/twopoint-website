@@ -35,3 +35,8 @@ let delivery deliveryType (post : Post) =
 let slottedHtml =
   $"<html><body><table><tr><td>{Newsletter.IntroSlot}</td></tr></table>"
   + $"<a href=\"{Newsletter.UnsubscribeUrlSlot}\">Unsubscribe</a></body></html>"
+
+let panelHtml =
+  $"<html><body><table>{Newsletter.IntroPanelStart}<tbody><tr><td>~/twopoint</td></tr>"
+  + $"<tr><td>{Newsletter.IntroSlot}</td></tr></tbody>{Newsletter.IntroPanelEnd}<tr><td><h1>A post</h1></td></tr></table>"
+  + $"<a href=\"{Newsletter.UnsubscribeUrlSlot}\">Unsubscribe</a></body></html>"

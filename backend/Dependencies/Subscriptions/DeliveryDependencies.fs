@@ -20,7 +20,7 @@ open System
 open System.Net
 open System.Web
 
-type WelcomeDependencies(
+type DeliveryDependencies(
   emailClient : Azure.Communication.Email.EmailClient,
   emailSender : EmailAddress,
   messaging : FirebaseMessaging,
@@ -51,10 +51,19 @@ type WelcomeDependencies(
       |> DependencyError.ofValidation Dependency.Database
   }
 
+  member _.GetPostBySlug (slug : Slug) = cancellableTaskResult {
+    let! (dbPost: DbPost option) = postDb.GetPostBySlug (Slug.value slug)
+
+    return!
+      dbPost
+      |> Option.traverseResult (fun dbo -> dbo.ToPost PostCommentStats.Zero)
+      |> DependencyError.ofValidation Dependency.Database
+  }
+
   /// The `upload` command of the frontend generator stores the newsletter of each post at this path.
   member _.GetNewsletter (post : Post) =
     let blobName = $"posts/{Slug.value post.Id}/index"
-    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof WelcomeDependencies}.GetNewsletter"
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof DeliveryDependencies}.GetNewsletter"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
       try
@@ -79,3 +88,17 @@ type WelcomeDependencies(
 
     return! commsService.SendEmail message
   }
+
+  member _.SendNewPost (subscription : Subscription) (post : Post) (intro : NonEmptyString option) (newsletter : Newsletter) =
+    cancellableTaskResult {
+      let content = newsletter |> Newsletter.fill (SubscriptionEmails.newPostIntro intro) (unsubscribeUrlFor subscription)
+
+      let! (message: EmailMessage) =
+        EmailMessage.create
+          (SubscriptionEmails.newPostSubject post)
+          content
+          (subscription.EmailAddress |> EmailAddress.value)
+        |> DependencyError.ofValidation Dependency.Communications
+
+      return! commsService.SendEmail message
+    }

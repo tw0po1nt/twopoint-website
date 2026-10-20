@@ -12,6 +12,8 @@
     <Compile Include="NewsletterTests.fs" />
     <Compile Include="CreateSubscriptionTests.fs" />
     <Compile Include="SendWelcomeTests.fs" />
+    <Compile Include="StartNewPostDeliveryTests.fs" />
+    <Compile Include="SendNewPostDeliveryTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

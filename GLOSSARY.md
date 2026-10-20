@@ -68,6 +68,12 @@ A delivery that the blog sends after a new subscription or a reactivation. It co
 the latest post.
 _Avoid_: Welcome notification, greeting
 
+**New-post delivery**:
+A delivery that contains the newsletter of one post. After the publish date of a post, the author starts
+a new-post delivery of that post to each active subscription. A subscription that already has a delivery
+of the post does not get a new-post delivery of it.
+_Avoid_: Announcement, broadcast, blast
+
 ### Admin
 
 **Notification**:

@@ -20,6 +20,10 @@ module Newsletter =
   let introSlot = "%%TWOPOINT_INTRO%%"
   let unsubscribeUrlSlot = "%%TWOPOINT_UNSUBSCRIBE_URL%%"
 
+  // The backend removes the rows between these markers from a delivery that has no intro.
+  let introPanelStart = "<!--TWOPOINT_INTRO_PANEL-->"
+  let introPanelEnd = "<!--/TWOPOINT_INTRO_PANEL-->"
+
   let private fonts =
     "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
 
@@ -63,18 +67,24 @@ module Newsletter =
           tr () {
             td(class' = "tp-outer").attr ("align", "center") {
               (presentation (table(class' = "tp-container tp-card").attr ("width", "600"))) {
-                tr () {
-                  td (class' = "tp-term tp-title-bar") {
-                    span (class' = "tp-dot-red") { "●" }
-                    raw "&nbsp;"
-                    span (class' = "tp-dot-yellow") { "●" }
-                    raw "&nbsp;"
-                    span (class' = "tp-dot-green") { "●" }
-                    span (class' = "tp-path") { "~/twopoint" }
+                raw introPanelStart
+
+                tbody () {
+                  tr () {
+                    td (class' = "tp-term tp-title-bar") {
+                      span (class' = "tp-dot-red") { "●" }
+                      raw "&nbsp;"
+                      span (class' = "tp-dot-yellow") { "●" }
+                      raw "&nbsp;"
+                      span (class' = "tp-dot-green") { "●" }
+                      span (class' = "tp-path") { "~/twopoint" }
+                    }
                   }
+
+                  tr () { td (class' = "tp-term tp-term-end") { raw introSlot } }
                 }
 
-                tr () { td (class' = "tp-term tp-term-end") { raw introSlot } }
+                raw introPanelEnd
 
                 tr () {
                   td (class' = "tp-px tp-header") {

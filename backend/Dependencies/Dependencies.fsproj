@@ -17,7 +17,7 @@
     <Compile Include="Subscriptions\SubscriptionDb.fs" />
     <Compile Include="Subscriptions\SubscriptionDependencies.fs" />
     <Compile Include="Subscriptions\SubscriptionEmails.fs" />
-    <Compile Include="Subscriptions\WelcomeDependencies.fs" />
+    <Compile Include="Subscriptions\DeliveryDependencies.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Communication.Email" Version="1.0.2" />
@@ -30,6 +30,9 @@
     <PackageReference Update="FSharp.Core" Version="10.0.102" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Tables.FSharp" Version="1.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Dependencies.Tests" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.fsproj" />

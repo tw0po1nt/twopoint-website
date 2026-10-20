@@ -11,6 +11,7 @@ type Dependency =
   | KeyVault = 2
   | Communications = 3
   | BlobStorage = 4
+  | ServiceBus = 5
 
 type DependencyErrorType =
   | Validation of message: string
