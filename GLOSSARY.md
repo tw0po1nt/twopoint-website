@@ -45,6 +45,11 @@ build fails on a bad directive.
 An image or a PDF that the author uploads for a post. A post refers to an asset by its URL.
 _Avoid_: Upload, attachment, media
 
+**Problem**:
+An error or a warning that the checks find in a post. An error makes the build fail and blocks a
+publish. A warning does neither.
+_Avoid_: Issue, lint, diagnostic
+
 **Upcoming post**:
 A published post with a publish date in the future. Readers can open it before that date, but they
 cannot comment on it until that date.
