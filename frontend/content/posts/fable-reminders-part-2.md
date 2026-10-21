@@ -8,7 +8,7 @@ series:
   slug: fable-reminders
   title: 'Fable Reminders'
   excerpt: 'Follow along as we learn what it takes to build a front-end web app entirely in F#!'
-  image: https://twopointwebsite.blob.core.windows.net/series/fable-reminders.jpg
+  image: https://twopointwebsite.blob.core.windows.net/assets/e3800544312a8f2f.jpg
 tags:
   - FSharp
   - Web development
@@ -51,7 +51,7 @@ more likely that it works as intended. Let's start modeling our application's do
 
 As a reminder (heh), here's our ultimate goal:
 
-![The finished FableReminders running in Google Chrome with several lists and tasks](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-1/end-goal.jpg)
+![The finished FableReminders running in Google Chrome with several lists and tasks](https://twopointwebsite.blob.core.windows.net/assets/8e2cd63a95aa6a8b.jpg)
 
 The first thing our reminders app needs is a data model for a single reminder. In other languages, you might reach for a class or an object to do this. In F#, we're going to use a record. Let's learn about records by defining one. First, we'll need a source file where our application's code will live. Let's create a file right next to `Program.fs` and call it `App.fs`. In `App.fs`, add the following:
 
@@ -360,7 +360,7 @@ Let's break this down:
 
 And that's it! If we fire up our application by running `npm run dev`, we should see:
 
-![FableReminders running in Google Chrome, simple UI with text "Hello, FableReminders"](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-2/bootstrapped-application.jpg)
+![FableReminders running in Google Chrome, simple UI with text "Hello, FableReminders"](https://twopointwebsite.blob.core.windows.net/assets/9eb83e78f71b6a6b.jpg)
 
 #### Preparing our layout
 
@@ -396,7 +396,7 @@ let render state dispatch =
 
 With that, we should now have this:
 
-![FableReminders running in Google Chrome, with a skeleton layout of a sidebar and main content area](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-2/layout.jpg)
+![FableReminders running in Google Chrome, with a skeleton layout of a sidebar and main content area](https://twopointwebsite.blob.core.windows.net/assets/f46aea99c749e4be.jpg)
 
 ### Conclusion
 

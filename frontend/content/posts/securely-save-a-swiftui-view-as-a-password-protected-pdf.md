@@ -3,7 +3,7 @@ publishDate: 2023-12-20T14:00:00.0000000Z
 author: Matthew Watt
 title: Securely save a SwiftUI view as a password-protected PDF
 excerpt: In order to develop the secure PDF seed phrase backup feature for Nighthawk Wallet 2.0, I needed to figure out how to render a SwiftUI view as a PDF and password protect it with a user-supplied password. In this guide, I share what I learned.
-image: https://images.unsplash.com/photo-1634224143538-ce0221abf732?q=80&w=3474&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
+image: https://twopointwebsite.blob.core.windows.net/assets/b8ef94bdb7bba201.jpg
 category: 'One-offs'
 tags:
   - swift
@@ -52,7 +52,7 @@ struct ContentView: View {
 
 Which should look like this:
 
-![SecretsView running in an Xcode Preview](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/secrets-view.jpg)
+![SecretsView running in an Xcode Preview](https://twopointwebsite.blob.core.windows.net/assets/abe3a8d1a13c417c.jpg)
 
 ### Get password from user input
 
@@ -76,7 +76,7 @@ struct ContentView: View {
 
 We should now have:
 
-![ContentView with state for password and a SecureField running in an Xcode Preview](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/password-state-and-secure-field.jpg)
+![ContentView with state for password and a SecureField running in an Xcode Preview](https://twopointwebsite.blob.core.windows.net/assets/5f19ab9a9bb7f0da.jpg)
 
 ### Render the view to a PDF file sharable via a share sheet
 
@@ -127,11 +127,11 @@ I made a few changes to suit our demo app's needs, namely, I changed the output 
 
 But with that, we should have the following:
 
-![Screenshot of Xcode with share sheet code wired up running in an Xcode Preview](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/share-link.jpg)
+![Screenshot of Xcode with share sheet code wired up running in an Xcode Preview](https://twopointwebsite.blob.core.windows.net/assets/662eaf014c7a48fd.jpg)
 
 Firing up the simulator or a physical device, you should see the following:
 
-![Screen recording of entering a password (that does nothing yet) and launching a share sheet with the SwiftUI view as a PDF](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/share-link-demo.webp)
+![Screen recording of entering a password (that does nothing yet) and launching a share sheet with the SwiftUI view as a PDF](https://twopointwebsite.blob.core.windows.net/assets/d04e048299ead4e1.webp)
 
 ### Password protect the PDF file
 
@@ -197,7 +197,7 @@ func render() -> URL {
 
 And firing it up in the simulator, if I enter the very secure password “password123” and tap share, I can see that I can save the file to disk and view it only by entering the password:
 
-![Screen recording of the final demo: entering a password, saving the PDF, and viewing the PDF by entering the password](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/final-demo.webp)
+![Screen recording of the final demo: entering a password, saving the PDF, and viewing the PDF by entering the password](https://twopointwebsite.blob.core.windows.net/assets/911a490e4ef29216.webp)
 
 ### A problem lurking in the shadows
 
@@ -277,7 +277,7 @@ guard let pdf = CGContext(url as CFURL, mediaBox: &box, nil) else {
 
 Here, we initialize a CGContext to render the PDF into. The problem is the initializer. Let's check out the [documentation](https://developer.apple.com/documentation/coregraphics/cgcontext/1456290-init) for it:
 
-![Screenshot of Apple's documentation for a URL-based CGContext](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/cgcontext-init-docs.jpg)
+![Screenshot of Apple's documentation for a URL-based CGContext](https://twopointwebsite.blob.core.windows.net/assets/7fcaa75be233460b.jpg)
 
 The key problem here is the URL parameter. When we render to a CGContext in this way, we are actually writing an unprotected version of our PDF to disk, after which we use PDFKit to overwrite that same file with the password protected version. In theory, an attacker could capture that unprotected file at some point between when we save it and overwrite it with the final version. Like I said, pretty subtle. Fortunately, the fix is pretty straightforward.
 
@@ -285,7 +285,7 @@ The key problem here is the URL parameter. When we render to a CGContext in this
 
 If the issue is that we are saving the PDF to a file and then overwriting that file, then it would seem that the solution is to write the PDF to some in-memory location, and then use PDFKit to securely save the password-protected version to disk. Handily, CoreGraphics provides an initializer for CGContext that allows us to do just that. Looking at the [documentation](https://developer.apple.com/documentation/coregraphics/cgcontext/1454204-init), we find:
 
-![Screenshot of Apple's documentation for a URL-based CGContext](https://twopointwebsite.blob.core.windows.net/posts/swiftui/securely-save-a-swiftui-view-as-a-password-protected-pdf/cgcontext-init-data-consumer-docs.jpg)
+![Screenshot of Apple's documentation for a URL-based CGContext](https://twopointwebsite.blob.core.windows.net/assets/c9864fc3f941ed17.jpg)
 
 So instead of passing in a CFURL, it looks like we need to supply a CGDataConsumer. How do we do that? Well, since these are C APIs we're working with, it can be a bit verbose, but it can be broken down as follows:
 
