@@ -10,10 +10,11 @@ let private oldest =
   postWith "fable-reminders-part-1" "2024-11-01T00:00:00Z" "Series" [ "FSharp"; "Fable" ] (Some "fable-reminders")
 
 let private middle =
-  published
+  publishedIn
+    [ fableReminders ]
     "fable-reminders-part-2"
     (text
-      "publishDate: 2024-11-15T00:00:00Z\nauthor: Matthew Watt\ntitle: Fable Reminders - Part 2\nexcerpt: The second part\ncategory: Series\ntags:\n  - FSharp\nseries:\n  slug: fable-reminders\n  title: Fable Reminders\n  excerpt: A series"
+      "publishDate: 2024-11-15T00:00:00Z\nauthor: Matthew Watt\ntitle: Fable Reminders - Part 2\nexcerpt: The second part\ncategory: Series\ntags:\n  - FSharp\nseries: fable-reminders"
       "## First\n\nText.\n\n### Not in the outline\n\nText.\n\n#### Detail\n\nText.")
 
 let private newest = postWith "smatterings-of-fsharp" "2025-11-14T00:00:00Z" "Talks" [ "FSharp" ] None

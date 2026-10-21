@@ -6,6 +6,7 @@ open System
 open System.IO
 
 let private postsFolder = Path.Combine("frontend", "content", "posts")
+let private seriesFolder = Path.Combine("frontend", "content", "series")
 let private assetsFolder = Path.Combine("frontend", "content", "assets")
 let private stylesFolder = Path.Combine("frontend", "content", "styles")
 let private privacyFile = "frontend/content/privacy.md"
@@ -23,19 +24,24 @@ let root (start: string) =
 
   find (DirectoryInfo start)
 
-let loadPosts (images: IImages) (root: string) : Result<Post list, PostError list> =
-  Directory.GetFiles(Path.Combine(root, postsFolder), "*.md")
+/// Gives the path from the repo root and the full path of each file, in path order.
+let private files (root: string) (folder: string) (extension: string) =
+  Directory.GetFiles(Path.Combine(root, folder), $"*{extension}")
   |> Array.sort
+  |> Array.map (fun path -> Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/'), path)
   |> List.ofArray
-  |> List.traverseResultA (fun path ->
-    let file = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/')
-    Post.parse images file (File.ReadAllText path))
+
+let loadSeries (root: string) : Result<Series list, PostError list> =
+  files root seriesFolder ".yml"
+  |> List.traverseResultA (fun (file, path) -> FrontMatter.parseSeries file (File.ReadAllText path))
   |> Result.mapError List.concat
-  |> Result.map (
-    List.choose (function
-      | Published post -> Some post
-      | Draft -> None)
-  )
+
+let loadPosts (images: IImages) (root: string) : Result<Post list, PostError list> =
+  loadSeries root
+  |> Result.bind (fun series ->
+    files root postsFolder ".md"
+    |> List.traverseResultA (fun (file, path) -> Post.parse images series file (File.ReadAllText path))
+    |> Result.mapError List.concat)
 
 let loadAssets (root: string) : Result<Assets, string list> =
   let assetsDir = Path.Combine(root, assetsFolder)

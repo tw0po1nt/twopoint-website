@@ -4,11 +4,7 @@ author: Matthew Watt
 title: 'Fable Reminders - Part 2'
 excerpt: Build a reminders app completely in F#. In part 2, we model our domain using F#'s algebraic data types, bootstrap our application using Elmish, and take a deeper look at some functional programming concepts along the way.
 category: Series
-series:
-  slug: fable-reminders
-  title: 'Fable Reminders'
-  excerpt: 'Follow along as we learn what it takes to build a front-end web app entirely in F#!'
-  image: https://twopointwebsite.blob.core.windows.net/assets/e3800544312a8f2f.jpg
+series: fable-reminders
 tags:
   - FSharp
   - Web development

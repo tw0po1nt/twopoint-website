@@ -7,7 +7,8 @@ generator with F# widgets that Fable compiles to JavaScript
 (`docs/spec/124-build-twopoint-dev-with-fsharp.md`). `backend/` is an F# Azure Functions app for
 newsletter subscriptions, notifications, and posts.
 
-Each post is a Markdown file in `frontend/content/posts/`.
+Each post is a Markdown file in `frontend/content/posts/`. Each series is a YAML record in
+`frontend/content/series/`. A post refers to its series with `series: <slug>`.
 
 To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
 compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in

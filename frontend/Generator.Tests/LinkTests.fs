@@ -60,9 +60,10 @@ let tests =
       Expect.isEmpty (check "Read [the one-offs](/category/one-offs/) and [page 1](/posts/).") "The list pages are in the output"
     }
 
-    test "a link to a draft fails" {
-      let draft = parse "c-post" (text $"{frontMatter}\ndraft: true" "Text.")
-      Expect.equal draft (Ok Draft) "c-post is a draft"
-      Expect.isNonEmpty (check "Read [c](/posts/c-post/).") "A draft is not in the output"
+    test "a link to a series with no published post fails" {
+      Expect.equal
+        (check "Read [the series](/series/a-series/).")
+        [ errorAt "a-post" 9 "The output has no page at /series/a-series/." ]
+        "A series with no published post has no page"
     }
   ]
