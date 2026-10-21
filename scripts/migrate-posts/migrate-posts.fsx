@@ -35,8 +35,6 @@ type Upload =
     ContentType: string
     Metadata: Collections.Generic.IDictionary<string, string> }
 
-/// The revision name gets the publish date in the round-trip format, for example
-/// `2025-04-11T13:00:00.0000000Z`.
 let publishDate (file: string) =
   let frontMatter = (File.ReadAllText file).Split("\n---", 2)[0]
   let found = publishDateLine.Match frontMatter
@@ -105,7 +103,7 @@ let upload (service: BlobServiceClient) (item: Upload) =
     blob.Upload(BinaryData.FromBytes(File.ReadAllBytes item.File), options) |> ignore
     printfn "  wrote the blob"
     1
-  with :? RequestFailedException as error when error.Status = 409 ->
+  with :? RequestFailedException as error when error.ErrorCode = "BlobAlreadyExists" ->
     printfn "  the blob is already in the store"
     0
 

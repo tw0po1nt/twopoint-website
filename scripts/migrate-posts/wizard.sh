@@ -279,16 +279,27 @@ pause
 
 # ── 4 ─────────────────────────────────────────────────────────────────────
 stage "Make the four containers"
+MISSING_CONTAINERS=()
 for container in "${CONTAINERS[@]}"; do
   EXISTS=$(az storage container-rm exists --storage-account "$STORE_ACCOUNT" -g "$SITE_RG" -n "$container" --query exists -o tsv)
   if [[ "$EXISTS" == "true" ]]; then
     note "The container '$container' already exists."
   else
+    MISSING_CONTAINERS+=("$container")
+  fi
+done
+if [[ ${#MISSING_CONTAINERS[@]} -eq 0 ]]; then
+  note "Nothing to do."
+elif confirm "Make the containers ${MISSING_CONTAINERS[*]} in $STORE_ACCOUNT?"; then
+  for container in "${MISSING_CONTAINERS[@]}"; do
     az storage container-rm create --storage-account "$STORE_ACCOUNT" -g "$SITE_RG" -n "$container" \
       --public-access off >/dev/null
     ok "made the container $container"
-  fi
-done
+  done
+else
+  warn "The other stages need the containers. Run the wizard again to continue."
+  exit 1
+fi
 pause
 
 # ── 5 ─────────────────────────────────────────────────────────────────────
@@ -332,18 +343,28 @@ pause
 stage "Let the build identity read published and series"
 say "The build identity gets Storage Blob Data Reader on published and series only."
 say "It cannot read a draft, a pending edit, or a revision."
+UNREADABLE_CONTAINERS=()
 for container in "${BUILD_CONTAINERS[@]}"; do
-  SCOPE="$STORE_ID/blobServices/default/containers/$container"
-  READER_ROLES=$(az role assignment list --assignee "$BUILD_PRINCIPAL_ID" --scope "$SCOPE" \
+  READER_ROLES=$(az role assignment list --assignee "$BUILD_PRINCIPAL_ID" \
+    --scope "$STORE_ID/blobServices/default/containers/$container" \
     --query "[?roleDefinitionName=='Storage Blob Data Reader'] | length(@)" -o tsv)
   if [[ "${READER_ROLES:-0}" -gt 0 ]]; then
     note "The identity can already read '$container'."
   else
-    az role assignment create --assignee-object-id "$BUILD_PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
-      --role "Storage Blob Data Reader" --scope "$SCOPE" >/dev/null
-    ok "assigned Storage Blob Data Reader on $container"
+    UNREADABLE_CONTAINERS+=("$container")
   fi
 done
+if [[ ${#UNREADABLE_CONTAINERS[@]} -eq 0 ]]; then
+  note "Nothing to do."
+elif confirm "Give $BUILD_IDENTITY 'Storage Blob Data Reader' on ${UNREADABLE_CONTAINERS[*]}?"; then
+  for container in "${UNREADABLE_CONTAINERS[@]}"; do
+    az role assignment create --assignee-object-id "$BUILD_PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
+      --role "Storage Blob Data Reader" --scope "$STORE_ID/blobServices/default/containers/$container" >/dev/null
+    ok "assigned Storage Blob Data Reader on $container"
+  done
+else
+  SKIPPED+=("Assign Storage Blob Data Reader on ${UNREADABLE_CONTAINERS[*]} to $BUILD_IDENTITY")
+fi
 WIDE_ROLES=$(az role assignment list --assignee "$BUILD_PRINCIPAL_ID" --all \
   --query "[?starts_with(roleDefinitionName, 'Storage Blob Data') && !contains(scope, '/containers/')].scope" -o tsv)
 if [[ -n "$WIDE_ROLES" ]]; then
@@ -359,6 +380,8 @@ stage "Trust the GitHub runs"
 say "Each site repo gets two federated credentials on the build identity:"
 step "pull_request: the CI site job on each PR."
 step "ref:refs/heads/main: a workflow_dispatch run of site.yml, and a push to main."
+MISSING_CREDENTIALS=()
+MISSING_SUBJECTS=()
 for repo in "${REPOS[@]}"; do
   short="${repo#*/}"
   for kind in pull-request main; do
@@ -367,12 +390,23 @@ for repo in "${REPOS[@]}"; do
     if az identity federated-credential show --name "$name" --identity-name "$BUILD_IDENTITY" -g "$SITE_RG" >/dev/null 2>&1; then
       note "The credential '$name' already exists."
     else
-      az identity federated-credential create --name "$name" --identity-name "$BUILD_IDENTITY" -g "$SITE_RG" \
-        --issuer "$GITHUB_ISSUER" --subject "$subject" --audiences "$GITHUB_AUDIENCE" >/dev/null
-      ok "added $name ($subject)"
+      MISSING_CREDENTIALS+=("$name")
+      MISSING_SUBJECTS+=("$subject")
+      step "$name: $subject"
     fi
   done
 done
+if [[ ${#MISSING_CREDENTIALS[@]} -eq 0 ]]; then
+  note "Nothing to do."
+elif confirm "Add these ${#MISSING_CREDENTIALS[@]} federated credentials to $BUILD_IDENTITY?"; then
+  for i in "${!MISSING_CREDENTIALS[@]}"; do
+    az identity federated-credential create --name "${MISSING_CREDENTIALS[$i]}" --identity-name "$BUILD_IDENTITY" \
+      -g "$SITE_RG" --issuer "$GITHUB_ISSUER" --subject "${MISSING_SUBJECTS[$i]}" --audiences "$GITHUB_AUDIENCE" >/dev/null
+    ok "added ${MISSING_CREDENTIALS[$i]}"
+  done
+else
+  SKIPPED+=("Add the federated credentials ${MISSING_CREDENTIALS[*]} to $BUILD_IDENTITY")
+fi
 pause
 
 # ── 9 ─────────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ and then uploads the posts and the series records from Git. The clean-up deletes
 - The storage account (`twopointposts` by default), in the resource group and the region of
   `twopointwebsite`. Blob public access and shared key access are off for the whole account.
 - The four containers: `published`, `working`, `revisions`, and `series`.
-- `Storage Blob Data Contributor` on the account for your account. With it, you can run `pull` on
+- `Storage Blob Data Contributor` on the account for your Azure user. With it, you can run `pull` on
   the local stage, run the upload script, and upload a post by hand until the admin is live.
 - The build identity, a user-assigned managed identity (`id-twopoint-site-build` by default). It
   gets `Storage Blob Data Reader` on `published` and `series` only.
@@ -52,7 +52,7 @@ Do not change a post from step 6 until the release of migration step 2 to `prod`
    resource that exists.
 
 4. Wait 10 minutes, so that the new roles take effect.
-5. Run the script with no write, and examine the list of blobs:
+5. Run the script with `--dry-run`. It writes no blob. Examine the list of blobs:
 
    ```sh
    dotnet fsi scripts/migrate-posts/migrate-posts.fsx --account twopointposts --dry-run
