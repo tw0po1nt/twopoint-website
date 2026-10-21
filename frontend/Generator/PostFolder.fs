@@ -11,29 +11,46 @@ type PostFiles =
   { Published: PostFile list
     Series: PostFile list }
 
+/// A container of the post store that the build reads.
+[<RequireQualifiedAccess>]
+type Container =
+  | Published
+  | Series
+
+[<RequireQualifiedAccess>]
+module Container =
+
+  let name container =
+    match container with
+    | Container.Published -> "published"
+    | Container.Series -> "series"
+
+  let extension container =
+    match container with
+    | Container.Published -> ".md"
+    | Container.Series -> ".yml"
+
 /// A post folder has one subfolder for each container that the build reads, with the blob names of the post store.
 [<RequireQualifiedAccess>]
 module PostFolder =
 
-  /// `pull` writes this folder and `build` reads it. Git ignores it.
+  /// Git ignores this folder.
   let pulled = "frontend/content/posts"
 
-  let published = "published"
-  let series = "series"
-
-  let filePath (folder: string) (container: string) (name: string) = $"{folder}/{container}/{name}"
+  let filePath (folder: string) (container: Container) (name: string) =
+    $"{folder}/{Container.name container}/{name}"
 
   let text (file: PostFile) =
     use reader = new StreamReader(new MemoryStream(file.Bytes), Encoding.UTF8, true)
     reader.ReadToEnd()
 
-  /// `folder` is the path from `root`. A folder with no post is an error, because the site needs the posts.
+  /// `folder` is the path from `root`.
   let read (root: string) (folder: string) : Result<PostFiles, string> =
-    let files container extension =
-      let path = Path.Combine(root, folder, container)
+    let files container =
+      let path = Path.Combine(root, folder, Container.name container)
 
       if Directory.Exists path then
-        Directory.GetFiles(path, $"*{extension}")
+        Directory.GetFiles(path, $"*{Container.extension container}")
         |> Array.sort
         |> Array.map (fun file ->
           { Path = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')
@@ -42,13 +59,12 @@ module PostFolder =
       else
         []
 
-    match files published ".md" with
+    match files Container.Published with
     | [] ->
       Error
-        $"Found no post in {folder}/{published}. Run pull --account <name> to download the posts from the post store."
-    | posts -> Ok { Published = posts; Series = files series ".yml" }
+        $"Found no post in {folder}/{Container.name Container.Published}. Run pull --account <name> to download the posts from the post store."
+    | posts -> Ok { Published = posts; Series = files Container.Series }
 
-  /// Deletes the pulled folder first, so a post that left the store leaves the folder.
   let write (root: string) (files: PostFiles) =
     let folder = Path.Combine(root, pulled)
 

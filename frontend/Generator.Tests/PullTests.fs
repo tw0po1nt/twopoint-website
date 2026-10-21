@@ -8,7 +8,7 @@ open System
 open System.IO
 open System.Text
 
-type private FakeStore(containers: Map<string, Result<(string * string) list, string>>) =
+type private FakeStore(containers: Map<Container, Result<(string * string) list, string>>) =
   interface IPostStore with
     member _.Download container =
       containers
@@ -17,7 +17,7 @@ type private FakeStore(containers: Map<string, Result<(string * string) list, st
       |> Result.map (List.map (fun (name, text) -> name, Encoding.UTF8.GetBytes text))
 
 let private store (published: (string * string) list) (series: (string * string) list) =
-  FakeStore(Map [ PostFolder.published, Ok published; PostFolder.series, Ok series ])
+  FakeStore(Map [ Container.Published, Ok published; Container.Series, Ok series ])
 
 let private paths (files: PostFile list) = files |> List.map _.Path
 
@@ -33,7 +33,7 @@ let private withTempRoot (action: string -> unit) =
 let private pulled =
   { Published = [ { Path = file "a-post"; Bytes = Encoding.UTF8.GetBytes "A post" } ]
     Series =
-      [ { Path = PostFolder.filePath PostFolder.pulled PostFolder.series "a-series.yml"
+      [ { Path = PostFolder.filePath PostFolder.pulled Container.Series "a-series.yml"
           Bytes = Encoding.UTF8.GetBytes "A series" } ] }
 
 [<Tests>]
@@ -65,7 +65,7 @@ let tests =
     }
 
     test "pull fails with the container when a download fails" {
-      let failing = FakeStore(Map [ PostFolder.series, Error "HTTP 403" ])
+      let failing = FakeStore(Map [ Container.Series, Error "HTTP 403" ])
       let error = Expect.wantError (Pull.run failing) "A failed download fails"
       Expect.equal error "Cannot download the container 'series': HTTP 403" "The error names the container and the reason"
     }

@@ -52,7 +52,7 @@ let frontMatter =
 let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
 
 let file slug =
-  PostFolder.filePath PostFolder.pulled PostFolder.published $"{slug}.md"
+  PostFolder.filePath PostFolder.pulled Container.Published $"{slug}.md"
 
 let seriesRecord slug : Series =
   { Slug = slug

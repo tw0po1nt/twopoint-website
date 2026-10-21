@@ -59,8 +59,10 @@ The site needs the posts from the post store. You need Storage Blob Data Reader 
 2. Download the posts from the root of the repository:
 
    ```sh
-   dotnet run --project frontend/Generator -- pull --account twopointposts
+   dotnet run --project frontend/Generator -- pull --account <name>
    ```
+
+   `<name>` is the post store account. The repo variable `POST_STORE_ACCOUNT` contains it.
 
 The command writes the posts and the series records to `frontend/content/posts/`. Git ignores this folder. Run the command again to get the newest posts.
 

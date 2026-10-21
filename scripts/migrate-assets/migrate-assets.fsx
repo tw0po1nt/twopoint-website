@@ -21,7 +21,7 @@ open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 
-let postsFolder = Path.Combine("frontend", "content", "posts")
+let postsFolder = Path.Combine("frontend", "content", "posts", "published")
 let mapFile = Path.Combine(__SOURCE_DIRECTORY__, "url-map.json")
 let container = Uri "https://twopointwebsite.blob.core.windows.net/assets"
 let cacheControl = "public, max-age=31536000, immutable"

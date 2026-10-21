@@ -1,6 +1,5 @@
 namespace TwoPoint.Site.Generator
 
-open Azure
 open Azure.Identity
 open Azure.Storage.Blobs
 open Azure.Storage.Blobs.Models
@@ -21,21 +20,12 @@ type IBlobContainer =
 [<RequireQualifiedAccess>]
 module BlobContainer =
 
-  let attempt (action: unit -> 'T) =
-    try
-      Ok(action ())
-    with
-    | :? AuthenticationFailedException as error -> Error error.Message
-    | :? RequestFailedException as error -> Error error.Message
-    // The retry policy wraps a network failure after its last retry.
-    | :? AggregateException as error -> Error error.Message
-
   let azure (container: Uri) =
     let client = BlobContainerClient(container, DefaultAzureCredential())
 
     { new IBlobContainer with
         member _.CreateIfNotExists() =
-          attempt (fun () -> client.CreateIfNotExists() |> ignore)
+          AzureRequest.attempt (fun () -> client.CreateIfNotExists() |> ignore)
 
         member _.Upload blob =
           let options =
@@ -43,7 +33,7 @@ module BlobContainer =
               HttpHeaders = BlobHttpHeaders(ContentType = blob.ContentType, CacheControl = blob.CacheControl)
             )
 
-          attempt (fun () -> client.GetBlobClient(blob.Name).Upload(BinaryData.FromBytes blob.Content, options) |> ignore) }
+          AzureRequest.attempt (fun () -> client.GetBlobClient(blob.Name).Upload(BinaryData.FromBytes blob.Content, options) |> ignore) }
 
 [<RequireQualifiedAccess>]
 module Upload =

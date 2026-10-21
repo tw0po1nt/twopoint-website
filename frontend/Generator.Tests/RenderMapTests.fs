@@ -9,24 +9,23 @@ open System.Text
 
 /// `files` gives each file as its path from the repo root and its text.
 let private loadPostsFrom (files: (string * string) list) =
-  let postFiles (extension: string) =
+  let postFiles container =
     files
-    |> List.filter (fun (path, _) -> path.EndsWith extension)
+    |> List.filter (fun (path, _) -> path.EndsWith(Container.extension container))
     |> List.map (fun (path, text) -> { Path = path; Bytes = Encoding.UTF8.GetBytes text })
 
-  Site.parsePosts anyImages { Published = postFiles ".md"; Series = postFiles ".yml" }
+  Site.parsePosts anyImages { Published = postFiles Container.Published; Series = postFiles Container.Series }
 
 let private seriesFile slug =
-  PostFolder.filePath PostFolder.pulled PostFolder.series $"{slug}.yml", "title: A series\nexcerpt: Posts\n"
+  PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml", "title: A series\nexcerpt: Posts\n"
 
-/// Each container has the blobs of the files in the fixture folder.
 type private FixtureStore() =
   interface IPostStore with
     member _.Download container =
       let files =
-        if container = PostFolder.published then realPostFiles.Value.Published
-        elif container = PostFolder.series then realPostFiles.Value.Series
-        else []
+        match container with
+        | Container.Published -> realPostFiles.Value.Published
+        | Container.Series -> realPostFiles.Value.Series
 
       Ok(files |> List.rev |> List.map (fun file -> Path.GetFileName file.Path, file.Bytes))
 

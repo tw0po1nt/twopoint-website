@@ -8,7 +8,7 @@ open System.IO
 
 type IPostStore =
   /// Gives the name and the bytes of each blob in the container.
-  abstract Download: container: string -> Result<(string * byte array) list, string>
+  abstract Download: container: Container -> Result<(string * byte array) list, string>
 
 [<RequireQualifiedAccess>]
 module PostStore =
@@ -19,8 +19,8 @@ module PostStore =
 
     { new IPostStore with
         member _.Download container =
-          BlobContainer.attempt (fun () ->
-            let client = service.GetBlobContainerClient container
+          AzureRequest.attempt (fun () ->
+            let client = service.GetBlobContainerClient(Container.name container)
 
             [ for item in client.GetBlobs() do
                 item.Name, client.GetBlobClient(item.Name).DownloadContent().Value.Content.ToArray() ]) }
@@ -28,24 +28,25 @@ module PostStore =
 [<RequireQualifiedAccess>]
 module Pull =
 
-  let private download (store: IPostStore) (container: string) (extension: string) =
+  let private download (store: IPostStore) (container: Container) =
+    let extension = Container.extension container
+
     let file (name: string, bytes) =
       if Path.GetFileName name = name && name.EndsWith extension && name.Length > extension.Length then
         Ok
           { Path = PostFolder.filePath PostFolder.pulled container name
             Bytes = bytes }
       else
-        Error $"The blob '{name}' in '{container}' is not a {extension} file at the top of the container."
+        Error $"The blob '{name}' in '{Container.name container}' is not a {extension} file at the top of the container."
 
     store.Download container
-    |> Result.mapError (fun reason -> $"Cannot download the container '{container}': {reason}")
+    |> Result.mapError (fun reason -> $"Cannot download the container '{Container.name container}': {reason}")
     |> Result.bind (List.traverseResultM file)
     |> Result.map (List.sortBy _.Path)
 
-  /// Gives each file at its path in the pulled folder.
   let run (store: IPostStore) : Result<PostFiles, string> =
     result {
-      let! published = download store PostFolder.published ".md"
-      let! series = download store PostFolder.series ".yml"
+      let! published = download store Container.Published
+      let! series = download store Container.Series
       return { Published = published; Series = series }
     }

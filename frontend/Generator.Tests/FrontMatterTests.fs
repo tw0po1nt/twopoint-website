@@ -141,7 +141,7 @@ let tests =
   ]
 
 let private seriesFile slug =
-  PostFolder.filePath PostFolder.pulled PostFolder.series $"{slug}.yml"
+  PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml"
 
 let private seriesErrors slug yaml =
   match FrontMatter.parseSeries (seriesFile slug) yaml with

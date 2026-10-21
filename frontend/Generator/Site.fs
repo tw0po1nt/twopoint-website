@@ -81,7 +81,6 @@ let loadContent (images: IImages) (root: string) (postFiles: PostFiles) : Result
         Email = loadEmail root }
   }
 
-/// Reads the posts from the folder that `pull` writes.
 let loadPulledContent (images: IImages) (root: string) : Result<Content, string list> =
   PostFolder.read root PostFolder.pulled
   |> Result.mapError List.singleton
