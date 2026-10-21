@@ -64,6 +64,11 @@ _Avoid_: Environment
 **Stage marker**:
 The file that the build writes next to the site output. It contains the stage name of the build.
 
+**Deploy**:
+One run that builds the site and puts it on one stage. A change to a post is deployed when a
+successful production deploy includes it.
+_Avoid_: Release, go live
+
 ### Subscriptions
 
 **Subscription**:
