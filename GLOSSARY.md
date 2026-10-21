@@ -128,5 +128,9 @@ One admin serves all stages.
 _Avoid_: CMS, back office, admin app
 
 **Notification**:
-A push message to a device that the author registered.
+A push message to a registered device.
 _Avoid_: Alert. Do not use this term for an email to a subscription.
+
+**Registered device**:
+A browser or a Home Screen web app where the author turned on notifications.
+_Avoid_: Push subscription, subscriber, device token
