@@ -41,7 +41,6 @@ let private post slug =
     FrontMatter =
       { PublishDate = DateTimeOffset.UnixEpoch
         UpdateDate = None
-        Draft = false
         Title = slug
         Excerpt = "An excerpt"
         Author = "Matthew Watt"

@@ -4,11 +4,7 @@ author: Matthew Watt
 title: 'Fable Reminders - Part 1'
 excerpt: Build a reminders app completely in F#. In part 1, we get our base project setup so we're ready to hit the ground running building in F#!
 category: Series
-series:
-  slug: fable-reminders
-  title: 'Fable Reminders'
-  excerpt: 'Follow along as we learn what it takes to build a front-end web app entirely in F#!'
-  image: https://twopointwebsite.blob.core.windows.net/assets/e3800544312a8f2f.jpg
+series: fable-reminders
 tags:
   - FSharp
   - Web development

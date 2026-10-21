@@ -5,6 +5,7 @@ open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
 open SkiaSharp
+open System
 open System.Text
 open System.Text.RegularExpressions
 
@@ -15,12 +16,13 @@ let private postImage = "https://twopointwebsite.blob.core.windows.net/assets/95
 let private post slug (image: string option) (series: string option) =
   let imageLine = image |> Option.map (sprintf "\nimage: %s") |> Option.defaultValue ""
 
-  let seriesLines =
+  let records =
     series
-    |> Option.map (sprintf "\nseries:\n  slug: a-series\n  title: A series\n  excerpt: A series\n  image: %s")
-    |> Option.defaultValue ""
+    |> Option.map (fun image -> { seriesRecord "a-series" with Image = Some(Uri image) })
+    |> Option.toList
 
-  published slug (text $"{frontMatter}{imageLine}{seriesLines}" "Text.")
+  let seriesLine = if records.IsEmpty then "" else "\nseries: a-series"
+  publishedIn records slug (text $"{frontMatter}{imageLine}{seriesLine}" "Text.")
 
 let private tags (map: RenderMap) slug =
   let html = siteText map $"posts/{slug}/index.html"

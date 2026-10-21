@@ -57,6 +57,16 @@ let tests =
         "Each post has a Markdown copy with the same slug"
     }
 
+    test "each series has a record, and each record has a post" {
+      let records = Site.loadSeries realRoot.Value |> ok |> List.map _.Slug
+      Expect.equal records [ "fable-reminders"; "matts-footgun-collection" ] "The 2 series have records"
+
+      Expect.equal
+        (realPosts.Value |> List.choose _.FrontMatter.Series |> List.map _.Slug |> List.distinct |> List.sort)
+        records
+        "Each series record has a published post"
+    }
+
     test "each post page is in the output of each stage" {
       for stage in Stage.all do
         let map = RenderMap.create stage buildTime widgets realContent.Value

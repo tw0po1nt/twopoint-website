@@ -4,11 +4,7 @@ author: Matthew Watt
 title: 'Danger lurks in System.Linq.Enumerable''s "OrDefault" functions'
 excerpt: In this post, we'll look at how my misunderstanding of a very important concept in .NET nearly led to disastrous results in our codebase.
 category: Series
-series:
-  slug: matts-footgun-collection
-  title: "Matt's Footgun Collection"
-  excerpt: "A collection of all sorts of footguns I have encountered in code that I've worked with over the years"
-  image: https://twopointwebsite.blob.core.windows.net/assets/823d1b141eaed748.jpg
+series: matts-footgun-collection
 tags:
   - Footguns
   - CSharp

@@ -25,7 +25,6 @@
     <Compile Include="BodyTests.fs" />
     <Compile Include="HighlightTests.fs" />
     <Compile Include="DirectiveTests.fs" />
-    <Compile Include="DraftTests.fs" />
     <Compile Include="LinkTests.fs" />
     <Compile Include="PostsTests.fs" />
     <Compile Include="BlogTests.fs" />

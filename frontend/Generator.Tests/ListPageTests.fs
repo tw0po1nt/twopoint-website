@@ -192,11 +192,18 @@ let tests =
     test "a series page has the series title, its excerpt, and its Open Graph image" {
       let image = "https://example.com/fable.png"
 
+      let series =
+        { Slug = "fable-reminders"
+          Title = "Fable Reminders"
+          Excerpt = "Notes on Fable"
+          Image = Some(Uri image) }
+
       let withImage slug date =
-        published
+        publishedIn
+          [ series ]
           slug
           (text
-            $"publishDate: {date}\nauthor: Matthew Watt\ntitle: {slug}\nexcerpt: An excerpt\ncategory: Series\nseries:\n  slug: fable-reminders\n  title: Fable Reminders\n  excerpt: Notes on Fable\n  image: {image}"
+            $"publishDate: {date}\nauthor: Matthew Watt\ntitle: {slug}\nexcerpt: An excerpt\ncategory: Series\nseries: fable-reminders"
             "Text.")
 
       let posts = [ withImage "part-1" "2024-11-01T13:00:00Z"; withImage "part-2" "2024-11-15T14:00:00Z" ]
