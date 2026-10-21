@@ -80,6 +80,11 @@ A subscribe request for an email address that has an inactive subscription. The 
 active again.
 _Avoid_: Resubscription
 
+**Cancellation**:
+A request that makes an active subscription inactive. The reader sends it from the unsubscribe link, or
+the author sends it from the admin.
+_Avoid_: Deactivation, unsubscription
+
 **Delivery**:
 One email that the blog sends to a subscription. Each delivery has a type and refers to one post.
 _Avoid_: Subscription notification, send
