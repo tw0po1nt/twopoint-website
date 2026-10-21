@@ -52,10 +52,10 @@ let tests =
         data.ToArray()
 
       let post =
-        Post.parse (Images.ofFetch (fetchWith (fun _ -> Ok webp))) (file "a-post") (text frontMatter $"![A demo]({blob}/demo.webp)")
+        Post.parse (Images.ofFetch (fetchWith (fun _ -> Ok webp))) [] (file "a-post") (text frontMatter $"![A demo]({blob}/demo.webp)")
 
       match post with
-      | Ok(Published post) -> Expect.stringContains post.Body.Html "width=\"1178\" height=\"2556\"" "The WebP size"
+      | Ok post -> Expect.stringContains post.Body.Html "width=\"1178\" height=\"2556\"" "The WebP size"
       | other -> failtest $"%A{other}"
     }
 
@@ -88,7 +88,7 @@ let tests =
       let failing = fetchWith (fun _ -> Error "HTTP 404, after 3 attempts")
 
       Expect.equal
-        (Post.parse (Images.ofFetch failing) (file "a-post") (text frontMatter $"Text.\n\n![A cat]({cat})"))
+        (Post.parse (Images.ofFetch failing) [] (file "a-post") (text frontMatter $"Text.\n\n![A cat]({cat})"))
         (Error [ errorAt "a-post" 11 $"The build cannot read the size of the image {cat}: HTTP 404, after 3 attempts." ])
         "A failed download fails the build"
     }
@@ -97,7 +97,7 @@ let tests =
       let text' = fetchWith (fun _ -> Ok(Encoding.UTF8.GetBytes "<html>Not found</html>"))
 
       Expect.equal
-        (Post.parse (Images.ofFetch text') (file "a-post") (text frontMatter $"![A cat]({cat})"))
+        (Post.parse (Images.ofFetch text') [] (file "a-post") (text frontMatter $"![A cat]({cat})"))
         (Error [ errorAt "a-post" 9 $"The build cannot read the size of the image {cat}: the file is not an image." ])
         "A file that is not an image fails the build"
     }
@@ -107,7 +107,7 @@ let tests =
       let images = Images.ofFetch (ImageFetch.memoize fetch)
 
       for slug in [ "a-post"; "b-post" ] do
-        Post.parse images (file slug) (text frontMatter $"![A cat]({cat})") |> ignore
+        Post.parse images [] (file slug) (text frontMatter $"![A cat]({cat})") |> ignore
 
       Expect.equal (List.ofSeq calls) [ cat ] "One download"
     }

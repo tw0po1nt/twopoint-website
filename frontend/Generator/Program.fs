@@ -14,6 +14,14 @@ let private build (root: string) (stage: Stage) =
     return $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}"
   }
 
+let private pull (root: string) (account: string) =
+  Pull.run (PostStore.azure account)
+  |> Result.map (fun files ->
+    PostFolder.write root files
+
+    $"Pulled {files.Published.Length} posts and {files.Series.Length} series records from {account} to {PostFolder.pulled}")
+  |> Result.mapError List.singleton
+
 let private upload (root: string) (container: Uri) =
   let folder = outputFolder root
 
@@ -34,6 +42,7 @@ let main argv =
 
       match command with
       | Cli.Build stage -> return! build root stage
+      | Cli.Pull account -> return! pull root account
       | Cli.Upload container -> return! upload root container
     }
 

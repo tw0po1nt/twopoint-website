@@ -30,7 +30,6 @@ type Series =
 type FrontMatter =
   { PublishDate: DateTimeOffset
     UpdateDate: DateTimeOffset option
-    Draft: bool
     Title: string
     Excerpt: string
     Author: string
@@ -65,7 +64,3 @@ type Post =
     Slug: string
     FrontMatter: FrontMatter
     Body: Body }
-
-type ParsedPost =
-  | Draft
-  | Published of Post

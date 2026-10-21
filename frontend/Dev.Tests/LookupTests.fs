@@ -36,12 +36,11 @@ let private noWidgets =
     DevFiles = Map.empty }
 
 let private post slug =
-  { File = $"frontend/content/posts/{slug}.md"
+  { File = $"frontend/content/posts/published/{slug}.md"
     Slug = slug
     FrontMatter =
       { PublishDate = DateTimeOffset.UnixEpoch
         UpdateDate = None
-        Draft = false
         Title = slug
         Excerpt = "An excerpt"
         Author = "Matthew Watt"

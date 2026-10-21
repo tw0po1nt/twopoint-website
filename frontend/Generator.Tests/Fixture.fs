@@ -51,19 +51,38 @@ let frontMatter =
 /// The body starts on line 9.
 let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
 
-let file slug = $"frontend/content/posts/{slug}.md"
+let file slug =
+  PostFolder.filePath PostFolder.pulled Container.Published $"{slug}.md"
 
-let parse slug text = Post.parse anyImages (file slug) text
+let seriesRecord slug : Series =
+  { Slug = slug
+    Title = slug
+    Excerpt = "A series"
+    Image = None }
 
-let published slug text =
-  match parse slug text with
-  | Ok(Published post) -> post
-  | other -> failtest $"The fixture post is not published: %A{other}"
+let fableReminders: Series =
+  { Slug = "fable-reminders"
+    Title = "Fable Reminders"
+    Excerpt = "Notes on Fable"
+    Image = None }
 
-let errors slug text =
-  match parse slug text with
+let parseIn (series: Series list) slug text = Post.parse anyImages series (file slug) text
+
+let parse slug text = parseIn [] slug text
+
+let publishedIn (series: Series list) slug text =
+  match parseIn series slug text with
+  | Ok post -> post
+  | Error errors -> failtest $"The fixture post has errors: %A{errors}"
+
+let published slug text = publishedIn [] slug text
+
+let errorsIn (series: Series list) slug text =
+  match parseIn series slug text with
   | Error errors -> errors
-  | other -> failtest $"The fixture post has no error: %A{other}"
+  | Ok post -> failtest $"The fixture post has no error: %A{post}"
+
+let errors slug text = errorsIn [] slug text
 
 let errorAt slug line message = PostError.at (file slug) line message
 
@@ -111,9 +130,18 @@ let realRoot =
      | Ok root -> root
      | Error message -> failtest message)
 
+/// The posts and the series records of the post store at the move out of Git, in the layout of the pulled folder.
+let fixtureFolder = "frontend/Generator.Tests/posts"
+
+let realPostFiles =
+  lazy
+    (match PostFolder.read realRoot.Value fixtureFolder with
+     | Ok files -> files
+     | Error message -> failtest message)
+
 let realContent =
   lazy
-    (match Site.loadContent anyImages realRoot.Value with
+    (match Site.loadContent anyImages realRoot.Value realPostFiles.Value with
      | Ok content -> content
      | Error errors -> failtest (String.concat "\n" errors))
 
@@ -140,13 +168,14 @@ let postWith slug (publishDate: string) category (tags: string list) (series: st
     | [] -> ""
     | tags -> "\ntags:" + (tags |> List.map (fun tag -> $"\n  - {tag}") |> String.concat "")
 
-  let seriesLines =
+  let seriesLine =
     match series with
-    | Some series -> $"\nseries:\n  slug: {series}\n  title: {series}\n  excerpt: A series"
+    | Some series -> $"\nseries: {series}"
     | None -> ""
 
-  published
+  publishedIn
+    (series |> Option.map seriesRecord |> Option.toList)
     slug
     (text
-      $"publishDate: {publishDate}\nauthor: Matthew Watt\ntitle: {slug}\nexcerpt: An excerpt\ncategory: {category}{tagLines}{seriesLines}"
+      $"publishDate: {publishDate}\nauthor: Matthew Watt\ntitle: {slug}\nexcerpt: An excerpt\ncategory: {category}{tagLines}{seriesLine}"
       "Text.")

@@ -1,12 +1,22 @@
 name: Build the site
 description: >-
-  Builds the widgets and the F# site for one stage. The site goes to
+  Pulls the posts from the post store, then builds the widgets and the F# site for one
+  stage. The job needs the id-token: write permission. The site goes to
   frontend/dist/website/, the newsletters to frontend/dist/newsletter/, and the stage
   marker to frontend/dist/stage.
 
 inputs:
   stage:
     description: "The stage of the build: local, staging, or production."
+    required: true
+  client-id:
+    description: "The client ID of the build identity, which can read the post store."
+    required: true
+  tenant-id:
+    description: "The Azure tenant ID."
+    required: true
+  post-store-account:
+    description: "The storage account name of the post store."
     required: true
 
 runs:
@@ -40,6 +50,20 @@ runs:
       shell: bash
       working-directory: frontend/Widgets
       run: npm test
+
+    - name: Sign in to Azure as the build identity
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        # The build identity has roles on two containers only, so it can see no subscription.
+        allow-no-subscriptions: true
+
+    - name: Pull the posts from the post store
+      shell: bash
+      env:
+        ACCOUNT: ${{ inputs.post-store-account }}
+      run: dotnet run --project frontend/Generator -- pull --account "$ACCOUNT"
 
     - name: Build the site
       shell: bash

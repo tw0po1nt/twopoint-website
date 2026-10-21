@@ -30,9 +30,15 @@ jobs:
   site:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/build-site
         with:
           stage: staging
+          client-id: ${{ secrets.AZURE_BUILD_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          post-store-account: ${{ vars.POST_STORE_ACCOUNT }}

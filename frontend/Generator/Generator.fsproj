@@ -14,8 +14,8 @@
     <Compile Include="../Widgets/HideAt.fs" Link="HideAt.fs" />
     <Compile Include="Stage.fs" />
     <Compile Include="Robots.fs" />
-    <Compile Include="Slug.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="Slug.fs" />
     <Compile Include="FrontMatter.fs" />
     <Compile Include="Highlight.fs" />
     <Compile Include="Directive.fs" />
@@ -45,9 +45,12 @@
     <Compile Include="HomePage.fs" />
     <Compile Include="Sitemap.fs" />
     <Compile Include="RenderMap.fs" />
+    <Compile Include="PostFolder.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />
+    <Compile Include="AzureRequest.fs" />
     <Compile Include="Upload.fs" />
+    <Compile Include="Pull.fs" />
     <Compile Include="Cli.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
