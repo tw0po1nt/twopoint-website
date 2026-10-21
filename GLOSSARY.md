@@ -41,6 +41,10 @@ A category or a tag of a post. Its slug comes from its title.
 A line of a post that embeds a video or the slides of a talk, for example `::youtube{id="…"}`. The
 build fails on a bad directive.
 
+**Asset**:
+An image or a PDF that the author uploads for a post. A post refers to an asset by its URL.
+_Avoid_: Upload, attachment, media
+
 **Upcoming post**:
 A published post with a publish date in the future. Readers can open it before that date, but they
 cannot comment on it until that date.
