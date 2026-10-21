@@ -8,7 +8,7 @@ series:
   slug: matts-footgun-collection
   title: "Matt's Footgun Collection"
   excerpt: "A collection of all sorts of footguns I have encountered in code that I've worked with over the years"
-  image: https://twopointwebsite.blob.core.windows.net/series/matts-footgun-collection/thumbnail.jpg
+  image: https://twopointwebsite.blob.core.windows.net/assets/823d1b141eaed748.jpg
 tags:
   - Footguns
   - CSharp
