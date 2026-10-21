@@ -31,11 +31,12 @@ The content of a post at one publish. The author can restore a revision as a pen
 _Avoid_: Version, snapshot
 
 **Series**:
-A group of posts in order. Each post in a series has the slug, the title, and the excerpt of the
-series.
+A group of posts in order. A series has a slug, a title, and an excerpt. The author makes a series,
+then puts posts in it.
 
 **Term**:
-A category or a tag of a post. Its slug comes from its title.
+A category or a tag of a post. Its slug comes from its title. A post has one category and can have
+tags.
 
 **Directive**:
 A line of a post that embeds a video or the slides of a talk, for example `::youtube{id="…"}`. The
