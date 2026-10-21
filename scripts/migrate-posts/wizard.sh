@@ -345,9 +345,9 @@ say "The build identity gets Storage Blob Data Reader on published and series on
 say "It cannot read a draft, a pending edit, or a revision."
 UNREADABLE_CONTAINERS=()
 for container in "${BUILD_CONTAINERS[@]}"; do
-  READER_ROLES=$(az role assignment list --assignee "$BUILD_PRINCIPAL_ID" \
-    --scope "$STORE_ID/blobServices/default/containers/$container" \
-    --query "[?roleDefinitionName=='Storage Blob Data Reader'] | length(@)" -o tsv)
+  READER_ROLES=$(az role assignment list --scope "$STORE_ID/blobServices/default/containers/$container" \
+    --fill-principal-name false \
+    --query "[?principalId=='$BUILD_PRINCIPAL_ID' && roleDefinitionName=='Storage Blob Data Reader'] | length(@)" -o tsv)
   if [[ "${READER_ROLES:-0}" -gt 0 ]]; then
     note "The identity can already read '$container'."
   else
@@ -365,8 +365,8 @@ elif confirm "Give $BUILD_IDENTITY 'Storage Blob Data Reader' on ${UNREADABLE_CO
 else
   SKIPPED+=("Assign Storage Blob Data Reader on ${UNREADABLE_CONTAINERS[*]} to $BUILD_IDENTITY")
 fi
-WIDE_ROLES=$(az role assignment list --assignee "$BUILD_PRINCIPAL_ID" --all \
-  --query "[?starts_with(roleDefinitionName, 'Storage Blob Data') && !contains(scope, '/containers/')].scope" -o tsv)
+WIDE_ROLES=$(az role assignment list --all --fill-principal-name false \
+  --query "[?principalId=='$BUILD_PRINCIPAL_ID' && starts_with(roleDefinitionName, 'Storage Blob Data') && !contains(scope, '/containers/')].scope" -o tsv)
 if [[ -n "$WIDE_ROLES" ]]; then
   warn "The identity has a Storage Blob Data role above the container level:"
   while IFS= read -r scope; do note "  $scope"; done <<< "$WIDE_ROLES"
@@ -439,8 +439,8 @@ printf '\n'
 az storage container-rm list --storage-account "$STORE_ACCOUNT" -g "$SITE_RG" \
   --query "[].{container:name, publicAccess:publicAccess}" -o table
 printf '\n'
-az role assignment list --assignee "$BUILD_PRINCIPAL_ID" --all \
-  --query "[].{role:roleDefinitionName, scope:scope}" -o table
+az role assignment list --all --fill-principal-name false \
+  --query "[?principalId=='$BUILD_PRINCIPAL_ID'].{role:roleDefinitionName, scope:scope}" -o table
 printf '\n'
 az identity federated-credential list --identity-name "$BUILD_IDENTITY" -g "$SITE_RG" \
   --query "[].{name:name, subject:subject}" -o table
