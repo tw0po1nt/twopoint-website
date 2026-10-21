@@ -58,7 +58,7 @@ let tests =
     }
 
     test "each series has a record, and each record has a post" {
-      let records = Site.loadSeries realRoot.Value |> ok |> List.map _.Slug
+      let records = Site.parseSeries realPostFiles.Value |> ok |> List.map _.Slug
       Expect.equal records [ "fable-reminders"; "matts-footgun-collection" ] "The 2 series have records"
 
       Expect.equal

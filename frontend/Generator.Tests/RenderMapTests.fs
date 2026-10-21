@@ -4,25 +4,30 @@ open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
 
 open Expecto
-open System
 open System.IO
 open System.Text
 
 /// `files` gives each file as its path from the repo root and its text.
 let private loadPostsFrom (files: (string * string) list) =
-  let root = Path.Combine(Path.GetTempPath(), $"twopoint-content-{Guid.NewGuid()}")
+  let postFiles container =
+    files
+    |> List.filter (fun (path, _) -> path.EndsWith(Container.extension container))
+    |> List.map (fun (path, text) -> { Path = path; Bytes = Encoding.UTF8.GetBytes text })
 
-  try
-    for path, text in files do
-      let full = Path.Combine(root, path)
-      Directory.CreateDirectory(Path.GetDirectoryName full) |> ignore
-      File.WriteAllText(full, text)
+  Site.parsePosts anyImages { Published = postFiles Container.Published; Series = postFiles Container.Series }
 
-    Site.loadPosts anyImages root
-  finally
-    Directory.Delete(root, true)
+let private seriesFile slug =
+  PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml", "title: A series\nexcerpt: Posts\n"
 
-let private seriesFile slug = $"frontend/content/series/{slug}.yml", "title: A series\nexcerpt: Posts\n"
+type private FixtureStore() =
+  interface IPostStore with
+    member _.Download container =
+      let files =
+        match container with
+        | Container.Published -> realPostFiles.Value.Published
+        | Container.Series -> realPostFiles.Value.Series
+
+      Ok(files |> List.rev |> List.map (fun file -> Path.GetFileName file.Path, file.Bytes))
 
 [<Tests>]
 let tests =
@@ -66,7 +71,18 @@ let tests =
       Expect.equal
         (loadPostsFrom [ seriesFile "a-series"; file "a-post", text $"{frontMatter}\nseries: b-series" "Text." ]
          |> Result.mapError (List.map PostError.format))
-        (Error [ "frontend/content/posts/a-post.md:7: No series has the slug 'b-series'." ])
+        (Error [ "frontend/content/posts/published/a-post.md:7: No series has the slug 'b-series'." ])
         "The build error names the file and the line of the series field"
+    }
+  
+    test "pull gives the posts that build makes into the same site" {
+      let pulled = Pull.run (FixtureStore()) |> Result.mapError List.singleton |> ok
+      let fromPull = Site.loadContent anyImages realRoot.Value pulled |> ok
+
+      let render content =
+        RenderMap.create Stage.Production buildTime widgets content
+        |> Map.map (fun _ render -> render ())
+
+      Expect.equal (render fromPull) (render realContent.Value) "Each output file has the same bytes"
     }
   ]

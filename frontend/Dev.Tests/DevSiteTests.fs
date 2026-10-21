@@ -46,7 +46,7 @@ let private content =
     OgImages = { Files = Map.empty; ByPost = Map.empty }
     Email = { Inline = ""; Embed = "" } }
 
-let private postError = "frontend/content/posts/a-post.md:12: The front matter has no 'title'."
+let private postError = "frontend/content/posts/published/a-post.md:12: The front matter has no 'title'."
 
 let private load previous widgets content =
   DevSite.load previous Stage.Local DateTimeOffset.UnixEpoch (fun () -> widgets) (fun () -> content)
@@ -104,7 +104,7 @@ let tests =
 
       Expect.stringContains
         html
-        "<li><code>frontend/content/posts/a-post.md:12</code> The front matter has no &#39;title&#39;.</li>"
+        "<li><code>frontend/content/posts/published/a-post.md:12</code> The front matter has no &#39;title&#39;.</li>"
         "The post error"
 
       Expect.stringContains html "<li>The site has no &lt;b&gt;stylesheet&lt;/b&gt;.</li>" "An error with no file, as text"

@@ -4,7 +4,7 @@ module TwoPoint.Site.Dev.ErrorPage
 open Oxpecker.ViewEngine
 open System.Text.RegularExpressions
 
-/// The form of a post error: `frontend/content/posts/a-post.md:12: The message.`
+/// The form of a post error: `frontend/content/posts/published/a-post.md:12: The message.`
 let private location =
   Regex("^(?<file>[^\\s:]+):(?<line>\\d+): (?<message>.*)$", RegexOptions.Singleline)
 

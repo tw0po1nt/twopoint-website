@@ -16,8 +16,8 @@ open System.Globalization
 open System.IO
 open System.Text.RegularExpressions
 
-let postsFolder = Path.Combine("frontend", "content", "posts")
-let seriesFolder = Path.Combine("frontend", "content", "series")
+let postsFolder = Path.Combine("frontend", "content", "posts", "published")
+let seriesFolder = Path.Combine("frontend", "content", "posts", "series")
 
 /// The dashboard does not count a post with this mark as a delivery to start.
 let migratedMark = dict [ "migrated", "true" ]

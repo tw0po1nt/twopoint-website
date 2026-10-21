@@ -51,7 +51,8 @@ let frontMatter =
 /// The body starts on line 9.
 let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
 
-let file slug = $"frontend/content/posts/{slug}.md"
+let file slug =
+  PostFolder.filePath PostFolder.pulled Container.Published $"{slug}.md"
 
 let seriesRecord slug : Series =
   { Slug = slug
@@ -129,9 +130,18 @@ let realRoot =
      | Ok root -> root
      | Error message -> failtest message)
 
+/// The posts and the series records of the post store at the move out of Git, in the layout of the pulled folder.
+let fixtureFolder = "frontend/Generator.Tests/posts"
+
+let realPostFiles =
+  lazy
+    (match PostFolder.read realRoot.Value fixtureFolder with
+     | Ok files -> files
+     | Error message -> failtest message)
+
 let realContent =
   lazy
-    (match Site.loadContent anyImages realRoot.Value with
+    (match Site.loadContent anyImages realRoot.Value realPostFiles.Value with
      | Ok content -> content
      | Error errors -> failtest (String.concat "\n" errors))
 

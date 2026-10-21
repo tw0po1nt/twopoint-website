@@ -140,7 +140,8 @@ let tests =
     }
   ]
 
-let private seriesFile slug = $"frontend/content/series/{slug}.yml"
+let private seriesFile slug =
+  PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml"
 
 let private seriesErrors slug yaml =
   match FrontMatter.parseSeries (seriesFile slug) yaml with

@@ -87,7 +87,7 @@ let start () =
 
   let load () =
     site.Value <-
-      DevSite.load site.Value stage DateTimeOffset.UtcNow (fun () -> Site.loadWidgets root) (fun () -> Site.loadContent images root)
+      DevSite.load site.Value stage DateTimeOffset.UtcNow (fun () -> Site.loadWidgets root) (fun () -> Site.loadPulledContent images root)
     report site.Value
     reloads.Send()
 
