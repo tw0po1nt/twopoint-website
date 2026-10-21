@@ -11,7 +11,7 @@ let private oldest =
 
 let private middle =
   publishedIn
-    [ { seriesRecord "fable-reminders" with Title = "Fable Reminders" } ]
+    [ fableReminders ]
     "fable-reminders-part-2"
     (text
       "publishDate: 2024-11-15T00:00:00Z\nauthor: Matthew Watt\ntitle: Fable Reminders - Part 2\nexcerpt: The second part\ncategory: Series\ntags:\n  - FSharp\nseries: fable-reminders"

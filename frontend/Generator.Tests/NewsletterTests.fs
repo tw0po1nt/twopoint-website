@@ -107,7 +107,7 @@ let tests =
     test "the header has the label, the title, the date, the reading time, and the tags" {
       let seriesPost =
         publishedIn
-          [ { seriesRecord "fable-reminders" with Title = "Fable Reminders" } ]
+          [ fableReminders ]
           "a-series-post"
           (text
             "publishDate: 2025-09-01T00:00:00Z\nauthor: Matthew Watt\ntitle: A series post\nexcerpt: An excerpt\n\

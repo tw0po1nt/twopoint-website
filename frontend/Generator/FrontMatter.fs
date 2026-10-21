@@ -8,7 +8,10 @@ open System.IO
 open YamlDotNet.Core
 open YamlDotNet.RepresentationModel
 
-type private Context = { File: string; StartLine: int }
+type private Context =
+  { File: string
+    StartLine: int
+    Document: string }
 
 let private errorAt (context: Context) (yamlLine: int64) message =
   PostError.at context.File (context.StartLine + int yamlLine) message
@@ -92,20 +95,20 @@ let private mapping context (prefix: string) (node: YamlNode) (known: string lis
       Ok(fields |> Map.map (fun _ (_, value) -> value))
     else
       Error unknown
-  | _ when prefix = "" -> fail context node "Give the front matter as a YAML mapping."
+  | _ when prefix = "" -> fail context node $"Give the {context.Document} as a YAML mapping."
   | _ -> fail context node $"Give '{prefix.TrimEnd '.'}' as a mapping."
 
 let private required context (missingLine: int64) (fields: Map<string, YamlNode>) prefix name (parse: Parse<'a>) =
   match fields.TryFind name with
   | Some node -> parse context $"{prefix}{name}" node
-  | None -> Error [ errorAt context missingLine $"The front matter has no '{prefix}{name}' field." ]
+  | None -> Error [ errorAt context missingLine $"The {context.Document} has no '{prefix}{name}' field." ]
 
 let private optional context (fields: Map<string, YamlNode>) prefix name (parse: Parse<'a>) =
   match fields.TryFind name with
   | Some node -> parse context $"{prefix}{name}" node |> Result.map Some
   | None -> Ok None
 
-let private seriesRecord (records: Series list) : Parse<Series> =
+let private seriesBySlug (records: Series list) : Parse<Series> =
   fun context name node ->
     text context name node
     |> Result.bind (fun slug ->
@@ -140,7 +143,7 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
         and! author = required "author" text
         and! category = required "category" term
         and! tags = optional "tags" terms
-        and! series = optional "series" (seriesRecord records)
+        and! series = optional "series" (seriesBySlug records)
         and! image = optional "image" httpsUrl
         and! showOnHomepage = optional "showOnHomepage" flag
 
@@ -158,8 +161,17 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
       }
   }
 
-let private load (file: string) (startLine: int) (yaml: string) (ofRoot: Context -> YamlNode -> Result<'a, PostError list>) =
-  let context = { File = file; StartLine = startLine }
+let private load
+  (document: string)
+  (file: string)
+  (startLine: int)
+  (yaml: string)
+  (ofRoot: Context -> YamlNode -> Result<'a, PostError list>)
+  =
+  let context =
+    { File = file
+      StartLine = startLine
+      Document = document }
 
   try
     let stream = YamlStream()
@@ -167,13 +179,13 @@ let private load (file: string) (startLine: int) (yaml: string) (ofRoot: Context
 
     match List.ofSeq stream.Documents with
     | [ document ] -> ofRoot context document.RootNode |> Result.mapError (List.sortBy _.Line)
-    | _ -> Error [ errorAt context 0L "The front matter is not one YAML mapping." ]
+    | _ -> Error [ errorAt context 0L $"The {document} is not one YAML mapping." ]
   with :? YamlException as error ->
     Error [ errorAt context error.Start.Line error.Message ]
 
 /// `startLine` is the file line of the opening `---`.
 let parse (records: Series list) (file: string) (startLine: int) (yaml: string) : Result<FrontMatter, PostError list> =
-  load file startLine yaml (ofRoot records)
+  load "front matter" file startLine yaml (ofRoot records)
 
 let private ofPageRoot context (root: YamlNode) =
   result {
@@ -190,7 +202,7 @@ let private ofPageRoot context (root: YamlNode) =
 
 /// The title and the description of a page that is not a post. `startLine` is the file line of the opening `---`.
 let parsePage (file: string) (startLine: int) (yaml: string) : Result<string * string, PostError list> =
-  load file startLine yaml ofPageRoot
+  load "front matter" file startLine yaml ofPageRoot
 
 let private ofSeriesRoot (slug: string) context (root: YamlNode) =
   result {
@@ -213,9 +225,5 @@ let private ofSeriesRoot (slug: string) context (root: YamlNode) =
 
 /// A series record is a YAML file, and its file name gives the slug.
 let parseSeries (file: string) (yaml: string) : Result<Series, PostError list> =
-  let slug = Path.GetFileNameWithoutExtension file
-
-  if Slug.term slug <> slug then
-    Error [ PostError.at file 1 $"Give the file a slug as its name, for example {Slug.term slug}.yml." ]
-  else
-    load file 0 yaml (ofSeriesRoot slug)
+  Slug.ofFileName file
+  |> Result.bind (fun slug -> load "series record" file 0 yaml (ofSeriesRoot slug))

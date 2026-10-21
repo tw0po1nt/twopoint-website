@@ -53,11 +53,16 @@ let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{bo
 
 let file slug = $"frontend/content/posts/{slug}.md"
 
-/// A series record with the title `slug`.
 let seriesRecord slug : Series =
   { Slug = slug
     Title = slug
     Excerpt = "A series"
+    Image = None }
+
+let fableReminders: Series =
+  { Slug = "fable-reminders"
+    Title = "Fable Reminders"
+    Excerpt = "Notes on Fable"
     Image = None }
 
 let parseIn (series: Series list) slug text = Post.parse anyImages series (file slug) text

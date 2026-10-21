@@ -14,8 +14,8 @@
     <Compile Include="../Widgets/HideAt.fs" Link="HideAt.fs" />
     <Compile Include="Stage.fs" />
     <Compile Include="Robots.fs" />
-    <Compile Include="Slug.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="Slug.fs" />
     <Compile Include="FrontMatter.fs" />
     <Compile Include="Highlight.fs" />
     <Compile Include="Directive.fs" />

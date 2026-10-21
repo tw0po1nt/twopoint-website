@@ -36,10 +36,12 @@ let loadSeries (root: string) : Result<Series list, PostError list> =
   |> List.traverseResultA (fun (file, path) -> FrontMatter.parseSeries file (File.ReadAllText path))
   |> Result.mapError List.concat
 
-let loadPosts (images: IImages) (series: Series list) (root: string) : Result<Post list, PostError list> =
-  files root postsFolder ".md"
-  |> List.traverseResultA (fun (file, path) -> Post.parse images series file (File.ReadAllText path))
-  |> Result.mapError List.concat
+let loadPosts (images: IImages) (root: string) : Result<Post list, PostError list> =
+  loadSeries root
+  |> Result.bind (fun series ->
+    files root postsFolder ".md"
+    |> List.traverseResultA (fun (file, path) -> Post.parse images series file (File.ReadAllText path))
+    |> Result.mapError List.concat)
 
 let loadAssets (root: string) : Result<Assets, string list> =
   let assetsDir = Path.Combine(root, assetsFolder)
@@ -72,10 +74,7 @@ let loadContent (images: IImages) (root: string) : Result<Content, string list> 
   result {
     let! posts, privacy, assets =
       validation {
-        let! posts =
-          loadSeries root
-          |> Result.bind (fun series -> loadPosts images series root)
-          |> Result.mapError (List.map PostError.format)
+        let! posts = loadPosts images root |> Result.mapError (List.map PostError.format)
         and! privacy = loadPrivacy images root |> Result.mapError (List.map PostError.format)
         and! assets = loadAssets root
         return posts, privacy, assets

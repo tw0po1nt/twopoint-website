@@ -175,9 +175,17 @@ let seriesTests =
     test "each missing required field of a series record fails at line 1" {
       Expect.equal
         (seriesErrors "a-series" "image: https://example.com/a.jpg\n")
-        [ seriesErrorAt "a-series" 1 "The front matter has no 'title' field."
-          seriesErrorAt "a-series" 1 "The front matter has no 'excerpt' field." ]
+        [ seriesErrorAt "a-series" 1 "The series record has no 'title' field."
+          seriesErrorAt "a-series" 1 "The series record has no 'excerpt' field." ]
         "The title and the excerpt are required"
+    }
+
+    test "a series record that is not a mapping fails" {
+      Expect.equal
+        (seriesErrors "a-series" "- A series
+")
+        [ seriesErrorAt "a-series" 1 "Give the series record as a YAML mapping." ]
+        "A series record is a YAML mapping"
     }
 
     test "an unknown or bad field of a series record fails with its line" {

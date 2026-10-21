@@ -192,11 +192,7 @@ let tests =
     test "a series page has the series title, its excerpt, and its Open Graph image" {
       let image = "https://example.com/fable.png"
 
-      let series =
-        { Slug = "fable-reminders"
-          Title = "Fable Reminders"
-          Excerpt = "Notes on Fable"
-          Image = Some(Uri image) }
+      let series = { fableReminders with Image = Some(Uri image) }
 
       let withImage slug date =
         publishedIn
