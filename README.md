@@ -8,12 +8,12 @@
 
 # Overview
 
-This website is a static site. An F# generator in `frontend/` builds the site from the Markdown posts in `frontend/content/posts/`. Fable compiles the interactive widgets to JavaScript. `backend/` is an F# Azure Functions app for comments, newsletter subscriptions, and notifications.
+This website is a static site. An F# generator in `frontend/` builds the site from the Markdown posts in the post store, a private Azure Blob storage account. Fable compiles the interactive widgets to JavaScript. `backend/` is an F# Azure Functions app for comments, newsletter subscriptions, and notifications.
 <br />
 
 ```text
 frontend/
-├── content/      # posts, privacy page, assets, styles, email CSS
+├── content/      # privacy page, assets, styles, email CSS, and the pulled posts
 ├── Generator/    # builds the site and the newsletters, and uploads the newsletters
 ├── Widgets/      # comments, subscribe, unsubscribe, and PDF viewer, in Fable
 └── Dev/          # dev server with live reload
@@ -46,15 +46,33 @@ cd frontend/Widgets
 npm ci
 ```
 
-### 4. Run the site locally
+### 4. Pull the posts
+
+The site needs the posts from the post store. You need Storage Blob Data Reader or a higher role on the post store.
+
+1. Sign in to Azure:
+
+   ```sh
+   az login
+   ```
+
+2. Download the posts from the root of the repository:
+
+   ```sh
+   dotnet run --project frontend/Generator -- pull --account twopointposts
+   ```
+
+The command writes the posts and the series records to `frontend/content/posts/`. Git ignores this folder. Run the command again to get the newest posts.
+
+### 5. Run the site locally
 
 Use one of these two paths. Each path gives the site at [http://localhost:4321](http://localhost:4321).
 
 #### Path A: the dev server
 
-Use this path to write posts or change the site. The dev server renders each page in memory, so it needs no build first.
+Use this path to change the site. The dev server renders each page in memory, so it needs no build first.
 
-Start a SageFs session in `frontend/Dev/`. The init script starts the dev server and the widget watch. A save of a post, a style, or a widget reloads the page.
+Start a SageFs session in `frontend/Dev/`. The init script starts the dev server and the widget watch. A save of a pulled post, a style, or a widget reloads the page.
 
 On the first start, the page shows an error until the widget watch writes `frontend/Widgets/dist/`. Then the page reloads.
 
@@ -92,7 +110,7 @@ The script runs the prose check, builds the solution, and runs the .NET tests. T
 
 ## Deploys
 
-A push to `main` builds the site and deploys it to GitHub Pages. In the production repository, the workflow also uploads the newsletters to Azure Blob storage before the deploy.
+A push to `main` or a manual run of `site.yml` pulls the posts, builds the site, and deploys it to GitHub Pages. In the production repository, the workflow also uploads the newsletters to Azure Blob storage before the deploy.
 
 ## Live site
 

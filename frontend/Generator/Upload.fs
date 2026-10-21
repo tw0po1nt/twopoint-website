@@ -21,10 +21,9 @@ type IBlobContainer =
 [<RequireQualifiedAccess>]
 module BlobContainer =
 
-  let private attempt (action: unit -> unit) =
+  let attempt (action: unit -> 'T) =
     try
-      action ()
-      Ok()
+      Ok(action ())
     with
     | :? AuthenticationFailedException as error -> Error error.Message
     | :? RequestFailedException as error -> Error error.Message

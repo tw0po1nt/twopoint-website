@@ -27,6 +27,26 @@ let tests =
         Expect.equal (Cli.parse [ "build"; "--stage"; Stage.name stage ]) (Ok(Cli.Build stage)) "build reads the stage"
     }
 
+    test "pull with no account option fails with a clear error" {
+      for args in [ [ "pull" ]; [ "pull"; "--account" ] ] do
+        let error = Expect.wantError (Cli.parse args) "pull needs an account"
+        Expect.equal error "pull needs an account. Give --account <name>." "The error names the option"
+    }
+
+    test "pull with a value that is not a storage account name fails" {
+      for value in [ "https://twopointposts.blob.core.windows.net"; "TwoPointPosts"; "ab" ] do
+        let error = Expect.wantError (Cli.parse [ "pull"; "--account"; value ]) $"'{value}' is not an account name"
+
+        Expect.equal
+          error
+          $"The account '{value}' is not a storage account name. Give --account <name>."
+          "The error names the value"
+    }
+
+    test "pull reads the account name" {
+      Expect.equal (Cli.parse [ "pull"; "--account"; "twopointposts" ]) (Ok(Cli.Pull "twopointposts")) "pull reads the name"
+    }
+
     test "upload with no container option fails with a clear error" {
       let error = Expect.wantError (Cli.parse [ "upload" ]) "upload needs a container"
       Expect.equal error "upload needs a container. Give --container <uri>." "The error names the option"

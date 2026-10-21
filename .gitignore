@@ -51,5 +51,8 @@ pnpm-lock.yaml
 # widget build output (dist/ is ignored above)
 frontend/Widgets/build/
 
+# the posts that pull downloads from the post store
+frontend/content/posts/
+
 # dev server image cache
 frontend/.cache/

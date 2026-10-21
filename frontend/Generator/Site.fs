@@ -5,8 +5,6 @@ open FsToolkit.ErrorHandling
 open System
 open System.IO
 
-let private postsFolder = Path.Combine("frontend", "content", "posts")
-let private seriesFolder = Path.Combine("frontend", "content", "series")
 let private assetsFolder = Path.Combine("frontend", "content", "assets")
 let private stylesFolder = Path.Combine("frontend", "content", "styles")
 let private privacyFile = "frontend/content/privacy.md"
@@ -24,23 +22,16 @@ let root (start: string) =
 
   find (DirectoryInfo start)
 
-/// Gives the path from the repo root and the full path of each file, in path order.
-let private files (root: string) (folder: string) (extension: string) =
-  Directory.GetFiles(Path.Combine(root, folder), $"*{extension}")
-  |> Array.sort
-  |> Array.map (fun path -> Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/'), path)
-  |> List.ofArray
-
-let loadSeries (root: string) : Result<Series list, PostError list> =
-  files root seriesFolder ".yml"
-  |> List.traverseResultA (fun (file, path) -> FrontMatter.parseSeries file (File.ReadAllText path))
+let parseSeries (files: PostFiles) : Result<Series list, PostError list> =
+  files.Series
+  |> List.traverseResultA (fun file -> FrontMatter.parseSeries file.Path (PostFolder.text file))
   |> Result.mapError List.concat
 
-let loadPosts (images: IImages) (root: string) : Result<Post list, PostError list> =
-  loadSeries root
+let parsePosts (images: IImages) (files: PostFiles) : Result<Post list, PostError list> =
+  parseSeries files
   |> Result.bind (fun series ->
-    files root postsFolder ".md"
-    |> List.traverseResultA (fun (file, path) -> Post.parse images series file (File.ReadAllText path))
+    files.Published
+    |> List.traverseResultA (fun file -> Post.parse images series file.Path (PostFolder.text file))
     |> Result.mapError List.concat)
 
 let loadAssets (root: string) : Result<Assets, string list> =
@@ -70,11 +61,11 @@ let loadEmail (root: string) : EmailStyles =
   let read name = File.ReadAllText(Path.Combine(root, emailFolder, name))
   { Inline = read "inline.css"; Embed = read "embed.css" }
 
-let loadContent (images: IImages) (root: string) : Result<Content, string list> =
+let loadContent (images: IImages) (root: string) (postFiles: PostFiles) : Result<Content, string list> =
   result {
     let! posts, privacy, assets =
       validation {
-        let! posts = loadPosts images root |> Result.mapError (List.map PostError.format)
+        let! posts = parsePosts images postFiles |> Result.mapError (List.map PostError.format)
         and! privacy = loadPrivacy images root |> Result.mapError (List.map PostError.format)
         and! assets = loadAssets root
         return posts, privacy, assets
@@ -89,6 +80,12 @@ let loadContent (images: IImages) (root: string) : Result<Content, string list> 
         OgImages = ogImages
         Email = loadEmail root }
   }
+
+/// Reads the posts from the folder that `pull` writes.
+let loadPulledContent (images: IImages) (root: string) : Result<Content, string list> =
+  PostFolder.read root PostFolder.pulled
+  |> Result.mapError List.singleton
+  |> Result.bind (loadContent images root)
 
 let loadWidgets (root: string) : Result<Widgets, string list> =
   let folder = Path.Combine(root, WidgetManifest.folder)
@@ -115,6 +112,6 @@ let renderMap (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (con
 let load (images: IImages) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap, string list> =
   result {
     let! widgets = loadWidgets root
-    let! content = loadContent images root
+    let! content = loadPulledContent images root
     return! renderMap stage buildTime widgets content
   }

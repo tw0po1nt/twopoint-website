@@ -7,21 +7,30 @@ generator with F# widgets that Fable compiles to JavaScript
 (`docs/spec/124-build-twopoint-dev-with-fsharp.md`). `backend/` is an F# Azure Functions app for
 newsletter subscriptions, notifications, and posts.
 
-Each post is a Markdown file in `frontend/content/posts/`. Each series is a YAML record in
-`frontend/content/series/`. A post refers to its series with `series: <slug>`.
+Each post is a Markdown blob in the `published` container of the post store, a private Azure Blob
+storage account. Each series is a YAML record in the `series` container. A post refers to its
+series with `series: <slug>`. A copy of the 10 posts and the 2 series records at the move out of
+Git is the test fixture in `frontend/Generator.Tests/posts/`. `dotnet test` reads the fixture and
+never reads the post store.
 
 To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
 compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in
 `frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
-`dotnet run --project frontend/Generator -- build --stage <local|staging|production>`. The command
+`dotnet run --project frontend/Generator -- pull --account <name>`. The command downloads each blob
+in `published` and `series` into `frontend/content/posts/`, which Git ignores. It uses
+`DefaultAzureCredential`, so on the local stage it uses your `az login`. The account name is in the
+repo variable `POST_STORE_ACCOUNT`. Then run
+`dotnet run --project frontend/Generator -- build --stage <local|staging|production>`. If
+`frontend/content/posts/` contains no post, the build fails and tells you to run `pull`. The command
 writes the site to `frontend/dist/website/`, the newsletters to `frontend/dist/newsletter/`, and
 the stage marker to `frontend/dist/stage`. The stage marker contains the stage name of the build.
 After a production build, `dotnet run --project frontend/Generator -- upload --container <uri>`
 sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
 
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
-on each push to `main`. The repo name sets the stage: the `prod` repo is `production`, and the
-`staging` repo is `staging`. On `production`, the workflow uploads the newsletters before the
+on each push to `main` and on each manual run. The build action signs in to Azure as the build
+identity through OIDC and runs `pull` before `build`. The repo name sets the stage: the `prod`
+repo is `production`, and the `staging` repo is `staging`. On `production`, the workflow uploads the newsletters before the
 deploy.
 
 ## Setup
@@ -58,8 +67,8 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips the blog posts
-  in `frontend/content/posts/`. The hook also
+  reads Markdown files, and the comments and strings of F# files. The check skips the posts
+  of the test fixture in `frontend/Generator.Tests/posts/`. The hook also
   checks the text of `git commit` and of `gh` issue and PR commands.
   `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - Code: `docs/standards/coding-standards.md`.

@@ -36,7 +36,7 @@ let private noWidgets =
     DevFiles = Map.empty }
 
 let private post slug =
-  { File = $"frontend/content/posts/{slug}.md"
+  { File = $"frontend/content/posts/published/{slug}.md"
     Slug = slug
     FrontMatter =
       { PublishDate = DateTimeOffset.UnixEpoch

@@ -117,7 +117,7 @@ if [ -n "${text_file:-}" ]; then
 else
   while IFS= read -r file; do
     case "$file" in
-      node_modules/* | */target/* | */node_modules/* | */bin/* | */obj/* | frontend/content/posts/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
+      node_modules/* | */target/* | */node_modules/* | */bin/* | */obj/* | frontend/Generator.Tests/posts/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
     esac
 
     case "$file" in

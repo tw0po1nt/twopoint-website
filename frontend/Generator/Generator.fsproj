@@ -45,9 +45,11 @@
     <Compile Include="HomePage.fs" />
     <Compile Include="Sitemap.fs" />
     <Compile Include="RenderMap.fs" />
+    <Compile Include="PostFolder.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />
     <Compile Include="Upload.fs" />
+    <Compile Include="Pull.fs" />
     <Compile Include="Cli.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
