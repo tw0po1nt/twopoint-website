@@ -3,7 +3,7 @@ publishDate: 2025-04-11T13:00:00.0000000Z
 author: Matthew Watt
 title: Contributing to the F# Open Source ecosystem
 excerpt: Every path to becoming an open source contributor is unique. In this session, Matt will describe how he approached the challenge.
-image: https://img.youtube.com/vi/TfznO3BYNlA/mqdefault.jpg
+image: https://twopointwebsite.blob.core.windows.net/assets/955b32a734ea15b4.jpg
 category: 'Talks'
 tags:
   - FSharp

@@ -8,7 +8,7 @@ series:
   slug: fable-reminders
   title: 'Fable Reminders'
   excerpt: 'Follow along as we learn what it takes to build a front-end web app entirely in F#!'
-  image: https://twopointwebsite.blob.core.windows.net/series/fable-reminders.jpg
+  image: https://twopointwebsite.blob.core.windows.net/assets/e3800544312a8f2f.jpg
 tags:
   - FSharp
   - Web development
@@ -372,7 +372,7 @@ npm run dev
 
 Open your favorite browser to [http://localhost:5173](http://localhost:5173) and you should see the following:
 
-![FableReminders running in Google Chrome with the DevTools console open and the text "Hello from F#"](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-1/first-run.jpg)
+![FableReminders running in Google Chrome with the DevTools console open and the text "Hello from F#"](https://twopointwebsite.blob.core.windows.net/assets/022fa7f5a0d13303.jpg)
 
 See that console log? It's no lie - it came from an F# file! Open up `src/Program.fs` to prove it to yourself:
 
@@ -383,7 +383,7 @@ printfn "Hello from F#"
 
 Pretty cool. It will be cooler when we write our _entire app_ in F#! Speaking of our app, here's our end goal:
 
-![The finished FableReminders running in Google Chrome with several lists and tasks](https://twopointwebsite.blob.core.windows.net/posts/series/fable-reminders/fable-reminders-part-1/end-goal.jpg)
+![The finished FableReminders running in Google Chrome with several lists and tasks](https://twopointwebsite.blob.core.windows.net/assets/8e2cd63a95aa6a8b.jpg)
 
 By the end of this series, we'll be able to add lists, add reminders, and mark them as completed or not completed. We'll even source our data from an API! It's pretty simple, but it's enough to give you a taste of what web development using F# looks like!
 

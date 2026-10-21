@@ -16,7 +16,7 @@ let private directiveError line =
   | errors -> failtest $"The directive gives one error: %A{errors}"
 
 let private slides =
-  "https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf"
+  "https://twopointwebsite.blob.core.windows.net/assets/a4dd66d174d2f471.pdf"
 
 [<Tests>]
 let tests =

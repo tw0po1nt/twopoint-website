@@ -115,12 +115,12 @@ let tests =
 
       Expect.stringContains
         (page slidesPost)
-        "<a class=\"pdf-download\" href=\"https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf\""
+        "<a class=\"pdf-download\" href=\"https://twopointwebsite.blob.core.windows.net/assets/a4dd66d174d2f471.pdf\""
         "The talk links its slides"
 
       Expect.stringContains
         (page slidesPost)
-        "<div data-widget=\"pdf\" data-file=\"https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf\"></div>"
+        "<div data-widget=\"pdf\" data-file=\"https://twopointwebsite.blob.core.windows.net/assets/a4dd66d174d2f471.pdf\"></div>"
         "The talk has the Pdf mount"
     }
 

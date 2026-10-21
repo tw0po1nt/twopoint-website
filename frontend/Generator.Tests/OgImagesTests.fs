@@ -10,7 +10,7 @@ open System.Text.RegularExpressions
 
 let private seriesImage = "https://twopointwebsite.blob.core.windows.net/series/a-series.jpg"
 
-let private postImage = "https://img.youtube.com/vi/TfznO3BYNlA/mqdefault.jpg"
+let private postImage = "https://twopointwebsite.blob.core.windows.net/assets/955b32a734ea15b4.jpg"
 
 let private post slug (image: string option) (series: string option) =
   let imageLine = image |> Option.map (sprintf "\nimage: %s") |> Option.defaultValue ""

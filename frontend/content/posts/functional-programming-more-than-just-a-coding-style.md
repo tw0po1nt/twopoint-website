@@ -3,7 +3,7 @@ publishDate: 2025-07-24T13:00:00.0000000Z
 author: Matthew Watt
 title: "Functional programming: more than just a coding style"
 excerpt: In this talk, we'll walk through five key learnings from my journey learning functional programming -- five fundamental approaches to building software that I believe make a strong case for the value in learning, applying, and teaching functional programming.
-image: https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/thumbnail.jpg
+image: https://twopointwebsite.blob.core.windows.net/assets/ca97a43015c3599b.jpg
 category: Talks
 tags:
   - fsharp
@@ -16,4 +16,4 @@ For the blog post version of this talk, [click here!](/posts/why-the-fsharp-woul
 
 #### Slides
 
-::pdf{file="https://twopointwebsite.blob.core.windows.net/posts/talks/functional-programming-more-than-just-a-coding-style/slides.pdf"}
+::pdf{file="https://twopointwebsite.blob.core.windows.net/assets/a4dd66d174d2f471.pdf"}

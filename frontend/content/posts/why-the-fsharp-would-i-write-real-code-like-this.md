@@ -3,7 +3,7 @@ publishDate: 2024-12-19T14:00:00.0000000Z
 author: Matthew Watt
 title: Why the F# would I write real code like this?
 excerpt: Come along for a story of how I grappled with that very question along my own journey of learning functional programming
-image: https://twopointwebsite.blob.core.windows.net/posts/one-offs/why-the-fsharp-would-i-write-real-code-like-this/thumbnail.jpg
+image: https://twopointwebsite.blob.core.windows.net/assets/44d0fd20803b08d3.jpg
 category: 'One-offs'
 tags:
   - FsAdvent

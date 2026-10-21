@@ -14,24 +14,46 @@ _Avoid_: Article, entry
 The post with the most recent publish date that does not set `showOnHomepage: false`. The home page shows it on the latest card.
 
 **Draft**:
-A post that is not ready to publish. The build checks its front matter and leaves it out of the
-output.
+A post that the author has not published. The site does not show it. A draft has no publish date.
 _Avoid_: Unpublished post
 
+**Published post**:
+A post that the author published. The site shows it from the next deploy. Its slug does not change.
+_Avoid_: Live post
+
+**Pending edit**:
+A saved change to a published post that the site does not show yet. The author publishes it or
+discards it.
+_Avoid_: Working copy, unpublished changes
+
+**Revision**:
+The content of a post at one publish. The author can restore a revision as a pending edit.
+_Avoid_: Version, snapshot
+
 **Series**:
-A group of posts in order. Each post in a series has the slug, the title, and the excerpt of the
-series.
+A group of posts in order. A series has a slug, a title, and an excerpt. The author makes a series,
+then puts posts in it.
 
 **Term**:
-A category or a tag of a post. Its slug comes from its title.
+A category or a tag of a post. Its slug comes from its title. A post has one category and can have
+tags.
 
 **Directive**:
 A line of a post that embeds a video or the slides of a talk, for example `::youtube{id="…"}`. The
 build fails on a bad directive.
 
+**Asset**:
+An image or a PDF that the author uploads for a post. A post refers to an asset by its URL.
+_Avoid_: Upload, attachment, media
+
+**Problem**:
+An error or a warning that the checks find in a post. An error makes the build fail and blocks a
+publish. A warning does neither.
+_Avoid_: Issue, lint, diagnostic
+
 **Upcoming post**:
-A post with a publish date in the future. Readers can open it before that date, but they cannot comment
-on it until that date.
+A published post with a publish date in the future. Readers can open it before that date, but they
+cannot comment on it until that date.
 _Avoid_: Scheduled post, future post
 
 **Newsletter**:
@@ -48,6 +70,11 @@ _Avoid_: Environment
 **Stage marker**:
 The file that the build writes next to the site output. It contains the stage name of the build.
 
+**Deploy**:
+One run that builds the site and puts it on one stage. A change to a post is deployed when a
+successful production deploy includes it.
+_Avoid_: Release, go live
+
 ### Subscriptions
 
 **Subscription**:
@@ -58,6 +85,11 @@ _Avoid_: Subscriber, member, signup
 A subscribe request for an email address that has an inactive subscription. The subscription becomes
 active again.
 _Avoid_: Resubscription
+
+**Cancellation**:
+A request that makes an active subscription inactive. The reader sends it from the unsubscribe link, or
+the author sends it from the admin.
+_Avoid_: Deactivation, unsubscription
 
 **Delivery**:
 One email that the blog sends to a subscription. Each delivery has a type and refers to one post.
@@ -74,8 +106,51 @@ a new-post delivery of that post to each active subscription. A subscription tha
 of the post does not get a new-post delivery of it.
 _Avoid_: Announcement, broadcast, blast
 
+### Comments
+
+**Commenter**:
+A person who verified an email address to comment on posts. A commenter is new, trusted, or
+banned.
+_Avoid_: User, reader
+
+**Comment**:
+The text that a commenter posts on one post. A comment is new, approved, or rejected. Readers see
+only approved comments.
+_Avoid_: Reply, response
+
+**Trusted commenter**:
+A commenter whose comments are approved at the time of the post. Only the author makes a commenter
+trusted.
+_Avoid_: Approved commenter, whitelisted commenter
+
+**Banned commenter**:
+A commenter whose new comments the blog does not keep. A banned commenter sees the same messages as
+a new commenter.
+_Avoid_: Blocked commenter, blacklisted commenter
+
+**Rejected comment**:
+A comment that readers do not see. The blog keeps it, and the author can approve it later.
+_Avoid_: Hidden comment, deleted comment
+
+**Moderation queue**:
+The new comments on all posts, oldest first. The author approves or rejects each one.
+_Avoid_: Inbox, pending comments
+
 ### Admin
 
+**Author**:
+The one person who writes the blog and uses the admin.
+_Avoid_: Owner, editor, admin
+
+**Admin**:
+The web app where the author moderates comments, writes and publishes posts, and starts deliveries.
+One admin serves all stages.
+_Avoid_: CMS, back office, admin app
+
 **Notification**:
-A push message to a device that an admin registered.
+A push message to a registered device.
 _Avoid_: Alert. Do not use this term for an email to a subscription.
+
+**Registered device**:
+A browser or a Home Screen web app where the author turned on notifications.
+_Avoid_: Push subscription, subscriber, device token
