@@ -86,6 +86,36 @@ a new-post delivery of that post to each active subscription. A subscription tha
 of the post does not get a new-post delivery of it.
 _Avoid_: Announcement, broadcast, blast
 
+### Comments
+
+**Commenter**:
+A person who verified an email address to comment on posts. A commenter is new, trusted, or
+banned.
+_Avoid_: User, reader
+
+**Comment**:
+The text that a commenter posts on one post. A comment is new, approved, or rejected. Readers see
+only approved comments.
+_Avoid_: Reply, response
+
+**Trusted commenter**:
+A commenter whose comments are approved at the time of the post. Only the author makes a commenter
+trusted.
+_Avoid_: Approved commenter, whitelisted commenter
+
+**Banned commenter**:
+A commenter whose new comments the blog does not keep. A banned commenter sees the same messages as
+a new commenter.
+_Avoid_: Blocked commenter, blacklisted commenter
+
+**Rejected comment**:
+A comment that readers do not see. The blog keeps it, and the author can approve it later.
+_Avoid_: Hidden comment, deleted comment
+
+**Moderation queue**:
+The new comments on all posts, oldest first. The author approves or rejects each one.
+_Avoid_: Inbox, pending comments
+
 ### Admin
 
 **Notification**:
