@@ -36,6 +36,8 @@ module Problem =
       Place = place
       Message = message }
 
+  let isError (problem: Problem) = problem.Severity = Severity.Error
+
 /// The problems of one file. `File` is the path from the repo root, and `BodyStart` is the file line of body line 1.
 type FileProblems =
   { File: string
@@ -75,10 +77,13 @@ module FileProblems =
     |> List.sortBy fst
     |> List.collect (fun (_, group) -> format { List.head group with Problems = List.collect _.Problems group })
 
-  /// The `Ok` value has the problems of the file that are not errors.
-  let ofResult file bodyStart (result: Result<'a, Problem list>) : Result<'a * FileProblems, FileProblems> =
+  let hasError (problems: FileProblems) = List.exists Problem.isError problems.Problems
+
+  /// An `Ok` value with an error becomes an `Error`. An `Ok` value keeps its warnings.
+  let ofResult file bodyStart (result: Result<'a * Problem list, Problem list>) : Result<'a * FileProblems, FileProblems> =
     match result with
-    | Ok value -> Ok(value, create file bodyStart [])
+    | Ok(value, problems) when not (List.exists Problem.isError problems) -> Ok(value, create file bodyStart problems)
+    | Ok(_, problems)
     | Error problems -> Error(create file bodyStart problems)
 
   /// `Ok` when no file has an error. Each case has the files with a problem.
@@ -90,7 +95,12 @@ module FileProblems =
         | Error problems -> problems)
       |> List.filter (fun problems -> not problems.Problems.IsEmpty)
 
-    if List.exists Result.isError results then
+    let failed =
+      function
+      | Ok(_, problems) -> hasError problems
+      | Error _ -> true
+
+    if List.exists failed results then
       Error problems
     else
       Ok(results |> List.choose Result.toOption |> List.map fst, problems)

@@ -24,7 +24,8 @@ let parse (images: IImages) (stage: Stage) (series: Series list) (file: string) 
       { File = file
         Slug = slug
         FrontMatter = frontMatter
-        Body = body }
+        Body = body },
+      []
   }
   |> FileProblems.ofResult file bodyStart
 

@@ -83,9 +83,11 @@ let tests =
       let post = published "a-post" (text frontMatter "Text.")
       let broken = published "b-post" (text frontMatter "Read [c](/posts/c-post/).")
 
-      Expect.isOk
-        (Site.renderMap Stage.Production buildTime widgets { content [ post ] with Warnings = [ warning ] })
-        "A warning does not fail the build"
+      Expect.equal
+        (Site.renderMap Stage.Production buildTime widgets { content [ post ] with Warnings = [ warning ] }
+         |> Result.map snd)
+        (Ok [ warning ])
+        "A warning does not fail the build, and the build keeps it"
 
       Expect.equal
         (Site.renderMap Stage.Production buildTime widgets { content [ post; broken ] with Warnings = [ warning ] }

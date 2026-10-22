@@ -76,11 +76,19 @@ let loadEmail (root: string) : EmailStyles =
   let read name = File.ReadAllText(Path.Combine(root, emailFolder, name))
   { Inline = read "inline.css"; Embed = read "embed.css" }
 
+/// An `Error` starts with the warnings of the pages.
 let loadContent (images: IImages) (stage: Stage) (root: string) (postFiles: PostFiles) : Result<Content, string list> =
+  let pages = parsePages images stage postFiles
+
+  let warnings =
+    match pages with
+    | Ok(_, _, warnings) -> warnings
+    | Error _ -> []
+
   result {
-    let! (posts, privacy, warnings), assets =
+    let! (posts, privacy, _), assets =
       validation {
-        let! pages = parsePages images stage postFiles
+        let! pages = pages
         and! assets = loadAssets root
         return pages, assets
       }
@@ -95,6 +103,7 @@ let loadContent (images: IImages) (stage: Stage) (root: string) (postFiles: Post
         Email = loadEmail root
         Warnings = warnings }
   }
+  |> Result.mapError (fun errors -> FileProblems.formatAll warnings @ errors)
 
 let loadPulledContent (images: IImages) (stage: Stage) (root: string) : Result<Content, string list> =
   PostFolder.read root PostFolder.pulled
@@ -115,19 +124,27 @@ let loadWidgets (root: string) : Result<Widgets, string list> =
   Widgets.create files
 
 /// Gives an error for each internal link of the posts and the privacy page that has no target in the map.
-let renderMap (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : Result<RenderMap, string list> =
+/// The `Ok` value has the warnings of the content and of the links.
+let renderMap
+  (stage: Stage)
+  (buildTime: DateTimeOffset)
+  (widgets: Widgets)
+  (content: Content)
+  : Result<RenderMap * FileProblems list, string list> =
   let map = RenderMap.create stage buildTime widgets content
   let sources = Links.ofPage PrivacyPage.urlPath content.Privacy :: List.map Links.ofPost content.Posts
+  let problems = Links.check (RenderMap.sitePaths map) sources @ content.Warnings
 
-  match Links.check (RenderMap.sitePaths map) sources with
-  | [] -> Ok map
-  | errors -> Error(FileProblems.formatAll (errors @ content.Warnings))
+  if List.exists FileProblems.hasError problems then
+    Error(FileProblems.formatAll problems)
+  else
+    Ok(map, problems)
 
 /// The `Ok` value has the warnings of the build, one line each.
 let load (images: IImages) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap * string list, string list> =
   result {
     let! widgets = loadWidgets root
     let! content = loadPulledContent images stage root
-    let! map = renderMap stage buildTime widgets content
-    return map, FileProblems.formatAll content.Warnings
+    let! map, warnings = renderMap stage buildTime widgets content
+    return map, FileProblems.formatAll warnings
   }

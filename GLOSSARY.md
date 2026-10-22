@@ -47,13 +47,15 @@ An image or a PDF that the author uploads for a post. A post refers to an asset 
 _Avoid_: Upload, attachment, media
 
 **Problem**:
-An error or a warning that the checks find in a post. An error makes the build fail and blocks a
+An error or a warning that the checks find in a post. The checks also find problems in a series
+record and in a Markdown page, such as the privacy page. An error makes the build fail and blocks a
 publish. A warning does neither.
 _Avoid_: Issue, lint, diagnostic
 
 **Place**:
 The part of a post that a problem is about: a front matter field, a body line, or the whole post.
-Body line 1 is the first line after the front matter. The build prints each place as `file:line`.
+Body line 1 is the first line after the front matter. A problem on the whole post can keep a file
+line, for example a YAML syntax error. The build prints each place as `file:line`.
 _Avoid_: Location, position
 
 **Upcoming post**:

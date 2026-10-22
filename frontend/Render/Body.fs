@@ -226,7 +226,7 @@ let private kind (stage: Stage) (url: string) =
     match Uri.TryCreate(url, UriKind.Absolute) with
     | true, uri when externalSchemes.Contains uri.Scheme && ownHosts.Contains uri.Host ->
       Invalid $"Give the link to {url} as a root-relative link, for example {uri.PathAndQuery}."
-    | true, uri when externalSchemes.Contains uri.Scheme && Azurite.isUrl uri && stage <> Stage.Local ->
+    | true, uri when Azurite.isForbidden stage uri ->
       Invalid(Azurite.problem uri)
     | true, uri when externalSchemes.Contains uri.Scheme -> External
     | true, uri when uri.Scheme = Uri.UriSchemeMailto -> Mail
@@ -301,7 +301,7 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
       attributes.AddPropertyIfNotExist("loading", "lazy")
 
       match Uri.TryCreate(image.Url, UriKind.Absolute) with
-      | true, url when Azurite.isUrl url && stage <> Stage.Local -> Some(errorAt startLine image.Line (Azurite.problem url))
+      | true, url when Azurite.isForbidden stage url -> Some(errorAt startLine image.Line (Azurite.problem url))
       | true, url when url.Scheme = Uri.UriSchemeHttps || Azurite.isUrl url ->
         match images.Size url with
         | Ok size ->
@@ -339,7 +339,7 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
     descendants<Directive.DirectiveBlock> document
     |> List.choose (fun block ->
       match block.Directive with
-      | Ok(Directive.Pdf file) when Azurite.isUrl file && stage <> Stage.Local ->
+      | Ok(Directive.Pdf file) when Azurite.isForbidden stage file ->
         Some(errorAt startLine block.Line (Azurite.problem file))
       | Ok _ -> None
       | Error message -> Some(errorAt startLine block.Line message))

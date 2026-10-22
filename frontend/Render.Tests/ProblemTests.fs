@@ -78,6 +78,23 @@ let tests =
         (FileProblems.collect [ Ok("a", warning); Error error ])
         (Error [ warning; error ])
         "An error fails, and the failure keeps each warning"
+
+      Expect.equal (FileProblems.collect [ Ok("a", error) ]) (Error [ error ]) "An error fails when the file has a value"
+    }
+
+    test "the severity of a problem from a parse decides if the file fails" {
+      let warning = Problem.warning (Place.Body 1) "A warning."
+      let error = Problem.error (Place.Body 2) "An error."
+
+      Expect.equal
+        (FileProblems.ofResult (file "a-post") 9 (Ok("a", [ warning ])))
+        (Ok("a", FileProblems.create (file "a-post") 9 [ warning ]))
+        "A warning passes and keeps its place"
+
+      Expect.equal
+        (FileProblems.ofResult (file "a-post") 9 (Ok("a", [ warning; error ])))
+        (Error(FileProblems.create (file "a-post") 9 [ warning; error ]))
+        "An error fails, and the failure keeps the warning"
     }
 
     test "an Azurite URL in the body is an error on staging and production" {
@@ -94,6 +111,15 @@ let tests =
         match parseOn Stage.Local "a-post" (text frontMatter body) with
         | Ok(_, problems) -> Expect.isEmpty problems.Problems $"The {name} on local"
         | Error problems -> failtest $"The {name} on local gives no problem: %A{problems}"
+    }
+
+    test "a URL on the Azurite port with a scheme other than http or https is not an Azurite URL" {
+      let pdf = "ftp://127.0.0.1:10000/devstoreaccount1/assets/a4dd66d174d2f471.pdf"
+
+      Expect.equal
+        (problems (parseOn Stage.Local "a-post" (text frontMatter $"Text.\n\n::pdf{{file=\"{pdf}\"}}")))
+        [ Problem.error (Place.Body 4) $"The 'file' of '::pdf' is '{pdf}'. Give the https URL of a .pdf file." ]
+        "The PDF needs https"
     }
 
     test "an http URL that is not on Azurite is still an error on local" {

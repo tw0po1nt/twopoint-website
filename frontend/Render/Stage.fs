@@ -25,7 +25,12 @@ module Stage =
 module Azurite =
 
   /// Azurite serves its blob endpoint on port 10000 of the local machine.
-  let isUrl (url: Uri) = url.IsLoopback && url.Port = 10000
+  let isUrl (url: Uri) =
+    (url.Scheme = Uri.UriSchemeHttp || url.Scheme = Uri.UriSchemeHttps)
+    && url.IsLoopback
+    && url.Port = 10000
+
+  let isForbidden (stage: Stage) (url: Uri) = isUrl url && stage <> Stage.Local
 
   let problem (url: Uri) =
     $"The URL {url.AbsoluteUri} is an Azurite URL. Only the local stage accepts an Azurite URL."

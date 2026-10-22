@@ -32,6 +32,7 @@ module MarkdownPage =
         { File = file
           Title = title
           Description = description
-          Body = body }
+          Body = body },
+        []
     }
     |> FileProblems.ofResult file bodyStart
