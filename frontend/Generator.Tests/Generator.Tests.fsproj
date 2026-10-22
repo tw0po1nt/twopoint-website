@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Render.Tests/Fixture.fs" Link="RenderFixture.fs" />
     <Compile Include="Fixture.fs" />
     <Compile Include="StageTests.fs" />
     <Compile Include="CliTests.fs" />

@@ -2,6 +2,7 @@ module TwoPoint.Site.Generator.Tests.UnsubscribePageTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 

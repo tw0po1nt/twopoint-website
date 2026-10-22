@@ -45,6 +45,10 @@ let private links =
     "subscribe", "/subscribe/"
     "about", "/about/" ]
 
+/// The form of `Date.toISOString`, so that the head script can compare the time with the current time as text.
+let scriptTime (time: DateTimeOffset) =
+  time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
+
 let private robots (config: StageConfig) (page: Page) =
   match config.Indexable, page.Robots with
   | false, _ -> "noindex,nofollow"

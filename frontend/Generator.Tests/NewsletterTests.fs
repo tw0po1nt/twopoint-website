@@ -3,6 +3,7 @@ module TwoPoint.Site.Generator.Tests.NewsletterTests
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
 open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open AngleSharp.Dom
 open AngleSharp.Html.Parser

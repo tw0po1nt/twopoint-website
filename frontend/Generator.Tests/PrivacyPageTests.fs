@@ -3,15 +3,14 @@ module TwoPoint.Site.Generator.Tests.PrivacyPageTests
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
 open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 
 let private parse text = MarkdownPage.parse anyImages Privacy.file text
 
-let private privacyText (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
-
 let private page body =
-  parse (privacyText "title: Privacy policy\ndescription: A description" body) |> ok
+  parse (text "title: Privacy policy\ndescription: A description" body) |> ok
 
 let private map stage = RenderMap.create stage buildTime widgets (content [])
 

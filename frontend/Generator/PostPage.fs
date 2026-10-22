@@ -81,7 +81,7 @@ let private commentsPanel (config: StageConfig) (buildTime: DateTimeOffset) (pos
 
   let panel =
     if Blog.isUpcoming buildTime post then
-      panel.attr("hidden", "").attr (HideAt.showAttribute, Time.scriptTime post.FrontMatter.PublishDate)
+      panel.attr("hidden", "").attr (HideAt.showAttribute, Layout.scriptTime post.FrontMatter.PublishDate)
     else
       panel
 

@@ -17,7 +17,7 @@ let private banner (buildTime: DateTimeOffset) (posts: Post list) =
   |> Option.map (fun post ->
     let publishDate = post.FrontMatter.PublishDate
 
-    p(class' = "upcoming").attr (HideAt.attribute, Time.scriptTime publishDate) {
+    p(class' = "upcoming").attr (HideAt.attribute, Layout.scriptTime publishDate) {
       span (class' = "badge") { "upcoming" }
       a (href = Post.urlPath post) { post.FrontMatter.Title }
       time (datetime = Time.isoTime publishDate) { Time.shownDate publishDate }

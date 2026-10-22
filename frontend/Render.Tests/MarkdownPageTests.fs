@@ -7,10 +7,8 @@ open Expecto
 
 let private parse text = MarkdownPage.parse anyImages Privacy.file text
 
-let private pageText (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
-
 let private page body =
-  parse (pageText "title: Privacy policy\ndescription: A description" body) |> ok
+  parse (text "title: Privacy policy\ndescription: A description" body) |> ok
 
 let private errorAt line message = PostError.at Privacy.file line message
 
@@ -27,12 +25,12 @@ let tests =
 
     test "a missing field, an unknown field, or no front matter fails" {
       Expect.equal
-        (parse (pageText "title: Privacy policy" "Text."))
+        (parse (text "title: Privacy policy" "Text."))
         (Error [ errorAt 1 "The front matter has no 'description' field." ])
         "The description is required"
 
       Expect.equal
-        (parse (pageText "title: Privacy policy\ndescription: A description\ndraft: true" "Text."))
+        (parse (text "title: Privacy policy\ndescription: A description\ndraft: true" "Text."))
         (Error [ errorAt 4 "Unknown field 'draft'." ])
         "An unknown field fails"
 

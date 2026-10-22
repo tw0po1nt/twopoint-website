@@ -9,7 +9,7 @@ let private row (term: string) (definition: HtmlElement) =
     dd () { definition }
   }
 
-let private meta (post: Post) (position: Blog.SeriesPosition option) =
+let private frontMatterBlock (post: Post) (position: Blog.SeriesPosition option) =
   let frontMatter = post.FrontMatter
 
   dl (class' = "front-matter") {
@@ -48,10 +48,9 @@ let private meta (post: Post) (position: Blog.SeriesPosition option) =
       row "read" (Fragment() { $"{post.Body.ReadingTime} min" })
   }
 
-/// The meta block, the title, the excerpt, and the body.
 let content (post: Post) (position: Blog.SeriesPosition option) =
   Fragment() {
-    meta post position
+    frontMatterBlock post position
     h1 () { post.FrontMatter.Title }
     p (class' = "excerpt") { post.FrontMatter.Excerpt }
     div (class' = "prose") { raw post.Body.Html }
