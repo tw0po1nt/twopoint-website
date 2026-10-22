@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sagefs": {
+      "type": "http",
+      "url": "http://localhost:37749/"
+    }
+  }
+}

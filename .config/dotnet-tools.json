@@ -10,7 +10,7 @@
       "rollForward": false
     },
     "sagefs": {
-      "version": "0.6.910",
+      "version": "0.6.924",
       "commands": [
         "sagefs"
       ],

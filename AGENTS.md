@@ -97,6 +97,12 @@ The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 Single-context layout: `GLOSSARY.md` and `docs/adr/` at the repo root. See
 `docs/agents/domain.md`.
 
+### SageFs
+
+The `sagefs` skill drives the SageFs REPL through the `sagefs` MCP server in `.mcp.json`. The repo
+standards in `docs/standards/` and the gate in `scripts/verify.sh` take priority over the design
+and test rules of that skill.
+
 ### Feedback ledger
 
 The ledger is an opt-in record for a review loop between two agents. Only `to-feedback` creates
