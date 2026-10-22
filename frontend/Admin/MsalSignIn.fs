@@ -1,6 +1,7 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.MsalSignIn
 
+open Browser
 open Fable.Core
 
 let private activeAccount (app: Msal.PublicClientApplication) =
@@ -40,11 +41,10 @@ let create () : SignIn =
         | Some account ->
           app.acquireTokenSilent {| scopes = scopes; account = account |}
           |> Promise.map (fun result -> Some result.accessToken)
-          |> Promise.catchBind (fun error ->
-            if Msal.isInteractionRequired error then
-              Promise.lift None
-            else
-              Promise.reject error)
+          // After the 24-hour refresh limit, a browser that blocks third-party cookies fails the renewal with a timeout error.
+          |> Promise.catch (fun error ->
+            console.warn ("admin: the silent token request failed.", error)
+            None)
 
       member _.signInByPopup() =
         app.acquireTokenPopup {| scopes = scopes; account = activeAccount app |> Option.toObj |}

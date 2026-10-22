@@ -35,18 +35,9 @@ type Configuration =
 [<Import("PublicClientApplication", "@azure/msal-browser")>]
 let private publicClientApplicationClass: obj = jsNative
 
-[<Import("InteractionRequiredAuthError", "@azure/msal-browser")>]
-let private interactionRequiredAuthErrorClass: obj = jsNative
-
 [<Emit "new $0($1)">]
 let private construct (constructor: obj) (options: obj) : 'T = jsNative
 
-[<Emit "$0 instanceof $1">]
-let private isInstance (value: obj) (constructor: obj) : bool = jsNative
-
 let publicClientApplication (configuration: Configuration) : PublicClientApplication =
   construct publicClientApplicationClass configuration
-
-/// A silent token request fails with this error when Entra needs the user to sign in again.
-let isInteractionRequired (error: exn) = isInstance error interactionRequiredAuthErrorClass
 
