@@ -29,6 +29,11 @@ After a production build, `dotnet run --project frontend/Generator -- upload --c
 sends each newsletter to Azure Blob. It then deletes each `posts/<slug>/index` blob that has no post
 in the build. The command stops if the stage marker is not `production`.
 
+`frontend/Admin/` is the admin, a separate Fable app that references the Widgets project for shared
+code. The site bundle gets no admin code. In `frontend/Admin/`, `npm run build` builds the release
+mode and `npm run dev` serves the dev mode on `http://localhost:4322`. `config.json` contains the
+public settings of each mode. `npm test` tests the last build in happy-dom.
+
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build
 identity through OIDC and runs `pull` before `build`. The repo name sets the stage: the `prod`
