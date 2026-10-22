@@ -23,17 +23,34 @@ let root (start: string) =
 
   find (DirectoryInfo start)
 
-let parseSeries (files: PostFiles) : Result<Series list, PostError list> =
+let parseSeries (files: PostFiles) : Result<Series list, FileProblems list> =
   files.Series
   |> List.traverseResultA (fun file -> FrontMatter.parseSeries file.Path (PostFolder.text file))
-  |> Result.mapError List.concat
 
-let parsePosts (images: IImages) (files: PostFiles) : Result<Post list, PostError list> =
+let parsePosts (images: IImages) (stage: Stage) (files: PostFiles) : Result<Post list * FileProblems list, FileProblems list> =
   parseSeries files
   |> Result.bind (fun series ->
     files.Published
-    |> List.traverseResultA (fun file -> Post.parse images series file.Path (PostFolder.text file))
-    |> Result.mapError List.concat)
+    |> List.map (fun file -> Post.parse images stage series file.Path (PostFolder.text file))
+    |> FileProblems.collect)
+
+let private parsePages (images: IImages) (stage: Stage) (postFiles: PostFiles) =
+  let problemsOf result =
+    match result with
+    | Ok(_, problems)
+    | Error problems -> problems
+
+  let posts = parsePosts images stage postFiles
+
+  let privacy =
+    Privacy.parse images stage
+    |> Result.map (fun (page, problems) -> page, [ problems ])
+    |> Result.mapError List.singleton
+
+  match posts, privacy with
+  | Ok(posts, postProblems), Ok(privacy, privacyProblems) ->
+    Ok(posts, privacy, (postProblems @ privacyProblems) |> List.filter (fun problems -> not problems.Problems.IsEmpty))
+  | _ -> Error(problemsOf posts @ problemsOf privacy |> FileProblems.formatAll)
 
 let loadAssets (root: string) : Result<Assets, string list> =
   let assetsDir = Path.Combine(root, assetsFolder)
@@ -59,14 +76,13 @@ let loadEmail (root: string) : EmailStyles =
   let read name = File.ReadAllText(Path.Combine(root, emailFolder, name))
   { Inline = read "inline.css"; Embed = read "embed.css" }
 
-let loadContent (images: IImages) (root: string) (postFiles: PostFiles) : Result<Content, string list> =
+let loadContent (images: IImages) (stage: Stage) (root: string) (postFiles: PostFiles) : Result<Content, string list> =
   result {
-    let! posts, privacy, assets =
+    let! (posts, privacy, warnings), assets =
       validation {
-        let! posts = parsePosts images postFiles |> Result.mapError (List.map PostError.format)
-        and! privacy = Privacy.parse images |> Result.mapError (List.map PostError.format)
+        let! pages = parsePages images stage postFiles
         and! assets = loadAssets root
-        return posts, privacy, assets
+        return pages, assets
       }
 
     let! ogImages = OgImages.create images assets.DefaultImage posts
@@ -76,13 +92,14 @@ let loadContent (images: IImages) (root: string) (postFiles: PostFiles) : Result
         Privacy = privacy
         Assets = assets
         OgImages = ogImages
-        Email = loadEmail root }
+        Email = loadEmail root
+        Warnings = warnings }
   }
 
-let loadPulledContent (images: IImages) (root: string) : Result<Content, string list> =
+let loadPulledContent (images: IImages) (stage: Stage) (root: string) : Result<Content, string list> =
   PostFolder.read root PostFolder.pulled
   |> Result.mapError List.singleton
-  |> Result.bind (loadContent images root)
+  |> Result.bind (loadContent images stage root)
 
 let loadWidgets (root: string) : Result<Widgets, string list> =
   let folder = Path.Combine(root, WidgetManifest.folder)
@@ -104,11 +121,13 @@ let renderMap (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (con
 
   match Links.check (RenderMap.sitePaths map) sources with
   | [] -> Ok map
-  | errors -> Error(List.map PostError.format errors)
+  | errors -> Error(FileProblems.formatAll (errors @ content.Warnings))
 
-let load (images: IImages) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap, string list> =
+/// The `Ok` value has the warnings of the build, one line each.
+let load (images: IImages) (root: string) (stage: Stage) (buildTime: DateTimeOffset) : Result<RenderMap * string list, string list> =
   result {
     let! widgets = loadWidgets root
-    let! content = loadPulledContent images root
-    return! renderMap stage buildTime widgets content
+    let! content = loadPulledContent images stage root
+    let! map = renderMap stage buildTime widgets content
+    return map, FileProblems.formatAll content.Warnings
   }

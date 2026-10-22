@@ -46,7 +46,7 @@ let private single name attribute (values: Map<string, string>) =
 
 let private pdf value =
   match Uri.TryCreate(value, UriKind.Absolute) with
-  | true, uri when uri.Scheme = Uri.UriSchemeHttps && uri.AbsolutePath.EndsWith ".pdf" -> Ok(Pdf uri)
+  | true, uri when (uri.Scheme = Uri.UriSchemeHttps || Azurite.isUrl uri) && uri.AbsolutePath.EndsWith ".pdf" -> Ok(Pdf uri)
   | _ -> Error $"The 'file' of '::pdf' is '{value}'. Give the https URL of a .pdf file."
 
 let private youTube (value: string) =

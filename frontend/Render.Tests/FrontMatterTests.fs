@@ -120,9 +120,10 @@ let tests =
     }
 
     test "bad YAML fails with its line" {
-      let error = errors "a-post" (withField "tags: [CSharp") |> List.exactlyOne
-      Expect.equal error.File (file "a-post") "The error names the post file"
-      Expect.isGreaterThanOrEqual error.Line 7 "The error gives the line of the bad YAML"
+      let problems = problemsOf (parse "a-post" (withField "tags: [CSharp"))
+      let problem = List.exactlyOne problems.Problems
+      Expect.equal problems.File (file "a-post") "The error names the post file"
+      Expect.isGreaterThanOrEqual (FileProblems.line problems problem.Place) 7 "The error gives the line of the bad YAML"
     }
 
     test "a post with no front matter fails" {
@@ -144,10 +145,10 @@ let private seriesFile slug = $"frontend/content/posts/series/{slug}.yml"
 
 let private seriesErrors slug yaml =
   match FrontMatter.parseSeries (seriesFile slug) yaml with
-  | Error errors -> errors
+  | Error problems -> FileProblems.format problems
   | Ok series -> failtest $"The series record has no error: %A{series}"
 
-let private seriesErrorAt slug line message = PostError.at (seriesFile slug) line message
+let private seriesErrorAt slug line message = $"{seriesFile slug}:{line}: {message}"
 
 [<Tests>]
 let seriesTests =

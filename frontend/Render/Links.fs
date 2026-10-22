@@ -14,7 +14,8 @@ let ofPage (urlPath: string) (page: MarkdownPage) =
     UrlPath = urlPath
     Body = page.Body }
 
-let check (sitePaths: Set<string>) (sources: Source list) : PostError list =
+/// One entry for each source with a problem.
+let check (sitePaths: Set<string>) (sources: Source list) : FileProblems list =
   let anchorsByPath =
     sources
     |> List.map (fun source -> SitePath.ofUrlPath source.UrlPath, source.Body.Anchors)
@@ -41,8 +42,12 @@ let check (sitePaths: Set<string>) (sources: Source list) : PostError list =
       | Some _, Some anchor -> Some $"The page {path} has no heading with the id '{anchor}'."
 
   [ for source in sources do
-      for link in source.Body.Links do
-        match problem source link.Target with
-        | Some message -> PostError.at source.File link.Line message
-        | None -> () ]
-  |> List.sortBy (fun error -> error.File, error.Line)
+      let problems =
+        source.Body.Links
+        |> List.choose (fun link ->
+          problem source link.Target
+          |> Option.map (Problem.error (Place.Body link.Line)))
+
+      if not problems.IsEmpty then
+        FileProblems.create source.File source.Body.StartLine problems ]
+  |> List.sortBy _.File

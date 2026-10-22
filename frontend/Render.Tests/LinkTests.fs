@@ -12,7 +12,7 @@ let private target = post "b-post" "## First step\n\nText."
 let private check body =
   let posts = [ post "a-post" body; target ]
   let sitePaths = posts |> List.map (Post.urlPath >> SitePath.ofUrlPath) |> Set.ofList
-  Links.check sitePaths (List.map Links.ofPost posts)
+  Links.check sitePaths (List.map Links.ofPost posts) |> FileProblems.formatAll
 
 [<Tests>]
 let tests =

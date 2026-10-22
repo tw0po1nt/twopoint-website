@@ -7,10 +7,11 @@ open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 
-let private parse text = MarkdownPage.parse anyImages Privacy.file text
+let private parse text =
+  MarkdownPage.parse anyImages Stage.Production Privacy.file text
 
 let private page body =
-  parse (text "title: Privacy policy\ndescription: A description" body) |> ok
+  parse (text "title: Privacy policy\ndescription: A description" body) |> ok |> fst
 
 let private map stage = RenderMap.create stage buildTime widgets (content [])
 

@@ -41,10 +41,11 @@ module OgImages =
         match crops[url.AbsoluteUri] with
         | Ok(path, bytes, image) -> Ok(post.Slug, image, Some(path, bytes))
         | Error reason ->
-          $"The front matter gives the Open Graph image {url}, and the build cannot make its crop: {reason}."
-          |> PostError.at post.File 1
-          |> PostError.format
+          [ Problem.error (Place.Post 1) $"The front matter gives the Open Graph image {url}, and the build cannot make its crop: {reason}." ]
+          |> FileProblems.create post.File post.Body.StartLine
+          |> FileProblems.format
           |> Error)
+    |> Result.mapError List.concat
     |> Result.map (fun images ->
       { Files = images |> List.choose (fun (_, _, file) -> file) |> Map.ofList
         ByPost = images |> List.map (fun (slug, image, _) -> slug, image) |> Map.ofList })

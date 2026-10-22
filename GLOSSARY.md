@@ -51,6 +51,11 @@ An error or a warning that the checks find in a post. An error makes the build f
 publish. A warning does neither.
 _Avoid_: Issue, lint, diagnostic
 
+**Place**:
+The part of a post that a problem is about: a front matter field, a body line, or the whole post.
+Body line 1 is the first line after the front matter. The build prints each place as `file:line`.
+_Avoid_: Location, position
+
 **Upcoming post**:
 A published post with a publish date in the future. Readers can open it before that date, but they
 cannot comment on it until that date.

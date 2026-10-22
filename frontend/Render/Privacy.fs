@@ -14,4 +14,5 @@ let private text () =
   use reader = new StreamReader(stream)
   reader.ReadToEnd()
 
-let parse (images: IImages) : Result<MarkdownPage, PostError list> = MarkdownPage.parse images file (text ())
+let parse (images: IImages) (stage: Stage) : Result<MarkdownPage * FileProblems, FileProblems> =
+  MarkdownPage.parse images stage file (text ())

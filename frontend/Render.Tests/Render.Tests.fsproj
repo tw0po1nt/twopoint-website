@@ -18,6 +18,7 @@
     <Compile Include="ImagesTests.fs" />
     <Compile Include="MarkdownPageTests.fs" />
     <Compile Include="LinkTests.fs" />
+    <Compile Include="ProblemTests.fs" />
     <Compile Include="BlogTests.fs" />
     <Compile Include="ArticleTests.fs" />
     <Compile Include="Main.fs" />

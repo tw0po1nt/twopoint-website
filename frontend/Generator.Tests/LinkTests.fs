@@ -14,6 +14,7 @@ let private target = post "b-post" "## First step\n\nText."
 let private check body =
   let posts = [ post "a-post" body; target ]
   Links.check (RenderMap.create Stage.Production buildTime widgets (content posts) |> RenderMap.sitePaths) (List.map Links.ofPost posts)
+  |> FileProblems.formatAll
 
 [<Tests>]
 let tests =

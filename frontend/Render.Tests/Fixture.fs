@@ -48,7 +48,7 @@ let frontMatter =
    excerpt: An excerpt\n\
    category: One-offs"
 
-/// The body starts on line 9.
+/// The body text starts on file line 9, which is body line 2.
 let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
 
 let file slug = $"frontend/content/posts/published/{slug}.md"
@@ -59,25 +59,34 @@ let seriesRecord slug : Series =
     Excerpt = "A series"
     Image = None }
 
-let parseIn (series: Series list) slug text = Post.parse anyImages series (file slug) text
+let parseOn (stage: Stage) slug text =
+  Post.parse anyImages stage [] (file slug) text
+
+let parseIn (series: Series list) slug text =
+  Post.parse anyImages Stage.Production series (file slug) text
 
 let parse slug text = parseIn [] slug text
 
 let publishedIn (series: Series list) slug text =
   match parseIn series slug text with
-  | Ok post -> post
-  | Error errors -> failtest $"The fixture post has errors: %A{errors}"
+  | Ok(post, _) -> post
+  | Error problems -> failtest $"The fixture post has errors: %A{problems}"
 
 let published slug text = publishedIn [] slug text
 
-let errorsIn (series: Series list) slug text =
-  match parseIn series slug text with
-  | Error errors -> errors
-  | Ok post -> failtest $"The fixture post has no error: %A{post}"
+let problemsOf (result: Result<'a * FileProblems, FileProblems>) =
+  match result with
+  | Error problems -> problems
+  | Ok(value, _) -> failtest $"The fixture has no error: %A{value}"
+
+/// The build output of each problem.
+let errorLines result = problemsOf result |> FileProblems.format
+
+let errorsIn (series: Series list) slug text = errorLines (parseIn series slug text)
 
 let errors slug text = errorsIn [] slug text
 
-let errorAt slug line message = PostError.at (file slug) line message
+let errorAt slug line message = $"{file slug}:{line}: {message}"
 
 /// A post with the title `slug` and a body of one paragraph.
 let postWith slug (publishDate: string) category (tags: string list) (series: string option) =

@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="../Widgets/Contract.fs" Link="Contract.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="Stage.fs" />
     <Compile Include="Slug.fs" />
     <Compile Include="FrontMatter.fs" />
     <Compile Include="Highlight.fs" />

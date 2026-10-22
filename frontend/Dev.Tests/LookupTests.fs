@@ -25,7 +25,8 @@ let private noPrivacy =
         Headings = []
         Anchors = Set.empty
         Links = []
-        ReadingTime = 0 } }
+        ReadingTime = 0
+        StartLine = 1 } }
 
 let private noWidgets =
   { Manifest =
@@ -61,7 +62,8 @@ let private mapOf (posts: Post list) =
       Privacy = noPrivacy
       Assets = noAssets
       OgImages = { Files = Map.empty; ByPost = Map.empty }
-      Email = { Inline = ""; Embed = "" } }
+      Email = { Inline = ""; Embed = "" }
+      Warnings = [] }
 
 let private map = mapOf []
 
