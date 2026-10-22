@@ -77,6 +77,18 @@ let tests =
       Expect.isNone (position oneOff) "A post with no series has no position"
     }
 
+    test "each post gets the title of the newest post with the same category or tag slug" {
+      let older = postWith "older" "2025-01-01T00:00:00Z" "One-offs" [ "Web development"; "Swift" ] None
+      let newer = postWith "newer" "2026-01-01T00:00:00Z" "one-offs" [ "web development" ] None
+
+      let titles (post: Post) = post.FrontMatter.Category.Title, post.FrontMatter.Tags |> List.map _.Title
+
+      Expect.equal
+        (Blog.withNewestTermTitles [ older; newer ] |> List.map titles)
+        [ ("one-offs", [ "web development"; "Swift" ]); ("one-offs", [ "web development" ]) ]
+        "The newer post gives the category and the tag title, and a tag of one post keeps its title"
+    }
+
     test "the years, the series, and the tags of the explorer" {
       let posts =
         [ postWith "a" "2025-03-01T00:00:00Z" "Series" [ "FSharp" ] (Some "fable-reminders")
