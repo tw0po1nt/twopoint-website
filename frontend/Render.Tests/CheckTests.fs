@@ -57,7 +57,17 @@ let tests =
         "The tag page goes away with the tag"
     }
 
-    test "the link check of the other posts calls no image size port" {
+    test "a change of the message of a broken link in another post gives no problem on the post" {
+      let tagged = publishedWith $"{frontMatter}\ntags:\n  - Fable" "a-post" "Text."
+      let other = publishedPost "b-post" "See [the tag](/tag/fable)."
+      Expect.isEmpty (check [ tagged; other ] "a-post" "Text.").Problems "The post does not cause the broken link"
+    }
+
+    test "a link to a file under /_/ gives no problem" {
+      Expect.isEmpty (check [ target ] "a-post" "See [the script](/_/widgets/search.js).").Problems "Only the build knows the files under /_/"
+    }
+
+    test "only the parse of the post calls the image size port" {
       let fetch, calls = recording anyImage
       let other = publishedPost "b-post" "![A cat](https://twopointwebsite.blob.core.windows.net/assets/cat.jpg)"
       let dog = "https://twopointwebsite.blob.core.windows.net/assets/dog.jpg"

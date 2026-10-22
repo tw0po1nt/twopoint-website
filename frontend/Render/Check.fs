@@ -8,27 +8,35 @@ type CheckedPost =
   { Article: string option
     Problems: Problem list }
 
-let private sizeStub =
+let private noImageSize =
   { new IImageSize with
       member _.Size _ = Ok { Width = 0; Height = 0 } }
 
 let private file slug = $"{slug}.md"
 
-/// Parses a published post for the link check of another post. It downloads no image.
+/// It downloads no image.
 let published (stage: Stage) (series: Series list) (slug: string) (text: string) : Result<Post, FileProblems> =
-  Post.parse sizeStub stage series (file slug) text |> Result.map fst
+  Post.parse noImageSize stage series (file slug) text |> Result.map fst
+
+let private isUnderAssets (link: InternalLink) =
+  match link.Target with
+  | Page(path, _) -> path.StartsWith "/_/"
+  | SamePage _ -> false
+
+/// The assets, the widgets, and the `og:image` crops under `/_/` are known only to the build.
+let private withoutAssetLinks (source: Links.Source) =
+  { source with Body = { source.Body with Links = source.Body.Links |> List.filter (isUnderAssets >> not) } }
 
 let private linkProblems (stage: Stage) (posts: Post list) =
   let privacy =
-    match Privacy.parse sizeStub stage with
+    match Privacy.parse noImageSize stage with
     | Ok(page, _) -> [ Links.ofPage Privacy.urlPath page ]
     | Error _ -> []
 
-  Links.check (SitePath.all posts) (privacy @ List.map Links.ofPost posts)
+  Links.check (SitePath.all posts) (privacy @ List.map Links.ofPost posts |> List.map withoutAssetLinks)
   |> List.map (fun problems -> problems.File, problems)
   |> Map.ofList
 
-/// An error on `post` for each link in another file that the change of `post` breaks.
 let private brokenElsewhere (published: Post list) (post: Post) (before: Map<string, FileProblems>) (after: Map<string, FileProblems>) =
   let names =
     published
@@ -40,22 +48,16 @@ let private brokenElsewhere (published: Post list) (post: Post) (before: Map<str
       if otherFile <> post.File then
         let earlier =
           before.TryFind otherFile
-          |> Option.map (fun problems -> Set.ofList problems.Problems)
+          |> Option.map (fun problems -> problems.Problems |> List.map _.Place |> Set.ofList)
           |> Option.defaultValue Set.empty
 
         for problem in problems.Problems do
-          if not (earlier.Contains problem) then
-            let line =
-              match problem.Place with
-              | Place.Body line -> $"body line {line}"
-              | place -> $"line {FileProblems.line problems place}"
-
+          if not (earlier.Contains problem.Place) then
             Problem.error
               (Place.Post 1)
-              $"The change breaks a link in {names[otherFile]}, on {line}: {problem.Message}" ]
+              $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
 
-/// The problems that the next build gives for the post, with the text of the post in the place of its published version.
-/// Each post of `published` can come from `Check.published`. Only the parse of the post uses `images`.
+/// Only the parse of the post uses `images`, so a caller can parse each post of `published` with `Check.published`.
 let post
   (stage: Stage)
   (images: IImageSize)

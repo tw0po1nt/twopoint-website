@@ -31,11 +31,11 @@ module RenderMap =
 
   let private file (urlPath: string) = SiteFile(SitePath.ofUrlPath urlPath)
 
-  let private page (config: StageConfig) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) (page: SitePage) =
+  let private pageEntry (config: StageConfig) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) (sitePage: SitePage) =
     let assets = content.Assets
     let posts = content.Posts
 
-    match page with
+    match sitePage with
     | SitePage.Home -> HomePage.robots, (fun () -> HomePage.render config assets widgets buildTime posts)
     | SitePage.Subscribe -> SubscribePage.robots, (fun () -> SubscribePage.render config assets widgets posts)
     | SitePage.Unsubscribe -> UnsubscribePage.robots, (fun () -> UnsubscribePage.render config assets widgets posts)
@@ -51,7 +51,7 @@ module RenderMap =
 
   let private pages (config: StageConfig) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) =
     [ for sitePage in SitePage.all content.Posts do
-        let robots, render = page config buildTime widgets content sitePage
+        let robots, render = pageEntry config buildTime widgets content sitePage
         SitePage.urlPath sitePage, robots, render ]
 
   /// `buildTime` decides which post the upcoming post banner shows, and which Comments panels are hidden.
