@@ -26,7 +26,8 @@ repo variable `POST_STORE_ACCOUNT`. Then run
 writes the site to `frontend/dist/website/`, the newsletters to `frontend/dist/newsletter/`, and
 the stage marker to `frontend/dist/stage`. The stage marker contains the stage name of the build.
 After a production build, `dotnet run --project frontend/Generator -- upload --container <uri>`
-sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
+sends each newsletter to Azure Blob. It then deletes each `posts/<slug>/index` blob that has no post
+in the build. The command stops if the stage marker is not `production`.
 
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build

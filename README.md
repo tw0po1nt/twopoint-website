@@ -112,7 +112,7 @@ The script runs the prose check, builds the solution, and runs the .NET tests. T
 
 ## Deploys
 
-A push to `main` or a manual run of `site.yml` pulls the posts, builds the site, and deploys it to GitHub Pages. In the production repository, the workflow also uploads the newsletters to Azure Blob storage before the deploy.
+A push to `main` or a manual run of `site.yml` pulls the posts, builds the site, and deploys it to GitHub Pages. In the production repository, the workflow also uploads the newsletters to Azure Blob storage before the deploy, and deletes the newsletter of each removed post.
 
 ## Live site
 
