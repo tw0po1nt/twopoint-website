@@ -56,4 +56,12 @@ let tests =
       let model, _ = Shell.update (Shell.Dashboard(Dashboard.Answered(Error Api.Refused))) model
       Expect.equal model.Dashboard (Dashboard.NotLoaded "The API refused the token of this account.") "The reason"
     }
+
+    test "a refused token offers another account" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let model, effect = Shell.update (Shell.Dashboard(Dashboard.Answered(Error Api.Refused))) model
+      Expect.equal model.Session.Status Session.Refused "The banner offers another account"
+      Expect.isNone effect "The page stays until the author chooses"
+    }
   ]

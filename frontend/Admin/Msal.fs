@@ -23,7 +23,7 @@ type PublicClientApplication =
   abstract getActiveAccount: unit -> AccountInfo
   abstract setActiveAccount: account: AccountInfo -> unit
   /// The promise resolves when the page starts to leave for Entra.
-  abstract loginRedirect: request: {| scopes: string array |} -> JS.Promise<unit>
+  abstract loginRedirect: request: {| scopes: string array; prompt: string |} -> JS.Promise<unit>
   abstract acquireTokenSilent: request: {| scopes: string array; account: AccountInfo |} -> JS.Promise<AuthenticationResult>
   /// With a null account, Entra asks the user to choose an account.
   abstract acquireTokenPopup: request: {| scopes: string array; account: AccountInfo |} -> JS.Promise<AuthenticationResult>

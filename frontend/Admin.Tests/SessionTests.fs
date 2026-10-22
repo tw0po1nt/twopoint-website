@@ -97,4 +97,15 @@ let tests =
       let _, effect = run [ Session.InteractionRequired "load"; Session.SignInAgainClicked; Session.SignInAgainClicked ] active
       Expect.isNone effect "One popup"
     }
+
+    test "a refused account shows the banner, and its button sends the page to the Entra sign-in" {
+      let model, effect = Session.update Session.AccountRefused active
+      Expect.equal model.Status Session.Refused "The API refuses the account"
+      Expect.isTrue (Session.showsBanner model) "The banner shows"
+      Expect.equal (Session.bannerText model) "The API refused this account. Sign in with the author account." "The banner text"
+      Expect.isNone effect "No sign-in before a click"
+      let model, effect = Session.update Session.SignInClicked model
+      Expect.equal model.Status Session.Redirecting "The page leaves"
+      Expect.equal effect (Some Session.SignInByRedirect) "The redirect sign-in, where the author chooses the account"
+    }
   ]

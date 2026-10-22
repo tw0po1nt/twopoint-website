@@ -13,6 +13,8 @@ type Status =
   | Renewing
   /// The start or the redirect did not complete.
   | Broken
+  /// The API refuses the token of the signed-in account. The banner offers another account.
+  | Refused
 
 /// `Waiting` contains each call that failed because Entra needs the author to sign in again.
 type Model<'call> = { Status: Status; Waiting: 'call list }
@@ -25,6 +27,7 @@ type Msg<'call> =
   | SignInAgainClicked
   | Renewed
   | RenewFailed
+  | AccountRefused
 
 type Effect<'call> =
   | Start
@@ -45,7 +48,8 @@ let update (msg: Msg<'call>) (model: Model<'call>) : Model<'call> * Effect<'call
   | Starting, Started true -> { model with Status = Active }, None
   | Starting, Started false -> { model with Status = Redirecting }, Some SignInByRedirect
   | (Starting | Redirecting), SignInFailed -> { model with Status = Broken }, None
-  | Broken, SignInClicked -> { model with Status = Redirecting }, Some SignInByRedirect
+  | (Broken | Refused), SignInClicked -> { model with Status = Redirecting }, Some SignInByRedirect
+  | Active, AccountRefused -> { model with Status = Refused }, None
   | Active, InteractionRequired call ->
     { Status = Expired false
       Waiting = waitFor call model }, None
@@ -60,7 +64,8 @@ let isActive (model: Model<'call>) = model.Status = Active
 let showsBanner (model: Model<'call>) =
   match model.Status with
   | Expired _
-  | Renewing -> true
+  | Renewing
+  | Refused -> true
   | Starting
   | Redirecting
   | Active
@@ -71,6 +76,7 @@ let bannerText (model: Model<'call>) =
   | Expired true -> "The sign-in did not complete. Try again."
   | Expired false
   | Renewing -> "Your session ended. Sign in again to continue."
+  | Refused -> "The API refused this account. Sign in with the author account."
   | Starting
   | Redirecting
   | Active

@@ -27,7 +27,7 @@ let init (path: string) : Model * Effect option =
     Dashboard = Dashboard.init },
   Option.map SignIn effect
 
-let update (msg: Msg) (model: Model) : Model * Effect option =
+let rec update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | Router msg ->
     let router, effect = Router.update msg model.Router
@@ -40,4 +40,9 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
       next, Some(Send LoadDashboard)
     else
       next, Option.map SignIn effect
-  | Dashboard msg -> { model with Dashboard = Dashboard.update msg model.Dashboard }, None
+  | Dashboard msg ->
+    let next = { model with Dashboard = Dashboard.update msg model.Dashboard }
+
+    match msg with
+    | Dashboard.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Dashboard.Answered _ -> next, None

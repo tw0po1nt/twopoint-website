@@ -131,6 +131,16 @@ let private banner (dispatch: Shell.Msg -> unit) (model: Session.Model<Shell.Cal
         button (type' = "button", onClick = fun _ -> dispatch (Shell.Session Session.SignInClicked)) { "Sign in" }
       }
     }
+  | Session.Refused ->
+    Fragment() {
+      div (class' = "banner", role = "alert") {
+        p () { Session.bannerText model }
+
+        button (type' = "button", onClick = fun _ -> dispatch (Shell.Session Session.SignInClicked)) {
+          "Use another account"
+        }
+      }
+    }
   | _ ->
     Fragment() {
       Show(when' = Session.showsBanner model) {

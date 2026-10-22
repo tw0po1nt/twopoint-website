@@ -33,7 +33,8 @@ let create () : SignIn =
           account |> Option.iter app.setActiveAccount
           account.IsSome)
 
-      member _.signIn() = app.loginRedirect {| scopes = scopes |}
+      member _.signIn() =
+        app.loginRedirect {| scopes = scopes; prompt = "select_account" |}
 
       member _.token() =
         match activeAccount app with
