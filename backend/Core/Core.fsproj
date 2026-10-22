@@ -16,6 +16,7 @@
     <Compile Include="Shared\LogicTypes.fs" />
     <Compile Include="Shared\StringTypes.fs" />
     <Compile Include="Shared\SharedTypes.fs" />
+    <Compile Include="Shared\Access.fs" />
     <Compile Include="Notifications\NotificationTypes.fs" />
     <Compile Include="Notifications\NotificationActions.fs" />
     <Compile Include="Posts\PostTypes.fs" />

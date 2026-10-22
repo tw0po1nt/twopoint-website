@@ -6,7 +6,7 @@
     "TwoPointWebsiteServiceBus": ""
   },
   "Host": {
-    "CORS": "http://localhost:4321"
+    "CORS": "http://localhost:4321,http://localhost:4322"
   },
   "AzureAd": {
     "Instance": "https://sts.windows.net/",

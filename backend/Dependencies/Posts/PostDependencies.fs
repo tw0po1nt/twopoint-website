@@ -205,11 +205,11 @@ type PostDependencies(
 
     // Notify admin
     do! cancellableTask {
-      // todo: probably good to eventually not hardcode this admin/client lookup
+      // todo: probably good to eventually not hardcode this admin lookup
       //       maybe would even be good to have this post an event and have the dispatching be handled separately
       //       this'll do for now
       let! notification =
-        notificationDb.GetDeviceRegistrationByUserAndClient "ad1209ae-c4cc-4360-953a-ccbab9d68c83" "android"
+        notificationDb.GetDeviceRegistrationByUser "ad1209ae-c4cc-4360-953a-ccbab9d68c83"
         |> CancellableTaskResult.map (
           fun registration -> option {
             let! registration = registration

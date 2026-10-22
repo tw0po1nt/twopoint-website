@@ -19,10 +19,9 @@ type NotificationDependencies(
 
   let source = Dependency.Database
 
-  member _.GetDeviceRegistrationByUserAndClient userExternalId client = cancellableTaskResult {
+  member _.GetDeviceRegistrationByUser userExternalId = cancellableTaskResult {
     let userExternalId = userExternalId.ToString()
-    let client = client.ToString()
-    let! dbDeviceRegistration = notificationDb.GetDeviceRegistrationByUserAndClient userExternalId client
+    let! dbDeviceRegistration = notificationDb.GetDeviceRegistrationByUser userExternalId
     return!
       dbDeviceRegistration
       |> Option.traverseResult (fun (dbo: DbDeviceRegistration) -> dbo.ToDeviceRegistration())
@@ -33,7 +32,6 @@ type NotificationDependencies(
     let newRegistration =
       { DbDeviceRegistration.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
         UserExternalId = newDeviceRegistration.UserExternalId.ToString()
-        Client = newDeviceRegistration.Client.ToString()
         Token = newDeviceRegistration.Token.ToString()
         CreatedDate = DateTime.UtcNow } // todo: model as ISystemDependencies
     let! (dbDeviceRegistration: DbDeviceRegistration) = notificationDb.CreateDeviceRegistration newRegistration
@@ -44,7 +42,6 @@ type NotificationDependencies(
     let dbDeviceRegistration =
       { DbDeviceRegistration.Id = registration.Id.ToString()
         UserExternalId = registration.UserExternalId.ToString()
-        Client = registration.Client.ToString()
         Token = registration.Token.ToString()
         CreatedDate = registration.CreatedDate }
     let dbToken = token.ToString()
