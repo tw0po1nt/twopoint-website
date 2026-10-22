@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.ListPage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
 [<RequireQualifiedAccess>]

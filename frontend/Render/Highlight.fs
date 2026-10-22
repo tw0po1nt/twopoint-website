@@ -1,6 +1,6 @@
 /// Gives the colors of a code block at build time.
 [<RequireQualifiedAccess>]
-module TwoPoint.Site.Generator.Highlight
+module TwoPoint.Site.Render.Highlight
 
 open System
 open System.IO

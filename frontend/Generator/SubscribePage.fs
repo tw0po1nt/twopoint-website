@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.SubscribePage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
 let urlPath = "/subscribe/"

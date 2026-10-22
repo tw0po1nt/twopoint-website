@@ -2,6 +2,7 @@ module TwoPoint.Site.Generator.Tests.HomePageTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
 open TwoPoint.Site.Widgets
 
 open Expecto
@@ -128,12 +129,12 @@ let tests =
 
     test "the head script hides the banner from the publish date on" {
       let publishDate = DateTimeOffset(2026, 10, 29, 13, 0, 0, TimeSpan.Zero)
-      let hideAt = Layout.scriptTime publishDate
+      let hideAt = Time.scriptTime publishDate
 
-      Expect.isTrue (HideAt.isPast (Layout.scriptTime publishDate) hideAt) "At the publish date"
+      Expect.isTrue (HideAt.isPast (Time.scriptTime publishDate) hideAt) "At the publish date"
 
       Expect.isFalse
-        (HideAt.isPast (Layout.scriptTime (publishDate.AddMilliseconds -1.0)) hideAt)
+        (HideAt.isPast (Time.scriptTime (publishDate.AddMilliseconds -1.0)) hideAt)
         "One millisecond before the publish date"
     }
 

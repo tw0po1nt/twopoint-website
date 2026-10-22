@@ -1,4 +1,4 @@
-namespace TwoPoint.Site.Generator
+namespace TwoPoint.Site.Render
 
 open FsToolkit.ErrorHandling
 open SkiaSharp

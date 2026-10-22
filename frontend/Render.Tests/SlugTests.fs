@@ -1,6 +1,6 @@
-module TwoPoint.Site.Generator.Tests.SlugTests
+module TwoPoint.Site.Render.Tests.SlugTests
 
-open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Expecto
 

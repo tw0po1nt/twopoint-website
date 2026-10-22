@@ -1,6 +1,6 @@
-module TwoPoint.Site.Generator.Tests.SitePathTests
+module TwoPoint.Site.Render.Tests.SitePathTests
 
-open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Expecto
 

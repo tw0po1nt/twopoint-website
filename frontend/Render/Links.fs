@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module TwoPoint.Site.Generator.Links
+module TwoPoint.Site.Render.Links
 
 /// A Markdown file of the site, at the URL path of its page.
 type Source = { File: string; UrlPath: string; Body: Body }

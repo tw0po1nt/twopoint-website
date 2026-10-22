@@ -2,6 +2,7 @@
 module TwoPoint.Site.Dev.Server
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http

@@ -13,6 +13,8 @@
     <Project Path="frontend/Dev/Dev.fsproj" />
     <Project Path="frontend/Generator.Tests/Generator.Tests.fsproj" />
     <Project Path="frontend/Generator/Generator.fsproj" />
+    <Project Path="frontend/Render.Tests/Render.Tests.fsproj" />
+    <Project Path="frontend/Render/Render.fsproj" />
     <Project Path="frontend/Widgets.Tests/Widgets.Tests.fsproj" />
     <Project Path="frontend/Widgets/Widgets.fsproj" />
   </Folder>

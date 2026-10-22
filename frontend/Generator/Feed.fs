@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Feed
 
+open TwoPoint.Site.Render
+
 open System.Globalization
 
 let urlPath = "/rss.xml"

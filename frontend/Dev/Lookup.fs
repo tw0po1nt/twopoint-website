@@ -2,6 +2,7 @@
 module TwoPoint.Site.Dev.Lookup
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Oxpecker.ViewEngine
 

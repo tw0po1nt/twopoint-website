@@ -1,6 +1,7 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.HomePage
 
+open TwoPoint.Site.Render
 open TwoPoint.Site.Widgets
 
 open Oxpecker.ViewEngine
@@ -16,10 +17,10 @@ let private banner (buildTime: DateTimeOffset) (posts: Post list) =
   |> Option.map (fun post ->
     let publishDate = post.FrontMatter.PublishDate
 
-    p(class' = "upcoming").attr (HideAt.attribute, Layout.scriptTime publishDate) {
+    p(class' = "upcoming").attr (HideAt.attribute, Time.scriptTime publishDate) {
       span (class' = "badge") { "upcoming" }
       a (href = Post.urlPath post) { post.FrontMatter.Title }
-      time (datetime = Layout.isoTime publishDate) { Layout.shownDate publishDate }
+      time (datetime = Time.isoTime publishDate) { Time.shownDate publishDate }
     }
     :> HtmlElement)
 
@@ -38,7 +39,7 @@ let private latestCard (posts: Post list) (post: Post) =
 
     article () {
       p (class' = "meta") {
-        time (datetime = Layout.isoTime frontMatter.PublishDate) { Layout.shownDate frontMatter.PublishDate }
+        time (datetime = Time.isoTime frontMatter.PublishDate) { Time.shownDate frontMatter.PublishDate }
         " · "
 
         match Blog.seriesPosition posts post with

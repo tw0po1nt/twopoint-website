@@ -1,6 +1,7 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.PostPage
 
+open TwoPoint.Site.Render
 open TwoPoint.Site.Widgets
 
 open Oxpecker.ViewEngine
@@ -19,51 +20,6 @@ let private pathLine (post: Post) (position: Blog.SeriesPosition option) =
       let category = post.FrontMatter.Category
       a (href = $"/category/{category.Slug}/") { $"category/{category.Slug}" }
       $"/{post.Slug}"
-  }
-
-let private row (term: string) (definition: HtmlElement) =
-  div () {
-    dt () { term }
-    dd () { definition }
-  }
-
-let private frontMatterBlock (post: Post) (position: Blog.SeriesPosition option) =
-  let frontMatter = post.FrontMatter
-
-  dl (class' = "front-matter") {
-    row "date" (time (datetime = Layout.isoTime frontMatter.PublishDate) { Layout.shownDate frontMatter.PublishDate })
-
-    match frontMatter.UpdateDate with
-    | Some updated -> row "updated" (time (datetime = Layout.isoTime updated) { Layout.shownDate updated })
-    | None -> ()
-
-    row "author" (Fragment() { frontMatter.Author })
-
-    match position with
-    | Some position ->
-      row
-        "series"
-        (Fragment() {
-          a (href = $"/series/{position.Series.Slug}/") { position.Series.Slug }
-          $" ({position.Position} of {position.Count})"
-        })
-    | None -> ()
-
-    match frontMatter.Tags with
-    | [] -> ()
-    | tags ->
-      row
-        "tags"
-        (Fragment() {
-          for index, tag in List.indexed tags do
-            if index > 0 then
-              " "
-
-            a (href = $"/tag/{tag.Slug}/") { $"#{tag.Title}" }
-        })
-
-    if post.Body.ReadingTime > 0 then
-      row "read" (Fragment() { $"{post.Body.ReadingTime} min" })
   }
 
 let private shareLinks (config: StageConfig) (post: Post) =
@@ -119,28 +75,13 @@ let private relatedPosts (related: Post list) =
       }
   }
 
-let private outline (post: Post) =
-  let headings = post.Body.Headings |> List.filter (fun heading -> heading.Level = 2 || heading.Level = 4)
-
-  aside(class' = "outline").attr ("aria-label", "Outline") {
-    match headings with
-    | [] -> ()
-    | headings ->
-      p (class' = "label") { "outline" }
-
-      ul () {
-        for heading in headings do
-          li (class' = $"outline-h{heading.Level}") { a (href = $"#{heading.Id}") { heading.Text } }
-      }
-  }
-
 /// The head script shows the panel of an upcoming post from the publish date on.
 let private commentsPanel (config: StageConfig) (buildTime: DateTimeOffset) (post: Post) =
   let panel = details (class' = "panel", id = "comments")
 
   let panel =
     if Blog.isUpcoming buildTime post then
-      panel.attr("hidden", "").attr (HideAt.showAttribute, Layout.scriptTime post.FrontMatter.PublishDate)
+      panel.attr("hidden", "").attr (HideAt.showAttribute, Time.scriptTime post.FrontMatter.PublishDate)
     else
       panel
 
@@ -176,10 +117,7 @@ let render
   main (class' = "post-page") {
     article (class' = "post") {
       pathLine post position
-      frontMatterBlock post position
-      h1 () { frontMatter.Title }
-      p (class' = "excerpt") { frontMatter.Excerpt }
-      div (class' = "prose") { raw post.Body.Html }
+      Article.content post position
       shareLinks config post
       olderNewer (Blog.neighbors posts post)
 
@@ -188,6 +126,6 @@ let render
       relatedPosts (Blog.related posts post)
     }
 
-    outline post
+    Article.outline post
   }
   |> Layout.render config assets widgets posts page

@@ -1,13 +1,14 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Site
 
+open TwoPoint.Site.Render
+
 open FsToolkit.ErrorHandling
 open System
 open System.IO
 
 let private assetsFolder = Path.Combine("frontend", "content", "assets")
 let private stylesFolder = Path.Combine("frontend", "content", "styles")
-let private privacyFile = "frontend/content/privacy.md"
 let private emailFolder = Path.Combine("frontend", "content", "email")
 
 /// Gives the folder of `TwoPoint.slnx`, from `start` or a parent folder of it.
@@ -54,9 +55,6 @@ let loadAssets (root: string) : Result<Assets, string list> =
 
   Styles.join styles |> Result.bind (Assets.create assets)
 
-let loadPrivacy (images: IImages) (root: string) : Result<MarkdownPage, PostError list> =
-  MarkdownPage.parse images privacyFile (File.ReadAllText(Path.Combine(root, privacyFile)))
-
 let loadEmail (root: string) : EmailStyles =
   let read name = File.ReadAllText(Path.Combine(root, emailFolder, name))
   { Inline = read "inline.css"; Embed = read "embed.css" }
@@ -66,7 +64,7 @@ let loadContent (images: IImages) (root: string) (postFiles: PostFiles) : Result
     let! posts, privacy, assets =
       validation {
         let! posts = parsePosts images postFiles |> Result.mapError (List.map PostError.format)
-        and! privacy = loadPrivacy images root |> Result.mapError (List.map PostError.format)
+        and! privacy = Privacy.parse images |> Result.mapError (List.map PostError.format)
         and! assets = loadAssets root
         return posts, privacy, assets
       }

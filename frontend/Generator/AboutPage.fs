@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.AboutPage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
 let urlPath = "/about/"

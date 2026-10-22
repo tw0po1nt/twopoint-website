@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.UnsubscribePage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
 let urlPath = "/unsubscribe/"
