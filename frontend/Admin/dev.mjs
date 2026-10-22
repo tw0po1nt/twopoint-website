@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 
 import { serve } from './server.mjs';
 
 const config = JSON.parse(await readFile('staticwebapp.config.json', 'utf8'));
 const { origin } = JSON.parse(await readFile('config.json', 'utf8')).dev;
 
+await rm('dist', { recursive: true, force: true });
 await serve({ root: 'dist', config, port: Number(new URL(origin).port) });
 console.log(`dev.mjs: serves dist/ on ${origin}`);
 

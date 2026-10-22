@@ -5,19 +5,15 @@ import path from 'node:path';
 const types = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
-  '.ico': 'image/x-icon',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json',
   '.map': 'application/json',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.webmanifest': 'application/manifest+json',
 };
 
-const escape = (text) => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegExp = (text) => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 
 // A route pattern of Azure Static Web Apps, where `*` matches any text.
-const matches = (pattern, pathname) => new RegExp(`^${pattern.split('*').map(escape).join('.*')}$`).test(pathname);
+const matches = (pattern, pathname) => new RegExp(`^${pattern.split('*').map(escapeRegExp).join('.*')}$`).test(pathname);
 
 const decode = (url) => {
   try {
@@ -36,7 +32,6 @@ const kind = async (file) => {
   }
 };
 
-// The same routes, headers, and fallback as Azure Static Web Apps, from the same config file.
 export const serve = ({ root, config, port }) => {
   const base = path.resolve(root);
   const fallback = config.navigationFallback;
@@ -72,7 +67,14 @@ export const serve = ({ root, config, port }) => {
     } else if (found === 'file') {
       await send(response, pathname, file);
     } else if (!fallback.exclude.some((pattern) => matches(pattern, pathname))) {
-      await send(response, pathname, path.join(base, fallback.rewrite));
+      const page = path.join(base, fallback.rewrite);
+
+      if ((await kind(page)) === 'file') {
+        await send(response, pathname, page);
+      } else {
+        response.writeHead(503, { ...headers(pathname), 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('The first build is not ready');
+      }
     } else {
       response.writeHead(404, { ...headers(pathname), 'Content-Type': 'text/plain; charset=utf-8' });
       response.end('Not found');
