@@ -31,8 +31,11 @@ in the build. The command stops if the stage marker is not `production`.
 
 `frontend/Admin/` is the admin, a separate Fable app that references the Widgets project for shared
 code. The site bundle gets no admin code. In `frontend/Admin/`, `npm run build` builds the release
-mode and `npm run dev` serves the dev mode on `http://localhost:4322`. `config.json` contains the
-public settings of each mode. `npm test` tests the last build in happy-dom.
+mode and `npm run watch` builds the dev mode at each change. `config.json` contains the public
+settings of each mode. `npm test` tests the last build in happy-dom. The admin dev host in
+`frontend/Admin.Dev/` serves the build on `http://localhost:4322` with the rules of
+`staticwebapp.config.json`. A SageFs session over `frontend/Admin.Tests/` starts the host and the
+watch.
 
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build
@@ -96,6 +99,12 @@ The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 
 Single-context layout: `GLOSSARY.md` and `docs/adr/` at the repo root. See
 `docs/agents/domain.md`.
+
+### SageFs
+
+The `sagefs` skill drives the SageFs REPL through the `sagefs` MCP server in `.mcp.json`. The repo
+standards in `docs/standards/` and the gate in `scripts/verify.sh` take priority over the design
+and test rules of that skill.
 
 ### Feedback ledger
 

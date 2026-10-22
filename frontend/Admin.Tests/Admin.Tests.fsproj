@@ -12,11 +12,13 @@
     <Compile Include="RouterTests.fs" />
     <Compile Include="SessionTests.fs" />
     <Compile Include="ShellTests.fs" />
+    <Compile Include="StaticWebAppTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Admin\Admin.fsproj" />
+    <ProjectReference Include="..\Admin.Dev\Admin.Dev.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module TwoPoint.Site.Dev.Watch
+module TwoPoint.DevHost.Watch
 
 open System
 open System.ComponentModel
@@ -49,10 +49,10 @@ type Reloads() =
     previous.TrySetResult() |> ignore
 
 /// The process tree stops when the dev process stops.
-let widgets (widgetsFolder: string) : Result<Process, string> =
+let npmWatch (folder: string) : Result<Process, string> =
   try
     let watch =
-      Process.Start(ProcessStartInfo("npm", "run watch", WorkingDirectory = widgetsFolder, UseShellExecute = false))
+      Process.Start(ProcessStartInfo("npm", "run watch", WorkingDirectory = folder, UseShellExecute = false))
 
     AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
       if not watch.HasExited then

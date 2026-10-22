@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "dotnet fable Admin.fsproj --outDir build/fable --extension .jsx --exclude Oxpecker.Solid.FablePlugin --silent && node build.mjs",
-    "dev": "node dev.mjs",
+    "watch": "dotnet fable watch Admin.fsproj --outDir build/fable --extension .jsx --exclude Oxpecker.Solid.FablePlugin --sourceMaps --silent --runWatch node build.mjs --dev",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
