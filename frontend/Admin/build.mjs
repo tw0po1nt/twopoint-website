@@ -41,11 +41,20 @@ const define = Object.fromEntries(Object.entries(config).map(([key, value]) => [
 
 await mkdir(path.join(outDir, 'redirect'), { recursive: true });
 
+// `admin` starts the app with MSAL. The bundle test starts `app` with a stub sign-in.
+const entryPoints = {
+  admin: path.join(fableDir, 'Main.jsx'),
+  app: path.join(fableDir, 'App.jsx'),
+  bridge: path.join(fableDir, 'Bridge.jsx'),
+  style: 'admin.css',
+};
+
 const result = await esbuild.build({
-  entryPoints: { admin: path.join(fableDir, 'Main.jsx'), style: 'admin.css' },
+  entryPoints,
   outdir: bundleDir,
   entryNames: '[name]-[hash]',
   bundle: true,
+  splitting: true,
   format: 'esm',
   minify: true,
   target: 'es2022',
@@ -57,21 +66,29 @@ const result = await esbuild.build({
 });
 
 const outputs = Object.keys(result.metafile.outputs);
-const output = (extension) => `/${path.relative(outDir, outputs.find((file) => file.endsWith(extension)))}`;
-const files = { script: output('.js'), style: output('.css') };
+const output = (entry) => {
+  const file = outputs.find((item) => result.metafile.outputs[item].entryPoint === entryPoints[entry]);
+  return `/${path.relative(outDir, file)}`;
+};
+const files = { script: output('admin'), app: output('app'), bridge: output('bridge'), style: output('style') };
 
-const template = await readFile('index.html', 'utf8');
+// Each page names its bundle files with these placeholders, and the build writes the hashed names.
+const page = async (template, replacements) => {
+  let text = await readFile(template, 'utf8');
 
-for (const placeholder of ['/bundle/admin.js', '/bundle/admin.css']) {
-  if (!template.includes(`"${placeholder}"`)) {
-    fail(`index.html has no reference to ${placeholder}.`);
+  for (const [placeholder, file] of Object.entries(replacements)) {
+    if (!text.includes(`"${placeholder}"`)) {
+      fail(`${template} has no reference to ${placeholder}.`);
+    }
+
+    text = text.replace(`"${placeholder}"`, `"${file}"`);
   }
-}
 
-const page = template.replace('"/bundle/admin.js"', `"${files.script}"`).replace('"/bundle/admin.css"', `"${files.style}"`);
+  return text;
+};
 
-await writeFile(path.join(outDir, 'index.html'), page);
-await copyFile('redirect/index.html', path.join(outDir, 'redirect', 'index.html'));
+await writeFile(path.join(outDir, 'index.html'), await page('index.html', { '/bundle/admin.js': files.script, '/bundle/admin.css': files.style }));
+await writeFile(path.join(outDir, 'redirect', 'index.html'), await page('redirect/index.html', { '/bundle/bridge.js': files.bridge }));
 await copyFile('staticwebapp.config.json', path.join(outDir, 'staticwebapp.config.json'));
 
 // The dev server serves this folder, so the build writes each new file first and deletes the old files last.
@@ -85,4 +102,4 @@ for (const file of await readdir(bundleDir)) {
 
 await writeFile('build/manifest.json', `${JSON.stringify({ mode, ...files }, null, 2)}\n`);
 
-console.log(`build.mjs: wrote ${outDir}/ in the ${mode} mode (${files.script}, ${files.style})`);
+console.log(`build.mjs: wrote ${outDir}/ in the ${mode} mode (${files.script}, ${files.bridge}, ${files.style})`);
