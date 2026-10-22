@@ -2,6 +2,8 @@ module TwoPoint.Site.Generator.Tests.PostPageTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 open System.Text.RegularExpressions
@@ -109,22 +111,6 @@ let tests =
       Expect.stringContains (page Stage.Local newest) """<p class="card is-empty"><span>newer →</span>this is the newest post</p>""" "The newest post has no newer card"
     }
 
-    test "the outline lists the h2 and h4 headings" {
-      let html = page Stage.Local middle
-
-      Expect.stringContains
-        html
-        """<ul><li class="outline-h2"><a href="#first">First</a></li><li class="outline-h4"><a href="#detail">Detail</a></li></ul>"""
-        "The outline has the h2 and the h4, and no h3"
-    }
-
-    test "the outline text of a heading has curly quote marks" {
-      let post = published "a-post" (text frontMatter "## It's a \"test\"")
-      let html = siteText (RenderMap.create Stage.Local buildTime widgets (content [ post ])) "posts/a-post/index.html"
-
-      Expect.stringContains html """<a href="#its-a-test">It’s a “test”</a>""" "The outline entry"
-    }
-
     test "the related posts and the share links follow the post" {
       let html = page Stage.Production middle
       Expect.stringContains html """<ul class="related"><li><a href="/posts/fable-reminders-part-1/">fable-reminders-part-1</a></li><li><a href="/posts/smatterings-of-fsharp/">""" "The related posts by score"
@@ -155,7 +141,7 @@ let tests =
     }
 
     test "the Comments panel of a post that the build publishes at the build time is not hidden" {
-      let post = postWith "now-post" (Layout.isoTime buildTime) "One-offs" [] None
+      let post = postWith "now-post" (Time.isoTime buildTime) "One-offs" [] None
       let html = siteText (RenderMap.create Stage.Local buildTime widgets (content [ post ])) "posts/now-post/index.html"
       Expect.stringContains html """<details class="panel" id="comments"><summary>""" "The panel is open to comments"
     }

@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module TwoPoint.Site.Generator.Post
+module TwoPoint.Site.Render.Post
 
 open Markdig
 open Markdig.Extensions.Yaml

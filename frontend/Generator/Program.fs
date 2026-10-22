@@ -1,5 +1,7 @@
 module TwoPoint.Site.Generator.Program
 
+open TwoPoint.Site.Render
+
 open FsToolkit.ErrorHandling
 open System
 open System.IO

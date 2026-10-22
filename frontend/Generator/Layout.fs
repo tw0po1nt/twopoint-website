@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Layout
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 open System
 open System.Globalization
@@ -43,15 +45,9 @@ let private links =
     "subscribe", "/subscribe/"
     "about", "/about/" ]
 
-let isoTime (time: DateTimeOffset) =
-  time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
-
 /// The form of `Date.toISOString`, so that the head script can compare the time with the current time as text.
 let scriptTime (time: DateTimeOffset) =
   time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
-
-let shownDate (time: DateTimeOffset) =
-  time.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
 
 let private robots (config: StageConfig) (page: Page) =
   match config.Indexable, page.Robots with
@@ -162,7 +158,7 @@ let private explorer (config: StageConfig) (posts: Post list) (current: Post opt
 
         for post in posts do
           li (class' = if isCurrent post then "is-current" else null) {
-            time (datetime = isoTime post.FrontMatter.PublishDate) {
+            time (datetime = Time.isoTime post.FrontMatter.PublishDate) {
               post.FrontMatter.PublishDate.UtcDateTime.ToString("MM-dd", CultureInfo.InvariantCulture)
             }
 

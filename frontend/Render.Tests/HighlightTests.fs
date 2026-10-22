@@ -1,7 +1,7 @@
-module TwoPoint.Site.Generator.Tests.HighlightTests
+module TwoPoint.Site.Render.Tests.HighlightTests
 
-open TwoPoint.Site.Generator
-open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 

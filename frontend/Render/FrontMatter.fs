@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module TwoPoint.Site.Generator.FrontMatter
+module TwoPoint.Site.Render.FrontMatter
 
 open FsToolkit.ErrorHandling
 open System

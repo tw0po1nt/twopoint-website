@@ -5,7 +5,8 @@ Instructions for agents in this repo.
 This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an F# static site
 generator with F# widgets that Fable compiles to JavaScript
 (`docs/spec/124-build-twopoint-dev-with-fsharp.md`). `backend/` is an F# Azure Functions app for
-newsletter subscriptions, notifications, and posts.
+newsletter subscriptions, notifications, and posts. `frontend/Render/` is the library that renders
+and checks a post. The generator and the backend reference it.
 
 Each post is a Markdown blob in the `published` container of the post store, a private Azure Blob
 storage account. Each series is a YAML record in the `series` container. A post refers to its

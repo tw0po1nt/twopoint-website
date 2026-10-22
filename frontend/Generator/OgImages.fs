@@ -1,5 +1,7 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Render
+
 open FsToolkit.ErrorHandling
 
 type OgImages =

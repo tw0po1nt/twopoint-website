@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module TwoPoint.Site.Generator.Blog
+module TwoPoint.Site.Render.Blog
 
 open System
 

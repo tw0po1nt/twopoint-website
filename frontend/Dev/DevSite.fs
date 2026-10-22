@@ -1,6 +1,7 @@
 namespace TwoPoint.Site.Dev
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open FsToolkit.ErrorHandling
 open System

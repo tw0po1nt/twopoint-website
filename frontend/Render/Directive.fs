@@ -1,6 +1,6 @@
 /// A leaf directive alone on its line, for example `::youtube{id="qRuKTkDvAk4"}`.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module TwoPoint.Site.Generator.Directive
+module TwoPoint.Site.Render.Directive
 
 open TwoPoint.Site.Widgets
 

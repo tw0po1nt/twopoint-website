@@ -1,5 +1,7 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Render
+
 open AngleSharp.Dom
 open Oxpecker.ViewEngine
 open PreMailer.Net
@@ -35,7 +37,7 @@ module Newsletter =
     | None -> "// latest post"
 
   let private metaText (post: Post) =
-    [ Layout.shownDate post.FrontMatter.PublishDate
+    [ Time.shownDate post.FrontMatter.PublishDate
       if post.Body.ReadingTime > 0 then
         $"{post.Body.ReadingTime} min"
       match post.FrontMatter.Tags with

@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module TwoPoint.Site.Generator.SitePath
+module TwoPoint.Site.Render.SitePath
 
 /// The URL path is decoded, for example `/posts/`. A folder path gives its `index.html`.
 let ofUrlPath (urlPath: string) =

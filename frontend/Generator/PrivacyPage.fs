@@ -1,9 +1,11 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.PrivacyPage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
-let urlPath = "/privacy/"
+let urlPath = Privacy.urlPath
 
 let robots = Layout.Robots.Index
 

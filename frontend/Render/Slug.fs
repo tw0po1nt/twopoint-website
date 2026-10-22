@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module TwoPoint.Site.Generator.Slug
+module TwoPoint.Site.Render.Slug
 
 open System
 open System.Globalization

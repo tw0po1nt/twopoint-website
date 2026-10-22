@@ -1,7 +1,7 @@
-module TwoPoint.Site.Generator.Tests.FrontMatterTests
+module TwoPoint.Site.Render.Tests.FrontMatterTests
 
-open TwoPoint.Site.Generator
-open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 open System
@@ -140,8 +140,7 @@ let tests =
     }
   ]
 
-let private seriesFile slug =
-  PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml"
+let private seriesFile slug = $"frontend/content/posts/series/{slug}.yml"
 
 let private seriesErrors slug yaml =
   match FrontMatter.parseSeries (seriesFile slug) yaml with

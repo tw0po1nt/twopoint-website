@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module TwoPoint.Site.Generator.Body
+module TwoPoint.Site.Render.Body
 
 open Markdig
 open Markdig.Extensions.SmartyPants
