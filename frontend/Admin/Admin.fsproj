@@ -6,10 +6,19 @@
 
   <ItemGroup>
     <Compile Include="Config.fs" />
+    <Compile Include="Msal.fs" />
+    <Compile Include="SignIn.fs" />
+    <Compile Include="MsalSignIn.fs" />
     <Compile Include="Route.fs" />
     <Compile Include="Router.fs" />
+    <Compile Include="Api.fs" />
+    <Compile Include="Session.fs" />
+    <Compile Include="Dashboard.fs" />
+    <Compile Include="Shell.fs" />
     <Compile Include="ShellView.fs" />
+    <Compile Include="App.fs" />
     <Compile Include="Main.fs" />
+    <Compile Include="Bridge.fs" />
   </ItemGroup>
 
   <ItemGroup>

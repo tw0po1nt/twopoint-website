@@ -1,10 +1,16 @@
 {
   "dev": {
     "api": "http://localhost:7071",
-    "origin": "http://localhost:4322"
+    "origin": "http://localhost:4322",
+    "clientId": "25b7422d-9fb9-41a3-a7f0-27287c2b89e9",
+    "authority": "https://login.microsoftonline.com/cdf89f94-8c88-48fc-b11c-dd24af4380b4",
+    "scope": "api://e8d3bb42-823a-43c6-902d-8920aafdbca7/access_as_user"
   },
   "release": {
     "api": "https://func-twopoint-website-api.azurewebsites.net",
-    "origin": "https://admin.twopoint.dev"
+    "origin": "https://admin.twopoint.dev",
+    "clientId": "25b7422d-9fb9-41a3-a7f0-27287c2b89e9",
+    "authority": "https://login.microsoftonline.com/cdf89f94-8c88-48fc-b11c-dd24af4380b4",
+    "scope": "api://e8d3bb42-823a-43c6-902d-8920aafdbca7/access_as_user"
   }
 }

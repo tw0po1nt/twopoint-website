@@ -15,31 +15,25 @@ open IcedTasks
 
 type NewDeviceRegistration =
   { UserExternalId : UserExternalId
-    Client : Client
     Token : NonEmptyString }
 
 module NewDeviceRegistration =
 
   type UserExternalId = UserExternalId of string
-  type Client = Client of string
   type Token = Token of string
 
   type Dto =
-    { UserExternalId : UserExternalId 
-      Client : Client
+    { UserExternalId : UserExternalId
       Token : Token }
 
   let create (dto : Dto) = validation {
     let (UserExternalId userExternalId) = dto.UserExternalId
-    let (Client client) = dto.Client
     let (Token token) = dto.Token
     let! userExternalId = UserExternalId.create userExternalId
-    and! client = Client.create client
     and! token = NonEmptyString.create (Some (nameof token)) token
 
     return
       { NewDeviceRegistration.UserExternalId = userExternalId
-        Client = client
         Token = token }
   }
 
@@ -87,9 +81,8 @@ module RegisterDevice =
       -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetDeviceRegistrationByUserAndClient:
+    abstract member GetDeviceRegistrationByUser:
       userExternalId: UserExternalId
-        -> client: Client
         -> DependencyResult<DeviceRegistration option>
     abstract member CreateDeviceRegistration:
       newDeviceRegistration: NewDeviceRegistration
@@ -117,7 +110,7 @@ module RegisterDevice =
         |> Result.mapError ActionError<Error>.Validation
 
       let! existingRegistration =
-        dependencies.GetDeviceRegistrationByUserAndClient newDeviceRegistration.UserExternalId newDeviceRegistration.Client
+        dependencies.GetDeviceRegistrationByUser newDeviceRegistration.UserExternalId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let decision = Logic.decide existingRegistration newDeviceRegistration

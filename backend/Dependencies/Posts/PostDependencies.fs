@@ -205,11 +205,9 @@ type PostDependencies(
 
     // Notify admin
     do! cancellableTask {
-      // todo: probably good to eventually not hardcode this admin/client lookup
-      //       maybe would even be good to have this post an event and have the dispatching be handled separately
-      //       this'll do for now
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/250): send an event, and let a separate handler notify the author
       let! notification =
-        notificationDb.GetDeviceRegistrationByUserAndClient "ad1209ae-c4cc-4360-953a-ccbab9d68c83" "android"
+        notificationDb.GetDeviceRegistrationByUser Access.authorObjectId
         |> CancellableTaskResult.map (
           fun registration -> option {
             let! registration = registration

@@ -22,6 +22,12 @@ test('index.html loads each bundle file from an absolute path that exists', asyn
   }
 });
 
+test('the bridge page loads the MSAL bridge script from an absolute path that exists', async () => {
+  const sources = [...bridge.matchAll(/<script type="module" src="(\/bundle\/bridge-[^"]+\.js)"><\/script>/g)].map((match) => match[1]);
+  assert.equal(sources.length, 1, 'One script');
+  await access(path.join('dist', sources[0]));
+});
+
 test('the host config sends noindex, keeps the bridge page out of the cache, and sends no COOP header', () => {
   assert.deepEqual(config.globalHeaders, { 'X-Robots-Tag': 'noindex, nofollow' });
   assert.deepEqual(config.routes, [{ route: '/redirect/*', headers: { 'Cache-Control': 'no-store' } }]);

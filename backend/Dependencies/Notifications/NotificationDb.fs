@@ -21,7 +21,6 @@ open System.Globalization
 ///    "RowKey": "&lt;guid&gt;",
 ///    "Timestamp": "&lt;date&gt;",    
 ///    "CreatedDate": "&lt;date&gt;",
-///    "Client": "&lt;android | ios | ...&gt;",
 ///    "Token": "&lt;string&gt;"
 ///  }
 /// </c>
@@ -29,7 +28,6 @@ open System.Globalization
 type internal DbDeviceRegistration =
   { Id : string
     UserExternalId : string
-    Client : string
     Token : string
     CreatedDate : DateTime }
   
@@ -37,7 +35,6 @@ type internal DbDeviceRegistration =
     let entityName = nameof DbDeviceRegistration
     let id = entity.RowKey
     let userExternalId = entity.PartitionKey
-    let! client = "Client" |> entity.RequireString entityName
     let! token = "Token" |> entity.RequireString entityName
     let! createdDate =
       "CreatedDate"
@@ -47,14 +44,12 @@ type internal DbDeviceRegistration =
     return
       { DbDeviceRegistration.Id = id
         UserExternalId = userExternalId
-        Client = client
         Token = token
         CreatedDate =  createdDate }
   }
   
   member this.ToEntity() =
     let entity = TableEntity(partitionKey = this.UserExternalId, rowKey = this.Id)
-    entity["Client"] <- this.Client
     entity["Token"] <- this.Token
     entity["CreatedDate"] <- this.CreatedDate.ToString("o", CultureInfo.InvariantCulture)
     entity
@@ -62,7 +57,6 @@ type internal DbDeviceRegistration =
   static member FromDeviceRegistration (registration : DeviceRegistration) =
     { Id = registration.Id.ToString()
       UserExternalId = registration.UserExternalId.ToString()
-      Client = registration.Client.ToString()
       Token = registration.Token.ToString()
       CreatedDate = registration.CreatedDate }
     
@@ -70,14 +64,12 @@ type internal DbDeviceRegistration =
     DeviceRegistration.create
       this.Id
       this.UserExternalId
-      this.Client
       this.Token
       (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
 
 type internal INotificationDb =
-  abstract member GetDeviceRegistrationByUserAndClient:
+  abstract member GetDeviceRegistrationByUser:
     userExternalId: string
-      -> client: string
       -> CancellableTaskResult<DbDeviceRegistration option, DependencyError>
   abstract member CreateDeviceRegistration: registration: DbDeviceRegistration -> CancellableTaskResult<DbDeviceRegistration, DependencyError>
   abstract member UpdateDeviceRegistration:
@@ -123,8 +115,8 @@ module internal NotificationDb =
     
     { new INotificationDb with
       
-      member this.GetDeviceRegistrationByUserAndClient userExternalId client =
-        (eq "PartitionKey" userExternalId + eq "Client" client) |> trySingleQuery deviceRegistrationsTable DbDeviceRegistration.FromEntity None
+      member this.GetDeviceRegistrationByUser userExternalId =
+        (eq "PartitionKey" userExternalId) |> trySingleQuery deviceRegistrationsTable DbDeviceRegistration.FromEntity None
 
       member this.CreateDeviceRegistration registration =
         registration.ToEntity() |> add deviceRegistrationsTable NotificationDbError.validation DbDeviceRegistration.FromEntity

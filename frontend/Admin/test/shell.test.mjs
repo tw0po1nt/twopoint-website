@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { follow, heading, links, load } from './load.mjs';
+import { follow, heading, links, load, summary } from './load.mjs';
 
 const { calls, config } = await load('http://localhost:4322/');
 
@@ -19,6 +19,11 @@ test('the admin replaces the mount with the navigation and the dashboard', () =>
   ]);
 
   assert.equal(heading(), 'Dashboard');
+});
+
+test('the dashboard gets the posts from the API with the token, and shows the counts', () => {
+  assert.deepEqual(calls, [{ url: `${config.api}/api/internal/posts`, authorization: 'Bearer token-1' }]);
+  assert.deepEqual(summary(), ['2', '3'], 'Two posts and three new comments');
 });
 
 test('a link in the navigation shows its page and changes the URL with no page load', () => {
@@ -58,6 +63,6 @@ test('an unknown path shows that no page has the address, and links to the dashb
   assert.equal(heading(), 'Dashboard');
 });
 
-test('the admin calls no API', () => {
-  assert.deepEqual(calls, []);
+test('a change of page calls the API no more', () => {
+  assert.equal(calls.length, 1);
 });

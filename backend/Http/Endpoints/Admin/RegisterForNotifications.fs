@@ -42,8 +42,8 @@ type RegisterForNotifications(
         let registerDevice = RegisterDevice.withDependencies {
           new RegisterDevice.Dependencies with
           
-          member _.GetDeviceRegistrationByUserAndClient userExternalId client =
-            notificationDependencies.GetDeviceRegistrationByUserAndClient userExternalId client
+          member _.GetDeviceRegistrationByUser userExternalId =
+            notificationDependencies.GetDeviceRegistrationByUser userExternalId
           member _.CreateDeviceRegistration newDeviceRegistration =
             notificationDependencies.CreateDeviceRegistration newDeviceRegistration
           member _.UpdateDeviceRegistration registration token =
@@ -54,7 +54,6 @@ type RegisterForNotifications(
 
         let newDeviceRegistration =
           { NewDeviceRegistration.Dto.UserExternalId = NewDeviceRegistration.UserExternalId authInfo.UserExternalId
-            NewDeviceRegistration.Dto.Client = NewDeviceRegistration.Client authInfo.Client
             NewDeviceRegistration.Dto.Token = NewDeviceRegistration.Token json.Token }
 
         let! registrationResult = ct |> registerDevice newDeviceRegistration
