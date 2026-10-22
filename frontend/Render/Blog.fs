@@ -73,6 +73,29 @@ let tags (posts: Post list) =
 let categories (posts: Post list) =
   newestFirst posts |> List.map _.FrontMatter.Category |> List.distinctBy _.Slug
 
+/// Each post with the title of the newest post that has the same term slug, for its category and each tag.
+let withNewestTermTitles (posts: Post list) =
+  let titles (termsOf: Post -> Term list) =
+    newestFirst posts
+    |> List.collect termsOf
+    |> List.distinctBy _.Slug
+    |> List.map (fun term -> term.Slug, term.Title)
+    |> Map.ofList
+
+  let categoryTitles = titles (fun post -> [ post.FrontMatter.Category ])
+  let tagTitles = titles _.FrontMatter.Tags
+  let newest (titles: Map<string, string>) (term: Term) = { term with Title = titles[term.Slug] }
+
+  posts
+  |> List.map (fun post ->
+    let frontMatter = post.FrontMatter
+
+    { post with
+        FrontMatter =
+          { frontMatter with
+              Category = newest categoryTitles frontMatter.Category
+              PlacedTags = frontMatter.PlacedTags |> List.map (fun placed -> { placed with Term = newest tagTitles placed.Term }) } })
+
 let pageSize = 6
 
 /// The newest posts are on page 1. With no post, the list has one empty page.

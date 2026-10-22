@@ -77,9 +77,11 @@ let post
       |> Option.map _.Problems
       |> Option.defaultValue []
 
+    let shown = Blog.withNewestTermTitles posts |> List.find (fun other -> other.Slug = slug)
+
     let article =
       Fragment() {
-        Article.content post (Blog.seriesPosition posts post)
+        Article.content shown (Blog.seriesPosition posts post)
         Article.outline post
       }
 

@@ -70,6 +70,22 @@ let tests =
         Expect.isFalse (Encoding.UTF8.GetString(render ()).Contains "/series/no-posts/") $"%A{output} has no link to the series"
     }
 
+    test "two titles for one tag slug give the title of the newer post on each page" {
+      let older = published "older-post" (text $"{frontMatter}\ntags:\n  - Web development" "Text.")
+      let newerFields = frontMatter.Replace("2026-02-04", "2026-03-04") + "\ntags:\n  - web development"
+      let newer = published "newer-post" (text newerFields "Text.")
+
+      let map = RenderMap.create Stage.Production buildTime widgets (content [ older; newer ])
+
+      for slug in [ "older-post"; "newer-post" ] do
+        Expect.stringContains (siteText map $"posts/{slug}/index.html") """<a href="/tag/web-development/">#web development</a>""" $"The page of {slug} has the newer title"
+
+      Expect.stringContains (siteText map "tag/web-development/index.html") "Posts by tag &#39;web development&#39;" "The tag page has the newer title"
+
+      for path in pagePaths map do
+        Expect.isFalse ((siteText map path).Contains "#Web development") $"{path} has no older title"
+    }
+
     test "a post with an unknown series slug fails with its file and line" {
       Expect.equal
         (loadPostsFrom [ seriesFile "a-series"; file "a-post", text $"{frontMatter}\nseries: b-series" "Text." ]
