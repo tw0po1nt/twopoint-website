@@ -8,7 +8,7 @@ open TwoPoint.Site.Render.Tests.Fixture
 open Expecto
 open System.Text.RegularExpressions
 
-let private post = postWith "a-post" "2026-01-01T00:00:00Z" "One-offs" [ "FSharp" ] (Some "fable-reminders")
+let private post = postWith "a-post" "2026-01-01T00:00:00Z" "Series" [ "FSharp" ] (Some "fable-reminders")
 
 let private html stage =
   siteText (RenderMap.create stage buildTime widgets (content [ post ])) "404.html"

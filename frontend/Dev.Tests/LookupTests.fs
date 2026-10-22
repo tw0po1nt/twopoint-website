@@ -47,7 +47,8 @@ let private post slug =
         Excerpt = "An excerpt"
         Author = "Matthew Watt"
         Category = { Slug = "one-offs"; Title = "One-offs" }
-        Tags = []
+        CategoryLine = 6
+        PlacedTags = []
         Series = None
         Image = None
         ShowOnHomepage = true }

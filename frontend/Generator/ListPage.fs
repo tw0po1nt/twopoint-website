@@ -21,8 +21,6 @@ type Page =
 
 let seriesUrlPath = "/series/"
 
-let private seriesCategorySlug = "series"
-
 /// The URL path of page 1.
 let private basePath (list: PostList) =
   match list with
@@ -33,7 +31,7 @@ let private basePath (list: PostList) =
 
 let private isSeriesCategory (list: PostList) =
   match list with
-  | PostList.Category category -> category.Slug = seriesCategorySlug
+  | PostList.Category category -> category.Slug = Rules.seriesCategory
   | _ -> false
 
 let private includes (list: PostList) (post: Post) =

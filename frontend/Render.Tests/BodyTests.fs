@@ -11,7 +11,7 @@ let private html body = (published "a-post" (text frontMatter body)).Body.Html
 
 let private bodyErrors body = errors "a-post" (text frontMatter body)
 
-let private blob = "https://twopointwebsite.blob.core.windows.net/posts/a-post"
+let private blob = "https://twopointwebsite.blob.core.windows.net/assets"
 
 let private cat = $"{blob}/cat.jpg"
 

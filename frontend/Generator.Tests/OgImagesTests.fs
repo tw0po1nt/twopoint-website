@@ -23,8 +23,8 @@ let private post slug (image: string option) (series: string option) =
     |> Option.map (fun image -> { seriesRecord "a-series" with Image = Some(Uri image) })
     |> Option.toList
 
-  let seriesLine = if records.IsEmpty then "" else "\nseries: a-series"
-  publishedIn records slug (text $"{frontMatter}{imageLine}{seriesLine}" "Text.")
+  let frontMatter = if records.IsEmpty then frontMatter else seriesFrontMatter "a-series"
+  publishedIn records slug (text $"{frontMatter}{imageLine}" "Text.")
 
 let private tags (map: RenderMap) slug =
   let html = siteText map $"posts/{slug}/index.html"

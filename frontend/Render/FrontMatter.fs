@@ -61,13 +61,17 @@ let private term: Parse<Term> =
       | "" -> fail context name node $"'{name}' gives an empty slug."
       | slug -> Ok { Slug = slug; Title = Slug.termTitle value })
 
-let private terms: Parse<Term list> =
+let private placedTerm: Parse<PlacedTerm> =
+  fun context name node ->
+    term context name node |> Result.map (fun term -> { Term = term; Line = fileLine context node.Start.Line })
+
+let private terms: Parse<PlacedTerm list> =
   fun context name node ->
     match node with
     | :? YamlSequenceNode as sequence ->
       sequence.Children
       |> List.ofSeq
-      |> List.traverseResultA (term context name)
+      |> List.traverseResultA (placedTerm context name)
       |> Result.mapError List.concat
     | _ -> fail context name node $"Give '{name}' as a list."
 
@@ -90,25 +94,25 @@ let private mapping context (prefix: string) (node: YamlNode) (known: string lis
         Problem.error (Place.Field($"{prefix}{field}", fileLine context key.Start.Line)) $"Unknown field '{prefix}{field}'.")
 
     if unknown.IsEmpty then
-      Ok(fields |> Map.map (fun _ (_, value) -> value))
+      Ok fields
     else
       Error unknown
   | _ when prefix = "" ->
     Error [ Problem.error (Place.Post(fileLine context node.Start.Line)) $"Give the {context.Document} as a YAML mapping." ]
   | _ -> fail context (prefix.TrimEnd '.') node $"Give '{prefix.TrimEnd '.'}' as a mapping."
 
-let private required context (missingLine: int64) (fields: Map<string, YamlNode>) prefix name (parse: Parse<'a>) =
+let private required context (missingLine: int64) (fields: Map<string, YamlNode * YamlNode>) prefix name (parse: Parse<'a>) =
   match fields.TryFind name with
-  | Some node -> parse context $"{prefix}{name}" node
+  | Some(_, node) -> parse context $"{prefix}{name}" node
   | None ->
     Error
       [ Problem.error
           (Place.Field($"{prefix}{name}", fileLine context missingLine))
           $"The {context.Document} has no '{prefix}{name}' field." ]
 
-let private optional context (fields: Map<string, YamlNode>) prefix name (parse: Parse<'a>) =
+let private optional context (fields: Map<string, YamlNode * YamlNode>) prefix name (parse: Parse<'a>) =
   match fields.TryFind name with
-  | Some node -> parse context $"{prefix}{name}" node |> Result.map Some
+  | Some(_, node) -> parse context $"{prefix}{name}" node |> Result.map Some
   | None -> Ok None
 
 let private seriesBySlug (records: Series list) : Parse<Series> =
@@ -137,31 +141,55 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
     let required name parse = required context 0L fields "" name parse
     let optional name parse = optional context fields "" name parse
 
-    return!
+    let keyLine name =
+      fields.TryFind name
+      |> Option.map (fun (key, _) -> fileLine context key.Start.Line)
+      |> Option.defaultValue (fileLine context 0L)
+
+    let! frontMatterOf, ruleFields =
       validation {
         let! publishDate = required "publishDate" utcTime
         and! updateDate = optional "updateDate" utcTime
         and! title = required "title" text
         and! excerpt = required "excerpt" text
         and! author = required "author" text
-        and! category = required "category" term
+        and! category = optional "category" placedTerm
         and! tags = optional "tags" terms
         and! series = optional "series" (seriesBySlug records)
         and! image = optional "image" httpsUrl
         and! showOnHomepage = optional "showOnHomepage" flag
 
-        return
+        let tags = defaultArg tags []
+        let categoryLine = category |> Option.map _.Line |> Option.defaultValue (keyLine "category")
+
+        let frontMatterOf category =
           { PublishDate = publishDate
             UpdateDate = updateDate
             Title = title
             Excerpt = excerpt
             Author = author
             Category = category
-            Tags = defaultArg tags []
+            CategoryLine = categoryLine
+            PlacedTags = tags
             Series = series
             Image = image
             ShowOnHomepage = defaultArg showOnHomepage true }
+
+        return
+          frontMatterOf,
+          { PublishDate = Some publishDate
+            Category = category |> Option.map _.Term
+            CategoryLine = categoryLine
+            Tags = tags
+            Series = series |> Option.map _.Slug
+            TagsLine = keyLine "tags" }
       }
+
+    let problems = Rules.frontMatter PostState.Published ruleFields
+
+    match ruleFields.Category with
+    | Some category when not (List.exists Problem.isError problems) -> return frontMatterOf category, problems
+    | _ -> return! Error problems
   }
 
 let private load (document: string) (startLine: int) (yaml: string) (ofRoot: Context -> YamlNode -> Result<'a, Problem list>) =
@@ -177,8 +205,8 @@ let private load (document: string) (startLine: int) (yaml: string) (ofRoot: Con
   with :? YamlException as error ->
     Error [ Problem.error (Place.Post(fileLine context error.Start.Line)) error.Message ]
 
-/// `startLine` is the file line of the opening `---`.
-let parse (records: Series list) (startLine: int) (yaml: string) : Result<FrontMatter, Problem list> =
+/// `startLine` is the file line of the opening `---`. The `Ok` value has the warnings.
+let parse (records: Series list) (startLine: int) (yaml: string) : Result<FrontMatter * Problem list, Problem list> =
   load "front matter" startLine yaml (ofRoot records)
 
 let private ofPageRoot context (root: YamlNode) =

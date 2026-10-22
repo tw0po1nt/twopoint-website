@@ -114,6 +114,9 @@ type Series =
     Excerpt: string
     Image: Uri option }
 
+/// A term and its line in the post file.
+type PlacedTerm = { Term: Term; Line: int }
+
 type FrontMatter =
   { PublishDate: DateTimeOffset
     UpdateDate: DateTimeOffset option
@@ -121,10 +124,30 @@ type FrontMatter =
     Excerpt: string
     Author: string
     Category: Term
-    Tags: Term list
+    CategoryLine: int
+    PlacedTags: PlacedTerm list
     Series: Series option
     Image: Uri option
     ShowOnHomepage: bool }
+
+  member this.Tags = this.PlacedTags |> List.map _.Term
+
+[<RequireQualifiedAccess>]
+type PostState =
+  /// A draft has no publish date, and it can have no category.
+  | Draft
+  | Published
+
+type RuleFields =
+  { PublishDate: DateTimeOffset option
+    Category: Term option
+    /// A missing category has the file line of the opening `---`.
+    CategoryLine: int
+    Tags: PlacedTerm list
+    /// The slug of the series.
+    Series: string option
+    /// The file line of the `tags` field.
+    TagsLine: int }
 
 type LinkTarget =
   /// A root-relative link, for example `/posts/<slug>/#<id>`.
