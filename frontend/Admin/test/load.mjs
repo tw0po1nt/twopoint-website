@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Loads the built admin at a URL, with a stub `fetch` that records each call.
 export const load = async (url) => {
   const manifest = JSON.parse(await readFile('build/manifest.json', 'utf8'));
   const config = JSON.parse(await readFile('config.json', 'utf8'))[manifest.mode];

@@ -28,6 +28,10 @@ let private link (dispatch: Router.Msg -> unit) (route: Route) (current: Route) 
   }
 
 [<SolidComponent>]
+let private routeLink (dispatch: Router.Msg -> unit) (route: Route) (text: string) =
+  a (href = Route.path route, onClick = follow dispatch (Route.path route)) { text }
+
+[<SolidComponent>]
 let private content (dispatch: Router.Msg -> unit) (route: Route) =
   match route with
   | Settings ->
@@ -43,7 +47,7 @@ let private content (dispatch: Router.Msg -> unit) (route: Route) =
     Fragment() {
       p () {
         "No page has this address. Go to the "
-        a (href = Route.path Dashboard, onClick = follow dispatch (Route.path Dashboard)) { "dashboard" }
+        routeLink dispatch Dashboard "dashboard"
         "."
       }
     }
@@ -62,8 +66,10 @@ let view () =
 
   window.addEventListener ("popstate", fun _ -> dispatch (Router.UrlChanged window.location.pathname))
 
-  div (class' = (if Router.showsNavigation (model ()).Route then "shell" else "shell is-bare")) {
-    Show(when' = Router.showsNavigation (model ()).Route) {
+  let showsNavigation () = Router.showsNavigation (model ()).Route
+
+  div (class' = (if showsNavigation () then "shell" else "shell is-bare")) {
+    Show(when' = showsNavigation ()) {
       nav (class' = "navigation", ariaLabel = "Admin") {
         p (class' = "brand") { "TwoPoint Admin" }
 
@@ -75,8 +81,8 @@ let view () =
       }
     }
 
-    Show(when' = not (Router.showsNavigation (model ()).Route)) {
-      header (class' = "bar") { a (href = Route.path Posts, onClick = follow dispatch (Route.path Posts)) { "Posts" } }
+    Show(when' = not (showsNavigation ())) {
+      header (class' = "bar") { routeLink dispatch Posts "Posts" }
     }
 
     main (class' = "screen") {
