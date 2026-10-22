@@ -5,7 +5,7 @@ open FsToolkit.ErrorHandling
 open Markdig
 
 /// `file` is the path from the repo root. A `series` field refers to one of `series` by its slug.
-let parse (images: IImages) (stage: Stage) (series: Series list) (file: string) (text: string) : Result<Post * FileProblems, FileProblems> =
+let parse (images: IImageSize) (stage: Stage) (series: Series list) (file: string) (text: string) : Result<Post * FileProblems, FileProblems> =
   let document = Markdown.Parse(text, Body.pipeline)
   let frontMatter = Body.frontMatter document
   let bodyStart = Body.startLine text frontMatter

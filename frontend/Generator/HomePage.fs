@@ -7,7 +7,7 @@ open TwoPoint.Site.Widgets
 open Oxpecker.ViewEngine
 open System
 
-let urlPath = "/"
+let urlPath = SitePage.urlPath SitePage.Home
 
 let robots = Layout.Robots.Index
 

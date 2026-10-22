@@ -5,7 +5,7 @@ open TwoPoint.Site.Render
 
 open Oxpecker.ViewEngine
 
-let sitePath = "404.html"
+let urlPath = SitePage.urlPath SitePage.NotFound
 
 let robots = Layout.Robots.NoIndex
 

@@ -5,7 +5,7 @@ open TwoPoint.Site.Render
 
 open System.Globalization
 
-let urlPath = "/rss.xml"
+let urlPath = FixedFile.feed
 
 let title = $"TwoPoint{char 0x2019}s Blog"
 

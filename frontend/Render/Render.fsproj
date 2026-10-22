@@ -23,11 +23,13 @@
     <Compile Include="Post.fs" />
     <Compile Include="MarkdownPage.fs" />
     <Compile Include="Privacy.fs" />
+    <Compile Include="Blog.fs" />
+    <Compile Include="SitePage.fs" />
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
-    <Compile Include="Blog.fs" />
     <Compile Include="Time.fs" />
     <Compile Include="Article.fs" />
+    <Compile Include="Check.fs" />
   </ItemGroup>
 
   <ItemGroup>

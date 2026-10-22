@@ -285,7 +285,7 @@ let private render (directiveHtml: Directive.Directive -> string) (document: Mar
   writer.ToString()
 
 /// Changes the document in place. `startLine` is the file line of body line 1. The `Ok` value has the warnings.
-let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: MarkdownDocument) : Result<Body * Problem list, Problem list> =
+let ofDocument (images: IImageSize) (stage: Stage) (startLine: int) (document: MarkdownDocument) : Result<Body * Problem list, Problem list> =
   let headings = descendants<HeadingBlock> document
   let texts = headings |> List.map (fun heading -> inlineText shownText heading.Inline)
   let ids = headings |> List.map (fun heading -> inlineText sourceText heading.Inline) |> Slug.headingIds
