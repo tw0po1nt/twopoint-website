@@ -1,0 +1,17 @@
+{
+  "globalHeaders": {
+    "X-Robots-Tag": "noindex, nofollow"
+  },
+  "routes": [
+    {
+      "route": "/redirect/*",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/redirect/*", "/bundle/*"]
+  }
+}

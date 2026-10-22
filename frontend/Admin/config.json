@@ -1,0 +1,10 @@
+{
+  "dev": {
+    "api": "http://localhost:7071",
+    "origin": "http://localhost:4322"
+  },
+  "release": {
+    "api": "https://func-twopoint-website-api.azurewebsites.net",
+    "origin": "https://admin.twopoint.dev"
+  }
+}
