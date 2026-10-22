@@ -9,6 +9,8 @@
     <Project Path="backend/Http/Http.fsproj" />
   </Folder>
   <Folder Name="/frontend/">
+    <Project Path="frontend/Admin.Tests/Admin.Tests.fsproj" />
+    <Project Path="frontend/Admin/Admin.fsproj" />
     <Project Path="frontend/Dev.Tests/Dev.Tests.fsproj" />
     <Project Path="frontend/Dev/Dev.fsproj" />
     <Project Path="frontend/Generator.Tests/Generator.Tests.fsproj" />
