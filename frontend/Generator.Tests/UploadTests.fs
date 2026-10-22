@@ -126,7 +126,11 @@ let tests =
       Upload.run container production newsletters |> ignore
 
       Expect.equal
-        (container.Calls |> List.skip 3)
+        (container.Calls
+         |> List.skipWhile (function
+           | CreateIfNotExists
+           | Upload _ -> true
+           | _ -> false))
         [ Names "posts/"; Delete "posts/removed-post/index" ]
         "upload lists and deletes after each upload"
     }

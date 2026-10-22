@@ -54,14 +54,14 @@ module BlobContainer =
 [<RequireQualifiedAccess>]
 module Upload =
 
-  /// The backend reads each newsletter at this name.
-  let blobName (slug: string) = $"posts/{slug}/index"
-
   let private prefix = "posts/"
+
+  /// The backend reads each newsletter at this name.
+  let blobName (slug: string) = $"{prefix}{slug}/index"
 
   let private isNewsletter (name: string) =
     match name.Split '/' with
-    | [| "posts"; slug; "index" |] -> slug <> ""
+    | [| _; slug; _ |] -> slug <> "" && name = blobName slug
     | _ -> false
 
   let private blob (newsletter: Disk.NewsletterFile) =

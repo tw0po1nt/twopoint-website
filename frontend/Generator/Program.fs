@@ -33,7 +33,7 @@ let private upload (root: string) (container: Uri) =
         $"Uploaded {name}"
       for name in report.Deleted do
         $"Deleted {name}"
-      $"Uploaded {report.Uploaded.Length} newsletters to {container} and deleted {report.Deleted.Length}" ]
+      $"Uploaded {report.Uploaded.Length} newsletters to {container} and deleted {report.Deleted.Length} newsletters" ]
     |> String.concat Environment.NewLine)
   |> Result.mapError List.singleton
 
