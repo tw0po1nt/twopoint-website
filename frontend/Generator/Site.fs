@@ -33,6 +33,13 @@ let parsePosts (images: IImages) (stage: Stage) (files: PostFiles) : Result<Post
     files.Published
     |> List.map (fun file -> Post.parse images stage series file.Path (PostFolder.text file))
     |> FileProblems.collect)
+  |> Result.map (fun (posts, problems) ->
+    let termProblems =
+      posts
+      |> List.map (fun post -> FileProblems.create post.File post.Body.StartLine (Rules.termTitles posts post))
+      |> List.filter (fun problems -> not problems.Problems.IsEmpty)
+
+    posts, problems @ termProblems)
 
 let private parsePages (images: IImages) (stage: Stage) (postFiles: PostFiles) =
   let problemsOf result =

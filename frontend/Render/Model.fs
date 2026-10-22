@@ -114,6 +114,9 @@ type Series =
     Excerpt: string
     Image: Uri option }
 
+/// The file line of the category and of each tag, in tag order.
+type TermLines = { Category: int; Tags: int list }
+
 type FrontMatter =
   { PublishDate: DateTimeOffset
     UpdateDate: DateTimeOffset option
@@ -124,7 +127,26 @@ type FrontMatter =
     Tags: Term list
     Series: Series option
     Image: Uri option
-    ShowOnHomepage: bool }
+    ShowOnHomepage: bool
+    TermLines: TermLines }
+
+[<RequireQualifiedAccess>]
+type PostState =
+  /// A draft has no publish date, and it can have no category.
+  | Draft
+  | Published
+
+/// The front matter values that the post rules read.
+type RuleFields =
+  { PublishDate: DateTimeOffset option
+    Category: Term option
+    Tags: Term list
+    /// The slug of the series.
+    Series: string option
+    /// The file line of the `tags` field.
+    TagsLine: int
+    /// A missing category has the file line of the opening `---`.
+    TermLines: TermLines }
 
 type LinkTarget =
   /// A root-relative link, for example `/posts/<slug>/#<id>`.

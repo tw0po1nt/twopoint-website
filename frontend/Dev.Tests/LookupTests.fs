@@ -50,7 +50,8 @@ let private post slug =
         Tags = []
         Series = None
         Image = None
-        ShowOnHomepage = true }
+        ShowOnHomepage = true
+        TermLines = { Category = 6; Tags = [] } }
     Body = { noPrivacy.Body with EmailHtml = $"<p>The body of {slug}.</p>" } }
 
 let private mapOf (posts: Post list) =

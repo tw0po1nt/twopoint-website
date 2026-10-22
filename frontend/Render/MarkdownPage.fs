@@ -26,13 +26,13 @@ module MarkdownPage =
         |> Result.requireSome [ Problem.error (Place.Post 1) "The page has no front matter. Start the file with a '---' line." ]
 
       let! title, description = FrontMatter.parsePage (block.Line + 1) (block.Lines.ToString())
-      let! body = Body.ofDocument images stage bodyStart document
+      let! body, warnings = Body.ofDocument images stage bodyStart document
 
       return
         { File = file
           Title = title
           Description = description
           Body = body },
-        []
+        warnings
     }
     |> FileProblems.ofResult file bodyStart

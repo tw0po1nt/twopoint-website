@@ -48,6 +48,11 @@ let frontMatter =
    excerpt: An excerpt\n\
    category: One-offs"
 
+/// Lines 2 to 7 of a fixture post in the series `slug`.
+let seriesFrontMatter slug =
+  let category = frontMatter.Replace("One-offs", "Series")
+  $"{category}\nseries: {slug}"
+
 /// The body text starts on file line 9, which is body line 2.
 let text (frontMatter: string) (body: string) = $"---\n{frontMatter}\n---\n\n{body}\n"
 

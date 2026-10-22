@@ -31,7 +31,8 @@ let tests =
           Excerpt = "Footguns"
           Image = Some(Uri "https://example.com/series.jpg") }
 
-      let post = publishedIn [ seriesRecord "a-series"; series ] "a-post" (withField fields)
+      let seriesCategory = frontMatter.Replace("One-offs", "Series")
+      let post = publishedIn [ seriesRecord "a-series"; series ] "a-post" (text $"{seriesCategory}\n{fields}" "Body text.")
 
       Expect.equal
         post.FrontMatter
@@ -40,15 +41,16 @@ let tests =
           Title = "A post"
           Excerpt = "An excerpt"
           Author = "Matthew Watt"
-          Category = { Slug = "one-offs"; Title = "One-offs" }
+          Category = { Slug = "series"; Title = "Series" }
           Tags =
             [ { Slug = "csharp"; Title = "C#" }
               { Slug = "net"; Title = ".NET" }
               { Slug = "2026"; Title = "2026" } ]
           Series = Some series
           Image = Some(Uri "https://example.com/post.jpg")
-          ShowOnHomepage = false }
-        "The post has each field"
+          ShowOnHomepage = false
+          TermLines = { Category = 6; Tags = [ 9; 10; 11 ] } }
+        "The post has each field, and the file line of each term"
 
       Expect.equal post.Slug "a-post" "The slug is the file name"
     }
@@ -89,11 +91,13 @@ let tests =
     }
 
     test "each missing required field fails" {
-      for field in [ "publishDate"; "author"; "title"; "excerpt"; "category" ] do
+      for field in [ "publishDate"; "author"; "title"; "excerpt" ] do
         Expect.equal
           (errors "a-post" (without field))
           [ errorAt "a-post" 1 $"The front matter has no '{field}' field." ]
           $"{field} is required"
+
+      Expect.equal (errors "a-post" (without "category")) [ errorAt "a-post" 1 "The post has no category." ] "category is required"
     }
 
     test "a bad value fails with its line" {

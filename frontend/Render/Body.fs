@@ -284,8 +284,8 @@ let private render (directiveHtml: Directive.Directive -> string) (document: Mar
   renderer.Render document |> ignore
   writer.ToString()
 
-/// Changes the document in place. `startLine` is the file line of body line 1.
-let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: MarkdownDocument) : Result<Body, Problem list> =
+/// Changes the document in place. `startLine` is the file line of body line 1. The `Ok` value has the warnings.
+let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: MarkdownDocument) : Result<Body * Problem list, Problem list> =
   let headings = descendants<HeadingBlock> document
   let texts = headings |> List.map (fun heading -> inlineText shownText heading.Inline)
   let ids = headings |> List.map (fun heading -> inlineText sourceText heading.Inline) |> Slug.headingIds
@@ -293,23 +293,41 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
   for heading, id in List.zip headings ids do
     heading.GetAttributes().Id <- id
 
-  let imageErrors =
+  let imageProblems =
     descendants<LinkInline> document
     |> List.filter _.IsImage
-    |> List.choose (fun image ->
+    |> List.collect (fun image ->
       let attributes = image.GetAttributes()
       attributes.AddPropertyIfNotExist("loading", "lazy")
 
+      let warningAt message =
+        Problem.warning (Place.Body(bodyLine startLine image.Line)) message
+
+      let altText =
+        if String.IsNullOrWhiteSpace(inlineText shownText image) then
+          [ warningAt "The image has no alt text. Write the alt text between the brackets, for example ![A cat](…)." ]
+        else
+          []
+
       match Uri.TryCreate(image.Url, UriKind.Absolute) with
-      | true, url when Azurite.isForbidden stage url -> Some(errorAt startLine image.Line (Azurite.problem url))
+      | true, url when Azurite.isForbidden stage url -> errorAt startLine image.Line (Azurite.problem url) :: altText
       | true, url when url.Scheme = Uri.UriSchemeHttps || Azurite.isUrl url ->
-        match images.Size url with
-        | Ok size ->
-          attributes.AddProperty("width", string size.Width)
-          attributes.AddProperty("height", string size.Height)
-          None
-        | Error reason -> Some(errorAt startLine image.Line $"The build cannot read the size of the image {url}: {reason}.")
-      | _ -> Some(errorAt startLine image.Line $"Give the image '{image.Url}' as an https URL."))
+        let size =
+          match images.Size url with
+          | Ok size ->
+            attributes.AddProperty("width", string size.Width)
+            attributes.AddProperty("height", string size.Height)
+            []
+          | Error reason -> [ errorAt startLine image.Line $"The build cannot read the size of the image {url}: {reason}." ]
+
+        let outside =
+          if AssetContainer.isUrl stage url then
+            []
+          else
+            [ warningAt $"The image {url} is not in the asset container. Upload the image, so that the site controls it." ]
+
+        size @ altText @ outside
+      | _ -> errorAt startLine image.Line $"Give the image '{image.Url}' as an https URL." :: altText)
 
   let links = links stage document
 
@@ -344,12 +362,12 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
       | Ok _ -> None
       | Error message -> Some(errorAt startLine block.Line message))
 
-  let errors =
-    rawHtmlErrors startLine document @ imageErrors @ linkErrors @ languageErrors @ directiveErrors
+  let problems =
+    rawHtmlErrors startLine document @ imageProblems @ linkErrors @ languageErrors @ directiveErrors
     |> List.sortBy _.Place
 
-  if errors.IsEmpty then
-    Ok
+  if not (List.exists Problem.isError problems) then
+    Ok(
       { Html = render Directive.html document
         EmailHtml = render Directive.emailHtml document
         Headings =
@@ -358,6 +376,8 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
         Anchors = Set.ofList ids
         Links = internalLinks
         ReadingTime = readingTime (blockText document)
-        StartLine = startLine }
+        StartLine = startLine },
+      problems
+    )
   else
-    Error errors
+    Error problems

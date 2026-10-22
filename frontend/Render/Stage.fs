@@ -34,3 +34,16 @@ module Azurite =
 
   let problem (url: Uri) =
     $"The URL {url.AbsoluteUri} is an Azurite URL. Only the local stage accepts an Azurite URL."
+
+/// The public blob container of the images and the PDFs that the author uploads.
+[<RequireQualifiedAccess>]
+module AssetContainer =
+
+  let url = Uri "https://twopointwebsite.blob.core.windows.net/assets/"
+
+  /// The local backend writes each asset to Azurite.
+  let isUrl (stage: Stage) (asset: Uri) =
+    url.IsBaseOf asset
+    || stage = Stage.Local
+       && Azurite.isUrl asset
+       && asset.AbsolutePath.StartsWith "/devstoreaccount1/assets/"

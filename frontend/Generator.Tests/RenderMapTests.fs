@@ -57,7 +57,7 @@ let tests =
         loadPostsFrom
           [ seriesFile "a-series"
             seriesFile "no-posts"
-            file "a-post", text $"{frontMatter}\nseries: a-series" "Text." ]
+            file "a-post", text (seriesFrontMatter "a-series") "Text." ]
         |> ok
         |> fst
 
