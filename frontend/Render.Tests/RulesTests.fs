@@ -22,10 +22,10 @@ let private assets = "https://twopointwebsite.blob.core.windows.net/assets/a4dd6
 let private draftFields: RuleFields =
   { PublishDate = None
     Category = None
+    CategoryLine = 1
     Tags = []
     Series = None
-    TagsLine = 1
-    TermLines = { Category = 1; Tags = [] } }
+    TagsLine = 1 }
 
 [<Tests>]
 let tests =
@@ -106,8 +106,8 @@ let tests =
           PostState.Draft
           { draftFields with
               Category = Some { Slug = "one-offs"; Title = "One-offs" }
-              Tags = [ { Slug = "2025"; Title = "2025" } ]
-              TermLines = { Category = 2; Tags = [ 4 ] } })
+              CategoryLine = 2
+              Tags = [ { Term = { Slug = "2025"; Title = "2025" }; Line = 4 } ] })
         "Only a post with a publish date"
     }
 

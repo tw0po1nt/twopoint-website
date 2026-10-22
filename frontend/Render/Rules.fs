@@ -6,26 +6,26 @@ open System.Text.RegularExpressions
 let seriesCategory = "series"
 
 let private categoryProblems (state: PostState) (fields: RuleFields) =
-  let at = Place.Field("category", fields.TermLines.Category)
-  let isSeries (category: Term) = category.Slug = seriesCategory
+  let at = Place.Field("category", fields.CategoryLine)
+  let isSeries = fields.Category |> Option.exists (fun category -> category.Slug = seriesCategory)
 
   match fields.Category, fields.Series with
-  | None, Some _ -> [ Problem.error at "The post is in a series, so give it the category 'Series'." ]
-  | Some category, Some _ when not (isSeries category) ->
-    [ Problem.error at "The post is in a series, so give it the category 'Series'." ]
-  | Some category, None when isSeries category ->
+  | _, Some _ when not isSeries -> [ Problem.error at "The post is in a series, so give it the category 'Series'." ]
+  | Some _, None when isSeries ->
     [ Problem.error at "The category is 'Series', so give the post a series, or give it another category." ]
   | None, None when state = PostState.Published -> [ Problem.error at "The post has no category." ]
   | _ -> []
 
-let private tagLines (fields: RuleFields) = List.zip fields.Tags fields.TermLines.Tags
-
 let private duplicateTags (fields: RuleFields) =
-  tagLines fields
+  fields.Tags
   |> List.indexed
-  |> List.choose (fun (index, (tag, line)) ->
-    if fields.Tags |> List.take index |> List.exists (fun earlier -> earlier.Slug = tag.Slug) then
-      Some(Problem.error (Place.Field("tags", line)) $"Another tag has the slug '{tag.Slug}'. Delete one of the two tags.")
+  |> List.choose (fun (index, tag) ->
+    if fields.Tags |> List.take index |> List.exists (fun earlier -> earlier.Term.Slug = tag.Term.Slug) then
+      Some(
+        Problem.error
+          (Place.Field("tags", tag.Line))
+          $"Another tag has the slug '{tag.Term.Slug}'. Delete one of the two tags."
+      )
     else
       None)
 
@@ -37,38 +37,38 @@ let private yearProblems (fields: RuleFields) =
     let year = string publishDate.UtcDateTime.Year
 
     let missing =
-      if fields.Tags |> List.exists (fun tag -> tag.Slug = year) then
+      if fields.Tags |> List.exists (fun tag -> tag.Term.Slug = year) then
         []
       else
         [ Problem.warning (Place.Field("tags", fields.TagsLine)) $"Add the tag '{year}' for the publish year." ]
 
     let otherYears =
-      tagLines fields
-      |> List.filter (fun (tag, _) -> yearTag.IsMatch tag.Slug && tag.Slug <> year)
-      |> List.map (fun (tag, line) ->
+      fields.Tags
+      |> List.filter (fun tag -> yearTag.IsMatch tag.Term.Slug && tag.Term.Slug <> year)
+      |> List.map (fun tag ->
         Problem.warning
-          (Place.Field("tags", line))
-          $"The tag '{tag.Slug}' is a year tag, and the publish year is {year}. Delete the tag or change it to '{year}'.")
+          (Place.Field("tags", tag.Line))
+          $"The tag '{tag.Term.Slug}' is a year tag, and the publish year is {year}. Delete the tag or change it to '{year}'.")
 
     missing @ otherYears
   | _ -> []
 
-/// The problems of the front matter of one post. A post with no tags gets no tag problem.
+/// A post with no tags gets no tag problem.
 let frontMatter (state: PostState) (fields: RuleFields) =
   categoryProblems state fields @ duplicateTags fields @ yearProblems fields
 
 let private termFields (post: Post) =
   let frontMatter = post.FrontMatter
 
-  [ "category", "category", [ frontMatter.Category, frontMatter.TermLines.Category ], (fun (other: Post) -> [ other.FrontMatter.Category ])
-    "tags", "tag", List.zip frontMatter.Tags frontMatter.TermLines.Tags, (fun (other: Post) -> other.FrontMatter.Tags) ]
+  [ "category", "category", [ { Term = frontMatter.Category; Line = frontMatter.CategoryLine } ], (fun (other: Post) -> [ other.FrontMatter.Category ])
+    "tags", "tag", frontMatter.PlacedTags, (fun (other: Post) -> other.FrontMatter.Tags) ]
 
 /// A warning for each term of `post` that another post of `published` gives another title.
 let termTitles (published: Post list) (post: Post) =
   let others = published |> List.filter (fun other -> other.Slug <> post.Slug) |> List.sortBy _.Slug
 
   [ for field, name, terms, termsOf in termFields post do
-      for term, line in terms do
+      for { Term = term; Line = line } in terms do
         let otherTitles =
           others
           |> List.choose (fun other ->

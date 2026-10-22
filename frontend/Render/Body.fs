@@ -312,7 +312,7 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
       match Uri.TryCreate(image.Url, UriKind.Absolute) with
       | true, url when Azurite.isForbidden stage url -> errorAt startLine image.Line (Azurite.problem url) :: altText
       | true, url when url.Scheme = Uri.UriSchemeHttps || Azurite.isUrl url ->
-        let size =
+        let sizeProblems =
           match images.Size url with
           | Ok size ->
             attributes.AddProperty("width", string size.Width)
@@ -320,13 +320,13 @@ let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: Mark
             []
           | Error reason -> [ errorAt startLine image.Line $"The build cannot read the size of the image {url}: {reason}." ]
 
-        let outside =
+        let assetProblems =
           if AssetContainer.isUrl stage url then
             []
           else
             [ warningAt $"The image {url} is not in the asset container. Upload the image, so that the site controls it." ]
 
-        size @ altText @ outside
+        sizeProblems @ altText @ assetProblems
       | _ -> errorAt startLine image.Line $"Give the image '{image.Url}' as an https URL." :: altText)
 
   let links = links stage document

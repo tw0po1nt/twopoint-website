@@ -42,14 +42,14 @@ let tests =
           Excerpt = "An excerpt"
           Author = "Matthew Watt"
           Category = { Slug = "series"; Title = "Series" }
-          Tags =
-            [ { Slug = "csharp"; Title = "C#" }
-              { Slug = "net"; Title = ".NET" }
-              { Slug = "2026"; Title = "2026" } ]
+          CategoryLine = 6
+          PlacedTags =
+            [ { Term = { Slug = "csharp"; Title = "C#" }; Line = 9 }
+              { Term = { Slug = "net"; Title = ".NET" }; Line = 10 }
+              { Term = { Slug = "2026"; Title = "2026" }; Line = 11 } ]
           Series = Some series
           Image = Some(Uri "https://example.com/post.jpg")
-          ShowOnHomepage = false
-          TermLines = { Category = 6; Tags = [ 9; 10; 11 ] } }
+          ShowOnHomepage = false }
         "The post has each field, and the file line of each term"
 
       Expect.equal post.Slug "a-post" "The slug is the file name"

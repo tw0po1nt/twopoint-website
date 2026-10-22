@@ -114,8 +114,8 @@ type Series =
     Excerpt: string
     Image: Uri option }
 
-/// The file line of the category and of each tag, in tag order.
-type TermLines = { Category: int; Tags: int list }
+/// A term and its line in the post file.
+type PlacedTerm = { Term: Term; Line: int }
 
 type FrontMatter =
   { PublishDate: DateTimeOffset
@@ -124,11 +124,13 @@ type FrontMatter =
     Excerpt: string
     Author: string
     Category: Term
-    Tags: Term list
+    CategoryLine: int
+    PlacedTags: PlacedTerm list
     Series: Series option
     Image: Uri option
-    ShowOnHomepage: bool
-    TermLines: TermLines }
+    ShowOnHomepage: bool }
+
+  member this.Tags = this.PlacedTags |> List.map _.Term
 
 [<RequireQualifiedAccess>]
 type PostState =
@@ -136,17 +138,16 @@ type PostState =
   | Draft
   | Published
 
-/// The front matter values that the post rules read.
 type RuleFields =
   { PublishDate: DateTimeOffset option
     Category: Term option
-    Tags: Term list
+    /// A missing category has the file line of the opening `---`.
+    CategoryLine: int
+    Tags: PlacedTerm list
     /// The slug of the series.
     Series: string option
     /// The file line of the `tags` field.
-    TagsLine: int
-    /// A missing category has the file line of the opening `---`.
-    TermLines: TermLines }
+    TagsLine: int }
 
 type LinkTarget =
   /// A root-relative link, for example `/posts/<slug>/#<id>`.

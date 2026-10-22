@@ -61,16 +61,17 @@ let private term: Parse<Term> =
       | "" -> fail context name node $"'{name}' gives an empty slug."
       | slug -> Ok { Slug = slug; Title = Slug.termTitle value })
 
-let private withLine (parse: Parse<'a>) : Parse<'a * int> =
-  fun context name node -> parse context name node |> Result.map (fun value -> value, fileLine context node.Start.Line)
+let private placedTerm: Parse<PlacedTerm> =
+  fun context name node ->
+    term context name node |> Result.map (fun term -> { Term = term; Line = fileLine context node.Start.Line })
 
-let private terms: Parse<(Term * int) list> =
+let private terms: Parse<PlacedTerm list> =
   fun context name node ->
     match node with
     | :? YamlSequenceNode as sequence ->
       sequence.Children
       |> List.ofSeq
-      |> List.traverseResultA (withLine term context name)
+      |> List.traverseResultA (placedTerm context name)
       |> Result.mapError List.concat
     | _ -> fail context name node $"Give '{name}' as a list."
 
@@ -152,17 +153,14 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
         and! title = required "title" text
         and! excerpt = required "excerpt" text
         and! author = required "author" text
-        and! category = optional "category" (withLine term)
+        and! category = optional "category" placedTerm
         and! tags = optional "tags" terms
         and! series = optional "series" (seriesBySlug records)
         and! image = optional "image" httpsUrl
         and! showOnHomepage = optional "showOnHomepage" flag
 
         let tags = defaultArg tags []
-
-        let termLines =
-          { Category = category |> Option.map snd |> Option.defaultValue (keyLine "category")
-            Tags = List.map snd tags }
+        let categoryLine = category |> Option.map _.Line |> Option.defaultValue (keyLine "category")
 
         let frontMatterOf category =
           { PublishDate = publishDate
@@ -171,20 +169,20 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
             Excerpt = excerpt
             Author = author
             Category = category
-            Tags = List.map fst tags
+            CategoryLine = categoryLine
+            PlacedTags = tags
             Series = series
             Image = image
-            ShowOnHomepage = defaultArg showOnHomepage true
-            TermLines = termLines }
+            ShowOnHomepage = defaultArg showOnHomepage true }
 
         return
           frontMatterOf,
           { PublishDate = Some publishDate
-            Category = Option.map fst category
-            Tags = List.map fst tags
+            Category = category |> Option.map _.Term
+            CategoryLine = categoryLine
+            Tags = tags
             Series = series |> Option.map _.Slug
-            TagsLine = keyLine "tags"
-            TermLines = termLines }
+            TagsLine = keyLine "tags" }
       }
 
     let problems = Rules.frontMatter PostState.Published ruleFields
