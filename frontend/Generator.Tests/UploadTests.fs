@@ -11,11 +11,16 @@ open System.Text
 type private Call =
   | CreateIfNotExists
   | Upload of Blob
+  | Names of prefix: string
+  | Delete of name: string
 
-type private FakeContainer(?failOn: string) =
+type private FakeContainer(?failOn: string, ?blobs: string list) =
   let calls = ResizeArray<Call>()
+  let names = Collections.Generic.SortedSet<string>(defaultArg blobs [])
 
   member _.Calls = List.ofSeq calls
+
+  member _.Names = List.ofSeq names
 
   interface IBlobContainer with
     member _.CreateIfNotExists() =
@@ -25,7 +30,24 @@ type private FakeContainer(?failOn: string) =
     member _.Upload blob =
       calls.Add(Upload blob)
 
-      if Some blob.Name = failOn then Error "HTTP 403" else Ok()
+      if Some blob.Name = failOn then
+        Error "HTTP 403"
+      else
+        names.Add blob.Name |> ignore
+        Ok()
+
+    member _.Names prefix =
+      calls.Add(Names prefix)
+      Ok(names |> Seq.filter _.StartsWith(prefix) |> List.ofSeq)
+
+    member _.Delete name =
+      calls.Add(Delete name)
+
+      if Some name = failOn then
+        Error "HTTP 403"
+      else
+        names.Remove name |> ignore
+        Ok()
 
 let private newsletters =
   [ ({ Slug = "first-post"; Html = Encoding.UTF8.GetBytes "<html>first</html>" }: Disk.NewsletterFile)
@@ -38,15 +60,15 @@ let tests =
   testList "Upload" [
     test "each newsletter goes to posts/<slug>/index with its bytes" {
       let container = FakeContainer()
-      let names = Expect.wantOk (Upload.run container production newsletters) "A production build uploads"
+      let report = Expect.wantOk (Upload.run container production newsletters) "A production build uploads"
 
-      Expect.equal names [ "posts/first-post/index"; "posts/second-post/index" ] "upload gives each blob name"
+      Expect.equal report.Uploaded [ "posts/first-post/index"; "posts/second-post/index" ] "upload gives each blob name"
 
       let blobs =
         container.Calls
         |> List.choose (function
           | Upload blob -> Some(blob.Name, Encoding.UTF8.GetString blob.Content)
-          | CreateIfNotExists -> None)
+          | _ -> None)
 
       Expect.equal
         blobs
@@ -63,7 +85,7 @@ let tests =
         | Upload blob ->
           Expect.equal blob.ContentType "text/html" $"{blob.Name} has the HTML content type"
           Expect.equal blob.CacheControl "public, max-age=3600" $"{blob.Name} has the cache header"
-        | CreateIfNotExists -> ()
+        | _ -> ()
     }
 
     test "upload makes the container before the first blob" {
@@ -74,9 +96,57 @@ let tests =
       Expect.equal (container.Calls |> List.filter ((=) CreateIfNotExists)).Length 1 "upload makes the container one time"
     }
 
+    test "upload deletes the newsletter of a slug with no post and keeps each other blob" {
+      let container =
+        FakeContainer(
+          blobs =
+            [ "posts/first-post/index"
+              "posts/removed-post/index"
+              "posts/removed-post/cover.png"
+              "posts/index"
+              "drafts/removed-post/index" ]
+        )
+
+      let report = Expect.wantOk (Upload.run container production newsletters) "A production build uploads"
+
+      Expect.equal report.Deleted [ "posts/removed-post/index" ] "upload gives the name of each deleted blob"
+
+      Expect.equal
+        container.Names
+        [ "drafts/removed-post/index"
+          "posts/first-post/index"
+          "posts/index"
+          "posts/removed-post/cover.png"
+          "posts/second-post/index" ]
+        "Only the newsletter of the removed post goes away"
+    }
+
+    test "upload deletes after the last newsletter goes up" {
+      let container = FakeContainer(blobs = [ "posts/removed-post/index" ])
+      Upload.run container production newsletters |> ignore
+
+      Expect.equal
+        (container.Calls
+         |> List.skipWhile (function
+           | CreateIfNotExists
+           | Upload _ -> true
+           | _ -> false))
+        [ Names "posts/"; Delete "posts/removed-post/index" ]
+        "upload lists and deletes after each upload"
+    }
+
+    test "a failed delete stops the upload and names the blob" {
+      let container =
+        FakeContainer(failOn = "posts/old-post/index", blobs = [ "posts/old-post/index"; "posts/other-post/index" ])
+
+      let error = Expect.wantError (Upload.run container production newsletters) "A failed delete fails upload"
+      Expect.equal error "Cannot delete posts/old-post/index: HTTP 403" "The error names the blob and the reason"
+      Expect.contains container.Names "posts/other-post/index" "No delete goes after the failed delete"
+    }
+
     test "a staging or local build stops with no call to the container" {
       for stage in [ Stage.Staging; Stage.Local ] do
-        let container = FakeContainer()
+        let container = FakeContainer(blobs = [ "posts/removed-post/index" ])
         let error = Expect.wantError (Upload.run container (Some(Stage.name stage)) newsletters) "upload stops"
 
         Expect.equal
@@ -85,6 +155,7 @@ let tests =
           "The error names the stage"
 
         Expect.isEmpty container.Calls $"A {Stage.name stage} build makes no call to the container"
+        Expect.equal container.Names [ "posts/removed-post/index" ] $"A {Stage.name stage} build deletes no newsletter"
     }
 
     test "no stage marker stops with no call to the container" {

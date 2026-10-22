@@ -28,10 +28,12 @@ let private upload (root: string) (container: Uri) =
   let folder = outputFolder root
 
   Upload.run (BlobContainer.azure container) (Disk.readStageMarker folder) (Disk.readNewsletters folder)
-  |> Result.map (fun names ->
-    [ for name in names do
+  |> Result.map (fun report ->
+    [ for name in report.Uploaded do
         $"Uploaded {name}"
-      $"Uploaded {names.Length} newsletters to {container}" ]
+      for name in report.Deleted do
+        $"Deleted {name}"
+      $"Uploaded {report.Uploaded.Length} newsletters to {container} and deleted {report.Deleted.Length} newsletters" ]
     |> String.concat Environment.NewLine)
   |> Result.mapError List.singleton
 
