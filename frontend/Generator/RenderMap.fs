@@ -57,6 +57,7 @@ module RenderMap =
   /// `buildTime` decides which post the upcoming post banner shows, and which Comments panels are hidden.
   let create (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : RenderMap =
     let config = Stage.config stage
+    let content = { content with Posts = Blog.withNewestTermTitles content.Posts }
     let pages = pages config buildTime widgets content
 
     Map
