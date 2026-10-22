@@ -2,7 +2,6 @@ namespace TwoPoint.Site.Render
 
 open FsToolkit.ErrorHandling
 open Markdig
-open Markdig.Extensions.Yaml
 
 /// A page of the site that is not a post, from a Markdown file with a title and a description.
 type MarkdownPage =
@@ -16,19 +15,24 @@ type MarkdownPage =
 module MarkdownPage =
 
   /// `file` is the path from the repo root.
-  let parse (images: IImages) (file: string) (text: string) : Result<MarkdownPage, PostError list> =
+  let parse (images: IImages) (stage: Stage) (file: string) (text: string) : Result<MarkdownPage * FileProblems, FileProblems> =
     let document = Markdown.Parse(text, Body.pipeline)
+    let frontMatter = Body.frontMatter document
+    let bodyStart = Body.startLine text frontMatter
 
-    match Seq.tryHead document with
-    | Some(:? YamlFrontMatterBlock as block) when block.Line = 0 ->
-      result {
-        let! title, description = FrontMatter.parsePage file (block.Line + 1) (block.Lines.ToString())
-        let! body = Body.ofDocument images file document
+    result {
+      let! block =
+        frontMatter
+        |> Result.requireSome [ Problem.error (Place.Post 1) "The page has no front matter. Start the file with a '---' line." ]
 
-        return
-          { File = file
-            Title = title
-            Description = description
-            Body = body }
-      }
-    | _ -> Error [ PostError.at file 1 "The page has no front matter. Start the file with a '---' line." ]
+      let! title, description = FrontMatter.parsePage (block.Line + 1) (block.Lines.ToString())
+      let! body = Body.ofDocument images stage bodyStart document
+
+      return
+        { File = file
+          Title = title
+          Description = description
+          Body = body },
+        []
+    }
+    |> FileProblems.ofResult file bodyStart

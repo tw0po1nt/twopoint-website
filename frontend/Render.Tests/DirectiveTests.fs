@@ -9,11 +9,11 @@ let private html body = (published "a-post" (text frontMatter body)).Body.Html
 
 /// The directive is on line 11 of the fixture post.
 let private directiveError line =
+  let place = file "a-post" + ":11: "
+
   match errors "a-post" (text frontMatter $"Text.\n\n{line}\n\nMore text.") with
-  | [ error ] ->
-    Expect.equal (error.File, error.Line) (file "a-post", 11) "The error gives the file and the line of the directive"
-    error.Message
-  | errors -> failtest $"The directive gives one error: %A{errors}"
+  | [ error ] when error.StartsWith place -> error.Substring place.Length
+  | errors -> failtest $"The directive gives one error, with the file and the line of the directive: %A{errors}"
 
 let private slides =
   "https://twopointwebsite.blob.core.windows.net/assets/a4dd66d174d2f471.pdf"

@@ -1,6 +1,7 @@
 module TwoPoint.Site.Generator.Tests.StageTests
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Expecto
 open System

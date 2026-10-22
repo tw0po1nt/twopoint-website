@@ -1,25 +1,32 @@
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module TwoPoint.Site.Render.Post
 
+open FsToolkit.ErrorHandling
 open Markdig
-open Markdig.Extensions.Yaml
 
 /// `file` is the path from the repo root. A `series` field refers to one of `series` by its slug.
-let parse (images: IImages) (series: Series list) (file: string) (text: string) : Result<Post, PostError list> =
-  Slug.ofFileName file
-  |> Result.bind (fun slug ->
-    let document = Markdown.Parse(text, Body.pipeline)
+let parse (images: IImages) (stage: Stage) (series: Series list) (file: string) (text: string) : Result<Post * FileProblems, FileProblems> =
+  let document = Markdown.Parse(text, Body.pipeline)
+  let frontMatter = Body.frontMatter document
+  let bodyStart = Body.startLine text frontMatter
 
-    match Seq.tryHead document with
-    | Some(:? YamlFrontMatterBlock as block) when block.Line = 0 ->
-      FrontMatter.parse series file (block.Line + 1) (block.Lines.ToString())
-      |> Result.bind (fun frontMatter ->
-        Body.ofDocument images file document
-        |> Result.map (fun body ->
-          { File = file
-            Slug = slug
-            FrontMatter = frontMatter
-            Body = body }))
-    | _ -> Error [ PostError.at file 1 "The post has no front matter. Start the file with a '---' line." ])
+  result {
+    let! slug = Slug.ofFileName file
+
+    let! block =
+      frontMatter
+      |> Result.requireSome [ Problem.error (Place.Post 1) "The post has no front matter. Start the file with a '---' line." ]
+
+    let! frontMatter = FrontMatter.parse series (block.Line + 1) (block.Lines.ToString())
+    let! body = Body.ofDocument images stage bodyStart document
+
+    return
+      { File = file
+        Slug = slug
+        FrontMatter = frontMatter
+        Body = body },
+      []
+  }
+  |> FileProblems.ofResult file bodyStart
 
 let urlPath (post: Post) = $"/posts/{post.Slug}/"

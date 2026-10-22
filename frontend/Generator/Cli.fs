@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Cli
 
+open TwoPoint.Site.Render
+
 open System
 open System.Text.RegularExpressions
 

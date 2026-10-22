@@ -1,12 +1,8 @@
 namespace TwoPoint.Site.Generator
 
-open System
+open TwoPoint.Site.Render
 
-[<RequireQualifiedAccess>]
-type Stage =
-  | Local
-  | Staging
-  | Production
+open System
 
 type StageConfig =
   { SiteUrl: Uri
@@ -19,16 +15,6 @@ type StageConfig =
 
 [<RequireQualifiedAccess>]
 module Stage =
-
-  let all = [ Stage.Local; Stage.Staging; Stage.Production ]
-
-  let name stage =
-    match stage with
-    | Stage.Local -> "local"
-    | Stage.Staging -> "staging"
-    | Stage.Production -> "production"
-
-  let parse (text: string) = all |> List.tryFind (fun stage -> name stage = text)
 
   let url (config: StageConfig) (urlPath: string) = Uri(config.SiteUrl, urlPath).AbsoluteUri
 

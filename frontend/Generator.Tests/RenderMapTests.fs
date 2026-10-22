@@ -16,7 +16,7 @@ let private loadPostsFrom (files: (string * string) list) =
     |> List.filter (fun (path, _) -> path.EndsWith(Container.extension container))
     |> List.map (fun (path, text) -> { Path = path; Bytes = Encoding.UTF8.GetBytes text })
 
-  Site.parsePosts anyImages { Published = postFiles Container.Published; Series = postFiles Container.Series }
+  Site.parsePosts anyImages Stage.Production { Published = postFiles Container.Published; Series = postFiles Container.Series }
 
 let private seriesFile slug =
   PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml", "title: A series\nexcerpt: Posts\n"
@@ -59,6 +59,7 @@ let tests =
             seriesFile "no-posts"
             file "a-post", text $"{frontMatter}\nseries: a-series" "Text." ]
         |> ok
+        |> fst
 
       let map = RenderMap.create Stage.Production buildTime widgets (content posts)
 
@@ -72,14 +73,34 @@ let tests =
     test "a post with an unknown series slug fails with its file and line" {
       Expect.equal
         (loadPostsFrom [ seriesFile "a-series"; file "a-post", text $"{frontMatter}\nseries: b-series" "Text." ]
-         |> Result.mapError (List.map PostError.format))
+         |> Result.mapError FileProblems.formatAll)
         (Error [ "frontend/content/posts/published/a-post.md:7: No series has the slug 'b-series'." ])
         "The build error names the file and the line of the series field"
     }
   
+    test "a build with only warnings passes, and a failed build prints each warning" {
+      let warning = FileProblems.create (file "a-post") 8 [ Problem.warning (Place.Body 2) "A warning." ]
+      let post = published "a-post" (text frontMatter "Text.")
+      let broken = published "b-post" (text frontMatter "Read [c](/posts/c-post/).")
+
+      Expect.equal
+        (Site.renderMap Stage.Production buildTime widgets { content [ post ] with Warnings = [ warning ] }
+         |> Result.map snd)
+        (Ok [ warning ])
+        "A warning does not fail the build, and the build keeps it"
+
+      Expect.equal
+        (Site.renderMap Stage.Production buildTime widgets { content [ post; broken ] with Warnings = [ warning ] }
+         |> Result.map ignore)
+        (Error
+          [ errorAt "a-post" 9 "warning: A warning."
+            errorAt "b-post" 9 "The output has no page at /posts/c-post/." ])
+        "The failed build prints the warning with the error"
+    }
+
     test "pull gives the posts that build makes into the same site" {
       let pulled = Pull.run (FixtureStore()) |> Result.mapError List.singleton |> ok
-      let fromPull = Site.loadContent anyImages realRoot.Value pulled |> ok
+      let fromPull = Site.loadContent anyImages Stage.Production realRoot.Value pulled |> ok
 
       let render content =
         RenderMap.create Stage.Production buildTime widgets content

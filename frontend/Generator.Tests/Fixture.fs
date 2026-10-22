@@ -69,7 +69,7 @@ let realPostFiles =
 
 let realContent =
   lazy
-    (match Site.loadContent anyImages realRoot.Value realPostFiles.Value with
+    (match Site.loadContent anyImages Stage.Production realRoot.Value realPostFiles.Value with
      | Ok content -> content
      | Error errors -> failtest (String.concat "\n" errors))
 
@@ -82,7 +82,8 @@ let contentWith (fetch: IImageFetch) (posts: Post list) =
     Privacy = realContent.Value.Privacy
     Assets = assets
     OgImages = OgImages.create (Images.ofFetch fetch) assets.DefaultImage posts |> ok
-    Email = realContent.Value.Email }
+    Email = realContent.Value.Email
+    Warnings = [] }
 
 let content (posts: Post list) = contentWith anyImage posts
 

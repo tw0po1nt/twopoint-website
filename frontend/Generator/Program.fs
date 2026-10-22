@@ -10,10 +10,10 @@ let private outputFolder (root: string) = Path.Combine(root, "frontend", "dist")
 
 let private build (root: string) (stage: Stage) =
   result {
-    let! map = Site.load (Images.ofFetch (ImageFetch.create ())) root stage DateTimeOffset.UtcNow
+    let! map, warnings = Site.load (Images.ofFetch (ImageFetch.create ())) root stage DateTimeOffset.UtcNow
     let folder = outputFolder root
     Disk.write folder map
-    return $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}"
+    return String.concat Environment.NewLine (warnings @ [ $"Wrote {map.Count} files for the {Stage.name stage} stage to {folder}" ])
   }
 
 let private pull (root: string) (account: string) =

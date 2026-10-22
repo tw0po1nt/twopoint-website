@@ -136,7 +136,23 @@ let private readingTime (text: string) =
   let words = text.Split([| ' '; '\n'; '\r'; '\t' |], StringSplitOptions.RemoveEmptyEntries).Length
   int (ceil (float words / 200.0))
 
-let private errorAt file (line: int) message = PostError.at file (line + 1) message
+/// The front matter block, when the text starts with one.
+let frontMatter (document: MarkdownDocument) =
+  match Seq.tryHead document with
+  | Some(:? Extensions.Yaml.YamlFrontMatterBlock as block) when block.Line = 0 -> Some block
+  | _ -> None
+
+/// The file line of body line 1: the line after the closing `---`, or line 1 when the text has no front matter.
+let startLine (text: string) (frontMatter: Extensions.Yaml.YamlFrontMatterBlock option) =
+  match frontMatter with
+  | Some block -> text.AsSpan(0, block.Span.End).Count '\n' + 2
+  | None -> 1
+
+/// `startLine` is the file line of body line 1, and `line` is a Markdig line, which counts from 0.
+let private bodyLine (startLine: int) (line: int) = line + 2 - startLine
+
+let private errorAt startLine (line: int) message =
+  Problem.error (Place.Body(bodyLine startLine line)) message
 
 let private attributePattern = """\s+([^\s"'>/=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?"""
 
@@ -146,7 +162,7 @@ let private startTag = Regex("""<([A-Za-z][\w:-]*)((?:""" + attributePattern + "
 
 let private styleAttributes = set [ "class"; "style" ]
 
-let private rawHtmlErrors file (document: MarkdownDocument) =
+let private rawHtmlErrors startLine (document: MarkdownDocument) =
   let errors line (html: string) =
     let lineAt index = line + html.AsSpan(0, index).Count '\n'
 
@@ -154,10 +170,10 @@ let private rawHtmlErrors file (document: MarkdownDocument) =
         let name = tag.Groups[1].Value
 
         if name.Equals("a", StringComparison.OrdinalIgnoreCase) then
-          errorAt file (lineAt tag.Index) "Write the link as a Markdown link, for example [the docs](https://example.com/)."
+          errorAt startLine (lineAt tag.Index) "Write the link as a Markdown link, for example [the docs](https://example.com/)."
 
         if name.Equals("img", StringComparison.OrdinalIgnoreCase) then
-          errorAt file (lineAt tag.Index) "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
+          errorAt startLine (lineAt tag.Index) "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
 
         let attributes = tag.Groups[2]
 
@@ -166,7 +182,7 @@ let private rawHtmlErrors file (document: MarkdownDocument) =
 
           if styleAttributes.Contains(name.Value.ToLowerInvariant()) then
             errorAt
-              file
+              startLine
               (lineAt (attributes.Index + name.Index))
               $"Delete the '{name.Value}' attribute. A post has no class or style in raw HTML." ]
 
@@ -199,7 +215,7 @@ type private LinkKind =
   | Mail
   | Invalid of message: string
 
-let private kind (url: string) =
+let private kind (stage: Stage) (url: string) =
   if String.IsNullOrEmpty url then
     Invalid "The link has no URL."
   elif url.StartsWith '#' then
@@ -210,18 +226,20 @@ let private kind (url: string) =
     match Uri.TryCreate(url, UriKind.Absolute) with
     | true, uri when externalSchemes.Contains uri.Scheme && ownHosts.Contains uri.Host ->
       Invalid $"Give the link to {url} as a root-relative link, for example {uri.PathAndQuery}."
+    | true, uri when Azurite.isForbidden stage uri ->
+      Invalid(Azurite.problem uri)
     | true, uri when externalSchemes.Contains uri.Scheme -> External
     | true, uri when uri.Scheme = Uri.UriSchemeMailto -> Mail
     | _ -> Invalid $"Give the link to '{url}' as a root-relative link that starts with /, or as an http or https URL."
 
-let private links (document: MarkdownDocument) =
+let private links stage (document: MarkdownDocument) =
   let links =
     descendants<LinkInline> document
     |> List.filter (fun link -> not link.IsImage)
-    |> List.map (fun link -> link :> Inline, kind link.Url)
+    |> List.map (fun link -> link :> Inline, kind stage link.Url)
 
   let autolinks =
-    descendants<AutolinkInline> document |> List.map (fun link -> link :> Inline, kind link.Url)
+    descendants<AutolinkInline> document |> List.map (fun link -> link :> Inline, kind stage link.Url)
 
   links @ autolinks
 
@@ -266,8 +284,8 @@ let private render (directiveHtml: Directive.Directive -> string) (document: Mar
   renderer.Render document |> ignore
   writer.ToString()
 
-/// Changes the document in place.
-let ofDocument (images: IImages) (file: string) (document: MarkdownDocument) : Result<Body, PostError list> =
+/// Changes the document in place. `startLine` is the file line of body line 1.
+let ofDocument (images: IImages) (stage: Stage) (startLine: int) (document: MarkdownDocument) : Result<Body, Problem list> =
   let headings = descendants<HeadingBlock> document
   let texts = headings |> List.map (fun heading -> inlineText shownText heading.Inline)
   let ids = headings |> List.map (fun heading -> inlineText sourceText heading.Inline) |> Slug.headingIds
@@ -283,16 +301,17 @@ let ofDocument (images: IImages) (file: string) (document: MarkdownDocument) : R
       attributes.AddPropertyIfNotExist("loading", "lazy")
 
       match Uri.TryCreate(image.Url, UriKind.Absolute) with
-      | true, url when url.Scheme = Uri.UriSchemeHttps ->
+      | true, url when Azurite.isForbidden stage url -> Some(errorAt startLine image.Line (Azurite.problem url))
+      | true, url when url.Scheme = Uri.UriSchemeHttps || Azurite.isUrl url ->
         match images.Size url with
         | Ok size ->
           attributes.AddProperty("width", string size.Width)
           attributes.AddProperty("height", string size.Height)
           None
-        | Error reason -> Some(errorAt file image.Line $"The build cannot read the size of the image {url}: {reason}.")
-      | _ -> Some(errorAt file image.Line $"Give the image '{image.Url}' as an https URL."))
+        | Error reason -> Some(errorAt startLine image.Line $"The build cannot read the size of the image {url}: {reason}.")
+      | _ -> Some(errorAt startLine image.Line $"Give the image '{image.Url}' as an https URL."))
 
-  let links = links document
+  let links = links stage document
 
   for node, kind in links do
     if kind = External then
@@ -301,31 +320,33 @@ let ofDocument (images: IImages) (file: string) (document: MarkdownDocument) : R
   let linkErrors =
     links
     |> List.choose (function
-      | node, Invalid message -> Some(errorAt file node.Line message)
+      | node, Invalid message -> Some(errorAt startLine node.Line message)
       | _ -> None)
 
   let internalLinks =
     links
     |> List.choose (function
-      | node, Internal target -> Some { Target = target; Line = node.Line + 1 }
+      | node, Internal target -> Some { Target = target; Line = bodyLine startLine node.Line }
       | _ -> None)
 
   let languageErrors =
     descendants<FencedCodeBlock> document
     |> List.filter (fun code -> not (String.IsNullOrEmpty code.Info) && (Highlight.tryLanguage code.Info).IsNone)
     |> List.map (fun code ->
-      errorAt file code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {Highlight.names}.")
+      errorAt startLine code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {Highlight.names}.")
 
   let directiveErrors =
     descendants<Directive.DirectiveBlock> document
     |> List.choose (fun block ->
       match block.Directive with
+      | Ok(Directive.Pdf file) when Azurite.isForbidden stage file ->
+        Some(errorAt startLine block.Line (Azurite.problem file))
       | Ok _ -> None
-      | Error message -> Some(errorAt file block.Line message))
+      | Error message -> Some(errorAt startLine block.Line message))
 
   let errors =
-    rawHtmlErrors file document @ imageErrors @ linkErrors @ languageErrors @ directiveErrors
-    |> List.sortBy _.Line
+    rawHtmlErrors startLine document @ imageErrors @ linkErrors @ languageErrors @ directiveErrors
+    |> List.sortBy _.Place
 
   if errors.IsEmpty then
     Ok
@@ -336,6 +357,7 @@ let ofDocument (images: IImages) (file: string) (document: MarkdownDocument) : R
           |> List.map (fun (heading, id, text) -> { Level = heading.Level; Id = id; Text = text })
         Anchors = Set.ofList ids
         Links = internalLinks
-        ReadingTime = readingTime (blockText document) }
+        ReadingTime = readingTime (blockText document)
+        StartLine = startLine }
   else
     Error errors

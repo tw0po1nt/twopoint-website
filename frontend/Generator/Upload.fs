@@ -1,5 +1,7 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Render
+
 open Azure.Identity
 open Azure.Storage.Blobs
 open Azure.Storage.Blobs.Models

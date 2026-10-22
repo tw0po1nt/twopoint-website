@@ -66,10 +66,10 @@ let termTitle (text: string) =
   languageNames |> List.fold (fun (title: string) (pattern, value) -> pattern.Replace(title, value)) text
 
 /// `file` is the path from the repo root.
-let ofFileName (file: string) : Result<string, PostError list> =
+let ofFileName (file: string) : Result<string, Problem list> =
   let slug = Path.GetFileNameWithoutExtension file
 
   if term slug = slug then
     Ok slug
   else
-    Error [ PostError.at file 1 $"Give the file a slug as its name, for example {term slug}{Path.GetExtension file}." ]
+    Error [ Problem.error (Place.Post 1) $"Give the file a slug as its name, for example {term slug}{Path.GetExtension file}." ]

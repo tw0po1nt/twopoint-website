@@ -20,7 +20,9 @@ type Content =
     Privacy: MarkdownPage
     Assets: Assets
     OgImages: OgImages
-    Email: EmailStyles }
+    Email: EmailStyles
+    /// The problems of the posts and the privacy page, when no problem is an error.
+    Warnings: FileProblems list }
 
 [<RequireQualifiedAccess>]
 module RenderMap =
