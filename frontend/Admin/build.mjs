@@ -42,11 +42,13 @@ const define = Object.fromEntries(Object.entries(config).map(([key, value]) => [
 await mkdir(path.join(outDir, 'redirect'), { recursive: true });
 
 // `admin` starts the app with MSAL. The bundle test starts `app` with a stub sign-in.
+// In the dev mode, `reload` is the reload widget of the site. It reloads the page when the dev host sees a new build.
 const entryPoints = {
   admin: path.join(fableDir, 'Main.jsx'),
   app: path.join(fableDir, 'App.jsx'),
   bridge: path.join(fableDir, 'Bridge.jsx'),
   style: 'admin.css',
+  ...(dev ? { reload: path.join(fableDir, 'Widgets', 'DevReload.jsx') } : {}),
 };
 
 const result = await esbuild.build({
@@ -70,7 +72,13 @@ const output = (entry) => {
   const file = outputs.find((item) => result.metafile.outputs[item].entryPoint === entryPoints[entry]);
   return `/${path.relative(outDir, file)}`;
 };
-const files = { script: output('admin'), app: output('app'), bridge: output('bridge'), style: output('style') };
+const files = {
+  script: output('admin'),
+  app: output('app'),
+  bridge: output('bridge'),
+  style: output('style'),
+  ...(dev ? { reload: output('reload') } : {}),
+};
 
 // Each page names its bundle files with these placeholders, and the build writes the hashed names.
 const page = async (template, replacements) => {
@@ -87,7 +95,10 @@ const page = async (template, replacements) => {
   return text;
 };
 
-await writeFile(path.join(outDir, 'index.html'), await page('index.html', { '/bundle/admin.js': files.script, '/bundle/admin.css': files.style }));
+const index = await page('index.html', { '/bundle/admin.js': files.script, '/bundle/admin.css': files.style });
+const reloadTag = dev ? `  <script type="module" src="${files.reload}"></script>\n  ` : '';
+
+await writeFile(path.join(outDir, 'index.html'), index.replace('</head>', `${reloadTag}</head>`));
 await writeFile(path.join(outDir, 'redirect', 'index.html'), await page('redirect/index.html', { '/bundle/bridge.js': files.bridge }));
 await copyFile('staticwebapp.config.json', path.join(outDir, 'staticwebapp.config.json'));
 

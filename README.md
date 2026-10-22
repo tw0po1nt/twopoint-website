@@ -102,6 +102,20 @@ Use this path to see the files that a deploy sends to GitHub Pages.
 
 The build writes the site to `frontend/dist/website/` and the newsletters to `frontend/dist/newsletter/`.
 
+### 6. Run the admin locally
+
+1. Install the admin packages in `frontend/Admin/`:
+
+   ```sh
+   npm ci
+   ```
+
+2. Start a SageFs session over `frontend/Admin.Tests/Admin.Tests.fsproj`.
+
+The init script starts the admin dev host on [http://localhost:4322](http://localhost:4322) and the admin watch. A save of an admin F# file builds the admin again and reloads the page. SageFs runs the admin tests at each save.
+
+On the first start, the page shows "The first build is not ready" until the admin watch writes `frontend/Admin/dist/`. Then refresh the page.
+
 ## Tests
 
 ```sh
