@@ -58,6 +58,11 @@ module FileProblems =
     | Place.Post line -> line
     | Place.Body line -> problems.BodyStart + line - 1
 
+  let describePlace (problems: FileProblems) (place: Place) =
+    match place with
+    | Place.Body line -> $"body line {line}"
+    | place -> $"line {line problems place}"
+
   /// One `file:line` line for each problem, in line order.
   let format (problems: FileProblems) =
     problems.Problems

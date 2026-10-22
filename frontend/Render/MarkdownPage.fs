@@ -15,7 +15,7 @@ type MarkdownPage =
 module MarkdownPage =
 
   /// `file` is the path from the repo root.
-  let parse (images: IImages) (stage: Stage) (file: string) (text: string) : Result<MarkdownPage * FileProblems, FileProblems> =
+  let parse (images: IImageSize) (stage: Stage) (file: string) (text: string) : Result<MarkdownPage * FileProblems, FileProblems> =
     let document = Markdown.Parse(text, Body.pipeline)
     let frontMatter = Body.frontMatter document
     let bodyStart = Body.startLine text frontMatter

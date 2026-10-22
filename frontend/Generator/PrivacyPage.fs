@@ -5,7 +5,7 @@ open TwoPoint.Site.Render
 
 open Oxpecker.ViewEngine
 
-let urlPath = Privacy.urlPath
+let urlPath = SitePage.urlPath SitePage.Privacy
 
 let robots = Layout.Robots.Index
 

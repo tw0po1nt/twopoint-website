@@ -5,8 +5,6 @@ open TwoPoint.Site.Render
 
 open Oxpecker.ViewEngine
 
-let sitePath = "404.html"
-
 let robots = Layout.Robots.NoIndex
 
 /// GitHub Pages serves this page at each path with no file, so each link and asset path of the page starts at the root.

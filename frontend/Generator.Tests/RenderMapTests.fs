@@ -108,4 +108,9 @@ let tests =
 
       Expect.equal (render fromPull) (render realContent.Value) "Each output file has the same bytes"
     }
+  
+    test "the site paths of the render map agree with the library" {
+      let map = RenderMap.create Stage.Production buildTime widgets realContent.Value
+      Expect.equal (pagePaths map) (SitePath.all realPosts.Value) "The pages and the fixed files are the same"
+    }
   ]

@@ -74,9 +74,12 @@ module ImageFetch =
     |> withRetries 3 (TimeSpan.FromSeconds 1.0)
     |> memoize
 
+type IImageSize =
+  abstract Size: Uri -> Result<ImageSize, string>
+
 /// The image work of a run, by the URL of the source image.
 type IImages =
-  abstract Size: Uri -> Result<ImageSize, string>
+  inherit IImageSize
   /// A JPEG crop for `og:image`, and its size.
   abstract OgCrop: Uri -> Result<byte array * ImageSize, string>
 
