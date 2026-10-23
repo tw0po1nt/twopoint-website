@@ -35,7 +35,9 @@ mode and `npm run watch` builds the dev mode at each change. `config.json` conta
 settings of each mode. `npm test` tests the last build in happy-dom. The admin dev host in
 `frontend/Admin.Dev/` serves the build on `http://localhost:4322` with the rules of
 `staticwebapp.config.json`. A SageFs session over `frontend/Admin.Tests/` starts the host and the
-watch.
+watch. In the `staging` repo, `.github/workflows/backend-staging.yml` deploys the admin to Azure
+Static Web Apps at `https://admin.twopoint.dev` after the backend. `scripts/setup-admin-host.sh`
+sets up that host.
 
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build

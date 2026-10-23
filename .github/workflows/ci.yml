@@ -46,30 +46,7 @@ jobs:
   admin:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: frontend/Admin
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: frontend/Admin/.node-version
-          cache: npm
-          cache-dependency-path: frontend/Admin/package-lock.json
-
-      - name: Restore the .NET tools
-        run: dotnet tool restore
-
-      - name: Install the admin packages
-        run: npm ci
-
-      - name: Build the admin
-        run: npm run build
-
-      - name: Test the admin bundle
-        run: npm test
+      - uses: ./.github/actions/build-admin
