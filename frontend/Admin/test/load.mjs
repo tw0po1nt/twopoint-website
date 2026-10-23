@@ -33,6 +33,10 @@ export const stubSignIn = (members = {}) => {
       signInByPopup: async () => {
         events.push('signInByPopup');
       },
+      account: () => 'Ada Lovelace',
+      signOut: async () => {
+        events.push('signOut');
+      },
       ...members,
     },
   };
@@ -78,21 +82,53 @@ export const heading = () => document.querySelector('main h1').textContent.trim(
 
 export const banner = () => document.querySelector('main .banner')?.textContent.trim() ?? null;
 
-export const summary = () => [...document.querySelectorAll('.summary dd')].map((item) => item.textContent.trim());
+export const summary = () => [...document.querySelectorAll('main .stat')].map((item) => item.textContent.trim());
 
-export const links = () =>
-  [...document.querySelectorAll('nav.navigation a')].map((link) => ({
-    text: link.textContent.trim(),
-    href: link.getAttribute('href'),
-    current: link.getAttribute('aria-current'),
+// A link in the navigation can have a count after its label.
+const label = (element) => (element.querySelector('.nav-label') ?? element).textContent.trim();
+
+const navigation = (selector) =>
+  [...document.querySelectorAll(`${selector} a, ${selector} button`)].map((item) => ({
+    text: label(item),
+    href: item.getAttribute('href'),
+    current: item.getAttribute('aria-current'),
   }));
 
-export const follow = (text) => {
-  const link = [...document.querySelectorAll('a')].find((item) => item.textContent.trim() === text);
+export const links = () => navigation('nav.side-nav');
+
+export const tabs = () => navigation('nav.tab-bar');
+
+export const count = (selector) => document.querySelector(`${selector} .badge.count`)?.textContent.trim() ?? null;
+
+export const follow = (text, within = document) => {
+  const link = [...within.querySelectorAll('a')].find((item) => label(item) === text);
   link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
 };
 
-export const press = (text) => {
-  const button = [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === text);
+export const press = (text, within = document) => {
+  const button = [...within.querySelectorAll('button')].find((item) => item.textContent.trim() === text);
   button.click();
+};
+
+// happy-dom opens a dialog with showModal as a plain open dialog, so the spy records each call.
+export const spyOnShowModal = () => {
+  const calls = [];
+  const showModal = HTMLDialogElement.prototype.showModal;
+
+  HTMLDialogElement.prototype.showModal = function () {
+    calls.push(this.id);
+    showModal.call(this);
+  };
+
+  return calls;
+};
+
+// happy-dom has no close request at the Esc key, so the helper sends the cancel and the close as a browser does.
+export const pressEscape = (dialog) => {
+  const cancel = new Event('cancel', { cancelable: true });
+  dialog.dispatchEvent(cancel);
+
+  if (!cancel.defaultPrevented) {
+    dialog.close();
+  }
 };

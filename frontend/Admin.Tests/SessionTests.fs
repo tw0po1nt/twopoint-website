@@ -108,4 +108,28 @@ let tests =
       Expect.equal model.Status Session.Redirecting "The page leaves"
       Expect.equal effect (Some Session.SignInByRedirect) "The redirect sign-in, where the author chooses the account"
     }
+
+    test "Sign out sends the page to the Entra sign-out, and no API call goes out" {
+      let model, effect = Session.update Session.SignOutClicked active
+      Expect.equal model.Status (Session.SigningOut Session.Active) "The page leaves"
+      Expect.equal effect (Some Session.SignOut) "The sign-out"
+      Expect.isFalse (Session.isActive model) "No API call goes out"
+      Expect.isFalse (Session.showsBanner model) "No banner"
+    }
+
+    test "a failed sign-out gives back the status from before" {
+      let expired, _ = Session.update (Session.InteractionRequired "load") active
+      let model, effect = run [ Session.SignOutClicked; Session.SignOutFailed ] expired
+      Expect.equal model expired "The banner and the failed call are back"
+      Expect.isNone effect "No retry"
+    }
+
+    test "Sign out does nothing while the page leaves for Entra" {
+      let redirecting, _ = Session.update (Session.Started false) (fst (Session.init ()))
+
+      for model in [ fst (Session.init ()); redirecting; fst (Session.update Session.SignOutClicked active) ] do
+        let next, effect = Session.update Session.SignOutClicked model
+        Expect.equal next model $"{model.Status} does not change"
+        Expect.isNone effect $"{model.Status} sends no sign-out"
+    }
   ]

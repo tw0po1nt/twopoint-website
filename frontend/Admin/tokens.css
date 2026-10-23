@@ -1,0 +1,113 @@
+/* Breakpoints: a phone is narrower than 640px, a tablet is 640px to 1023px, and a desktop is 1024px or wider.
+   A custom property cannot go in @media, so each rule writes the width. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Neutral gray (zinc). The editor has warm paper colors, and the dashboard is cool. */
+  --bg: light-dark(#ffffff, #09090b);
+  --bg-subtle: light-dark(#fafafa, #111113);
+  --bg-muted: light-dark(#f4f4f5, #1c1c1f);
+  --bg-hover: light-dark(#f4f4f5, #232326);
+  --fg: light-dark(#09090b, #fafafa);
+  --fg-muted: light-dark(#71717a, #a1a1aa);
+  --fg-subtle: light-dark(#a1a1aa, #71717a);
+  --border: light-dark(#e4e4e7, #27272a);
+  --border-strong: light-dark(#d4d4d8, #3f3f46);
+  --input: light-dark(#e4e4e7, #3f3f46);
+  --overlay: light-dark(rgb(9 9 11 / 0.35), rgb(0 0 0 / 0.6));
+
+  --accent: light-dark(#2563eb, #60a5fa);
+  --accent-fg: light-dark(#ffffff, #09090b);
+  --accent-soft: light-dark(#eff6ff, #172554);
+  --ring: color-mix(in oklab, var(--accent) 45%, transparent);
+
+  /* The primary button is ink on paper. */
+  --primary: var(--fg);
+  --primary-fg: var(--bg);
+
+  --ok: light-dark(#15803d, #4ade80);
+  --ok-soft: light-dark(#f0fdf4, #052e16);
+  --warn: light-dark(#b45309, #fbbf24);
+  --warn-soft: light-dark(#fffbeb, #2a1a04);
+  --bad: light-dark(#dc2626, #f87171);
+  --bad-soft: light-dark(#fef2f2, #2a0a0a);
+  --info: light-dark(#4f46e5, #a5b4fc);
+  --info-soft: light-dark(#eef2ff, #1e1b4b);
+
+  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+  --t-xs: 12px;
+  --lh-xs: 16px;
+  --t-sm: 13px;
+  --lh-sm: 18px;
+  --t-base: 14px;
+  --lh-base: 20px;
+  --t-md: 16px;
+  --lh-md: 24px;
+  --t-lg: 20px;
+  --lh-lg: 28px;
+  --t-xl: 24px;
+  --lh-xl: 32px;
+  --t-2xl: 30px;
+  --lh-2xl: 36px;
+  --w-normal: 400;
+  --w-medium: 500;
+  --w-semibold: 600;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  --r-sm: 4px;
+  --r: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  --r-full: 999px;
+
+  /* Dark mode has darker shadows and depends more on the borders. */
+  --shadow-xs: 0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.3));
+  --shadow-sm: 0 1px 3px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4)),
+    0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.3));
+  --shadow-md: 0 4px 12px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.5));
+  --shadow-lg: 0 16px 40px light-dark(rgb(0 0 0 / 0.14), rgb(0 0 0 / 0.6));
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --d-fast: 120ms;
+  --d: 200ms;
+  --d-slow: 420ms;
+
+  /* The insets are 0 unless the viewport meta tag has viewport-fit=cover. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* The editor, layout D "Paper". A part in the editor gets the paper colors. */
+.paper {
+  --paper: light-dark(#fbfaf8, #1b1a18);
+  --paper-ink: light-dark(#2b2a28, #ece8e1);
+  --paper-muted: light-dark(#a29d96, #8a857d);
+  --paper-hair: light-dark(#ebe8e3, #2f2d2a);
+  --write-font: Charter, 'Iowan Old Style', Georgia, serif;
+
+  --bg: var(--paper);
+  --bg-subtle: color-mix(in oklab, var(--paper) 96%, var(--paper-ink));
+  --bg-muted: color-mix(in oklab, var(--paper) 92%, var(--paper-ink));
+  --bg-hover: color-mix(in oklab, var(--paper) 92%, var(--paper-ink));
+  --fg: var(--paper-ink);
+  --fg-muted: var(--paper-muted);
+  --fg-subtle: var(--paper-muted);
+  --border: var(--paper-hair);
+  --border-strong: color-mix(in oklab, var(--paper-hair) 70%, var(--paper-ink));
+  --input: var(--paper-hair);
+  --primary: var(--fg);
+  --primary-fg: var(--bg);
+}

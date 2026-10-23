@@ -64,4 +64,45 @@ let tests =
       Expect.equal model.Session.Status Session.Refused "The banner offers another account"
       Expect.isNone effect "The page stays until the author chooses"
     }
+
+    test "the shell starts with no sheet and no dialog" {
+      let model, _ = Shell.init "/"
+      Expect.isNone model.Overlay "Nothing over the page"
+    }
+
+    test "a link in the More sheet closes the sheet" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Opened Shell.MoreSheet) model
+      Expect.equal model.Overlay (Some Shell.MoreSheet) "The sheet is open"
+      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/series")) model
+      Expect.isNone model.Overlay "The sheet closes"
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/series"))) "The page changes"
+    }
+
+    test "the close of a sheet that another overlay replaced keeps the new overlay" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Opened Shell.MoreSheet) model
+      let model, _ = Shell.update (Shell.Opened Shell.SignOutDialog) model
+      let model, _ = Shell.update (Shell.Closed Shell.MoreSheet) model
+      Expect.equal model.Overlay (Some Shell.SignOutDialog) "The dialog stays"
+      let model, _ = Shell.update (Shell.Closed Shell.SignOutDialog) model
+      Expect.isNone model.Overlay "The dialog closes"
+    }
+
+    test "Sign out in the dialog closes the dialog and sends the page to the Entra sign-out" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let model, _ = Shell.update (Shell.Opened Shell.SignOutDialog) model
+      let model, effect = Shell.update (Shell.Session Session.SignOutClicked) model
+      Expect.isNone model.Overlay "The dialog closes"
+      Expect.equal effect (Some(Shell.SignIn Session.SignOut)) "The sign-out"
+    }
+
+    test "the queue count is the number of new comments, after the dashboard loads" {
+      let model, _ = Shell.init "/"
+      Expect.isNone (Dashboard.newComments model.Dashboard) "No count before the answer"
+      let answer = Ok [ post "first" 2; post "second" 1 ] |> Dashboard.Answered |> Shell.Dashboard
+      let model, _ = Shell.update answer model
+      Expect.equal (Dashboard.newComments model.Dashboard) (Some 3) "Three new comments"
+    }
   ]

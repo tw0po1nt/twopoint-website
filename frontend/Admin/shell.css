@@ -1,0 +1,387 @@
+/* The shell: a side navigation of 240px on a desktop, a rail of icons of 64px on a tablet, and a top bar with a
+   bottom tab bar on a phone. */
+
+.shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.shell.is-bare {
+  display: block;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg);
+  font-weight: var(--w-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand .mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: var(--bg);
+  background: var(--fg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.side {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  height: 100vh;
+  padding: var(--s-4) var(--s-3);
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.side > .brand {
+  padding: 0 var(--s-2);
+}
+
+.side-nav,
+.side-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-foot {
+  margin-top: auto;
+}
+
+.side-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 var(--s-2);
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  color: var(--fg-muted);
+  font-size: var(--t-sm);
+  font-weight: var(--w-medium);
+  text-decoration: none;
+}
+
+.side-link:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.side-link[aria-current='page'] {
+  border-color: var(--border);
+  color: var(--fg);
+  background: var(--bg);
+  box-shadow: var(--shadow-xs);
+}
+
+.side-link .badge.count {
+  margin-left: auto;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--r);
+  color: var(--fg);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account:hover {
+  background: var(--bg-hover);
+}
+
+.avatar-button {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: 52px;
+  padding: 0 var(--s-8);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 85%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.crumb {
+  color: var(--fg-muted);
+  font-size: var(--t-sm);
+}
+
+.crumb .sep {
+  margin: 0 6px;
+  color: var(--fg-subtle);
+}
+
+.crumb .here {
+  color: var(--fg);
+}
+
+.phone-only,
+.tab-bar {
+  display: none;
+}
+
+.screen {
+  width: 100%;
+  max-width: 1200px;
+  padding: var(--s-6) var(--s-8) var(--s-12);
+}
+
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-5);
+}
+
+.screen > .banner {
+  margin-bottom: var(--s-5);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.stat-grid .skeleton + .skeleton {
+  margin-top: var(--s-3);
+}
+
+.card.settings {
+  max-width: 640px;
+}
+
+/* The editor: no navigation, and the colors of Paper. */
+.bar {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: calc(var(--safe-top)) var(--s-4) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg-muted);
+  font-size: var(--t-sm);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--fg);
+}
+
+.is-bare .screen {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.is-bare h1 {
+  font-family: var(--write-font);
+  font-weight: var(--w-normal);
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .shell {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .side {
+    align-items: center;
+    padding: var(--s-4) 10px;
+  }
+
+  .side > .brand {
+    padding: 0;
+  }
+
+  .side .nav-label,
+  .side .brand-text {
+    display: none;
+  }
+
+  .side-link {
+    justify-content: center;
+    width: 42px;
+    padding: 0;
+  }
+
+  .side-link .badge.count {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    margin: 0;
+  }
+
+  .account {
+    justify-content: center;
+  }
+
+  .top,
+  .screen {
+    padding-right: var(--s-6);
+    padding-left: var(--s-6);
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .shell {
+    display: block;
+  }
+
+  .side,
+  .crumb {
+    display: none;
+  }
+
+  .top {
+    height: auto;
+    padding: calc(var(--safe-top) + 8px) calc(var(--s-4) + var(--safe-right)) 8px calc(var(--s-4) + var(--safe-left));
+  }
+
+  .phone-only {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .screen {
+    padding: var(--s-4) calc(var(--s-4) + var(--safe-right)) calc(88px + var(--safe-bottom))
+      calc(var(--s-4) + var(--safe-left));
+  }
+
+  .is-bare .screen {
+    padding-bottom: calc(var(--s-8) + var(--safe-bottom));
+  }
+
+  .tab-bar {
+    position: fixed;
+    z-index: 30;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    padding: 6px calc(4px + var(--safe-right)) calc(6px + var(--safe-bottom)) calc(4px + var(--safe-left));
+    border-top: 1px solid var(--border);
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    backdrop-filter: blur(16px) saturate(1.6);
+  }
+
+  .tab-bar a,
+  .tab-bar button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 0;
+    border: 0;
+    color: var(--fg-muted);
+    background: none;
+    font: inherit;
+    font-size: 10px;
+    font-weight: var(--w-medium);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .tab-bar .icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tab-bar [aria-current='page'] {
+    color: var(--accent);
+  }
+
+  .tab-icon {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .tab-icon .badge.count {
+    position: absolute;
+    top: -4px;
+    left: 14px;
+  }
+
+  .shell {
+    --toast-lift: 64px;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#more-sheet .sheet-body {
+  gap: 4px;
+  padding: var(--s-3);
+}
+
+.more-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r);
+  color: var(--fg);
+  background: none;
+  font: inherit;
+  font-size: var(--t-md);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.more-link:hover {
+  background: var(--bg-hover);
+}
+
+.more-link .icon {
+  width: 20px;
+  height: 20px;
+  color: var(--fg-muted);
+}

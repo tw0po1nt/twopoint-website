@@ -53,3 +53,26 @@ let isCurrent (item: Route) (route: Route) =
   match route with
   | Post _ -> item = Posts
   | _ -> item = route
+
+/// A tab of the tab bar of a phone.
+type Tab =
+  | Page of Route
+  /// Opens a sheet with the pages that have no tab.
+  | More
+
+let tabs = [ Page Dashboard; Page Posts; Page ModerationQueue; Page Subscriptions; More ]
+
+let morePages = [ Commenters; Series; Settings ]
+
+let tabTitle (tab: Tab) =
+  match tab with
+  | Page Dashboard -> "Home"
+  | Page ModerationQueue -> "Queue"
+  | Page Subscriptions -> "Readers"
+  | Page route -> title route
+  | More -> "More"
+
+let isCurrentTab (tab: Tab) (route: Route) =
+  match tab with
+  | Page item -> isCurrent item route
+  | More -> morePages |> List.exists (fun item -> isCurrent item route)

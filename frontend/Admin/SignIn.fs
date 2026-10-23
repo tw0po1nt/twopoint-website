@@ -12,3 +12,7 @@ type SignIn =
   abstract token: unit -> JS.Promise<string option>
   /// Opens the Entra sign-in in a popup. A click must start it, or the browser blocks the popup.
   abstract signInByPopup: unit -> JS.Promise<unit>
+  /// The name of the signed-in account. None before the start, or when Entra gives no name.
+  abstract account: unit -> string option
+  /// The promise resolves when the page starts to leave for the Entra sign-out.
+  abstract signOut: unit -> JS.Promise<unit>
