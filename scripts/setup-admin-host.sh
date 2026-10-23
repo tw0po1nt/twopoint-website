@@ -269,8 +269,10 @@ pause
 # ── 4 ─────────────────────────────────────────────────────────────────────
 stage "Add the CNAME record in Cloudflare"
 say "Cloudflare has the DNS of twopoint.dev."
-CURRENT_TARGET=$(dig +short CNAME "$ADMIN_HOST" | sed 's/\.$//')
-if [[ "$CURRENT_TARGET" == "$DEFAULT_HOST" ]]; then
+# A local resolver keeps a "no such name" answer for up to 30 minutes, so ask the zone's name server.
+ZONE_NS=$(dig +short NS "${ADMIN_HOST#*.}" | head -n1)
+cname_target() { dig +short CNAME "$ADMIN_HOST" @"$ZONE_NS" | sed 's/\.$//'; }
+if [[ "$(cname_target)" == "$DEFAULT_HOST" ]]; then
   note "$ADMIN_HOST already points to $DEFAULT_HOST. Nothing to do."
 else
   open_url "https://dash.cloudflare.com/"
@@ -279,7 +281,7 @@ else
   step "Proxy status: DNS only (gray cloud). Azure must see the CNAME to issue the certificate."
   step "Save the record."
   pause "Press Enter after you save the record."
-  until [[ "$(dig +short CNAME "$ADMIN_HOST" | sed 's/\.$//')" == "$DEFAULT_HOST" ]]; do
+  until [[ "$(cname_target)" == "$DEFAULT_HOST" ]]; do
     warn "$ADMIN_HOST does not point to $DEFAULT_HOST yet."
     confirm "Check again?" || { SKIPPED+=("CNAME admin → $DEFAULT_HOST in Cloudflare, DNS only"); finish; exit 0; }
   done
