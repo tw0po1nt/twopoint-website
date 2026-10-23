@@ -1,0 +1,36 @@
+name: Build the admin
+description: >-
+  Builds the admin in the release mode and tests the bundle in happy-dom. The admin goes to
+  frontend/Admin/dist/.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: frontend/Admin/.node-version
+        cache: npm
+        cache-dependency-path: frontend/Admin/package-lock.json
+
+    - name: Restore the .NET tools
+      shell: bash
+      run: dotnet tool restore
+
+    - name: Install the admin packages
+      shell: bash
+      working-directory: frontend/Admin
+      run: npm ci
+
+    - name: Build the admin
+      shell: bash
+      working-directory: frontend/Admin
+      run: npm run build
+
+    - name: Test the admin bundle
+      shell: bash
+      working-directory: frontend/Admin
+      run: npm test
