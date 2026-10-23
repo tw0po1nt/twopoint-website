@@ -52,7 +52,10 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     let next =
       { model with
           Session = session
-          Overlay = if msg = Session.SignOutClicked then None else model.Overlay }
+          Overlay =
+            match session.Status with
+            | Session.SigningOut _ -> None
+            | _ -> model.Overlay }
 
     if model.Session.Status = Session.Starting && Session.isActive session then
       next, Some(Send LoadDashboard)

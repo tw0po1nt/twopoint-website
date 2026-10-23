@@ -65,25 +65,20 @@ let private perform (signIn: SignIn) (effect: Shell.Effect) (dispatch: Shell.Msg
 
 let private site = "https://twopoint.dev"
 
-let private follow (dispatch: Router.Msg -> unit) (path: string) (event: MouseEvent) =
+let private follow (dispatch: Router.Msg -> unit) (route: Route) (event: MouseEvent) =
   if event.button = 0. && not (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) then
     event.preventDefault ()
-    dispatch (Router.LinkFollowed path)
+    dispatch (Router.LinkFollowed(Route.path route))
 
 let private currentMark (isCurrent: bool) = if isCurrent then "page" else null
 
 [<SolidComponent>]
 let private routeLink (dispatch: Router.Msg -> unit) (route: Route) (text: string) =
-  a (href = Route.path route, onClick = follow dispatch (Route.path route)) { text }
+  a (href = Route.path route, onClick = follow dispatch route) { text }
 
 [<SolidComponent>]
 let private brand (dispatch: Router.Msg -> unit) =
-  a (
-    class' = "brand",
-    href = Route.path Dashboard,
-    ariaLabel = "twopoint admin",
-    onClick = follow dispatch (Route.path Dashboard)
-  ) {
+  a (class' = "brand", href = Route.path Dashboard, ariaLabel = "twopoint admin", onClick = follow dispatch Dashboard) {
     span (class' = "mark") { "2·" }
 
     span (class' = "brand-text") {
@@ -107,7 +102,7 @@ let private sideLink (dispatch: Router.Msg -> unit) (current: unit -> Route) (co
     href = Route.path item,
     title = Router.title item,
     ariaCurrent = currentMark (Router.isCurrent item (current ())),
-    onClick = follow dispatch (Route.path item)
+    onClick = follow dispatch item
   ) {
     Icon.view (Icon.ofRoute item)
     span (class' = "nav-label") { Router.title item }
@@ -128,7 +123,7 @@ let private tabLink
       a (
         href = Route.path item,
         ariaCurrent = currentMark (Router.isCurrentTab tab (current ())),
-        onClick = follow dispatch (Route.path item)
+        onClick = follow dispatch item
       ) {
         span (class' = "tab-icon") {
           Icon.view (Icon.ofRoute item)
@@ -170,6 +165,7 @@ let private accountMenu (id: string) (placement: Menu.Placement) (name: unit -> 
 
       Parts.menuItem
         id
+        Parts.Plain
         signOut
         (Fragment() {
           Icon.view Icon.SignOut
@@ -361,7 +357,7 @@ let view (signIn: SignIn) =
 
       Show(when' = not (showsNavigation ())) {
         header (class' = "bar") {
-          a (class' = "back", href = Route.path Posts, onClick = follow route (Route.path Posts)) {
+          a (class' = "back", href = Route.path Posts, onClick = follow route Posts) {
             Icon.view Icon.Back
             "Posts"
           }
@@ -393,7 +389,7 @@ let view (signIn: SignIn) =
           For(each = Array.ofList Router.morePages) {
             yield
               fun item _ ->
-                a (class' = "more-link", href = Route.path item, onClick = follow route (Route.path item)) {
+                a (class' = "more-link", href = Route.path item, onClick = follow route item) {
                   Icon.view (Icon.ofRoute item)
                   Router.title item
                 }

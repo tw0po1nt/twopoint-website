@@ -121,7 +121,6 @@ type Textarea() =
     textarea(id = this.id, class' = "textarea", rows = this.rows, disabled = this.disabled, onInput = this.onInput)
       .ref (fun element -> createEffect (fun () -> element?value <- this.value ()))
 
-/// A label, a control, and an optional hint and error.
 type Field() =
   /// The id of the control.
   member val id: string = null with get, set
@@ -342,10 +341,10 @@ let menu (id: string) (placement: Menu.Placement) (items: #HtmlElement) =
   }
 
 [<SolidComponent>]
-let menuItem (menuId: string) (choose: unit -> unit) (content: #HtmlElement) =
+let menuItem (menuId: string) (tone: Tone) (choose: unit -> unit) (content: #HtmlElement) =
   button (
     type' = "button",
-    class' = "item",
+    class' = $"item {toneClass tone}",
     role = "menuitem",
     tabindex = -1,
     popovertarget = menuId,
@@ -355,26 +354,10 @@ let menuItem (menuId: string) (choose: unit -> unit) (content: #HtmlElement) =
     content
   }
 
-[<SolidComponent>]
-let menuDangerItem (menuId: string) (choose: unit -> unit) (content: #HtmlElement) =
-  button (
-    type' = "button",
-    class' = "item bad",
-    role = "menuitem",
-    tabindex = -1,
-    popovertarget = menuId,
-    popovertargetaction = "hide",
-    onClick = fun _ -> choose ()
-  ) {
-    content
-  }
-
-/// A link that opens in a new tab.
 [<SolidComponent>]
 let menuLink (url: string) (content: #HtmlElement) =
   a (class' = "item", role = "menuitem", tabindex = -1, href = url, target = "_blank", rel = "noopener") { content }
 
-/// An action that is not available, with the reason.
 [<SolidComponent>]
 let menuUnavailable (reason: string) (content: #HtmlElement) =
   div (class' = "item", role = "menuitem", ariaDisabled = true) {
@@ -395,14 +378,14 @@ let syncDialog (isOpen: bool) (element: HTMLElement) =
   | false, true -> element?close ()
   | _ -> ()
 
+let followOpen (isOpen: unit -> bool) (element: HTMLElement) =
+  createEffect (fun () -> syncDialog (isOpen ()) element)
+
 /// `closed` runs after each close, also a close from the browser at the Esc key.
 [<SolidComponent>]
 let modalDialog (id: string) (isOpen: unit -> bool) (closed: unit -> unit) (title: string) (body: #HtmlElement) (actions: #HtmlElement) =
-  let element = ref Unchecked.defaultof<HTMLElement>
-  createEffect (fun () -> syncDialog (isOpen ()) element.Value)
-
   dialog(id = id, class' = "dialog", ariaLabelledBy = $"{id}-title")
-    .ref(fun el -> element.Value <- el)
+    .ref(followOpen isOpen)
     .on ("close", fun _ -> closed ()) {
     h2 (id = $"{id}-title") { title }
     div (class' = "dialog-body") { body }
@@ -412,9 +395,6 @@ let modalDialog (id: string) (isOpen: unit -> bool) (closed: unit -> unit) (titl
 /// A panel at the right on a wide screen, and from the bottom on a phone. A click outside the panel closes it.
 [<SolidComponent>]
 let sheet (id: string) (isOpen: unit -> bool) (closed: unit -> unit) (label: string) (content: #HtmlElement) =
-  let element = ref Unchecked.defaultof<HTMLElement>
-  createEffect (fun () -> syncDialog (isOpen ()) element.Value)
-
   dialog(
     id = id,
     class' = "sheet",
@@ -422,9 +402,9 @@ let sheet (id: string) (isOpen: unit -> bool) (closed: unit -> unit) (label: str
     onClick =
       fun event ->
         if event.target = event.currentTarget then
-          element.Value?close ()
+          event.currentTarget?close ()
   )
-    .ref(fun el -> element.Value <- el)
+    .ref(followOpen isOpen)
     .on ("close", fun _ -> closed ()) {
     div (class' = "sheet-frame") { content }
   }

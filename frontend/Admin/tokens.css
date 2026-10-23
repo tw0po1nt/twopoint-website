@@ -90,7 +90,7 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
-/* The editor, layout D "Paper". A part in the editor gets the paper colors. */
+/* The editor. A part in the editor gets the paper colors. */
 .paper {
   --paper: light-dark(#fbfaf8, #1b1a18);
   --paper-ink: light-dark(#2b2a28, #ece8e1);

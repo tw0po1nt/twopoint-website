@@ -98,6 +98,14 @@ let tests =
       Expect.equal effect (Some(Shell.SignIn Session.SignOut)) "The sign-out"
     }
 
+    test "Sign out before the session starts keeps the dialog and sends nothing" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Opened Shell.SignOutDialog) model
+      let model, effect = Shell.update (Shell.Session Session.SignOutClicked) model
+      Expect.equal model.Overlay (Some Shell.SignOutDialog) "The dialog stays"
+      Expect.isNone effect "No sign-out"
+    }
+
     test "the queue count is the number of new comments, after the dashboard loads" {
       let model, _ = Shell.init "/"
       Expect.isNone (Dashboard.newComments model.Dashboard) "No count before the answer"
