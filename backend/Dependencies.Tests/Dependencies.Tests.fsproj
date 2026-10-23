@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Include="SubscriptionEmailsTests.fs" />
+    <Compile Include="GitHubAppJwtTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

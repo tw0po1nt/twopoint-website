@@ -1,5 +1,6 @@
 namespace TwoPoint.Http.Extensions
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Shared
 
 module Bind =
@@ -11,3 +12,5 @@ module Bind =
   let bool = Bind.tryParseable Boolean.TryParse
 
   let emailAddress = Bind.tryParseable EmailAddress.tryParse
+
+  let repo = Bind.tryParseable Repo.tryParse

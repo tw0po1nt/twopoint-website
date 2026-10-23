@@ -2,7 +2,9 @@
 module TwoPoint.Admin.Shell
 
 /// Each API call of the admin. A call needs a token.
-type Call = LoadDashboard
+type Call =
+  | LoadDashboard
+  | RebuildSite
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -13,12 +15,14 @@ type Model =
   { Router: Router.Model
     Session: Session.Model<Call>
     Dashboard: Dashboard.Model
+    Rebuild: Rebuild.Model
     Overlay: Overlay option }
 
 type Msg =
   | Router of Router.Msg
   | Session of Session.Msg<Call>
   | Dashboard of Dashboard.Msg
+  | Rebuild of Rebuild.Msg
   | Opened of Overlay
   /// The browser closed the overlay, for example after the Esc key.
   | Closed of Overlay
@@ -34,6 +38,7 @@ let init (path: string) : Model * Effect option =
   { Router = Router.init path
     Session = session
     Dashboard = Dashboard.init
+    Rebuild = Rebuild.init
     Overlay = None },
   Option.map SignIn effect
 
@@ -67,6 +72,13 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Dashboard.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | Dashboard.Answered _ -> next, None
+  | Rebuild msg ->
+    let rebuild, effect = Rebuild.update msg model.Rebuild
+    let next = { model with Rebuild = rebuild }
+
+    match msg with
+    | Rebuild.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | _ -> next, effect |> Option.map (fun Rebuild.Dispatch -> Send RebuildSite)
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None

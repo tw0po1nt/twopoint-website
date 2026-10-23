@@ -185,6 +185,20 @@
   max-width: 640px;
 }
 
+.card.rebuild {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: 640px;
+  margin-top: var(--s-5);
+}
+
+.rebuild-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
 /* The editor: no navigation, and the colors of Paper. */
 .bar {
   display: flex;

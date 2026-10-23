@@ -8,7 +8,7 @@ export const posts = [
   { slug: 'second', title: 'Second', createdDate: '2026-02-03T00:00:00Z', commentStats: { new: 1, approved: 0, rejected: 1 } },
 ];
 
-const answer = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+export const answer = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 export const postsAnswer = () => answer(200, { success: true, message: null, data: posts });
 
@@ -69,7 +69,7 @@ export const load = async (url, { signIn = stubSignIn(), respond = postsAnswer }
   const calls = [];
   globalThis.fetch = async (input, init = {}) => {
     calls.push({ url: String(input), authorization: new Headers(init.headers).get('Authorization') });
-    return respond(String(input));
+    return respond(String(input), init);
   };
 
   const app = await import(pathToFileURL(path.resolve('dist', manifest.app.slice(1))).href);

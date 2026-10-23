@@ -18,10 +18,13 @@
     <Compile Include="Subscriptions\SubscriptionDependencies.fs" />
     <Compile Include="Subscriptions\SubscriptionEmails.fs" />
     <Compile Include="Subscriptions\DeliveryDependencies.fs" />
+    <Compile Include="Deploys\SiteDispatch.fs" />
+    <Compile Include="Deploys\RebuildDb.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Communication.Email" Version="1.0.2" />
     <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
+    <PackageReference Include="Azure.Security.KeyVault.Keys" Version="4.8.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.30.1" />
     <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
