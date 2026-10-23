@@ -58,4 +58,37 @@ let tests =
       Expect.equal (current (Post "hello")) [ Posts ] "The posts"
       Expect.equal (current (NotFound "/nothing")) [] "No page"
     }
+
+    test "the tab bar of a phone has four pages and More" {
+      Expect.equal
+        (Router.tabs |> List.map Router.tabTitle)
+        [ "Home"; "Posts"; "Queue"; "Readers"; "More" ]
+        "The tab bar"
+    }
+
+    test "More has each page of the navigation that has no tab, in order" {
+      let tabPages =
+        Router.tabs
+        |> List.choose (fun tab ->
+          match tab with
+          | Router.Page route -> Some route
+          | Router.More -> None)
+
+      Expect.equal Router.morePages [ Commenters; Series; Settings ] "The pages of More"
+
+      Expect.equal
+        (List.sort (tabPages @ Router.morePages))
+        (List.sort Router.navigation)
+        "Each page has a tab or a place in More, one time"
+    }
+
+    test "the tab bar marks the tab of the route, and More for a page in More" {
+      let current route =
+        Router.tabs |> List.filter (fun tab -> Router.isCurrentTab tab route)
+
+      Expect.equal (current ModerationQueue) [ Router.Page ModerationQueue ] "The queue"
+      Expect.equal (current (Post "hello")) [ Router.Page Posts ] "The posts"
+      Expect.equal (current Series) [ Router.More ] "More"
+      Expect.equal (current (NotFound "/nothing")) [] "No tab"
+    }
   ]

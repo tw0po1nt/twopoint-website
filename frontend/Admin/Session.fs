@@ -15,6 +15,8 @@ type Status =
   | Broken
   /// The API refuses the token of the signed-in account. The banner offers another account.
   | Refused
+  /// The page leaves for the Entra sign-out. A failed sign-out gives back the status from before.
+  | SigningOut of before: Status
 
 /// `Waiting` contains each call that failed because Entra needs the author to sign in again.
 type Model<'call> = { Status: Status; Waiting: 'call list }
@@ -28,12 +30,15 @@ type Msg<'call> =
   | Renewed
   | RenewFailed
   | AccountRefused
+  | SignOutClicked
+  | SignOutFailed
 
 type Effect<'call> =
   | Start
   | SignInByRedirect
   | SignInByPopup
   | Retry of calls: 'call list
+  | SignOut
 
 let init () : Model<'call> * Effect<'call> option = { Status = Starting; Waiting = [] }, Some Start
 
@@ -57,6 +62,9 @@ let update (msg: Msg<'call>) (model: Model<'call>) : Model<'call> * Effect<'call
   | Expired _, SignInAgainClicked -> { model with Status = Renewing }, Some SignInByPopup
   | Renewing, Renewed -> { Status = Active; Waiting = [] }, Some(Retry model.Waiting)
   | Renewing, RenewFailed -> { model with Status = Expired true }, None
+  | (Active | Expired _ | Refused | Broken), SignOutClicked ->
+    { model with Status = SigningOut model.Status }, Some SignOut
+  | SigningOut before, SignOutFailed -> { model with Status = before }, None
   | _ -> model, None
 
 let isActive (model: Model<'call>) = model.Status = Active
@@ -69,7 +77,8 @@ let showsBanner (model: Model<'call>) =
   | Starting
   | Redirecting
   | Active
-  | Broken -> false
+  | Broken
+  | SigningOut _ -> false
 
 let bannerText (model: Model<'call>) =
   match model.Status with
@@ -80,4 +89,5 @@ let bannerText (model: Model<'call>) =
   | Starting
   | Redirecting
   | Active
-  | Broken -> ""
+  | Broken
+  | SigningOut _ -> ""

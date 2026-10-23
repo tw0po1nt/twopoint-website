@@ -49,4 +49,12 @@ let create () : SignIn =
 
       member _.signInByPopup() =
         app.acquireTokenPopup {| scopes = scopes; account = activeAccount app |> Option.toObj |}
-        |> Promise.map (fun result -> app.setActiveAccount result.account) }
+        |> Promise.map (fun result -> app.setActiveAccount result.account)
+
+      member _.account() =
+        activeAccount app
+        |> Option.bind (fun account -> Option.ofObj account.name)
+        |> Option.filter (fun name -> name <> "")
+
+      member _.signOut() =
+        app.logoutRedirect {| account = activeAccount app |> Option.toObj |} }

@@ -7,6 +7,8 @@ open Fable.Core
 type AccountInfo =
   abstract homeAccountId: string
   abstract username: string
+  /// Null or empty when the ID token has no name claim.
+  abstract name: string
 
 [<AllowNullLiteral>]
 type AuthenticationResult =
@@ -27,6 +29,8 @@ type PublicClientApplication =
   abstract acquireTokenSilent: request: {| scopes: string array; account: AccountInfo |} -> JS.Promise<AuthenticationResult>
   /// With a null account, Entra asks the user to choose an account.
   abstract acquireTokenPopup: request: {| scopes: string array; account: AccountInfo |} -> JS.Promise<AuthenticationResult>
+  /// The promise resolves when the page starts to leave for Entra.
+  abstract logoutRedirect: request: {| account: AccountInfo |} -> JS.Promise<unit>
 
 type Configuration =
   {| auth: {| clientId: string; authority: string; redirectUri: string |}

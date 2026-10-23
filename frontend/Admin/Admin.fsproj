@@ -15,6 +15,9 @@
     <Compile Include="Session.fs" />
     <Compile Include="Dashboard.fs" />
     <Compile Include="Shell.fs" />
+    <Compile Include="Menu.fs" />
+    <Compile Include="Icon.fs" />
+    <Compile Include="Parts.fs" />
     <Compile Include="ShellView.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Main.fs" />
