@@ -206,7 +206,7 @@ TOTAL_STAGES=6
 TENANT_ID="cdf89f94-8c88-48fc-b11c-dd24af4380b4"
 FUNCTION_APP="func-twopoint-website-api"
 SWA_NAME="stapp-twopoint-admin"
-# The Free plan is in a few regions only. The region does not change where the files are served from.
+# The Free plan is in a few regions only. The region does not change the locations that serve the files.
 SWA_LOCATION="eastus2"
 ADMIN_HOST="admin.twopoint.dev"
 STAGING_REPO="tw0po1nt/twopoint-website-staging"
@@ -218,7 +218,7 @@ banner "Admin host: Static Web Apps, deploy token, and DNS"
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
 stage "Sign in to Azure and GitHub"
-say "The wizard uses the Azure CLI and the GitHub CLI. It asks before each change."
+say "The wizard uses the Azure CLI and the GitHub CLI. It asks before it creates a resource or starts a workflow."
 if az account show >/dev/null 2>&1; then
   note "Azure: you are signed in as $(az account show --query user.name -o tsv)."
 else
@@ -251,7 +251,7 @@ else
   exit 0
 fi
 SKU=$(az staticwebapp show -n "$SWA_NAME" -g "$RESOURCE_GROUP" --query sku.name -o tsv)
-[[ "$SKU" == "Free" ]] || warn "$SWA_NAME is on the '$SKU' plan, not on the Free plan."
+[[ "$SKU" == "Free" ]] || warn "$SWA_NAME must be on the Free plan. Its plan is '$SKU'."
 DEFAULT_HOST=$(az staticwebapp show -n "$SWA_NAME" -g "$RESOURCE_GROUP" --query defaultHostname -o tsv)
 note "Default host name: $DEFAULT_HOST"
 pause
@@ -316,11 +316,11 @@ if confirm "Start 'Deploy backend (staging)' on main now? It deploys the backend
 fi
 check_header() {
   local url="$1" name="$2" expected="$3" actual
-  actual=$(curl -sSI "$url" | tr -d '\r' | awk -F': ' -v name="$name" 'tolower($1) == tolower(name) { print $2 }' | tail -n1)
+  actual=$(curl -sSI "$url" | tr -d '\r' | awk -F': ' -v name="$name" 'tolower($1) == tolower(name) { print $2 }' | tail -n1) || true
   if [[ "$actual" == "$expected" ]]; then
     printf '  %s✓%s %s sends %s: %s\n' "$GREEN" "$RESET" "$url" "$name" "$actual"
   else
-    warn "$url sends $name: '${actual:-none}', not '$expected'."
+    warn "$url sends $name: '${actual:-none}'. Expected: '$expected'."
     SKIPPED+=("Check $name on $url after the admin deploy")
   fi
 }
