@@ -37,6 +37,16 @@ let tests =
       Expect.equal (Rebuild.text model.Rebuild) "The rebuild started. The production run is #42." "The run number"
     }
 
+    test "a started rebuild with no run number says that the rebuild started" {
+      let model, _ = Shell.init "/"
+      let model, _ = clicked model
+      let model, _ = answered (Ok Api.QueuedWithoutRunNumber) model
+      Expect.equal
+        (Rebuild.text model.Rebuild)
+        "The rebuild started. GitHub did not send the number of the production run."
+        "No run number"
+    }
+
     test "the local backend logs the rebuild and sends nothing to GitHub" {
       let model, _ = Shell.init "/"
       let model, _ = clicked model

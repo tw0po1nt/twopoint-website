@@ -49,7 +49,7 @@ let tests =
 
       Expect.equal
         (run dependencies)
-        (Ok (RebuildSite.Dispatched (rebuild (Dispatched (Queued (RunNumber 41L))))))
+        (Ok (RebuildSite.Rebuilt (Queued (RunNumber 41L))))
         "Expected the production run"
       Expect.equal dependencies.Dispatched [ production; staging ] "Expected a dispatch to each repo"
       Expect.equal dependencies.Saved [ rebuild (Dispatched (Queued (RunNumber 41L))) ] "Expected the saved rebuild"
@@ -79,6 +79,15 @@ let tests =
     test "a logged dispatch is a rebuild with no run" {
       let dependencies = FakeDependencies(fun _ -> Ok Logged)
 
-      Expect.equal (run dependencies) (Ok (RebuildSite.Dispatched (rebuild (Dispatched Logged)))) "Expected the log"
+      Expect.equal (run dependencies) (Ok (RebuildSite.Rebuilt Logged)) "Expected the log"
+      Expect.equal dependencies.Saved [ rebuild (Dispatched Logged) ] "Expected the saved log"
+    }
+
+    test "a queued production run with no run number is a rebuild" {
+      let dependencies =
+        FakeDependencies(fun repo -> if repo = production then Ok QueuedWithoutRunNumber else queued repo)
+
+      Expect.equal (run dependencies) (Ok (RebuildSite.Rebuilt QueuedWithoutRunNumber)) "Expected the rebuild"
+      Expect.equal dependencies.Saved [ rebuild (Dispatched QueuedWithoutRunNumber) ] "Expected no run number"
     }
   ]

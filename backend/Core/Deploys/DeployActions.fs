@@ -18,7 +18,7 @@ module RebuildSite =
   // Output
 
   type Error = DispatchFailed of failed : (Repo * DependencyError) list
-  type Event = Dispatched of Rebuild
+  type Event = Rebuilt of production : Dispatch
 
   // Logic
 
@@ -35,15 +35,17 @@ module RebuildSite =
       (repos : SiteRepos)
       (production : Result<Dispatch, DependencyError>)
       (staging : Result<Dispatch, DependencyError>)
-      : Decision<unit, Error> =
-      [ repos.Production, production; repos.Staging, staging ]
-      |> List.choose (fun (repo, result) ->
-        match result with
-        | Ok _ -> None
-        | Error error -> Some (repo, error))
-      |> function
-        | [] -> Decision.success ()
-        | failed -> Decision.failure (DispatchFailed failed)
+      : Decision<Event, Error> =
+      match production, staging with
+      | Ok production, Ok _ -> Decision.success (Rebuilt production)
+      | _ ->
+        [ repos.Production, production; repos.Staging, staging ]
+        |> List.choose (fun (repo, result) ->
+          match result with
+          | Ok _ -> None
+          | Error error -> Some (repo, error))
+        |> DispatchFailed
+        |> Decision.failure
 
   // Action
 
@@ -68,6 +70,5 @@ module RebuildSite =
       | Ok () ->
         return
           Logic.decide repos production staging
-          |> Result.map (fun () -> Event.Dispatched rebuild)
           |> Result.mapError ActionError.Logic
     }

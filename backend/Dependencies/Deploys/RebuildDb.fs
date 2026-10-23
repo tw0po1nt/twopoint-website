@@ -39,14 +39,8 @@ type RebuildDb(tableServiceClient : TableServiceClient, logger : ILogger) =
       let entity = TableEntity(partitionKey = "site", rowKey = "latest")
       entity["DispatchedDate"] <- rebuild.DispatchedDate.ToString("o", CultureInfo.InvariantCulture)
 
-      let production, runNumber =
-        match rebuild.Production with
-        | Dispatched (Queued run) -> "queued", Nullable run.Value
-        | Dispatched Logged -> "logged", Nullable()
-        | Failed -> "failed", Nullable()
-
-      entity["Production"] <- production
-      entity["RunNumber"] <- runNumber
+      entity["Production"] <- ProductionDispatch.name rebuild.Production
+      entity["RunNumber"] <- rebuild.Production |> ProductionDispatch.runNumber |> Option.map _.Value |> Option.toNullable
       let! _ = tableServiceClient.GetTableClient(Table).UpsertEntityAsync(entity, TableUpdateMode.Replace, ct)
       return ()
     }

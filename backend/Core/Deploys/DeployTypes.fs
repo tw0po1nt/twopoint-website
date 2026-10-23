@@ -30,13 +30,38 @@ type RunNumber =
 
 type Dispatch =
   | Queued of RunNumber
+  | QueuedWithoutRunNumber
   /// The local backend logs each dispatch and sends nothing.
   | Logged
+
+module Dispatch =
+  let name (dispatch : Dispatch) =
+    match dispatch with
+    | Queued _
+    | QueuedWithoutRunNumber -> "queued"
+    | Logged -> "logged"
+
+  let runNumber (dispatch : Dispatch) =
+    match dispatch with
+    | Queued run -> Some run
+    | QueuedWithoutRunNumber
+    | Logged -> None
 
 type ProductionDispatch =
   | Dispatched of Dispatch
   /// The rebuild has no run number. A run that GitHub queues after the rebuild deploys it.
   | Failed
+
+module ProductionDispatch =
+  let name (production : ProductionDispatch) =
+    match production with
+    | Dispatched dispatch -> Dispatch.name dispatch
+    | Failed -> "failed"
+
+  let runNumber (production : ProductionDispatch) =
+    match production with
+    | Dispatched dispatch -> Dispatch.runNumber dispatch
+    | Failed -> None
 
 type Rebuild =
   { DispatchedDate : DateTime

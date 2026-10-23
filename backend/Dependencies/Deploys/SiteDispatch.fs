@@ -29,8 +29,7 @@ module GitHubAppJwt =
 
   let private encode (json : string) = json |> Encoding.UTF8.GetBytes |> base64Url
 
-  /// GitHub refuses an app JWT that expires more than 10 minutes after its issue time.
-  /// The issue time is 60 seconds early, because the clock of GitHub can be behind.
+  /// GitHub refuses an app JWT with a life of more than 10 minutes, and the clock of GitHub can be behind.
   let unsigned (clientId : string) (now : DateTimeOffset) =
     let header = JsonSerializer.Serialize {| alg = "RS256"; typ = "JWT" |}
     let payload =
@@ -42,19 +41,18 @@ module GitHubAppJwt =
 
   let complete (unsigned : string) (signature : byte array) = $"{unsigned}.{base64Url signature}"
 
-type private Installation = { Id : int64 }
+type Installation = { Id : int64 }
 
-type private InstallationToken = { Token : string }
+type InstallationToken = { Token : string }
 
-type private DispatchRun =
+type DispatchRun =
   { [<JsonPropertyName "run_url">]
     RunUrl : Uri }
 
-type private Run =
+type Run =
   { [<JsonPropertyName "run_number">]
     RunNumber : int64 }
 
-/// Sends `workflow_dispatch` to `site.yml` as the GitHub App, with an installation token for each dispatch.
 type GitHubDispatch(httpClient : HttpClient, signer : CryptographyClient, app : GitHubApp, logger : ILogger) =
 
   let api = Uri "https://api.github.com/"
@@ -96,6 +94,16 @@ type GitHubDispatch(httpClient : HttpClient, signer : CryptographyClient, app : 
     return token.Token
   }
 
+  let queued (repo : Repo) (dispatched : DispatchRun) (token : string) = cancellableTask {
+    try
+      let! (run : Run) = read (new HttpRequestMessage(HttpMethod.Get, dispatched.RunUrl)) token
+      logger.LogInformation("GitHub queued run {runNumber} of site.yml in {repo}", run.RunNumber, repo)
+      return Queued (RunNumber run.RunNumber)
+    with ex ->
+      logger.LogWarning(ex, "GitHub queued a run of site.yml in {repo}, but the read of its run number failed", repo)
+      return QueuedWithoutRunNumber
+  }
+
   member _.Dispatch (repo : Repo) : DependencyResult<Dispatch> =
     runDependencyWithLogging Dependency.GitHub logger $"{nameof GitHubDispatch}.Dispatch"
     <| cancellableTaskResult {
@@ -103,12 +111,9 @@ type GitHubDispatch(httpClient : HttpClient, signer : CryptographyClient, app : 
       let request = new HttpRequestMessage(HttpMethod.Post, Uri(api, $"repos/{repo}/actions/workflows/site.yml/dispatches"))
       request.Content <- JsonContent.Create {| ref = "main"; return_run_details = true |}
       let! (dispatched : DispatchRun) = read request token
-      let! (run : Run) = read (new HttpRequestMessage(HttpMethod.Get, dispatched.RunUrl)) token
-      logger.LogInformation("GitHub queued run {runNumber} of site.yml in {repo}", run.RunNumber, repo)
-      return Queued (RunNumber run.RunNumber)
+      return! queued repo dispatched token
     }
 
-/// The local backend logs each dispatch and sends nothing.
 type LoggedDispatch(logger : ILogger) =
 
   member _.Dispatch (repo : Repo) : DependencyResult<Dispatch> =

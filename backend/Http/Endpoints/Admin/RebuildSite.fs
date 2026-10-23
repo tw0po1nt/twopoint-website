@@ -59,13 +59,9 @@ type RebuildSite(
     }
 
     match! rebuildSite () with
-    | Ok (RebuildSite.Dispatched rebuild) ->
-      let dispatch, run =
-        match rebuild.Production with
-        | Dispatched (Queued run) -> "queued", Some run.Value
-        | Dispatched Logged -> "logged", None
-        | Failed -> "failed", None
-      let apiResponse = { Success = true; Message = None; Data = Some { Dispatch = dispatch; ProductionRun = run } }
+    | Ok (RebuildSite.Rebuilt production) ->
+      let data = { Dispatch = Dispatch.name production; ProductionRun = Dispatch.runNumber production |> Option.map _.Value }
+      let apiResponse = { Success = true; Message = None; Data = Some data }
       return apiResponse, HttpStatusCode.OK
     | Error (ActionError.Logic (RebuildSite.DispatchFailed failed)) ->
       for repo, error in failed do

@@ -23,7 +23,7 @@ type Rebuild =
 
 type Rebuilt =
   | Queued of productionRun: int
-  /// The local backend logged the dispatch and sent nothing.
+  | QueuedWithoutRunNumber
   | Logged
 
 type Failure =
@@ -31,7 +31,6 @@ type Failure =
   | Refused
   | Unanswered
   | Invalid
-  /// The API refused the call with a reason.
   | Failed of reason: string
 
 let reason (failure: Failure) =
@@ -72,6 +71,7 @@ let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failu
     Result.bind (fun rebuild ->
       match rebuild.Dispatch, rebuild.ProductionRun with
       | "queued", Some run -> Ok(Queued run)
+      | "queued", None -> Ok QueuedWithoutRunNumber
       | "logged", None -> Ok Logged
       | _ -> Error Invalid)
   )

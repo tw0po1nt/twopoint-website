@@ -7,6 +7,7 @@ const rebuilds = [];
 const replies = [
   answer(200, { success: true, message: null, data: { dispatch: 'queued', productionRun: 42 } }),
   answer(502, { success: false, message: 'The dispatch to tw0po1nt/twopoint-website-staging failed.', data: null }),
+  answer(200, { success: true, message: null, data: { dispatch: 'queued', productionRun: null } }),
 ];
 
 const respond = (url, init) => {
@@ -44,4 +45,12 @@ test('a failed dispatch shows the reason from the API', async () => {
   assert.equal(rebuilds.length, 2);
   assert.equal(text(), 'The rebuild did not start.');
   assert.equal(alert(), 'The dispatch to tw0po1nt/twopoint-website-staging failed.');
+});
+
+test('a queued rebuild with no run number says that the rebuild started', async () => {
+  press('Rebuild site', card());
+  await settle();
+  assert.equal(rebuilds.length, 3);
+  assert.equal(text(), 'The rebuild started. GitHub did not send the number of the production run.');
+  assert.equal(alert(), null);
 });

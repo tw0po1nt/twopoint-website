@@ -43,5 +43,6 @@ let text (model: Model) =
   | Idle -> "Build and deploy the site again in the production repo and the staging repo."
   | Sending -> "The rebuild starts."
   | Started(Api.Queued run) -> $"The rebuild started. The production run is #{run}."
+  | Started Api.QueuedWithoutRunNumber -> "The rebuild started. GitHub did not send the number of the production run."
   | Started Api.Logged -> "The local backend logged the rebuild and sent nothing to GitHub."
   | NotStarted _ -> "The rebuild did not start."
