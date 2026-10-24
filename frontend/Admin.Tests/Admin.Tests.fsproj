@@ -15,6 +15,7 @@
     <Compile Include="RebuildTests.fs" />
     <Compile Include="QueueTests.fs" />
     <Compile Include="PostsTests.fs" />
+    <Compile Include="EditorTests.fs" />
     <Compile Include="PostCommentsTests.fs" />
     <Compile Include="CommentersTests.fs" />
     <Compile Include="SubscriptionsTests.fs" />

@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { follow, heading, links, load } from './load.mjs';
+import { answer, apiAnswer, follow, heading, links, load } from './load.mjs';
 
-await load('http://localhost:4322/posts/hello%20world');
+const post = { slug: 'hello world', state: 'draft', pendingEdit: false, publishDate: null, eTag: '"v1"', title: 'Hello', excerpt: '', body: '', text: '', publishedText: null };
+
+const respond = (url) =>
+  url.endsWith('/api/internal/posts/hello%20world') ? answer(200, { success: true, message: null, data: post }) : apiAnswer(url);
+
+await load('http://localhost:4322/posts/hello%20world', { respond });
 
 test('the editor of a post shows the slug and no navigation', () => {
   assert.equal(heading(), 'hello world');

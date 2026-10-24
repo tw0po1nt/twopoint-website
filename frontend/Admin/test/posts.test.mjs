@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { answer, apiAnswer, heading, load, settle } from './load.mjs';
+import { answer, apiAnswer, heading, load, press, settle } from './load.mjs';
 
 const stats = { new: 1, approved: 2, rejected: 0 };
 
@@ -14,7 +14,20 @@ const posts = [
 
 const reads = [];
 
-const respond = (url) => {
+const creates = [];
+
+const draft = { slug: 'untitled', state: 'draft', pendingEdit: false, publishDate: null, eTag: '"v1"', title: '', excerpt: '', body: '', text: '', publishedText: null };
+
+const respond = (url, init = {}) => {
+  if (url.endsWith('/api/internal/posts') && init.method === 'POST') {
+    creates.push(url);
+    return answer(201, { success: true, message: null, data: { slug: 'untitled', eTag: '"v1"' } });
+  }
+
+  if (url.endsWith('/api/internal/posts/untitled')) {
+    return answer(200, { success: true, message: null, data: draft });
+  }
+
   if (url.endsWith('/api/internal/posts')) {
     reads.push(url);
     return answer(200, { success: true, message: null, data: posts });
@@ -55,4 +68,14 @@ test('the filters show only the drafts, or only the posts with a pending edit', 
   await settle();
   assert.equal(rows().length, 4);
   assert.equal(reads.length, before, 'The filter calls no API');
+});
+
+test('New draft makes a draft and opens it in the editor', async () => {
+  press('New draft');
+  await settle();
+  assert.equal(creates.length, 1);
+  assert.equal(location.pathname, '/posts/untitled');
+  assert.ok(document.querySelector('.shell.is-bare'), 'The editor has no navigation');
+  assert.equal(document.querySelector('.editor-status').textContent.trim(), 'Draft · saved');
+  assert.equal(document.querySelector('textarea[aria-label="Title"]').value, '');
 });

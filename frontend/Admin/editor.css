@@ -1,0 +1,217 @@
+/* The post editor, layout "Paper": one column with the title, the excerpt, and the Markdown body. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.editor-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: calc(var(--safe-top) + 14px) calc(var(--s-6) + var(--safe-right)) 14px calc(var(--s-6) + var(--safe-left));
+  background: var(--bg);
+  transition: opacity 0.4s;
+}
+
+.editor-bar.is-typing {
+  opacity: 0.12;
+}
+
+.editor-bar:hover,
+.editor-bar:focus-within {
+  opacity: 1;
+}
+
+.editor-status {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--t-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-1);
+  margin-left: auto;
+}
+
+.editor-actions .text {
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--t-sm);
+}
+
+.editor-actions .text:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.editor-actions .editor-primary {
+  padding: 4px 14px;
+  border: 1px solid var(--fg);
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-sm);
+}
+
+.editor-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.editor-screen {
+  max-width: 720px;
+  padding-top: var(--s-6);
+}
+
+.editor-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-title,
+.editor-excerpt {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font-family: var(--write-font);
+  resize: none;
+  overflow: hidden;
+}
+
+.editor-title {
+  margin-bottom: var(--s-2);
+  font-size: 34px;
+  font-weight: var(--w-semibold);
+  line-height: 1.2;
+}
+
+.editor-excerpt {
+  margin-bottom: var(--s-8);
+  color: var(--fg-muted);
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.editor-title:focus,
+.editor-excerpt:focus {
+  outline: none;
+}
+
+.editor-title::placeholder,
+.editor-excerpt::placeholder {
+  color: var(--paper-muted);
+  opacity: 0.6;
+}
+
+.editor-body .cm-editor {
+  background: transparent;
+}
+
+.editor-body .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor-body .cm-scroller {
+  font-family: var(--write-font);
+  font-size: 18px;
+  line-height: 1.75;
+}
+
+.editor-body .cm-content {
+  padding: 0 0 160px;
+  caret-color: var(--fg);
+}
+
+.editor-body .cm-placeholder {
+  color: var(--paper-muted);
+  opacity: 0.6;
+}
+
+.editor-body .cm-selectionBackground,
+.editor-body .cm-focused .cm-selectionBackground {
+  background: color-mix(in oklab, var(--paper) 85%, var(--paper-ink)) !important;
+}
+
+/* Quiet styles for the Markdown source. */
+.editor-body .cm-heading {
+  font-weight: var(--w-semibold);
+}
+
+.editor-body .cm-emphasis {
+  font-style: italic;
+}
+
+.editor-body .cm-strong {
+  font-weight: var(--w-semibold);
+}
+
+.editor-body .cm-link {
+  text-decoration: underline;
+  text-decoration-color: var(--paper-muted);
+  text-underline-offset: 3px;
+}
+
+.editor-body .cm-url,
+.editor-body .cm-mark {
+  color: var(--paper-muted);
+}
+
+.editor-body .cm-code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+
+.editor-body .cm-quote {
+  color: var(--fg-muted);
+}
+
+.editor-body .cm-directive {
+  color: var(--paper-muted);
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+
+@media (max-width: 639px) {
+  .editor-bar {
+    flex-wrap: wrap;
+    gap: var(--s-1) var(--s-3);
+    padding: calc(var(--safe-top) + 10px) calc(var(--s-4) + var(--safe-right)) 10px calc(var(--s-4) + var(--safe-left));
+  }
+
+  .editor-status {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .editor-title {
+    font-size: 26px;
+  }
+
+  .editor-excerpt,
+  .editor-body .cm-scroller {
+    font-size: 17px;
+  }
+}
