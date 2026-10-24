@@ -57,7 +57,6 @@ type SubscriptionDependencies(
         CreatedDate = createdDateUtc 
         EmailAddress = newSubscription.EmailAddress |> EmailAddress.value
         Name = newSubscription.Name |> Option.map NonEmptyString.value
-        IsActive = true
         CanceledDate = None }
     let! (dbSubscription: DbSubscription) = subscriptionDb.CreateSubscription newSubscription
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source

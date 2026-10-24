@@ -35,8 +35,9 @@ type internal DbSubscription =
     CreatedDate : DateTime 
     EmailAddress : string
     Name : string option
-    IsActive : bool
     CanceledDate : DateTime option }
+
+  member this.IsActive = this.CanceledDate.IsNone
 
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbSubscription 
@@ -65,7 +66,6 @@ type internal DbSubscription =
         CreatedDate =  createdDate
         EmailAddress = emailAddress
         Name = name 
-        IsActive = isActive
         CanceledDate = canceledDate }
   }
   
@@ -83,7 +83,6 @@ type internal DbSubscription =
       CreatedDate = subscription.CreatedDate
       EmailAddress = subscription.EmailAddress |> EmailAddress.value
       Name = subscription.Name |> Option.map NonEmptyString.value
-      IsActive = Subscription.isActive subscription
       CanceledDate =
         match subscription.Status with
         | Active -> None
@@ -103,8 +102,9 @@ type internal DbSubscription =
         EmailAddress = emailAddress
         Name = name
         Status =
-          if this.IsActive then Active
-          else Canceled ((this.CanceledDate |> Option.defaultValue createdDate).ToUniversalTime()) }
+          match this.CanceledDate with
+          | None -> Active
+          | Some date -> Canceled(date.ToUniversalTime()) }
   }
 
 /// <summary>

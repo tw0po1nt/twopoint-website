@@ -24,7 +24,7 @@ let private decisionTests =
     }
 
     test "an inactive subscription gets no welcome" {
-      let inactive = subscription false
+      let inactive = subscription canceledStatus
       Expect.equal
         (decide (Some inactive) [] (Some latestPost))
         (Error (SendWelcome.SubscriptionInactive inactive))
@@ -32,11 +32,11 @@ let private decisionTests =
     }
 
     test "no welcome goes out when there are no posts" {
-      Expect.equal (decide (Some (subscription true)) [] None) (Error SendWelcome.NoPosts) "Expected NoPosts"
+      Expect.equal (decide (Some (subscription Active)) [] None) (Error SendWelcome.NoPosts) "Expected NoPosts"
     }
 
     test "a new subscription gets the latest post" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [] (Some latestPost))
         (Ok (SendWelcome.Send (active, latestPost)))
@@ -44,7 +44,7 @@ let private decisionTests =
     }
 
     test "a reactivation gets no second welcome for the same post" {
-      let active = subscription true
+      let active = subscription Active
       let earlierWelcome = delivery Welcome latestPost
       Expect.equal
         (decide (Some active) [ earlierWelcome ] (Some latestPost))
@@ -53,7 +53,7 @@ let private decisionTests =
     }
 
     test "a reactivation gets a welcome when a newer post exists" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [ delivery Welcome olderPost ] (Some latestPost))
         (Ok (SendWelcome.Send (active, latestPost)))
@@ -61,7 +61,7 @@ let private decisionTests =
     }
 
     test "a new-post delivery of the latest post does not count as a welcome" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [ delivery NewPost latestPost ] (Some latestPost))
         (Ok (SendWelcome.Send (active, latestPost)))
@@ -114,7 +114,7 @@ let private run (dependencies : FakeDependencies) =
 let private actionTests =
   testList "withDependencies" [
     test "sends the welcome, then records the delivery" {
-      let dependencies = FakeDependencies(Some (subscription true), [], Some latestPost, Some slottedHtml)
+      let dependencies = FakeDependencies(Some (subscription Active), [], Some latestPost, Some slottedHtml)
 
       match run dependencies with
       | Ok (SendWelcome.Sent (_, recorded)) ->
@@ -127,7 +127,7 @@ let private actionTests =
 
     test "sends nothing when a welcome for the latest post exists" {
       let dependencies =
-        FakeDependencies(Some (subscription true), [ delivery Welcome latestPost ], Some latestPost, Some slottedHtml)
+        FakeDependencies(Some (subscription Active), [ delivery Welcome latestPost ], Some latestPost, Some slottedHtml)
 
       match run dependencies with
       | Error (ActionError.Logic (SendWelcome.AlreadySent _)) -> ()
@@ -137,7 +137,7 @@ let private actionTests =
     }
 
     test "sends nothing when the newsletter has no slots" {
-      let dependencies = FakeDependencies(Some (subscription true), [], Some latestPost, Some "<html></html>")
+      let dependencies = FakeDependencies(Some (subscription Active), [], Some latestPost, Some "<html></html>")
 
       match run dependencies with
       | Error (ActionError.Logic (SendWelcome.NewsletterInvalid _)) -> ()

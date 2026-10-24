@@ -25,7 +25,7 @@ let private decisionTests =
     }
 
     test "an inactive subscription gets no delivery" {
-      let inactive = subscription false
+      let inactive = subscription canceledStatus
       Expect.equal
         (decide (Some inactive) [] latestPost.Id (Some latestPost))
         (Error (SendNewPostDelivery.SubscriptionInactive inactive))
@@ -34,13 +34,13 @@ let private decisionTests =
 
     test "no delivery goes out for a post that is not in the posts table" {
       Expect.equal
-        (decide (Some (subscription true)) [] latestPost.Id None)
+        (decide (Some (subscription Active)) [] latestPost.Id None)
         (Error (SendNewPostDelivery.PostNotFound latestPost.Id))
         "Expected PostNotFound"
     }
 
     test "an active subscription gets the post" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [ delivery Welcome olderPost; delivery NewPost olderPost ] latestPost.Id (Some latestPost))
         (Ok (SendNewPostDelivery.Send (active, latestPost)))
@@ -48,7 +48,7 @@ let private decisionTests =
     }
 
     test "a subscription that got the post in its welcome does not get it again" {
-      let active = subscription true
+      let active = subscription Active
       let welcome = delivery Welcome latestPost
       Expect.equal
         (decide (Some active) [ welcome ] latestPost.Id (Some latestPost))
@@ -57,7 +57,7 @@ let private decisionTests =
     }
 
     test "a subscription that got a new-post delivery of the post does not get it again" {
-      let active = subscription true
+      let active = subscription Active
       let earlier = delivery NewPost latestPost
       Expect.equal
         (decide (Some active) [ earlier ] latestPost.Id (Some latestPost))
@@ -113,7 +113,7 @@ let private run intro (dependencies : FakeDependencies) =
 let private actionTests =
   testList "withDependencies" [
     test "sends the post, then records a new-post delivery" {
-      let dependencies = FakeDependencies(Some (subscription true), [], Some latestPost, Some slottedHtml)
+      let dependencies = FakeDependencies(Some (subscription Active), [], Some latestPost, Some slottedHtml)
 
       match run (Some "A new post") dependencies with
       | Ok (SendNewPostDelivery.Sent (_, recorded)) ->
@@ -130,7 +130,7 @@ let private actionTests =
 
     test "sends nothing when the welcome contained the post" {
       let dependencies =
-        FakeDependencies(Some (subscription true), [ delivery Welcome latestPost ], Some latestPost, Some slottedHtml)
+        FakeDependencies(Some (subscription Active), [ delivery Welcome latestPost ], Some latestPost, Some slottedHtml)
 
       match run None dependencies with
       | Error (ActionError.Logic (SendNewPostDelivery.AlreadySent _)) -> ()
@@ -140,7 +140,7 @@ let private actionTests =
     }
 
     test "sends nothing to an inactive subscription" {
-      let dependencies = FakeDependencies(Some (subscription false), [], Some latestPost, Some slottedHtml)
+      let dependencies = FakeDependencies(Some (subscription canceledStatus), [], Some latestPost, Some slottedHtml)
 
       match run None dependencies with
       | Error (ActionError.Logic (SendNewPostDelivery.SubscriptionInactive _)) -> ()
@@ -150,7 +150,7 @@ let private actionTests =
     }
 
     test "sends nothing when the newsletter has no slots" {
-      let dependencies = FakeDependencies(Some (subscription true), [], Some latestPost, Some "<html></html>")
+      let dependencies = FakeDependencies(Some (subscription Active), [], Some latestPost, Some "<html></html>")
 
       match run None dependencies with
       | Error (ActionError.Logic (SendNewPostDelivery.NewsletterInvalid _)) -> ()

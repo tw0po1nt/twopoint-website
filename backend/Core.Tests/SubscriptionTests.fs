@@ -76,7 +76,7 @@ let private delete (dependencies : FakeDeleteDependencies) (id : string) =
 let private actionTests =
   testList "Subscription actions" [
     test "a cancellation makes the subscription inactive and sets the canceled date" {
-      let dependencies = FakeCancelDependencies (Some (subscription true))
+      let dependencies = FakeCancelDependencies (Some (subscription Active))
 
       match cancel dependencies with
       | Ok (CancelSubscription.Event.Cancelled canceled) ->
@@ -92,7 +92,7 @@ let private actionTests =
     }
 
     test "a second cancellation keeps the first canceled date and saves nothing" {
-      let existing = subscription false
+      let existing = subscription canceledStatus
       let dependencies = FakeCancelDependencies (Some existing)
 
       match cancel dependencies with
@@ -105,7 +105,7 @@ let private actionTests =
     test "a delete removes each delivery of the subscription, then the subscription" {
       let welcome = delivery Welcome olderPost
       let newPost = delivery NewPost latestPost
-      let existing = subscription true
+      let existing = subscription Active
       let dependencies = FakeDeleteDependencies (Some existing, [ welcome; newPost ])
 
       match delete dependencies (subscriptionId.ToString()) with
@@ -134,7 +134,7 @@ let private actionTests =
     }
 
     test "a reactivation makes the subscription active and clears the canceled date" {
-      let dependencies = FakeReactivateDependencies (Some (subscription false))
+      let dependencies = FakeReactivateDependencies (Some (subscription canceledStatus))
 
       match subscribe dependencies with
       | Ok (CreateSubscription.Event.Reactivated reactivated) ->
@@ -146,8 +146,8 @@ let private actionTests =
 
 let private otherId = SubscriptionId.create "8d0b7a3e-1c2f-4e5a-9b6d-7f8e9a0b1c2d" |> ok
 
-let private older = { subscription true with Id = otherId; CreatedDate = DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc) }
-let private newer = subscription false
+let private older = { subscription Active with Id = otherId; CreatedDate = DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc) }
+let private newer = subscription canceledStatus
 
 type private FakeListDependencies(subscriptions : Subscription list) =
   interface GetAllSubscriptions.Dependencies with
