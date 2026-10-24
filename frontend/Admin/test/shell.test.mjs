@@ -42,8 +42,11 @@ test('the account shows the name of the signed-in account', () => {
   assert.equal(document.querySelector('.side .account .avatar').textContent.trim(), 'AL');
 });
 
-test('the dashboard gets the posts from the API with the token, and shows the counts', () => {
-  assert.deepEqual(calls, [{ url: `${config.api}/api/internal/posts`, authorization: 'Bearer token-1' }]);
+test('the start gets the posts and the moderation queue from the API with the token, and shows the counts', () => {
+  assert.deepEqual(calls, [
+    { url: `${config.api}/api/internal/posts`, authorization: 'Bearer token-1' },
+    { url: `${config.api}/api/internal/comments`, authorization: 'Bearer token-1' },
+  ]);
   assert.deepEqual(summary(), ['2', '3'], 'Two posts and three new comments');
 });
 
@@ -115,5 +118,5 @@ test('a link in the More sheet closes the sheet, shows its page, and marks More'
 });
 
 test('a change of page calls the API no more', () => {
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
 });

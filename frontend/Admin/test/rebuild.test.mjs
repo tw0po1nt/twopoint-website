@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { answer, load, postsAnswer, press, settle } from './load.mjs';
+import { answer, apiAnswer, load, press, settle } from './load.mjs';
 
 const rebuilds = [];
 const replies = [
@@ -16,7 +16,7 @@ const respond = (url, init) => {
     return replies.shift();
   }
 
-  return postsAnswer();
+  return apiAnswer(url);
 };
 
 const { config } = await load('http://localhost:4322/', { respond });

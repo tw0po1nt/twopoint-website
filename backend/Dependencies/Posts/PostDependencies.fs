@@ -178,6 +178,20 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.GetCommentsOnAllPosts (approvals : CommentApproval list) = cancellableTaskResult {
+    let! dbPosts, dbComments =
+      CancellableTaskResult.parallelZip
+        (postDb.GetAllPosts())
+        (postDb.GetCommentsOnAllPosts (approvals |> List.map _.ToString()))
+
+    return!
+      dbComments
+      |> List.traverseValidationA (fun (comment: DbComment, commenter, status) ->
+        let post = dbPosts |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
+        comment.ToQueuedComment(post, status, commenter))
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetCommentById commentId = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())
 

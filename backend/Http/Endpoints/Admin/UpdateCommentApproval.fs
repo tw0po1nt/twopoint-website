@@ -61,7 +61,6 @@ type UpdateCommentApproval(
           new UpdateCommentApproval.Dependencies with
           
           member _.GetCommentById commentId = postDependencies.GetCommentById commentId
-          member _.UpdateCommenterStatus commenter status = postDependencies.UpdateCommenterStatus commenter status
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
         }
 
@@ -77,11 +76,12 @@ type UpdateCommentApproval(
           match approvalUpdateResult with
           | Ok _ ->
             { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic updateCommentApprovalError) ->
-            let errorMessage =
-              match updateCommentApprovalError with
-              | UpdateCommentApproval.Error.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
+          | Error (Logic (UpdateCommentApproval.Error.CommentNotFound commentId)) ->
+            let errorMessage = $"Comment '{commentId.ToString()}' not found for post '{slug}'"
             { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
+          | Error (Logic (UpdateCommentApproval.Error.ChangeNotAllowed (current, requested))) ->
+            let errorMessage = $"Comment is {current} and cannot become {requested}"
+            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.Conflict
           | Error actionError when actionError.IsValidation ->
             { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
           | Error actionError ->

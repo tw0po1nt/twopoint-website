@@ -18,10 +18,10 @@ let tests =
       Expect.equal model.Dashboard Dashboard.Waiting "The dashboard waits"
     }
 
-    test "a started session loads the dashboard" {
+    test "a started session loads the dashboard and the moderation queue" {
       let model, _ = Shell.init "/comments"
       let _, effect = Shell.update (Shell.Session(Session.Started true)) model
-      Expect.equal effect (Some(Shell.Send Shell.LoadDashboard)) "The first API call"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue ])) "The first API calls"
     }
 
     test "a start with no session sends no API call" {
@@ -104,13 +104,5 @@ let tests =
       let model, effect = Shell.update (Shell.Session Session.SignOutClicked) model
       Expect.equal model.Overlay (Some Shell.SignOutDialog) "The dialog stays"
       Expect.isNone effect "No sign-out"
-    }
-
-    test "the queue count is the number of new comments, after the dashboard loads" {
-      let model, _ = Shell.init "/"
-      Expect.isNone (Dashboard.newComments model.Dashboard) "No count before the answer"
-      let answer = Ok [ post "first" 2; post "second" 1 ] |> Dashboard.Answered |> Shell.Dashboard
-      let model, _ = Shell.update answer model
-      Expect.equal (Dashboard.newComments model.Dashboard) (Some 3) "Three new comments"
     }
   ]

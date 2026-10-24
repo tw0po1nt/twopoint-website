@@ -12,6 +12,12 @@ type CommenterStatus =
   | Trusted
   | Banned
 
+  override this.ToString() =
+    match this with
+    | New -> "new"
+    | Trusted -> "trusted"
+    | Banned -> "banned"
+
 module CommenterStatus =
   let create (value : string) =
     match value.ToLower() with
@@ -193,6 +199,11 @@ module PostInfo =
     let! createdDate = DateTime.TryValidateUtc(createdDate, nameof createdDate)
     return { Slug = slug; Title = title;  CreatedDate = createdDate; CommentStats = commentStats }
   }
+
+type QueuedComment =
+  { Post : Slug
+    PostTitle : NonEmptyString
+    Comment : Comment }
 
 type Post =
   { Id: Slug
