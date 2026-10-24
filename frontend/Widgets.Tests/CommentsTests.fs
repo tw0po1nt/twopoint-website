@@ -32,10 +32,11 @@ let private postAnswer success message (posted: PostedComment option) : PostComm
     Comment = posted }
 
 let private posted approval : PostedComment =
-  { Id = "3"
-    CreatedDate = "2026-10-18T10:00:00Z"
-    Commenter = "Reader"
-    Content = "Nice post & thanks"
+  { Comment =
+      { Id = "3"
+        CreatedDate = "2026-10-18T10:00:00Z"
+        Commenter = "Reader"
+        Content = "Nice post & thanks" }
     Approval = approval }
 
 let private filled email =
@@ -229,7 +230,7 @@ let tests =
           model
           { start with
               List = Comments.Loaded [ comment "1" ]
-              Status = Comments.Posted Comments.AwaitsApproval }
+              Status = Comments.Posted AwaitsApproval }
           "The form is empty"
       }
 
@@ -238,10 +239,10 @@ let tests =
           run (
             Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
             :: filled "known@example.com"
-            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted "new"))) ]
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted AwaitsApproval))) ]
           )
 
-        Expect.equal model.Status (Comments.Posted Comments.AwaitsApproval) "The status says that the comment shows after approval"
+        Expect.equal model.Status (Comments.Posted AwaitsApproval) "The status says that the comment shows after approval"
         Expect.equal model.List (Comments.Loaded [ comment "1" ]) "The list stays"
       }
 
@@ -250,11 +251,11 @@ let tests =
           run (
             Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
             :: filled "known@example.com"
-            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted "approved"))) ]
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ]
           )
 
         Expect.isNone effect "No request"
-        Expect.equal model.Status (Comments.Posted Comments.Approved) "The status says that the comment is posted"
+        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
 
         Expect.equal
           model.List
@@ -270,8 +271,8 @@ let tests =
       }
 
       test "an approved comment while the list is not loaded keeps the list as it is" {
-        let model, _ = run (filled "known@example.com" @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted "approved"))) ])
-        Expect.equal model.Status (Comments.Posted Comments.Approved) "The status says that the comment is posted"
+        let model, _ = run (filled "known@example.com" @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ])
+        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
         Expect.equal model.List Comments.Loading "The list is still loading"
       }
 

@@ -24,11 +24,6 @@ type CommentList =
   | Loaded of Comment list
   | NotLoaded of reason: string
 
-type Approval =
-  | Approved
-  /// A comment of a new commenter shows after the author approves it.
-  | AwaitsApproval
-
 type Status =
   | Editing
   | Validated
@@ -170,20 +165,11 @@ let private failed (message: string option) =
   Failed(message |> Option.defaultValue refused)
 
 let private posted (answer: PostCommentAnswer) (list: CommentList) =
-  match answer.Comment with
-  | Some comment when comment.Approval = "approved" ->
-    let shown =
-      { Id = comment.Id
-        CreatedDate = comment.CreatedDate
-        Commenter = comment.Commenter
-        Content = comment.Content }
-
-    match list with
-    | Loaded comments -> Approved, Loaded(comments @ [ shown ])
-    | Loading
-    | NotLoaded _ -> Approved, list
-  | Some _
-  | None -> AwaitsApproval, list
+  match answer.Comment, list with
+  | Some { Comment = comment; Approval = Approved }, Loaded comments -> Approved, Loaded(comments @ [ comment ])
+  | Some { Approval = Approved }, (Loading | NotLoaded _) -> Approved, list
+  | Some { Approval = AwaitsApproval }, _
+  | None, _ -> AwaitsApproval, list
 
 let private submit (model: Model) =
   let email = model.Email.Trim()

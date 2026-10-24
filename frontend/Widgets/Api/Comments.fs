@@ -17,14 +17,14 @@ type NewComment =
   { ValidationId : string
     Comment : string }
 
-type PostedComment =
-  { Id : string
-    CreatedDate : string
-    Commenter : string
-    Content : string
-    Approval : string }
+type Approval =
+  | Approved
+  | AwaitsApproval
 
-/// The posted comment comes beside `data`, which stays null.
+type PostedComment =
+  { Comment : Comment
+    Approval : Approval }
+
 type PostCommentAnswer =
   { Success : bool
     Message : string option
@@ -42,17 +42,37 @@ module Comments =
 
   let private invalid = { Success = false; Message = invalidMessage; Data = None }
 
-  let inline private answer<'Answer> (url: string) (properties: RequestProperties list) (invalid: 'Answer) : Promise<'Answer> = promise {
+  let private answer (decoder: Decoder<'Answer>) (url: string) (properties: RequestProperties list) (invalid: 'Answer) : Promise<'Answer> = promise {
     let! response = fetchUnsafe url (requestHeaders [ Accept "application/json" ] :: properties)
     let! text = response.text ()
 
     return
-      Decode.Auto.fromString<'Answer>(text, caseStrategy = CamelCase)
+      Decode.fromString decoder text
       |> Result.defaultValue invalid
   }
 
   let inline private request<'T> (url: string) (properties: RequestProperties list) : Promise<ApiResponse<'T>> =
-    answer url properties invalid
+    answer (Decode.Auto.generateDecoder<ApiResponse<'T>>(caseStrategy = CamelCase)) url properties invalid
+
+  let private approval : Decoder<Approval> =
+    Decode.string
+    |> Decode.map (fun name ->
+      match name with
+      | "approved" -> Approved
+      | _ -> AwaitsApproval)
+
+  let private postedComment : Decoder<PostedComment> =
+    Decode.map2
+      (fun comment approval -> { Comment = comment; Approval = approval })
+      (Decode.Auto.generateDecoder<Comment>(caseStrategy = CamelCase))
+      (Decode.field "approval" approval)
+
+  let private postCommentAnswer : Decoder<PostCommentAnswer> =
+    Decode.map3
+      (fun success message comment -> { Success = success; Message = message; Comment = comment })
+      (Decode.field "success" Decode.bool)
+      (Decode.optional "message" Decode.string)
+      (Decode.optional "comment" postedComment)
 
   let getCommentsForPost uri slug : Promise<ApiResponse<Comment list>> =
     request $"{uri}/api/blog/posts/{slug}/comments" [ Method HttpMethod.GET ]
@@ -64,7 +84,7 @@ module Comments =
     ]
 
   let postComment uri slug (newComment: NewComment) : Promise<PostCommentAnswer> =
-    answer $"{uri}/api/blog/posts/{slug}/comments" [
+    answer postCommentAnswer $"{uri}/api/blog/posts/{slug}/comments" [
       Method HttpMethod.POST
       Body(U3.Case3(Encode.Auto.toString newComment))
     ] { Success = false; Message = invalidMessage; Comment = None }

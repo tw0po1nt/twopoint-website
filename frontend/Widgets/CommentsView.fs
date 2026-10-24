@@ -96,8 +96,8 @@ let private statusText (model: Comments.Model) =
   | Comments.Validated -> "Your email address is verified. Select [post comment] to post your comment."
   | Comments.ValidationSent email ->
     $"The site sent an email to {email}. Open the link in that email to verify your address, then post your comment."
-  | Comments.Posted Comments.Approved -> "Your comment is posted."
-  | Comments.Posted Comments.AwaitsApproval -> "Your comment is posted. It shows here after the author approves it."
+  | Comments.Posted Approved -> "Your comment is posted."
+  | Comments.Posted AwaitsApproval -> "Your comment is posted. It shows here after the author approves it."
   | Comments.Editing
   | Comments.Validating
   | Comments.Posting -> ""
