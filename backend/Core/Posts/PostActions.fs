@@ -146,7 +146,9 @@ module CreateDraft =
         |> Slug.create
         |> Result.mapError ActionError<Error>.Validation
 
-      let text = TwoPoint.Site.Render.PostText.compose "" { Title = dto.Title.Trim(); Excerpt = ""; Body = "" }
+      let! text =
+        TwoPoint.Site.Render.PostText.compose "" { Title = dto.Title.Trim(); Excerpt = ""; Body = "" }
+        |> Result.mapError (List.singleton >> ActionError<Error>.Validation)
 
       let! outcome =
         dependencies.WriteWorkingBlob slug text MustNotExist
@@ -174,6 +176,8 @@ module SaveDraft =
 
   type Error =
     | PostNotFound of Slug
+    /// The YAML parser cannot read the front matter of the stored text. A save would drop the other fields.
+    | FrontMatterUnreadable of reason: string
     /// The working blob changed after the editor read it, or the editor read a blob that no longer exists.
     | Stale
 
@@ -215,8 +219,9 @@ module SaveDraft =
         Logic.decide slug published working dto.IfMatch
         |> Result.mapError ActionError<Error>.Logic
 
-      let text =
+      let! text =
         TwoPoint.Site.Render.PostText.compose baseText { Title = dto.Title; Excerpt = dto.Excerpt; Body = dto.Body }
+        |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
 
       let! outcome =
         dependencies.WriteWorkingBlob slug text condition

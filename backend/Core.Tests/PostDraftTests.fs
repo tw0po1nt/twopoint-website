@@ -186,6 +186,17 @@ let tests =
       | other -> failtestf "Expected PostNotFound, got %A" other
     }
 
+    test "a save of a post whose front matter is not readable fails with the reason and keeps the stored text" {
+      let broken = "---\ntitle: [\ntags:\n  - FSharp\n---\n\nBody.\n"
+      let fake = store [] [ "draft", broken ]
+
+      match save fake "draft" (Some "v1") "New" "New body.\n" with
+      | Error(ActionError.Logic(SaveDraft.Error.FrontMatterUnreadable reason)) -> Expect.isNotEmpty reason "A reason"
+      | other -> failtestf "Expected FrontMatterUnreadable, got %A" other
+
+      Expect.equal fake.Working["draft"] broken "The stored text stays"
+    }
+
     test "a save with a bad slug is a validation error" {
       match save (store [] []) "Not A Slug" None "x" "x" with
       | Error(ActionError.Validation _) -> ()

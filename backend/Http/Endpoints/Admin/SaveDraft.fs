@@ -100,6 +100,11 @@ type SaveDraft (
             | Ok(SaveDraft.Event.Saved eTag) -> { Success = true; Message = None; Data = Some { ETag = eTag } }, HttpStatusCode.OK
             | Error(Logic SaveDraft.Error.Stale) ->
               { Success = false; Message = Some "The post changed since you opened it"; Data = None }, HttpStatusCode.PreconditionFailed
+            | Error(Logic(SaveDraft.Error.FrontMatterUnreadable reason)) ->
+              { Success = false
+                Message = Some $"The front matter of the stored post is not readable: {reason}"
+                Data = None },
+              HttpStatusCode.UnprocessableEntity
             | Error(Logic(SaveDraft.Error.PostNotFound slug)) ->
               { Success = false; Message = Some $"Post '{slug}' not found"; Data = None }, HttpStatusCode.NotFound
             | Error actionError when actionError.IsValidation ->
