@@ -233,19 +233,106 @@ let tests =
       Expect.isFalse (document' model).Typing "Back"
     }
 
-    test "the author who leaves the editor with unsaved text sends one save first" {
+    test "the author who leaves the editor with unsaved text stays until the API has the text" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
 
-      match effect with
-      | Some(Shell.Navigate(_, calls)) ->
-        Expect.equal
-          calls
-          [ Shell.LoadPosts; Shell.SavePost(request (Some "\"v1\"") "My post" "About it." "x" 1) ]
-          "The posts and the save"
-      | other -> failtestf "Expected a navigation, got %A" other
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.SavePost(request (Some "\"v1\"") "My post" "About it." "x" 1) ]))
+        "The save"
 
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author stays on the editor"
+      Expect.equal (document' model).Fields.Body "x" "The text stays"
+
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "Now the author leaves"
+      Expect.equal model.Router.Route Route.Posts "The post list"
       Expect.isNone model.Editor "The editor goes"
+    }
+
+    test "text typed during a save is saved before the author leaves" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send Editor.SaveRequested model
+      let model, _ = send (Editor.BodyChanged "xy") model
+      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      Expect.isNone effect "One save at a time"
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author stays"
+
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "xy" 2) ]))
+        "The newest text"
+
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author still stays"
+      let model, effect = send (Editor.SaveAnswered("my-post", 2, Ok "\"v3\"")) model
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "Now the author leaves"
+      Expect.equal model.Router.Route Route.Posts "The post list"
+    }
+
+    test "a failed save after a leave keeps the author on the editor with the text" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Unanswered)) model
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author stays"
+      Expect.equal (document' model).Fields.Body "x" "The text stays"
+      Expect.equal (document' model).LeaveTo None "No leave waits"
+      Expect.equal (status model) "Draft · save failed" "The status"
+    }
+
+    test "a stale answer after a leave keeps the author on the editor, and a second leave goes" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Stale)) model
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author stays"
+      Expect.equal (document' model).Fields.Body "x" "The text stays"
+      Expect.equal (status model) "Draft · changed in another tab" "The status"
+
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      Expect.equal model.Router.Route Route.Posts "The second leave goes"
+    }
+
+    test "a leave after a session expiry saves the newest text after the waiting save" {
+      let model, _ = send (Editor.BodyChanged "a") (opened draft)
+      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let call = effect |> Option.bind (function Shell.Send [ call ] -> Some call | _ -> None) |> Option.get
+      let model, _ = Shell.update (Shell.Session(Session.InteractionRequired call)) model
+      let model, _ = send (Editor.BodyChanged "ab") model
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author stays"
+
+      let model, _ = Shell.update (Shell.Session Session.SignInAgainClicked) model
+      let model, effect = Shell.update (Shell.Session Session.Renewed) model
+      Expect.equal effect (Some(Shell.SignIn(Session.Retry [ call ]))) "The waiting save runs"
+
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "ab" 2) ]))
+        "The newest text"
+
+      let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok "\"v3\"")) model
+      Expect.equal model.Router.Route Route.Posts "The author leaves"
+    }
+
+    test "the Back button of the browser with unsaved text puts the editor address back and saves" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, effect = Shell.update (Shell.Router(Router.UrlChanged "/posts")) model
+
+      Expect.equal
+        effect
+        (Some(
+          Shell.Navigate(
+            Router.PushUrl "/posts/my-post",
+            [ Shell.SavePost(request (Some "\"v1\"") "My post" "About it." "x" 1) ]
+          )
+        ))
+        "The address and the save"
+
+      Expect.equal model.Router.Route (Route.Post "my-post") "The author stays"
     }
 
     test "the author who leaves the editor with saved text sends no save" {

@@ -27,9 +27,13 @@ type Document =
     Fields: Fields
     /// Counts each input. A timer and a save answer name the version that they belong to.
     Version: int
+    /// The newest version that the API has. A version after it has text that only this page has.
+    Confirmed: int
     Save: SaveState
     /// A save was asked for while another save was in flight.
     SaveAgain: bool
+    /// The page that the author wants to go to. The editor stays until the API has the newest text.
+    LeaveTo: string option
     /// The top bar fades until the pointer moves.
     Typing: bool }
 
@@ -53,6 +57,7 @@ type Msg =
   | SaveRequested
   | SaveAnswered of slug: string * version: int * Result<string, Api.Failure>
   | PointerMoved
+  | LeaveRequested of path: string
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -75,22 +80,28 @@ let private loaded (post: Api.PostDocument) =
           Excerpt = post.Excerpt
           Body = post.Body }
       Version = 0
+      Confirmed = 0
       Save = Saved
       SaveAgain = false
+      LeaveTo = None
       Typing = false }
+
+let private requestOf (document: Document) : SaveRequest =
+  { Slug = document.Slug
+    ETag = document.ETag
+    Fields = document.Fields
+    Version = document.Version }
+
+/// A page with a stale save has no text that it can send.
+let needsSave (document: Document) =
+  document.Version > document.Confirmed && document.Save <> Stale
 
 let private startSave (document: Document) =
   Loaded
     { document with
         Save = Saving document.Version
         SaveAgain = false },
-  Some(
-    Save
-      { Slug = document.Slug
-        ETag = document.ETag
-        Fields = document.Fields
-        Version = document.Version }
-  )
+  Some(Save(requestOf document))
 
 let private edit (change: Fields -> Fields) (document: Document) =
   let version = document.Version + 1
@@ -125,15 +136,22 @@ let private answered (version: int) (result: Result<string, Api.Failure>) (docum
     let document =
       { document with
           ETag = Some eTag
+          Confirmed = version
           PendingEdit = document.PendingEdit || document.State <> Api.Draft }
 
     if document.Version = version then
       Loaded { document with Save = Saved }, None
-    elif document.SaveAgain then
+    elif document.SaveAgain || document.LeaveTo.IsSome then
       startSave { document with Save = Unsaved }
     else
       Loaded { document with Save = Unsaved }, Some(Autosave document.Version)
-  | Saving sent, Error Api.Stale when sent = version -> Loaded { document with Save = Stale; SaveAgain = false }, None
+  | Saving sent, Error Api.Stale when sent = version ->
+    Loaded
+      { document with
+          Save = Stale
+          SaveAgain = false
+          LeaveTo = None },
+    None
   | Saving sent, Error failure when sent = version ->
     let retry =
       match failure with
@@ -143,7 +161,8 @@ let private answered (version: int) (result: Result<string, Api.Failure>) (docum
     Loaded
       { document with
           Save = SaveFailed(Api.reason failure)
-          SaveAgain = false },
+          SaveAgain = false
+          LeaveTo = None },
     retry
   | _ -> Loaded document, None
 
@@ -158,25 +177,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, SaveRequested -> saveNow document
   | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug -> answered version result document
   | Loaded document, PointerMoved -> Loaded { document with Typing = false }, None
+  | Loaded document, LeaveRequested path when needsSave document -> saveNow { document with LeaveTo = Some path }
   | _ -> model, None
-
-/// The save that the page sends when the author leaves the editor, or `None` when the API has the text.
-let unsaved (model: Model) : SaveRequest option =
-  match model with
-  | Loaded document ->
-    match document.Save with
-    | Unsaved
-    | SaveFailed _ ->
-      Some
-        { Slug = document.Slug
-          ETag = document.ETag
-          Fields = document.Fields
-          Version = document.Version }
-    | Saved
-    | Saving _
-    | Stale -> None
-  | Loading _
-  | NotLoaded _ -> None
 
 /// The browser asks before it closes a page with text that the API does not have.
 let isAtRisk (model: Model) =

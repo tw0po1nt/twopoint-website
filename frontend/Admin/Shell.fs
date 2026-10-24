@@ -130,8 +130,26 @@ let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
   | PostComments.Chosen _
   | PostComments.Done(_, _, Error _) -> queue
 
+/// The author goes to another page, and the editor has text that the API does not have.
+let private leavesUnsavedText (model: Model) (path: string) =
+  match model.Editor with
+  | Some(Editor.Loaded document) -> Route.parse path <> model.Router.Route && Editor.needsSave document
+  | _ -> false
+
 let rec update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
+  | Router((Router.LinkFollowed path | Router.UrlChanged path) as routerMsg) when leavesUnsavedText model path ->
+    match model.Editor with
+    | Some editor ->
+      let editor, effect = Editor.update (Editor.LeaveRequested path) editor
+      let next = { model with Editor = Some editor }
+      let calls = effect |> Option.toList |> List.collect (function Editor.Save request -> [ SavePost request ] | Editor.Autosave _ -> [])
+
+      match routerMsg, calls with
+      | Router.UrlChanged _, calls -> next, Some(Navigate(Router.PushUrl(Route.path model.Router.Route), calls))
+      | Router.LinkFollowed _, [] -> next, None
+      | Router.LinkFollowed _, calls -> next, Some(Send calls)
+    | None -> model, None
   | Router msg ->
     let router, effect = Router.update msg model.Router
 
@@ -141,16 +159,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       else
         model, []
 
-    // The editor that the author leaves can have text that the API does not have.
-    let flush =
-      match model.Editor with
-      | Some editor when router.Route <> model.Router.Route ->
-        Editor.unsaved editor |> Option.map SavePost |> Option.toList
-      | _ -> []
-
     let calls =
       if model.Session.Status <> Session.Starting then
-        pageCalls @ flush
+        pageCalls
       else
         []
 
@@ -211,9 +222,11 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       let editor, effect = Editor.update msg editor
       let next = { model with Editor = Some editor }
 
-      match msg with
-      | Editor.Answered(_, Error Api.Refused)
-      | Editor.SaveAnswered(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
+      match msg, editor with
+      | Editor.Answered(_, Error Api.Refused), _
+      | Editor.SaveAnswered(_, _, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
+      | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
+        update (Router(Router.LinkFollowed path)) next
       | _ ->
         next,
         effect
