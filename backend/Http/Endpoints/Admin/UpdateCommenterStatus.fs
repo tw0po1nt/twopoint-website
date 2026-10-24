@@ -1,10 +1,10 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -42,7 +42,7 @@ type UpdateCommenterStatus(
       Auth.runIfAuthorized logger req claimsPrincipal op
       <| fun _ -> cancellableTask {
         let response = req.CreateResponse HttpStatusCode.OK
-        logger.LogInformation("Processing '{op}' request", op)
+        logger.LogInformation("Processing '{op}' request with validation id '{validationId}'", op, validationId)
         let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         let! json = req.ReadFromJsonAsync<UpdateCommenterStatusJson> ct
@@ -75,8 +75,9 @@ type UpdateCommenterStatus(
           match statusUpdateResult with
           | Ok _ ->
             { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic (UpdateCommenterStatus.Error.CommenterNotFound _)) ->
-            { Success = false; Message = Some "Commenter not found"; Data = None }, HttpStatusCode.NotFound
+          | Error (Logic (UpdateCommenterStatus.Error.CommenterNotFound validationId)) ->
+            let errorMessage = $"Commenter '{validationId.ToString()}' not found"
+            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
           | Error (Logic (UpdateCommenterStatus.Error.ChangeNotAllowed (current, requested))) ->
             let errorMessage = $"Commenter is {current} and cannot become {requested}"
             { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.Conflict

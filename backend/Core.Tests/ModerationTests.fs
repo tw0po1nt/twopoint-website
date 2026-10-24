@@ -241,7 +241,7 @@ let private statusTests =
       | other -> failtestf "Expected Updated, got %A" other
     }
 
-    test "untrust makes a trusted commenter new, and leaves each comment as it was" {
+    test "a change from trusted to new makes the commenter new, and leaves each comment as it was" {
       let dependencies = FakeStatusDependencies (Some (commenter CommenterStatus.Trusted))
 
       match updateStatus dependencies CommenterStatus.New with
@@ -251,7 +251,7 @@ let private statusTests =
       | other -> failtestf "Expected Updated, got %A" other
     }
 
-    test "a second trust or untrust keeps the status" {
+    test "a second change to trusted or to new keeps the status" {
       for status in [ CommenterStatus.New; CommenterStatus.Trusted ] do
         let dependencies = FakeStatusDependencies (Some (commenter status))
 
