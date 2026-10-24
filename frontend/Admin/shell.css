@@ -224,6 +224,18 @@
   overflow-wrap: anywhere;
 }
 
+.row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.filter-bar {
+  margin-bottom: var(--s-4);
+}
+
 .queue-row .actions {
   display: flex;
   flex-wrap: wrap;

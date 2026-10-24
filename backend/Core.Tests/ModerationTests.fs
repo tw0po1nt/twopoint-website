@@ -135,5 +135,25 @@ let private queueTests =
     }
   ]
 
+type private FakePostCommentsDependencies(post : Post, comments : Comment list) =
+  interface GetCommentsForPost.Dependencies with
+    member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
+    member _.GetCommentsForPost _ _ = CancellableTaskResult.singleton comments
+
+let private postCommentsTests =
+  testList "GetCommentsForPost" [
+    test "the comments of a post come oldest first" {
+      let newest = comment (Guid.NewGuid().ToString()) "2026-02-03T00:00:00.0000000Z" CommentApproval.Rejected
+      let oldest = comment (Guid.NewGuid().ToString()) "2026-02-01T00:00:00.0000000Z" CommentApproval.Approved
+      let middle = comment (Guid.NewGuid().ToString()) "2026-02-02T00:00:00.0000000Z" CommentApproval.New
+      let dependencies = FakePostCommentsDependencies (olderPost, [ newest; oldest; middle ])
+
+      Expect.equal
+        (GetCommentsForPost.withDependencies dependencies [] (olderPost.Id.ToString()) CancellationToken.None).Result
+        (Ok (Some [ oldest; middle; newest ]))
+        "Expected the oldest comment first"
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Moderation" [ approvalTests; queueTests ]
+let tests = testList "Moderation" [ approvalTests; queueTests; postCommentsTests ]

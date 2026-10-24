@@ -14,7 +14,7 @@ let private queued id status : Api.QueuedComment =
           { Email = "ada@example.com"
             Name = "Ada"
             Status = status }
-        Status = "new"
+        Status = Api.CommentApproval.New
         Content = "A comment" } }
 
 let private first = queued "first" Api.New
@@ -40,7 +40,7 @@ let tests =
     test "Approve sends the approval, and the answer removes the row and lowers the navigation count" {
       let model, effect = send (Queue.Chosen("first", Queue.Approve)) (loaded ())
       Expect.equal effect (Some(Shell.Send [ Shell.Moderate(first, Queue.Approve) ])) "The approval call"
-      Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists Queue.isSending) "The buttons are off"
+      Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists (fun row -> Queue.sends row.State)) "The buttons are off"
       Expect.equal (Queue.count model.Queue) (Some 2) "The count stays until the answer"
 
       let model, effect = send (Queue.Done("first", Queue.Approve, Ok())) model
@@ -68,7 +68,7 @@ let tests =
       let model, _ = send (Queue.Done("first", Queue.Approve, Error(Api.Failed "Comment is approved and cannot become approved"))) model
       let row = Queue.tryFind "first" model.Queue
       Expect.equal
-        (row |> Option.bind Queue.reason)
+        (row |> Option.bind (fun row -> Queue.failure row.State))
         (Some "The approval did not complete. Comment is approved and cannot become approved")
         "The reason"
       Expect.equal (Queue.count model.Queue) (Some 2) "The count stays"

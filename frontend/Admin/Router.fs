@@ -30,6 +30,7 @@ let title (route: Route) =
   | Dashboard -> "Dashboard"
   | Posts -> "Posts"
   | Post slug -> slug
+  | PostComments slug -> $"Comments on {slug}"
   | ModerationQueue -> "Moderation queue"
   | Commenters -> "Commenters"
   | Series -> "Series"
@@ -42,6 +43,7 @@ let showsNavigation (route: Route) =
   | Post _ -> false
   | Dashboard
   | Posts
+  | PostComments _
   | ModerationQueue
   | Commenters
   | Series
@@ -51,7 +53,8 @@ let showsNavigation (route: Route) =
 
 let isCurrent (item: Route) (route: Route) =
   match route with
-  | Post _ -> item = Posts
+  | Post _
+  | PostComments _ -> item = Posts
   | _ -> item = route
 
 /// A tab of the tab bar of a phone.

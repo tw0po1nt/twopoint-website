@@ -96,6 +96,7 @@ module GetCommentsForPost =
         post
         |> Option.traverseCancellableTaskResult (dependencies.GetCommentsForPost approvals)
         |> CancellableTaskResult.mapError QueryError.Dependency
+        |> CancellableTaskResult.map (Option.map (List.sortBy _.CreatedDate))
     }
 
 // ====================================================================================================================

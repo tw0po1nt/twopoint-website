@@ -64,14 +64,14 @@ let tryFind (commentId: string) (model: Model) =
   | Waiting
   | NotLoaded _ -> None
 
-let isSending (row: Row) =
-  match row.State with
+let sends (state: RowState) =
+  match state with
   | Sending _ -> true
   | Ready
   | NotDone _ -> false
 
-let reason (row: Row) =
-  match row.State with
+let failure (state: RowState) =
+  match state with
   | NotDone(Approve, reason) -> Some $"The approval did not complete. {reason}"
   | NotDone(Reject, reason) -> Some $"The rejection did not complete. {reason}"
   | NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"

@@ -8,6 +8,7 @@ let private routes =
   [ Dashboard, "/"
     Posts, "/posts"
     Post "fable-reminders-part-2", "/posts/fable-reminders-part-2"
+    PostComments "fable-reminders-part-2", "/posts/fable-reminders-part-2/comments"
     ModerationQueue, "/comments"
     Commenters, "/commenters"
     Series, "/series"
@@ -31,6 +32,8 @@ let tests =
     test "the slug of a post is decoded from the path, and encoded into it" {
       Expect.equal (Route.parse "/posts/hello%20world") (Post "hello world") "The slug is decoded"
       Expect.equal (Route.path (Post "hello world")) "/posts/hello%20world" "The slug is encoded"
+      Expect.equal (Route.parse "/posts/hello%20world/comments") (PostComments "hello world") "The comments decode it"
+      Expect.equal (Route.path (PostComments "hello world")) "/posts/hello%20world/comments" "The comments encode it"
     }
 
     test "an unknown path keeps the path" {

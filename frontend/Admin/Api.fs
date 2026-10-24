@@ -27,11 +27,17 @@ type Commenter =
     Name: string
     Status: CommenterStatus }
 
+[<RequireQualifiedAccess>]
+type CommentApproval =
+  | New
+  | Approved
+  | Rejected
+
 type Comment =
   { Id: string
     CreatedDate: string
     Commenter: Commenter
-    Status: string
+    Status: CommentApproval
     Content: string }
 
 type QueuedComment =
@@ -81,9 +87,25 @@ let private commenterStatus: Decoder<CommenterStatus> =
     | "banned" -> Decode.succeed Banned
     | _ -> Decode.fail $"The commenter status '{name}' is not known.")
 
+let private commentApprovalName (approval: CommentApproval) =
+  match approval with
+  | CommentApproval.New -> "new"
+  | CommentApproval.Approved -> "approved"
+  | CommentApproval.Rejected -> "rejected"
+
+let private commentApproval: Decoder<CommentApproval> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "new" -> Decode.succeed CommentApproval.New
+    | "approved" -> Decode.succeed CommentApproval.Approved
+    | "rejected" -> Decode.succeed CommentApproval.Rejected
+    | _ -> Decode.fail $"The comment approval '{name}' is not known.")
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
+  |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
 
 let inline private request<'T>
   (method: HttpMethod)
@@ -133,8 +155,11 @@ let private act (method: HttpMethod) (api: string) (token: string) (path: string
       | _ -> Error Invalid)
   )
 
-let private commentPath (comment: QueuedComment) =
-  $"internal/posts/{JS.encodeURIComponent comment.PostSlug}/comments/{JS.encodeURIComponent comment.Comment.Id}"
+let private commentsPath (slug: string) =
+  $"internal/posts/{JS.encodeURIComponent slug}/comments"
+
+let private commentPath (slug: string) (comment: Comment) =
+  $"{commentsPath slug}/{JS.encodeURIComponent comment.Id}"
 
 let getPosts (api: string) (token: string) : JS.Promise<Result<Post list, Failure>> =
   send HttpMethod.GET api token "internal/posts"
@@ -153,10 +178,14 @@ let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failu
 let getModerationQueue (api: string) (token: string) : JS.Promise<Result<QueuedComment list, Failure>> =
   send HttpMethod.GET api token "internal/comments"
 
+let getPostComments (api: string) (token: string) (slug: string) : JS.Promise<Result<Comment list, Failure>> =
+  send HttpMethod.GET api token (commentsPath slug)
+
 let changeApproval
   (api: string)
   (token: string)
-  (comment: QueuedComment)
+  (slug: string)
+  (comment: Comment)
   (approval: Approval)
   : JS.Promise<Result<unit, Failure>> =
   let value =
@@ -167,7 +196,7 @@ let changeApproval
   Encode.object [ "approval", Encode.string value ]
   |> Encode.toString 0
   |> Some
-  |> act HttpMethod.PUT api token (commentPath comment)
+  |> act HttpMethod.PUT api token (commentPath slug comment)
 
-let deleteComment (api: string) (token: string) (comment: QueuedComment) : JS.Promise<Result<unit, Failure>> =
-  act HttpMethod.DELETE api token (commentPath comment) None
+let deleteComment (api: string) (token: string) (slug: string) (comment: Comment) : JS.Promise<Result<unit, Failure>> =
+  act HttpMethod.DELETE api token (commentPath slug comment) None
