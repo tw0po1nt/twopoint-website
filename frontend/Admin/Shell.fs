@@ -5,8 +5,8 @@ module TwoPoint.Admin.Shell
 type Call =
   | LoadDashboard
   | LoadQueue
-  | TrustCommenter of comment: Api.QueuedComment
-  | Moderate of comment: Api.QueuedComment * Queue.Action
+  | TrustCommenter of comment: Api.PostedComment
+  | Moderate of comment: Api.PostedComment * Queue.Action
   | LoadPostComments of slug: string
   | ModeratePostComment of slug: string * comment: Api.Comment * Queue.Action
   | LoadCommenters
@@ -51,7 +51,6 @@ type Effect =
   | SignIn of Session.Effect<Call>
   | Send of calls: Call list
 
-/// The page of the route gets a new model, and the calls load it.
 let private enter (route: Route) (model: Model) =
   let left =
     { model with
@@ -258,7 +257,6 @@ let deleteChosen (model: Model) =
   | Some SignOutDialog, _
   | None, _ -> None
 
-/// None when the commenter page has no commenter.
 let deleteCommenterChosen (model: Model) =
   match model.Overlay, model.Router.Route with
   | Some DeleteCommenterDialog, Route.Commenter _ ->

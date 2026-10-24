@@ -21,7 +21,6 @@ type Page =
 type Model = { Id: string; Page: Page }
 
 type Msg =
-  /// An answer for another commenter comes after the author left its page, and changes nothing.
   | Answered of commenterId: string * Result<Api.CommenterComments, Api.Failure>
   /// A delete comes here only after the confirmation.
   | Chosen of Action
@@ -46,7 +45,6 @@ let label (action: Action) =
   | Unban -> "Unban"
   | Delete -> "Delete"
 
-/// None for a delete, because a delete removes the commenter.
 let statusAfter (action: Action) =
   match action with
   | Trust -> Some Api.Trusted
@@ -57,7 +55,7 @@ let statusAfter (action: Action) =
 
 /// The ban rejects each new comment in the backend, so the page does the same.
 let private changed (status: Api.CommenterStatus) (page: Api.CommenterComments) =
-  let reject (comment: Api.QueuedComment) =
+  let reject (comment: Api.PostedComment) =
     match status, comment.Comment.Status with
     | Api.Banned, Api.CommentApproval.New ->
       { comment with

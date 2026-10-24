@@ -498,7 +498,7 @@ let private commenterAction (dispatch: Shell.Msg -> unit) (sending: bool) (actio
     .Has(Fragment() { Commenter.label action })
 
 [<SolidComponent>]
-let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.QueuedComment) =
+let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedComment) =
   let route = Shell.Router >> dispatch
 
   article (id = comment.Comment.Id, class' = "card card-body queue-row") {

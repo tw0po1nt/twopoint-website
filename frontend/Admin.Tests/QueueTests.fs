@@ -4,7 +4,7 @@ open TwoPoint.Admin
 
 open Expecto
 
-let private queued id (name: string) status : Api.QueuedComment =
+let private queued id (name: string) status : Api.PostedComment =
   { PostSlug = "first-post"
     PostTitle = "First post"
     Comment =
@@ -33,7 +33,7 @@ let private loadedWith comments =
 
 let private loaded () = loadedWith [ first; second ]
 
-let private trusted (comment: Api.QueuedComment) =
+let private trusted (comment: Api.PostedComment) =
   { comment with
       Comment.Commenter.Status = Api.Trusted }
 

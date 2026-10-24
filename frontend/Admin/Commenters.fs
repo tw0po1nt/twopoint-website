@@ -22,7 +22,6 @@ let init =
   { Filter = All
     Commenters = Waiting }
 
-/// The filter stays, so that the author comes back from a commenter page to the same list.
 let reload (model: Model) = { model with Commenters = Waiting }
 
 let filters =

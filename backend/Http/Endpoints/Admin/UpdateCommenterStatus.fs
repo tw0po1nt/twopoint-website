@@ -9,7 +9,6 @@ open TwoPoint.Http.Endpoints
 open Azure.Communication.Email
 open Azure.Data.Tables
 open FirebaseAdmin.Messaging
-open FsToolkit.ErrorHandling
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -61,8 +60,7 @@ type UpdateCommenterStatus(
           new UpdateCommenterStatus.Dependencies with
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-          member _.GetCommentsOfCommenter commenter =
-            postDependencies.GetCommentsOfCommenter commenter |> CancellableTaskResult.map (List.map _.Comment)
+          member _.GetCommentsOfCommenter commenter = postDependencies.GetCommentsOfCommenter commenter
           member _.UpdateCommenterStatus commenter status = postDependencies.UpdateCommenterStatus commenter status
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
         }

@@ -122,7 +122,7 @@ let tests =
 
     test "Approve sends the approval, and the answer approves the row and removes it from the moderation queue" {
       let model, _ = start "/posts/first/comments"
-      let queued: Api.QueuedComment = { PostSlug = "first"; PostTitle = "First"; Comment = waiting }
+      let queued: Api.PostedComment = { PostSlug = "first"; PostTitle = "First"; Comment = waiting }
       let model, _ = Shell.update (Shell.Queue(Queue.Answered(Ok [ queued ]))) model
       let model, _ = send (PostComments.Answered("first", Ok [ waiting; approved; rejected ])) model
 

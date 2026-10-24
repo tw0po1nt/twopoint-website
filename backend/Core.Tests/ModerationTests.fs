@@ -104,7 +104,7 @@ let private approvalTests =
     }
   ]
 
-type private FakeQueueDependencies(comments : QueuedComment list) =
+type private FakeQueueDependencies(comments : PostedComment list) =
   let requests = ResizeArray<CommentApproval list>()
 
   member _.Requests = List.ofSeq requests
@@ -391,11 +391,13 @@ let private commentOf (validationId : string) (id : string) (createdDate : strin
   let posted = comment id createdDate CommentApproval.Approved
   { posted with Commenter = { posted.Commenter with ValidationId = CommenterValidationId.create validationId |> ok } }
 
-/// One store for the delete and for the verification after it, so that the verification sees the delete.
-type private FakeCommenterStore(commenters : Commenter list, comments : Comment list) =
+type private FakeCommenterStore(commenters : Commenter list, comments : Comment list, postedAfterFirstRead : Comment list) =
   let commenters = ResizeArray commenters
   let comments = ResizeArray comments
+  let postedAfterFirstRead = ResizeArray postedAfterFirstRead
   let sent = ResizeArray<Commenter>()
+
+  new(commenters, comments) = FakeCommenterStore(commenters, comments, [])
 
   member _.Commenters = List.ofSeq commenters
   member _.Comments = List.ofSeq comments
@@ -405,10 +407,13 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
     member _.GetCommenterByValidationId validationId =
       commenters |> Seq.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
     member _.GetCommentsOfCommenter commenter =
-      comments
-      |> Seq.filter (fun comment -> comment.Commenter.ValidationId = commenter.ValidationId)
-      |> List.ofSeq
-      |> CancellableTaskResult.singleton
+      let read =
+        comments
+        |> Seq.filter (fun comment -> comment.Commenter.ValidationId = commenter.ValidationId)
+        |> List.ofSeq
+      comments.AddRange postedAfterFirstRead
+      postedAfterFirstRead.Clear()
+      CancellableTaskResult.singleton read
     member _.DeleteComment comment =
       comments.RemoveAll(fun stored -> stored.Id = comment.Id) |> ignore
       CancellableTaskResult.singleton ()
@@ -463,6 +468,16 @@ let private deleteTests =
       | other -> failtestf "Expected Validated, got %A" other
     }
 
+    test "a comment that the commenter posts during the delete is also removed" {
+      let posted = commentOf commenterId "5c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f45" "2026-02-05T00:00:00.0000000Z"
+      let store = FakeCommenterStore ([ commenter CommenterStatus.New ], commentsOfCommenter @ [ otherComment ], [ posted ])
+
+      match deleteCommenter store with
+      | Ok (DeleteCommenter.Event.Deleted _) ->
+        Expect.equal store.Comments [ otherComment ] "Expected only the comment of another commenter"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
     test "a missing commenter gets no delete" {
       let store = FakeCommenterStore ([], [ otherComment ])
 
@@ -480,7 +495,7 @@ type private FakeCommentersDependencies(commenters : Commenter list) =
   interface GetAllCommenters.Dependencies with
     member _.GetAllCommenters () = CancellableTaskResult.singleton commenters
 
-type private FakeCommenterDependencies(existing : Commenter option, comments : QueuedComment list) =
+type private FakeCommenterDependencies(existing : Commenter option, comments : PostedComment list) =
   interface GetCommenter.Dependencies with
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
     member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments

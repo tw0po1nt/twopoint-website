@@ -731,12 +731,20 @@ module DeleteCommenter =
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    // The commenter goes last, so that a second try after a failed delete finds the comments that are left.
-    let handleCommenterDeleted (Success.Deleted (commenter, comments)) : DependencyResult<Commenter> =
+    let deleteComments (comments : Comment list) : DependencyResult<unit> =
       cancellableTaskResult {
         for comment in comments do
           do! dependencies.DeleteComment comment
+      }
+
+    // The commenter goes after its comments, so that a second try after a failed delete finds the comments that are left.
+    let handleCommenterDeleted (Success.Deleted (commenter, comments)) : DependencyResult<Commenter> =
+      cancellableTaskResult {
+        do! deleteComments comments
         do! dependencies.DeleteCommenter commenter
+        // A comment that the commenter posted during the delete is not in the first read.
+        let! postedDuringDelete = dependencies.GetCommentsOfCommenter commenter
+        do! deleteComments postedDuringDelete
         return commenter
       }
 

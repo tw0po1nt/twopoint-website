@@ -42,14 +42,14 @@ type Comment =
     Status: CommentApproval
     Content: string }
 
-type QueuedComment =
+type PostedComment =
   { PostSlug: string
     PostTitle: string
     Comment: Comment }
 
 type CommenterComments =
   { Commenter: Commenter
-    Comments: QueuedComment list }
+    Comments: PostedComment list }
 
 type Approval =
   | Approved
@@ -181,7 +181,7 @@ let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failu
       | _ -> Error Invalid)
   )
 
-let getModerationQueue (api: string) (token: string) : JS.Promise<Result<QueuedComment list, Failure>> =
+let getModerationQueue (api: string) (token: string) : JS.Promise<Result<PostedComment list, Failure>> =
   send HttpMethod.GET api token "internal/comments"
 
 let getPostComments (api: string) (token: string) (slug: string) : JS.Promise<Result<Comment list, Failure>> =

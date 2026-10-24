@@ -15,7 +15,7 @@ let private ada = commenter "ada" Api.New
 let private grace = commenter "grace" Api.Trusted
 let private alan = commenter "alan" Api.Banned
 
-let private queued id (commenter: Api.Commenter) approval : Api.QueuedComment =
+let private posted id (commenter: Api.Commenter) approval : Api.PostedComment =
   { PostSlug = "first"
     PostTitle = "First"
     Comment =
@@ -25,8 +25,8 @@ let private queued id (commenter: Api.Commenter) approval : Api.QueuedComment =
         Status = approval
         Content = "A comment" } }
 
-let private waiting = queued "waiting" ada Api.CommentApproval.New
-let private approved = queued "approved" ada Api.CommentApproval.Approved
+let private waiting = posted "waiting" ada Api.CommentApproval.New
+let private approved = posted "approved" ada Api.CommentApproval.Approved
 
 let private start (path: string) =
   let model, _ = Shell.init path

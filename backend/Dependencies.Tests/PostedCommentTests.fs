@@ -1,4 +1,4 @@
-module TwoPoint.Dependencies.Tests.QueuedCommentTests
+module TwoPoint.Dependencies.Tests.PostedCommentTests
 
 open TwoPoint.Core.Shared
 open TwoPoint.Dependencies.Posts
@@ -30,13 +30,13 @@ let private status =
     Approval = "new" }
 
 let private title (post : DbPost option) =
-  comment.ToQueuedComment(post, status, commenter)
+  comment.ToPostedComment(post, status, commenter)
   |> Result.map (_.PostTitle >> NonEmptyString.value)
 
 [<Tests>]
 let tests =
-  testList "QueuedComment" [
-    test "a queued comment has the title of its post" {
+  testList "PostedComment" [
+    test "a posted comment has the title of its post" {
       let post = { DbPost.Title = "First post"; Slug = "first-post"; CreatedDate = date }
       Expect.equal (title (Some post)) (Ok "First post") "Expected the post title"
     }

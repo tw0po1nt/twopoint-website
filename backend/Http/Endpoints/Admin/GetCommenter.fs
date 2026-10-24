@@ -18,7 +18,7 @@ open System.Threading
 
 type CommenterCommentsDto =
   { Commenter : AdminCommenterDto
-    Comments : QueuedCommentDto list }
+    Comments : PostedCommentDto list }
 
 [<AutoOpen>]
 module CommenterCommentsExt =
@@ -70,7 +70,7 @@ type GetCommenter (
           new GetCommenterQuery.Dependencies with
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-          member _.GetCommentsOfCommenter commenter = postDependencies.GetCommentsOfCommenter commenter
+          member _.GetCommentsOfCommenter commenter = postDependencies.GetPostedCommentsOfCommenter commenter
         }
 
         let! commenterResult = getCommenter validationId

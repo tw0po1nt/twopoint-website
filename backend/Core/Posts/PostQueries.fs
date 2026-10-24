@@ -106,12 +106,12 @@ module GetCommentsForPost =
 [<RequireQualifiedAccess>]
 module GetModerationQueue =
 
-  type Query = unit -> CancellableTask<QueryResult<QueuedComment list>>
+  type Query = unit -> CancellableTask<QueryResult<PostedComment list>>
 
   type Dependencies =
     abstract member GetCommentsOnAllPosts:
       approvals: CommentApproval list
-        -> DependencyResult<QueuedComment list>
+        -> DependencyResult<PostedComment list>
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun () ->
@@ -141,14 +141,10 @@ module GetAllCommenters =
 // Get commenter
 // ====================================================================================================================
 
-// Input
-
-type ValidationId = string
-
 [<RequireQualifiedAccess>]
 module GetCommenter =
 
-  type Query = ValidationId -> CancellableTask<QueryResult<CommenterComments option>>
+  type Query = string -> CancellableTask<QueryResult<CommenterComments option>>
 
   type Dependencies =
     abstract member GetCommenterByValidationId:
@@ -156,7 +152,7 @@ module GetCommenter =
         -> DependencyResult<Commenter option>
     abstract member GetCommentsOfCommenter:
       commenter: Commenter
-        -> DependencyResult<QueuedComment list>
+        -> DependencyResult<PostedComment list>
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun validationId -> cancellableTaskResult {
