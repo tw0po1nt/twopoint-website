@@ -27,20 +27,17 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
       try
         let! blobs = client.GetBlobsAsync(cancellationToken = ct) |> TaskSeq.toListAsync
 
-        let texts = ResizeArray()
+        let posts = ResizeArray()
 
         for blob in blobs |> List.filter (fun blob -> blob.Name.EndsWith extension && not (blob.Name.Contains '/')) do
-          let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-          texts.Add(blob.Name.Substring(0, blob.Name.Length - extension.Length), content.Value.Content.ToString())
+          match Slug.create (blob.Name.Substring(0, blob.Name.Length - extension.Length)) with
+          | Ok slug ->
+            let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
+            posts.Add { Slug = slug; Text = content.Value.Content.ToString() }
+          | Error reason ->
+            logger.LogWarning("The blob '{blobName}' in '{container}' is not a post: {reason}", blob.Name, container, reason)
 
-        return!
-          List.ofSeq texts
-          |> List.traverseResultM (fun (slug, text) ->
-            Slug.create slug
-            |> Result.map (fun slug -> { Slug = slug; Text = text })
-            |> Result.mapError (fun reason ->
-              { Dependency = Dependency.BlobStorage
-                Type = DependencyErrorType.Validation $"The blob '{slug}{extension}' in '{container}' is not a post: {reason}" }))
+        return List.ofSeq posts
       with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
         return []
     }
