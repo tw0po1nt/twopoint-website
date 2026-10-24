@@ -20,6 +20,7 @@
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />
     <Compile Include="Commenter.fs" />
+    <Compile Include="Subscriptions.fs" />
     <Compile Include="Shell.fs" />
     <Compile Include="Menu.fs" />
     <Compile Include="Icon.fs" />

@@ -104,7 +104,7 @@ module CreateSubscription =
           | New newSubscription ->
             dependencies.CreateSubscription newSubscription utcNow |> CancellableTaskResult.map Event.Created
           | Reactivate existing ->
-            dependencies.ActivateSubscription existing |> CancellableTaskResult.map Event.Reactivated
+            dependencies.ActivateSubscription (Subscription.reactivate existing) |> CancellableTaskResult.map Event.Reactivated
         )
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult id)
@@ -152,7 +152,9 @@ module CancelSubscription =
   // Output
 
   type Error = SubscriptionNotFound of SubscriptionCancellation 
-  type Success = Cancelled of Subscription
+  type Success =
+    | Cancelled of Subscription
+    | AlreadyCanceled of Subscription
   type Decision = Decision<Success, Error>
   type Event = Cancelled of Subscription
   
@@ -167,9 +169,10 @@ module CancelSubscription =
   module Logic =
     let decide : Logic = 
       fun existingSubscription cancellation ->
-        existingSubscription 
+        existingSubscription
         |> Result.requireSome (SubscriptionNotFound cancellation)
-        |> Result.map Success.Cancelled
+        |> Result.map (fun subscription ->
+          if subscription.IsActive then Success.Cancelled subscription else Success.AlreadyCanceled subscription)
    
   // Action
 
@@ -178,6 +181,7 @@ module CancelSubscription =
   type Dependencies =
     abstract member GetSubscriptionByEmail: EmailAddress -> DependencyResult<Subscription option>
     abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member GetUtcNow: unit -> DateTime
     abstract member DeactivateSubscription: Subscription -> DependencyResult<Subscription>
 
   let withDependencies (dependencies : Dependencies) : Action =
@@ -197,8 +201,11 @@ module CancelSubscription =
 
       return!
         decision
-        |> Result.map (fun (Success.Cancelled subscription) -> subscription)
-        |> Result.traverseCancellableTask dependencies.DeactivateSubscription 
+        |> Result.traverseCancellableTask (function
+          | Success.Cancelled subscription ->
+            dependencies.DeactivateSubscription (Subscription.cancel (dependencies.GetUtcNow()) subscription)
+          | Success.AlreadyCanceled subscription -> CancellableTaskResult.singleton subscription
+        )
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Cancelled)
           (Logic >> ActionResult.failure)

@@ -117,6 +117,7 @@ test('a link in the More sheet closes the sheet, shows its page, and marks More'
   assert.deepEqual(tabs().filter((tab) => tab.current === 'page').map((tab) => tab.text), ['More']);
 });
 
-test('a change of page calls the API no more', () => {
-  assert.equal(calls.length, 2);
+test('a change of page calls the API only for a page with a list of its own', () => {
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].url, `${config.api}/api/internal/subscriptions`);
 });

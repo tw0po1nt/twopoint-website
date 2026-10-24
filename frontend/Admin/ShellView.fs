@@ -23,6 +23,9 @@ let private fail (call: Shell.Call) =
   | Shell.LoadCommenter commenterId -> Shell.Commenter(Commenter.Answered(commenterId, Error Api.Unanswered))
   | Shell.ChangeCommenter(commenterId, action) ->
     Shell.Commenter(Commenter.Done(commenterId, action, Error Api.Unanswered))
+  | Shell.LoadSubscriptions -> Shell.Subscriptions(Subscriptions.Answered(Error Api.Unanswered))
+  | Shell.LoadSubscriptionDeliveries subscriptionId ->
+    Shell.Subscriptions(Subscriptions.DeliveriesAnswered(subscriptionId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -66,6 +69,12 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   | Shell.ChangeCommenter(commenterId, action) ->
     changeCommenter token commenterId action
     |> Promise.map (fun result -> Shell.Commenter(Commenter.Done(commenterId, action, result)))
+  | Shell.LoadSubscriptions ->
+    Api.getSubscriptions (Config.api ()) token
+    |> Promise.map (Subscriptions.Answered >> Shell.Subscriptions)
+  | Shell.LoadSubscriptionDeliveries subscriptionId ->
+    Api.getSubscriptionDeliveries (Config.api ()) token subscriptionId
+    |> Promise.map (fun result -> Shell.Subscriptions(Subscriptions.DeliveriesAnswered(subscriptionId, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
 let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
@@ -628,6 +637,150 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
     postList dispatch model
   }
 
+let private subscriptionTone (subscription: Api.Subscription) =
+  if subscription.IsActive then Parts.Good else Parts.Plain
+
+let private countsText (model: Subscriptions.Model) =
+  match Subscriptions.counts model with
+  | Some counts -> $"{counts.Active} active and {counts.Inactive} inactive"
+  | None -> "The counts come with the list."
+
+[<SolidComponent>]
+let private subscriptionsToolbar (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send = Shell.Subscriptions >> dispatch
+
+  div (class' = "filter-bar toolbar") {
+    p (class' = "muted", ariaLive = "polite") { countsText (model ()).Subscriptions }
+
+    Parts
+      .Search(
+        label = "Search the subscriptions",
+        placeholder = "Email address or name",
+        value = (fun () -> (model ()).Subscriptions.Search),
+        onInput = fun event -> send (Subscriptions.Searched((event.target :?> HTMLInputElement).value))
+      )
+      .View()
+
+    Parts.tabs "Status" Subscriptions.filters (fun () -> (model ()).Subscriptions.Filter) (Subscriptions.Filtered >> send)
+  }
+
+[<SolidComponent>]
+let private subscriptionRow (dispatch: Shell.Msg -> unit) (subscription: Api.Subscription) =
+  article (id = subscription.Id, class' = "card card-body queue-row subscription-row") {
+    div (class' = "row-top") {
+      div (class' = "grow") {
+        p (class' = "strong ellipsis") {
+          subscription.Email
+          " "
+          Parts.badge (subscriptionTone subscription) (Subscriptions.statusText subscription)
+        }
+
+        p (class' = "muted small ellipsis") { subscription.Name |> Option.defaultValue "No name" }
+      }
+
+      Parts
+        .Button(
+          kind = Parts.Ghost,
+          size = Parts.Small,
+          onClick = fun _ -> dispatch (Shell.Subscriptions(Subscriptions.Opened subscription.Id))
+        )
+        .Has(Fragment() { "Details" })
+    }
+
+    p (class' = "muted small") { $"Subscribed: {Commenters.dateText subscription.CreatedDate}" }
+  }
+
+[<SolidComponent>]
+let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions.Model) =
+  match model.Subscriptions, Subscriptions.shown model with
+  | Subscriptions.Waiting, _ ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Subscriptions.Loaded _, [] ->
+    Fragment() {
+      Parts.emptyState
+        Icon.Inbox
+        (Subscriptions.emptyText model.Filter model.Search)
+        (p () { "Each reader who subscribes to the newsletter comes here." })
+    }
+  | Subscriptions.Loaded _, subscriptions ->
+    Fragment() {
+      div (class' = "queue") {
+        For(each = Array.ofList subscriptions) { yield fun subscription _ -> subscriptionRow dispatch subscription }
+      }
+    }
+  | Subscriptions.NotLoaded reason, _ ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The subscriptions did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private deliveryRow (delivery: Api.Delivery) =
+  li (class' = "delivery") {
+    Parts.badge Parts.Plain (Subscriptions.deliveryText delivery.Type)
+    " "
+    a (href = $"{site}/posts/{delivery.PostSlug}/", target = "_blank", rel = "noopener") { delivery.PostTitle }
+    span (class' = "muted small") { $" on {Commenters.dateText delivery.CreatedDate}" }
+  }
+
+[<SolidComponent>]
+let private deliveryList (deliveries: Subscriptions.Deliveries) =
+  match deliveries with
+  | Subscriptions.DeliveriesWaiting ->
+    Fragment() {
+      div (ariaBusy = true) {
+        Parts.skeleton "60%"
+        Parts.skeleton "40%"
+      }
+    }
+  | Subscriptions.DeliveriesLoaded [] -> Fragment() { p (class' = "muted") { "This subscription has no delivery." } }
+  | Subscriptions.DeliveriesLoaded deliveries ->
+    Fragment() { ul (class' = "deliveries") { For(each = Array.ofList deliveries) { yield fun delivery _ -> deliveryRow delivery } } }
+  | Subscriptions.DeliveriesNotLoaded reason ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The deliveries did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private subscriptionDetails (model: Subscriptions.Model) =
+  match Subscriptions.tryOpened model, model.Sheet with
+  | Some subscription, Some sheet ->
+    Fragment() {
+      dl (class' = "fields") {
+        dt () { "Email" }
+        dd () { subscription.Email }
+        dt () { "Name" }
+        dd () { subscription.Name |> Option.defaultValue "No name" }
+        dt () { "Status" }
+        dd () { Parts.badge (subscriptionTone subscription) (Subscriptions.statusText subscription) }
+        dt () { "Subscribed" }
+        dd () { Commenters.dateText subscription.CreatedDate }
+
+        Show(when' = subscription.CanceledDate.IsSome) {
+          dt () { "Canceled" }
+          dd () { subscription.CanceledDate |> Option.map Commenters.dateText |> Option.defaultValue "" }
+        }
+      }
+
+      h3 () { "Deliveries" }
+      deliveryList sheet.Deliveries
+    }
+  | _ -> Fragment() { p (class' = "muted") { "This subscription is not in the list." } }
+
+[<SolidComponent>]
+let private subscriptionSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Subscriptions Subscriptions.Closed)
+
+  Parts.sheet
+    "subscription-sheet"
+    (fun () -> (model ()).Subscriptions.Sheet.IsSome)
+    close
+    "Subscription"
+    (Fragment() {
+      Parts.sheetHead "Subscription" close
+      Parts.sheetBody (subscriptionDetails (model ()).Subscriptions)
+    })
+
 [<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
@@ -667,9 +820,9 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
           "."
         })
     }
+  | Subscriptions -> Fragment() { subscriptionList dispatch model.Subscriptions }
   | Post _
-  | Series
-  | Subscriptions as route ->
+  | Series as route ->
     Fragment() {
       Parts.emptyState (Icon.ofRoute route) "This page is empty." (p () { "Its content comes in a later version." })
     }
@@ -848,6 +1001,10 @@ let view (signIn: SignIn) =
       main (class' = "screen") {
         banner dispatch (model ()).Session
         div (class' = "page-head") { h1 () { Router.title (current ()) } }
+
+        // The search input stays outside the page, so a typed letter does not replace the input.
+        Show(when' = (current () = Subscriptions)) { subscriptionsToolbar dispatch model }
+
         content dispatch (model ())
       }
     }
@@ -904,4 +1061,5 @@ let view (signIn: SignIn) =
 
     deleteDialog dispatch model
     deleteCommenterDialog dispatch model
+    subscriptionSheet dispatch model
   }

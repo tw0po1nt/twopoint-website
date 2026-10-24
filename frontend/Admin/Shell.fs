@@ -13,6 +13,8 @@ type Call =
   | LoadCommenters
   | LoadCommenter of commenterId: string
   | ChangeCommenter of commenterId: string * Commenter.Action
+  | LoadSubscriptions
+  | LoadSubscriptionDeliveries of subscriptionId: string
   | RebuildSite
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -32,6 +34,7 @@ type Model =
     PostComments: PostComments.Model option
     Commenters: Commenters.Model
     Commenter: Commenter.Model option
+    Subscriptions: Subscriptions.Model
     Overlay: Overlay option }
 
 type Msg =
@@ -44,6 +47,7 @@ type Msg =
   | PostComments of PostComments.Msg
   | Commenters of Commenters.Msg
   | Commenter of Commenter.Msg
+  | Subscriptions of Subscriptions.Msg
   | Opened of Overlay
   /// The browser closed the overlay, for example after the Esc key.
   | Closed of Overlay
@@ -65,11 +69,12 @@ let private enter (route: Route) (model: Model) =
   | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
   | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
+  | Route.Subscriptions ->
+    { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
   | Route.Dashboard
   | Route.Post _
   | Route.ModerationQueue
   | Route.Series
-  | Route.Subscriptions
   | Route.Settings
   | Route.NotFound _ -> left, []
 
@@ -86,6 +91,7 @@ let init (path: string) : Model * Effect option =
     PostComments = None
     Commenters = Commenters.init
     Commenter = None
+    Subscriptions = Subscriptions.init
     Overlay = None }
   |> enter router.Route
   |> fst,
@@ -248,6 +254,17 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       next,
       effect
       |> Option.map (fun (Commenter.Change(commenterId, action)) -> Send [ ChangeCommenter(commenterId, action) ])
+  | Subscriptions msg ->
+    let subscriptions, effect = Subscriptions.update msg model.Subscriptions
+    let next = { model with Subscriptions = subscriptions }
+
+    match msg with
+    | Subscriptions.Answered(Error Api.Refused)
+    | Subscriptions.DeliveriesAnswered(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | _ ->
+      next,
+      effect
+      |> Option.map (fun (Subscriptions.LoadDeliveries subscriptionId) -> Send [ LoadSubscriptionDeliveries subscriptionId ])
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None

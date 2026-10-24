@@ -58,4 +58,17 @@ type Subscription =
     CreatedDate : DateTime
     EmailAddress : EmailAddress
     Name : NonEmptyString option
-    IsActive : bool }
+    IsActive : bool
+    CanceledDate : DateTime option }
+
+module Subscription =
+
+  let cancel (canceledDateUtc : DateTime) (subscription : Subscription) =
+    { subscription with IsActive = false; CanceledDate = Some canceledDateUtc }
+
+  let reactivate (subscription : Subscription) =
+    { subscription with IsActive = true; CanceledDate = None }
+
+type DeliveredPost =
+  { Delivery : SubscriptionDelivery
+    PostTitle : NonEmptyString option }
