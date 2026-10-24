@@ -63,6 +63,26 @@ type Approval =
   | Approved
   | Rejected
 
+type Subscription =
+  { Id: string
+    Email: string
+    Name: string option
+    CreatedDate: string
+    IsActive: bool
+    CanceledDate: string option }
+
+[<RequireQualifiedAccess>]
+type DeliveryType =
+  | Welcome
+  | NewPost
+
+type Delivery =
+  { Id: string
+    CreatedDate: string
+    Type: DeliveryType
+    PostSlug: string
+    PostTitle: string }
+
 type Rebuild =
   { Dispatch: string
     ProductionRun: int option }
@@ -125,11 +145,25 @@ let private commentApproval: Decoder<CommentApproval> =
     | "rejected" -> Decode.succeed CommentApproval.Rejected
     | _ -> Decode.fail $"The comment approval '{name}' is not known.")
 
+let private deliveryTypeName (deliveryType: DeliveryType) =
+  match deliveryType with
+  | DeliveryType.Welcome -> "welcome"
+  | DeliveryType.NewPost -> "newpost"
+
+let private deliveryType: Decoder<DeliveryType> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "welcome" -> Decode.succeed DeliveryType.Welcome
+    | "newpost" -> Decode.succeed DeliveryType.NewPost
+    | _ -> Decode.fail $"The delivery type '{name}' is not known.")
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
+  |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
 
 let inline private request<'T>
   (method: HttpMethod)
@@ -247,3 +281,13 @@ let changeCommenterStatus
 
 let deleteCommenter (api: string) (token: string) (commenterId: string) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token (commenterPath commenterId) None
+
+let getSubscriptions (api: string) (token: string) : JS.Promise<Result<Subscription list, Failure>> =
+  send HttpMethod.GET api token "internal/subscriptions"
+
+let getSubscriptionDeliveries
+  (api: string)
+  (token: string)
+  (subscriptionId: string)
+  : JS.Promise<Result<Delivery list, Failure>> =
+  send HttpMethod.GET api token $"internal/subscriptions/{JS.encodeURIComponent subscriptionId}/deliveries"

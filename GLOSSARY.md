@@ -85,7 +85,9 @@ _Avoid_: Release, go live
 ### Subscriptions
 
 **Subscription**:
-The record of one email address that gets posts by email. A subscription is active or inactive.
+The record of one email address that gets posts by email. A subscription is active or inactive. An
+inactive subscription has the canceled date of its last cancellation, and a reactivation clears that
+date.
 _Avoid_: Subscriber, member, signup
 
 **Reactivation**:

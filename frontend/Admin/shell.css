@@ -236,6 +236,34 @@
   margin-bottom: var(--s-4);
 }
 
+.filter-bar.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.filter-bar.toolbar > p {
+  flex-basis: 100%;
+}
+
+.subscription-row .strong .badge {
+  margin-inline-start: var(--s-2);
+}
+
+.delivery .badge {
+  margin-inline-end: var(--s-2);
+}
+
+.deliveries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
 .queue-row .actions {
   display: flex;
   flex-wrap: wrap;
