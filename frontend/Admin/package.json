@@ -16,6 +16,13 @@
   },
   "dependencies": {
     "@azure/msal-browser": "5.25.1",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@lezer/highlight": "1.2.5",
+    "@lezer/markdown": "1.8.1",
     "solid-js": "1.9.17"
   }
 }
