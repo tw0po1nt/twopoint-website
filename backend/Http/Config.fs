@@ -1,7 +1,9 @@
 namespace TwoPoint.Http
 
-open System
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Shared
+
+open System
 
 type AzureConfig =
   { CommsResourceEndpoint : Uri
@@ -24,11 +26,22 @@ type WelcomeConfig =
     NewsletterContainerUri : Uri
     UnsubscribeUri : Uri }
 
+type GitHubAppConfig =
+  { ClientId : string
+    SigningKeyUri : Uri }
+
+/// The local backend needs no GitHub App, because it sends no dispatch.
+type DeployConfig =
+  { ProductionRepo : Repo
+    StagingRepo : Repo
+    GitHubApp : GitHubAppConfig option }
+
 type Config =
   { Azure : AzureConfig
     Firebase : FirebaseConfig
     ValidRedirectUris : ValidRedirectUri list
-    Welcome : WelcomeConfig option }
+    Welcome : WelcomeConfig option
+    Deploy : DeployConfig option }
 
 module Config =
 
@@ -81,10 +94,25 @@ module Config =
             UnsubscribeUri = unsubscribeUri }
       }
 
+      let! deploy = Bind.optSection "Deploy" <| bind {
+        let! productionRepo = Bind.valueAt "ProductionRepo" Bind.repo
+        let! stagingRepo = Bind.valueAt "StagingRepo" Bind.repo
+        let! gitHubApp = Bind.optSection "GitHubApp" <| bind {
+          let! clientId = Bind.valueAt "ClientId" Bind.string
+          let! signingKeyUri = Bind.valueAt "SigningKeyUri" (Bind.uri UriKind.Absolute)
+          return { ClientId = clientId; SigningKeyUri = signingKeyUri }
+        }
+        return
+          { ProductionRepo = productionRepo
+            StagingRepo = stagingRepo
+            GitHubApp = gitHubApp }
+      }
+
       return
         { Azure = azure
           Firebase = firebase
           ValidRedirectUris = validRedirectUris
-          Welcome = welcome }
+          Welcome = welcome
+          Deploy = deploy }
     }
     |> Binder.eval config

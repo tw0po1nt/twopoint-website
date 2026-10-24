@@ -39,6 +39,11 @@ watch. In the `staging` repo, `.github/workflows/backend-staging.yml` deploys th
 Static Web Apps at `https://admin.twopoint.dev` after the backend. `scripts/setup-admin-host.sh`
 sets up that host.
 
+"Rebuild site" on the dashboard sends `workflow_dispatch` to `site.yml` in the two site repos
+through a GitHub App. Key Vault keeps the private key of the app and signs each app JWT.
+`scripts/setup-site-dispatch.sh` sets up the app. The local backend logs each dispatch and sends
+nothing.
+
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build
 identity through OIDC and runs `pull` before `build`. The repo name sets the stage: the `prod`

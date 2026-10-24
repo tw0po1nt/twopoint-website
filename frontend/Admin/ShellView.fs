@@ -12,10 +12,12 @@ open Oxpecker.Solid.Aria
 let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
+  | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
 
 let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
+  | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
 let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()
@@ -201,9 +203,32 @@ let private dashboard (model: Dashboard.Model) =
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The dashboard did not load.").Has(p () { reason }) }
 
 [<SolidComponent>]
-let private content (dispatch: Router.Msg -> unit) (model: Shell.Model) =
+let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) =
+  div (class' = "card card-body rebuild") {
+    div (class' = "rebuild-row") {
+      div (class' = "grow") {
+        h3 () { "Site" }
+        p (class' = "muted small rebuild-text", ariaLive = "polite") { Rebuild.text model }
+      }
+
+      Parts
+        .Button(disabled = Rebuild.isSending model, onClick = fun _ -> dispatch (Shell.Rebuild Rebuild.Clicked))
+        .Has(Fragment() { "Rebuild site" })
+    }
+
+    Show(when' = Rebuild.failed model) { Parts.Alert(tone = Parts.Bad).Has(p () { Rebuild.reason model }) }
+  }
+
+[<SolidComponent>]
+let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
+  let route = Shell.Router >> dispatch
+
   match model.Router.Route with
-  | Dashboard -> dashboard model.Dashboard
+  | Dashboard ->
+    Fragment() {
+      dashboard model.Dashboard
+      rebuild dispatch model.Rebuild
+    }
   | Settings ->
     Fragment() {
       div (class' = "card card-body settings") {
@@ -222,7 +247,7 @@ let private content (dispatch: Router.Msg -> unit) (model: Shell.Model) =
         "No page has this address."
         (p () {
           "Go to the "
-          routeLink dispatch Dashboard "dashboard"
+          routeLink route Dashboard "dashboard"
           "."
         })
     }
@@ -367,7 +392,7 @@ let view (signIn: SignIn) =
       main (class' = "screen") {
         banner dispatch (model ()).Session
         div (class' = "page-head") { h1 () { Router.title (current ()) } }
-        content route (model ())
+        content dispatch (model ())
       }
     }
 

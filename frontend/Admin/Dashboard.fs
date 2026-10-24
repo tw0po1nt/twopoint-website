@@ -25,6 +25,4 @@ let newComments (model: Model) =
 let update (msg: Msg) (_: Model) : Model =
   match msg with
   | Answered(Ok posts) -> Loaded(summary posts)
-  | Answered(Error Api.Refused) -> NotLoaded "The API refused the token of this account."
-  | Answered(Error Api.Unanswered) -> NotLoaded "The API did not answer."
-  | Answered(Error Api.Invalid) -> NotLoaded "The API sent an answer that the admin cannot read."
+  | Answered(Error failure) -> NotLoaded(Api.reason failure)

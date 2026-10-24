@@ -25,6 +25,8 @@
     <Compile Include="Posts\PostQueries.fs" />
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
     <Compile Include="Subscriptions\SubscriptionActions.fs" />
+    <Compile Include="Deploys\DeployTypes.fs" />
+    <Compile Include="Deploys\DeployActions.fs" />
   </ItemGroup>
 
   <ItemGroup>

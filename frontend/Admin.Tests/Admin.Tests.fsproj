@@ -12,6 +12,7 @@
     <Compile Include="RouterTests.fs" />
     <Compile Include="SessionTests.fs" />
     <Compile Include="ShellTests.fs" />
+    <Compile Include="RebuildTests.fs" />
     <Compile Include="MenuTests.fs" />
     <Compile Include="PartsTests.fs" />
     <Compile Include="StaticWebAppTests.fs" />
