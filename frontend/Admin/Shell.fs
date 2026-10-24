@@ -42,9 +42,9 @@ type Effect =
   | SignIn of Session.Effect<Call>
   | Send of calls: Call list
 
-let private pageCalls (route: Route) =
+let private pageOf (route: Route) =
   match route with
-  | Route.PostComments slug -> [ LoadPostComments slug ]
+  | Route.PostComments slug -> Some(PostComments.init slug), [ LoadPostComments slug ]
   | Route.Dashboard
   | Route.Posts
   | Route.Post _
@@ -53,20 +53,7 @@ let private pageCalls (route: Route) =
   | Route.Series
   | Route.Subscriptions
   | Route.Settings
-  | Route.NotFound _ -> []
-
-let private postComments (route: Route) =
-  match route with
-  | Route.PostComments slug -> Some(PostComments.init slug)
-  | Route.Dashboard
-  | Route.Posts
-  | Route.Post _
-  | Route.ModerationQueue
-  | Route.Commenters
-  | Route.Series
-  | Route.Subscriptions
-  | Route.Settings
-  | Route.NotFound _ -> None
+  | Route.NotFound _ -> None, []
 
 let init (path: string) : Model * Effect option =
   let session, effect = Session.init ()
@@ -77,7 +64,7 @@ let init (path: string) : Model * Effect option =
     Dashboard = Dashboard.init
     Rebuild = Rebuild.init
     Queue = Queue.init
-    PostComments = postComments router.Route
+    PostComments = fst (pageOf router.Route)
     Overlay = None },
   Option.map SignIn effect
 
@@ -94,17 +81,18 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
   | Router msg ->
     let router, effect = Router.update msg model.Router
     let entered = router.Route <> model.Router.Route
+    let postComments, pageCalls = pageOf router.Route
 
     let calls =
       if entered && model.Session.Status <> Session.Starting then
-        pageCalls router.Route
+        pageCalls
       else
         []
 
     let next =
       { model with
           Router = router
-          PostComments = if entered then postComments router.Route else model.PostComments
+          PostComments = if entered then postComments else model.PostComments
           Overlay = None }
 
     match effect, calls with
@@ -123,7 +111,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
             | _ -> model.Overlay }
 
     if model.Session.Status = Session.Starting && Session.isActive session then
-      next, Some(Send([ LoadDashboard; LoadQueue ] @ pageCalls model.Router.Route))
+      next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (pageOf model.Router.Route)))
     else
       next, Option.map SignIn effect
   | Dashboard msg ->
@@ -185,7 +173,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None
 
-/// The message of Delete in the confirmation, to the page that opened it. None when that page has no such comment.
+/// None when that page has no such comment.
 let deleteChosen (model: Model) =
   match model.Overlay, model.Router.Route with
   | Some(DeleteDialog commentId), Route.ModerationQueue ->

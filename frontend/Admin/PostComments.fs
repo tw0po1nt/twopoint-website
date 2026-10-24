@@ -34,11 +34,16 @@ let init (slug: string) =
     Filter = All
     Comments = Waiting }
 
+let approvalText (approval: Api.CommentApproval) =
+  match approval with
+  | Api.CommentApproval.New -> "New"
+  | Api.CommentApproval.Approved -> "Approved"
+  | Api.CommentApproval.Rejected -> "Rejected"
+
 let filters =
-  [ All, "All"
-    Only Api.CommentApproval.New, "New"
-    Only Api.CommentApproval.Approved, "Approved"
-    Only Api.CommentApproval.Rejected, "Rejected" ]
+  (All, "All")
+  :: ([ Api.CommentApproval.New; Api.CommentApproval.Approved; Api.CommentApproval.Rejected ]
+      |> List.map (fun approval -> Only approval, approvalText approval))
 
 /// The backend refuses a change to the approval that the comment has.
 let actions (approval: Api.CommentApproval) =
@@ -52,14 +57,14 @@ let private id (row: Row) = row.Comment.Id
 let private change (commentId: string) (next: Row -> Row) (rows: Row list) =
   rows |> List.map (fun row -> if id row = commentId then next row else row)
 
-let private approve (approval: Api.CommentApproval) (row: Row) =
+let private withApproval (approval: Api.CommentApproval) (row: Row) =
   { Comment = { row.Comment with Status = approval }
     State = Queue.Ready }
 
 let private moderated (commentId: string) (action: Queue.Action) (rows: Row list) =
   match action with
-  | Queue.Approve -> change commentId (approve Api.CommentApproval.Approved) rows
-  | Queue.Reject -> change commentId (approve Api.CommentApproval.Rejected) rows
+  | Queue.Approve -> change commentId (withApproval Api.CommentApproval.Approved) rows
+  | Queue.Reject -> change commentId (withApproval Api.CommentApproval.Rejected) rows
   | Queue.Delete -> rows |> List.filter (fun row -> id row <> commentId)
 
 let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (model: Model) =
@@ -96,12 +101,6 @@ let tryFind (commentId: string) (model: Model) =
   | Loaded rows -> rows |> List.tryFind (fun row -> id row = commentId)
   | Waiting
   | NotLoaded _ -> None
-
-let approvalText (approval: Api.CommentApproval) =
-  match approval with
-  | Api.CommentApproval.New -> "New"
-  | Api.CommentApproval.Approved -> "Approved"
-  | Api.CommentApproval.Rejected -> "Rejected"
 
 let emptyText (filter: Filter) =
   match filter with

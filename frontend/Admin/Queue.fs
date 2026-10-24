@@ -70,8 +70,6 @@ let sends (state: RowState) =
   | Ready
   | NotDone _ -> false
 
-let isSending (row: Row) = sends row.State
-
 let failure (state: RowState) =
   match state with
   | NotDone(Approve, reason) -> Some $"The approval did not complete. {reason}"
@@ -79,8 +77,6 @@ let failure (state: RowState) =
   | NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
   | Ready
   | Sending _ -> None
-
-let reason (row: Row) = failure row.State
 
 let statusText (status: Api.CommenterStatus) =
   match status with
