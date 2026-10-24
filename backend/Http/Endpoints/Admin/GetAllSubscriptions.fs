@@ -33,8 +33,11 @@ module SubscriptionExt =
         Email = this.EmailAddress.ToString()
         Name = this.Name |> Option.map _.ToString() |> Option.toObj
         CreatedDate = this.CreatedDate
-        IsActive = this.IsActive
-        CanceledDate = this.CanceledDate |> Option.toNullable }
+        IsActive = Subscription.isActive this
+        CanceledDate =
+          match this.Status with
+          | Active -> Nullable()
+          | Canceled date -> Nullable date }
 
 module GetAllSubscriptionsQuery = TwoPoint.Core.Subscriptions.Queries.GetAllSubscriptions
 

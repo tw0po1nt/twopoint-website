@@ -83,8 +83,11 @@ type internal DbSubscription =
       CreatedDate = subscription.CreatedDate
       EmailAddress = subscription.EmailAddress |> EmailAddress.value
       Name = subscription.Name |> Option.map NonEmptyString.value
-      IsActive = subscription.IsActive
-      CanceledDate = subscription.CanceledDate }
+      IsActive = Subscription.isActive subscription
+      CanceledDate =
+        match subscription.Status with
+        | Active -> None
+        | Canceled date -> Some date }
     
   member this.ToSubscription () = validation {
     let! subscriptionId = this.SubscriptionId |> SubscriptionId.create
@@ -99,8 +102,9 @@ type internal DbSubscription =
         CreatedDate = createdDate
         EmailAddress = emailAddress
         Name = name
-        IsActive = this.IsActive
-        CanceledDate = this.CanceledDate |> Option.map _.ToUniversalTime() }
+        Status =
+          if this.IsActive then Active
+          else Canceled ((this.CanceledDate |> Option.defaultValue createdDate).ToUniversalTime()) }
   }
 
 /// <summary>
@@ -190,6 +194,9 @@ type internal ISubscriptionDb =
     subscriptionId: string -> CancellableTaskResult<DbSubscriptionDelivery list, DependencyError>
   abstract member CreateDelivery:
     delivery: DbSubscriptionDelivery -> CancellableTaskResult<DbSubscriptionDelivery, DependencyError>
+  abstract member DeleteSubscription: subscriptionId: string -> CancellableTaskResult<unit, DependencyError>
+  abstract member DeleteDelivery:
+    subscriptionId: string -> deliveryId: string -> CancellableTaskResult<unit, DependencyError>
 
 module internal SubscriptionDbError =
   let private subscriptionDbError =
@@ -228,6 +235,9 @@ module internal SubscriptionDb =
     let where table onEntity filter =
       Db.where tableServiceClient logger db table onEntity filter
 
+    let delete table onError filter =
+      Db.delete tableServiceClient logger db table onError filter
+
     let subscriptionsTable = "subscriptions"
     let deliveriesTable = "deliveries"
 
@@ -259,5 +269,13 @@ module internal SubscriptionDb =
 
       member _.CreateDelivery delivery =
         delivery.ToEntity() |> add deliveriesTable SubscriptionDbError.validation DbSubscriptionDelivery.FromEntity
+
+      member _.DeleteSubscription subscriptionId =
+        eq "PartitionKey" subscriptionId + eq "RowKey" subscriptionId
+        |> delete subscriptionsTable SubscriptionDbError.validation
+
+      member _.DeleteDelivery subscriptionId deliveryId =
+        eq "PartitionKey" subscriptionId + eq "RowKey" deliveryId
+        |> delete deliveriesTable SubscriptionDbError.validation
     }
   

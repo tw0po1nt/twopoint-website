@@ -67,7 +67,7 @@ module CreateSubscription =
       fun existingSubscription newSubscription ->
         match existingSubscription with
         | None -> Ok (New newSubscription)
-        | Some existing when existing.IsActive -> Error (AlreadyActive existing)
+        | Some existing when Subscription.isActive existing -> Error (AlreadyActive existing)
         | Some existing -> Ok (Reactivate existing)
 
   // Action
@@ -172,7 +172,7 @@ module CancelSubscription =
         existingSubscription
         |> Result.requireSome (SubscriptionNotFound cancellation)
         |> Result.map (fun subscription ->
-          if subscription.IsActive then Success.Cancelled subscription else Success.AlreadyCanceled subscription)
+          if Subscription.isActive subscription then Success.Cancelled subscription else Success.AlreadyCanceled subscription)
    
   // Action
 
@@ -208,6 +208,101 @@ module CancelSubscription =
         )
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Cancelled)
+          (Logic >> ActionResult.failure)
+    }
+
+// ========================================================================================
+// Delete subscription
+// ========================================================================================
+
+// Input
+
+type SubscriptionDeletion =
+  { SubscriptionId : SubscriptionId }
+
+module SubscriptionDeletion =
+
+  type SubscriptionId = SubscriptionId of string
+
+  type Dto =
+    { SubscriptionId : SubscriptionId }
+
+  let create (dto : Dto) = validation {
+    let (SubscriptionId subscriptionId) = dto.SubscriptionId
+
+    let! subscriptionId = subscriptionId |> SubscriptionId.create
+
+    return { SubscriptionDeletion.SubscriptionId = subscriptionId }
+  }
+
+[<RequireQualifiedAccess>]
+module DeleteSubscription =
+
+  // Output
+
+  type Error = SubscriptionNotFound of SubscriptionId
+  type Success = Deleted of Subscription * deliveries : SubscriptionDelivery list
+  type Decision = Decision<Success, Error>
+  type Event = Deleted of Subscription
+
+  // Logic
+
+  type Logic =
+    SubscriptionDeletion
+      -> Subscription option
+      -> SubscriptionDelivery list
+      -> Decision
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic =
+      fun deletion existingSubscription deliveries -> result {
+        let! subscription = existingSubscription |> Result.requireSome (SubscriptionNotFound deletion.SubscriptionId)
+        return Success.Deleted (subscription, deliveries)
+      }
+
+  // Action
+
+  type Action = SubscriptionDeletion.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<SubscriptionDelivery list>
+    abstract member DeleteDelivery: Subscription -> SubscriptionDelivery -> DependencyResult<unit>
+    abstract member DeleteSubscription: Subscription -> DependencyResult<unit>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+
+    // The subscription goes after its deliveries, so that a second try after a failed delete finds the deliveries that are left.
+    let handleDeleted (Success.Deleted (subscription, deliveries)) : DependencyResult<Subscription> =
+      cancellableTaskResult {
+        for delivery in deliveries do
+          do! dependencies.DeleteDelivery subscription delivery
+        do! dependencies.DeleteSubscription subscription
+        return subscription
+      }
+
+    fun deletion -> cancellableTaskResult {
+      let! deletion =
+        deletion
+        |> SubscriptionDeletion.create
+        |> Result.mapError ActionError<Error>.Validation
+
+      let! existingSubscription =
+        dependencies.GetSubscriptionById deletion.SubscriptionId
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! deliveries =
+        existingSubscription
+        |> Option.traverseCancellableTaskResult dependencies.GetDeliveriesForSubscription
+        |> CancellableTaskResult.map (Option.defaultValue [])
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return!
+        Logic.decide deletion existingSubscription deliveries
+        |> Result.traverseCancellableTask handleDeleted
+        |> CancellableTaskResult.foldResult
+          (DependencyResult.toActionResult Event.Deleted)
           (Logic >> ActionResult.failure)
     }
 
@@ -280,7 +375,7 @@ module SendWelcome =
     let decide : Logic =
       fun subscriptionId subscription deliveries latestPost -> result {
         let! subscription = subscription |> Result.requireSome (SubscriptionNotFound subscriptionId)
-        do! subscription.IsActive |> Result.requireTrue (SubscriptionInactive subscription)
+        do! Subscription.isActive subscription |> Result.requireTrue (SubscriptionInactive subscription)
         let! latestPost = latestPost |> Result.requireSome NoPosts
         // A reactivation gets a second welcome only when a newer post exists than the one in the last welcome.
         do!
@@ -422,7 +517,7 @@ module StartNewPostDelivery =
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
       NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
 
-    let recipients (subscriptions : Subscription list) = subscriptions |> List.filter _.IsActive
+    let recipients (subscriptions : Subscription list) = subscriptions |> List.filter Subscription.isActive
 
   // Action
 
@@ -543,7 +638,7 @@ module SendNewPostDelivery =
     let decide : Logic =
       fun subscriptionId subscription deliveries slug post -> result {
         let! subscription = subscription |> Result.requireSome (SubscriptionNotFound subscriptionId)
-        do! subscription.IsActive |> Result.requireTrue (SubscriptionInactive subscription)
+        do! Subscription.isActive subscription |> Result.requireTrue (SubscriptionInactive subscription)
         let! post = post |> Result.requireSome (PostNotFound slug)
         // A delivery of any type counts, so a subscription that got the post in its welcome does not get it again.
         do!
