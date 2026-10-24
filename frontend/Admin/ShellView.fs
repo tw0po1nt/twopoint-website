@@ -629,7 +629,7 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
   }
 
 [<SolidComponent>]
-let private content(dispatch: Shell.Msg -> unit) (model: Shell.Model) =
+let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
 
   match model.Router.Route with

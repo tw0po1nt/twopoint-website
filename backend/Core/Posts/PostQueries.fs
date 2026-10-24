@@ -49,7 +49,7 @@ module GetAllPosts =
           match Map.tryFind slug published with
           | Some summary -> summary, true
           | None -> working[slug], false
-        let publishDate = summary.PublishDate |> Option.map _.UtcDateTime
+        let publishDate = if hasPublished then summary.PublishDate |> Option.map _.UtcDateTime else None
         let state =
           match hasPublished, publishDate with
           | false, _ -> Draft
