@@ -260,7 +260,10 @@ module Db =
         try
           let! entity = tableClient.GetEntityAsync<TableEntity>(entity.PartitionKey, entity.RowKey)
           let entity = updateEntity entity.Value
-          do! tableClient.UpdateEntityAsync(entity, entity.ETag, cancellationToken = ct) |> Task.ignore
+          // Replace, because a merge keeps a property that the update removed.
+          do!
+            tableClient.UpdateEntityAsync(entity, entity.ETag, TableUpdateMode.Replace, cancellationToken = ct)
+            |> Task.ignore
         with
           | :? RequestFailedException as ex when ex.Status = int HttpStatusCode.Conflict ->
             return! onError ex.Message |> Error

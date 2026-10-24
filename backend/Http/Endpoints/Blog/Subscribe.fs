@@ -77,7 +77,7 @@ type Subscribe (
       member _.CreateSubscription subscription createdDateUtc = 
         subscriptionDependencies.CreateSubscription subscription createdDateUtc
       member _.ActivateSubscription subscription = 
-        subscriptionDependencies.UpdateSubscriptionActivation subscription true
+        subscriptionDependencies.UpdateSubscriptionActivation subscription
     }
 
     let! createSubscriptionResult = ct |> createSubscription newSubscription

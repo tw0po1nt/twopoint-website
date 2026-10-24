@@ -55,20 +55,15 @@ type SubscriptionDependencies(
         CreatedDate = createdDateUtc 
         EmailAddress = newSubscription.EmailAddress |> EmailAddress.value
         Name = newSubscription.Name |> Option.map NonEmptyString.value
-        IsActive = true }
+        IsActive = true
+        CanceledDate = None }
     let! (dbSubscription: DbSubscription) = subscriptionDb.CreateSubscription newSubscription
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
   }
 
-  member _.UpdateSubscriptionActivation subscription isActive = cancellableTaskResult {
-    let dbSubscription =
-      { DbSubscription.SubscriptionId = subscription.Id.ToString()
-        CreatedDate = subscription.CreatedDate
-        EmailAddress = subscription.EmailAddress |> EmailAddress.value
-        Name = subscription.Name |> Option.map NonEmptyString.value
-        IsActive = subscription.IsActive }
-
-    let! (dbSubscription: DbSubscription) = subscriptionDb.UpdateSubscriptionActivation dbSubscription isActive
+  member _.UpdateSubscriptionActivation (subscription : Subscription) = cancellableTaskResult {
+    let! (dbSubscription: DbSubscription) =
+      subscriptionDb.UpdateSubscriptionActivation (DbSubscription.FromSubscription subscription)
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
   }
 

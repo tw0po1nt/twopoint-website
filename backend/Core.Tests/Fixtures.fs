@@ -18,7 +18,8 @@ let subscription isActive =
     CreatedDate = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
     EmailAddress = EmailAddress.create "reader@example.com" |> ok
     Name = NonEmptyString.create None "Reader" |> ok |> Some
-    IsActive = isActive }
+    IsActive = isActive
+    CanceledDate = if isActive then None else Some (DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)) }
 
 let post slug (createdDate : string) =
   Post.create slug "A post" createdDate PostCommentStats.Zero |> ok

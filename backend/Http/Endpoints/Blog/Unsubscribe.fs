@@ -10,6 +10,7 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
+open System
 open System.Net
 open System.Threading
 
@@ -53,8 +54,10 @@ type Unsubscribe (
         subscriptionDependencies.GetSubscriptionByEmail email
       member _.GetSubscriptionById id =
         subscriptionDependencies.GetSubscriptionById id 
+      member _.GetUtcNow () =
+        DateTime.UtcNow
       member _.DeactivateSubscription subscription = 
-        subscriptionDependencies.UpdateSubscriptionActivation subscription false 
+        subscriptionDependencies.UpdateSubscriptionActivation subscription
     }
 
     let! cancelSubscriptionResult = ct |> cancelSubscription subscriptionCancellation 

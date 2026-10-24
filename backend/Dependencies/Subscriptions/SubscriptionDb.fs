@@ -25,7 +25,8 @@ open System.Globalization
 ///    "CreatedDate": "&lt;date&gt;",
 ///    "EmailAddress": "&lt;string&gt;",
 ///    "Name": "&lt;string&gt;" | null,
-///    "IsActive": "&lt;boolean&gt;"
+///    "IsActive": "&lt;boolean&gt;",
+///    "CanceledDate": "&lt;date&gt;" | null
 ///  }
 /// </c>
 /// </remarks>
@@ -34,8 +35,9 @@ type internal DbSubscription =
     CreatedDate : DateTime 
     EmailAddress : string
     Name : string option
-    IsActive : bool }
-  
+    IsActive : bool
+    CanceledDate : DateTime option }
+
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbSubscription 
     let! createdDate =
@@ -45,13 +47,26 @@ type internal DbSubscription =
     let! emailAddress = "EmailAddress" |> entity.RequireString entityName
     let name = "Name" |> entity.TryGetString
     let isActive = "IsActive" |> entity.TryGetBoolean |> Option.defaultValue false
+    let! storedCanceledDate =
+      match "CanceledDate" |> entity.TryGetString with
+      | Some date -> DateTime.TryValidateUtc(date, "CanceledDate") |> Validation.map Some
+      | None -> Validation.ok None
+
+    // A row canceled before the field existed has no stored date. The cancellation was its last write.
+    let canceledDate =
+      match isActive, storedCanceledDate with
+      | true, _ -> None
+      | false, Some date -> Some date
+      | false, None ->
+        entity.Timestamp |> Option.ofNullable |> Option.map _.UtcDateTime |> Option.orElse (Some createdDate)
 
     return
       { SubscriptionId = entity.RowKey
         CreatedDate =  createdDate
         EmailAddress = emailAddress
         Name = name 
-        IsActive = isActive }
+        IsActive = isActive
+        CanceledDate = canceledDate }
   }
   
   member this.ToEntity() =
@@ -60,6 +75,7 @@ type internal DbSubscription =
     entity["EmailAddress"] <- this.EmailAddress
     entity["Name"] <- this.Name |> Option.toObj
     entity["IsActive"] <- this.IsActive
+    entity["CanceledDate"] <- this.CanceledDate |> Option.map (fun date -> date.ToString("o", CultureInfo.InvariantCulture)) |> Option.toObj
     entity
     
   static member FromSubscription (subscription : Subscription) =
@@ -67,7 +83,8 @@ type internal DbSubscription =
       CreatedDate = subscription.CreatedDate
       EmailAddress = subscription.EmailAddress |> EmailAddress.value
       Name = subscription.Name |> Option.map NonEmptyString.value
-      IsActive = subscription.IsActive }
+      IsActive = subscription.IsActive
+      CanceledDate = subscription.CanceledDate }
     
   member this.ToSubscription () = validation {
     let! subscriptionId = this.SubscriptionId |> SubscriptionId.create
@@ -82,7 +99,8 @@ type internal DbSubscription =
         CreatedDate = createdDate
         EmailAddress = emailAddress
         Name = name
-        IsActive = this.IsActive }
+        IsActive = this.IsActive
+        CanceledDate = this.CanceledDate |> Option.map _.ToUniversalTime() }
   }
 
 /// <summary>
@@ -165,9 +183,8 @@ type internal ISubscriptionDb =
   abstract member GetSubscriptionByEmail: email: string -> CancellableTaskResult<DbSubscription option, DependencyError>
   abstract member GetSubscriptionById: id: string -> CancellableTaskResult<DbSubscription option, DependencyError>
   abstract member CreateSubscription: subscription: DbSubscription -> CancellableTaskResult<DbSubscription, DependencyError>
-  abstract member UpdateSubscriptionActivation: 
+  abstract member UpdateSubscriptionActivation:
     subscription: DbSubscription
-      -> isActive: bool
       -> CancellableTaskResult<DbSubscription, DependencyError>
   abstract member GetDeliveriesForSubscription:
     subscriptionId: string -> CancellableTaskResult<DbSubscriptionDelivery list, DependencyError>
@@ -228,10 +245,13 @@ module internal SubscriptionDb =
       member _.CreateSubscription subscription =
         subscription.ToEntity() |> add subscriptionsTable SubscriptionDbError.validation DbSubscription.FromEntity
 
-      member _.UpdateSubscriptionActivation subscription isActive =
+      member _.UpdateSubscriptionActivation subscription =
         subscription.ToEntity() |> update subscriptionsTable SubscriptionDbError.validation DbSubscription.FromEntity
         <| fun entity ->
-          entity["IsActive"] <- isActive
+          entity["IsActive"] <- subscription.IsActive
+          match subscription.CanceledDate with
+          | Some date -> entity["CanceledDate"] <- date.ToString("o", CultureInfo.InvariantCulture)
+          | None -> entity.Remove "CanceledDate" |> ignore
           entity
 
       member _.GetDeliveriesForSubscription subscriptionId =
