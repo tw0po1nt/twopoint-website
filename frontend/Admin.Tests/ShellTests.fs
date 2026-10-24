@@ -76,7 +76,7 @@ let tests =
       Expect.equal model.Overlay (Some Shell.MoreSheet) "The sheet is open"
       let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/series")) model
       Expect.isNone model.Overlay "The sheet closes"
-      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/series"))) "The page changes"
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/series", []))) "The page changes"
     }
 
     test "the close of a sheet that another overlay replaced keeps the new overlay" {

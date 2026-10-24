@@ -50,7 +50,8 @@ let ofRoute (route: Route) =
   match route with
   | Dashboard -> Home
   | Route.Posts
-  | Post _ -> Posts
+  | Post _
+  | PostComments _ -> Posts
   | ModerationQueue -> Comments
   | Route.Commenters -> Commenters
   | Route.Series -> Series

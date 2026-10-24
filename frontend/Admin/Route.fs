@@ -6,6 +6,7 @@ type Route =
   | Dashboard
   | Posts
   | Post of slug: string
+  | PostComments of slug: string
   | ModerationQueue
   | Commenters
   | Series
@@ -21,6 +22,7 @@ module Route =
     | [] -> Dashboard
     | [ "posts" ] -> Posts
     | [ "posts"; slug ] -> Post(Uri.UnescapeDataString slug)
+    | [ "posts"; slug; "comments" ] -> PostComments(Uri.UnescapeDataString slug)
     | [ "comments" ] -> ModerationQueue
     | [ "commenters" ] -> Commenters
     | [ "series" ] -> Series
@@ -33,6 +35,7 @@ module Route =
     | Dashboard -> "/"
     | Posts -> "/posts"
     | Post slug -> $"/posts/{Uri.EscapeDataString slug}"
+    | PostComments slug -> $"/posts/{Uri.EscapeDataString slug}/comments"
     | ModerationQueue -> "/comments"
     | Commenters -> "/commenters"
     | Series -> "/series"

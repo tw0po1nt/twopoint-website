@@ -14,13 +14,16 @@ let private fail (call: Shell.Call) =
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
+  | Shell.LoadPostComments slug -> Shell.PostComments(PostComments.Answered(slug, Error Api.Unanswered))
+  | Shell.ModeratePostComment(_, comment, action) ->
+    Shell.PostComments(PostComments.Done(comment.Id, action, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
 
-let private moderate (token: string) (comment: Api.QueuedComment) (action: Queue.Action) =
+let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
-  | Queue.Approve -> Api.changeApproval (Config.api ()) token comment Api.Approved
-  | Queue.Reject -> Api.changeApproval (Config.api ()) token comment Api.Rejected
-  | Queue.Delete -> Api.deleteComment (Config.api ()) token comment
+  | Queue.Approve -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Approved
+  | Queue.Reject -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Rejected
+  | Queue.Delete -> Api.deleteComment (Config.api ()) token slug comment
 
 let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
@@ -29,8 +32,14 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
   | Shell.Moderate(comment, action) ->
-    moderate token comment action
+    moderate token comment.PostSlug comment.Comment action
     |> Promise.map (fun result -> Shell.Queue(Queue.Done(comment.Comment.Id, action, result)))
+  | Shell.LoadPostComments slug ->
+    Api.getPostComments (Config.api ()) token slug
+    |> Promise.map (fun result -> Shell.PostComments(PostComments.Answered(slug, result)))
+  | Shell.ModeratePostComment(slug, comment, action) ->
+    moderate token slug comment action
+    |> Promise.map (fun result -> Shell.PostComments(PostComments.Done(comment.Id, action, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
 let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
@@ -75,7 +84,9 @@ let private signInWith (signIn: SignIn) (effect: Session.Effect<Shell.Call>) (di
 
 let private perform (signIn: SignIn) (effect: Shell.Effect) (dispatch: Shell.Msg -> unit) =
   match effect with
-  | Shell.Navigate(Router.PushUrl path) -> history.pushState (null, "", path)
+  | Shell.Navigate(Router.PushUrl path, calls) ->
+    history.pushState (null, "", path)
+    calls |> List.iter (send signIn dispatch)
   | Shell.SignIn effect -> signInWith signIn effect dispatch
   | Shell.Send calls -> calls |> List.iter (send signIn dispatch)
 
@@ -240,51 +251,82 @@ let private statusTone (status: Api.CommenterStatus) =
   | Api.Banned -> Parts.Bad
 
 [<SolidComponent>]
-let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
-  let comment = row.Comment.Comment
-  let status = comment.Commenter.Status
-  let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
+let private commenterHead (commenter: Api.Commenter) =
+  div (class' = "queue-head") {
+    Parts.avatar commenter.Name
 
-  article (id = comment.Id, class' = "card card-body queue-row") {
-    div (class' = "queue-head") {
-      Parts.avatar comment.Commenter.Name
-
-      div (class' = "grow") {
-        p (class' = "strong") {
-          comment.Commenter.Name
-          " "
-          Parts.badge (statusTone status) (Queue.statusText status)
-        }
-
-        p (class' = "muted small ellipsis") { comment.Commenter.Email }
+    div (class' = "grow") {
+      p (class' = "strong") {
+        commenter.Name
+        " "
+        Parts.badge (statusTone commenter.Status) (Queue.statusText commenter.Status)
       }
+
+      p (class' = "muted small ellipsis") { commenter.Email }
     }
+  }
 
-    p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
-    p (class' = "queue-text") { comment.Content }
-
-    Show(when' = (Queue.reason row).IsSome) {
-      Parts.Alert(tone = Parts.Bad).Has(p () { Queue.reason row |> Option.defaultValue "" })
-    }
-
-    div (class' = "actions") {
+[<SolidComponent>]
+let private actionButton
+  (dispatch: Shell.Msg -> unit)
+  (commentId: string)
+  (choose: Queue.Action -> unit)
+  (sending: bool)
+  (action: Queue.Action)
+  =
+  match action with
+  | Queue.Approve ->
+    Fragment() {
       Parts
-        .Button(kind = Parts.Accent, size = Parts.Small, disabled = Queue.isSending row, onClick = fun _ -> choose Queue.Approve)
+        .Button(kind = Parts.Accent, size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.Approve)
         .Has(Fragment() { "Approve" })
-
-      Parts
-        .Button(size = Parts.Small, disabled = Queue.isSending row, onClick = fun _ -> choose Queue.Reject)
-        .Has(Fragment() { "Reject" })
-
+    }
+  | Queue.Reject ->
+    Fragment() {
+      Parts.Button(size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.Reject).Has(Fragment() { "Reject" })
+    }
+  | Queue.Delete ->
+    Fragment() {
       Parts
         .Button(
           kind = Parts.Ghost,
           size = Parts.Small,
-          disabled = Queue.isSending row,
-          onClick = fun _ -> dispatch (Shell.Opened(Shell.DeleteDialog comment.Id))
+          disabled = sending,
+          onClick = fun _ -> dispatch (Shell.Opened(Shell.DeleteDialog commentId))
         )
         .Has(Fragment() { "Delete" })
     }
+
+[<SolidComponent>]
+let private rowEnd
+  (dispatch: Shell.Msg -> unit)
+  (commentId: string)
+  (choose: Queue.Action -> unit)
+  (state: Queue.RowState)
+  (actions: Queue.Action list)
+  =
+  Fragment() {
+    Show(when' = (Queue.failure state).IsSome) {
+      Parts.Alert(tone = Parts.Bad).Has(p () { Queue.failure state |> Option.defaultValue "" })
+    }
+
+    div (class' = "actions") {
+      For(each = Array.ofList actions) {
+        yield fun action _ -> actionButton dispatch commentId choose (Queue.sends state) action
+      }
+    }
+  }
+
+[<SolidComponent>]
+let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
+  let comment = row.Comment.Comment
+  let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
+
+  article (id = comment.Id, class' = "card card-body queue-row") {
+    commenterHead comment.Commenter
+    p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
+    p (class' = "queue-text") { comment.Content }
+    rowEnd dispatch comment.Id choose row.State [ Queue.Approve; Queue.Reject; Queue.Delete ]
   }
 
 [<SolidComponent>]
@@ -308,6 +350,57 @@ let private queue (dispatch: Shell.Msg -> unit) (model: Queue.Model) =
   | Queue.NotLoaded reason ->
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The moderation queue did not load.").Has(p () { reason }) }
 
+let private approvalTone (approval: Api.CommentApproval) =
+  match approval with
+  | Api.CommentApproval.New -> Parts.Warn
+  | Api.CommentApproval.Approved -> Parts.Good
+  | Api.CommentApproval.Rejected -> Parts.Bad
+
+[<SolidComponent>]
+let private postCommentRow (dispatch: Shell.Msg -> unit) (row: PostComments.Row) =
+  let comment = row.Comment
+  let choose action = dispatch (Shell.PostComments(PostComments.Chosen(comment.Id, action)))
+
+  article (id = comment.Id, class' = "card card-body queue-row") {
+    div (class' = "row-top") {
+      commenterHead comment.Commenter
+      Parts.badge (approvalTone comment.Status) (PostComments.approvalText comment.Status)
+    }
+
+    p (class' = "queue-text") { comment.Content }
+    rowEnd dispatch comment.Id choose row.State (PostComments.actions comment.Status)
+  }
+
+[<SolidComponent>]
+let private postCommentList (dispatch: Shell.Msg -> unit) (model: PostComments.Model) =
+  match model.Comments, PostComments.shown model with
+  | PostComments.Waiting, _ ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | PostComments.Loaded _, [] ->
+    Fragment() {
+      Parts.emptyState Icon.Inbox (PostComments.emptyText model.Filter) (p () { "Each comment on the post comes here." })
+    }
+  | PostComments.Loaded _, rows ->
+    Fragment() {
+      div (class' = "queue") { For(each = Array.ofList rows) { yield fun row _ -> postCommentRow dispatch row } }
+    }
+  | PostComments.NotLoaded reason, _ ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The comments did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private postComments (dispatch: Shell.Msg -> unit) (model: PostComments.Model) =
+  let filter = PostComments.Filtered >> Shell.PostComments >> dispatch
+
+  Fragment() {
+    div (class' = "filter-bar") { Parts.tabs "Approval" PostComments.filters (fun () -> model.Filter) filter }
+    postCommentList dispatch model
+  }
+
 [<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
@@ -330,6 +423,8 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
       }
     }
   | ModerationQueue -> Fragment() { queue dispatch model.Queue }
+  | PostComments slug ->
+    Fragment() { postComments dispatch (model.PostComments |> Option.defaultValue (PostComments.init slug)) }
   | NotFound _ ->
     Fragment() {
       Parts.emptyState
@@ -385,13 +480,6 @@ let private banner (dispatch: Shell.Msg -> unit) (model: Session.Model<Shell.Cal
 
 [<SolidComponent>]
 let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
-  let target () =
-    match (model ()).Overlay with
-    | Some(Shell.DeleteDialog commentId) -> Queue.tryFind commentId (model ()).Queue
-    | Some Shell.MoreSheet
-    | Some Shell.SignOutDialog
-    | None -> None
-
   let close () =
     match (model ()).Overlay with
     | Some(Shell.DeleteDialog _ as overlay) -> dispatch (Shell.Closed overlay)
@@ -399,13 +487,11 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     | Some Shell.SignOutDialog
     | None -> ()
 
-  let confirm () =
-    target ()
-    |> Option.iter (fun row -> dispatch (Shell.Queue(Queue.Chosen(row.Comment.Comment.Id, Queue.Delete))))
+  let confirm () = Shell.deleteChosen (model ()) |> Option.iter dispatch
 
   Parts.modalDialog
     "delete-comment"
-    (fun () -> (target ()).IsSome)
+    (fun () -> (Shell.deleteChosen (model ())).IsSome)
     close
     "Delete the comment?"
     (p () {

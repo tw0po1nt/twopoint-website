@@ -14,7 +14,7 @@ let private queued id status : Api.QueuedComment =
           { Email = "ada@example.com"
             Name = "Ada"
             Status = status }
-        Status = "new"
+        Status = Api.CommentApproval.New
         Content = "A comment" } }
 
 let private first = queued "first" Api.New
