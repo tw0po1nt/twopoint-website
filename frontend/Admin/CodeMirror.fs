@@ -67,7 +67,6 @@ let directiveLines: obj = jsNative
 [<ImportMember("./directive-lines.js")>]
 let directiveTag: obj = jsNative
 
-/// Quiet styles for the Markdown source. Each class comes from `editor.css`.
 let private quietStyle () =
   let style (tag: obj) (cls: string) = createObj [ "tag" ==> tag; "class" ==> cls ]
 

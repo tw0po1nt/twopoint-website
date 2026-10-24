@@ -1,6 +1,7 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
 open TwoPoint.Core.Posts
+open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
@@ -80,14 +81,13 @@ type GetPost (
 
         let! postResult = getPost slug
 
+        let toApiResponse = QueryResult.toApiResponse (fun (document : PostDocument) -> document.ToDto())
+
         let apiResponse, statusCode =
           match postResult with
-          | Ok(Some document) -> { Success = true; Message = None; Data = Some(document.ToDto()) }, HttpStatusCode.OK
           | Ok None -> { Success = false; Message = Some $"Post '{slug}' not found"; Data = None }, HttpStatusCode.NotFound
-          | Error queryError when queryError.IsValidation ->
-            { Success = false; Message = Some(queryError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error queryError ->
-            { Success = false; Message = Some(queryError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          | Ok(Some document) -> toApiResponse (Ok document)
+          | Error queryError -> toApiResponse (Error queryError)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

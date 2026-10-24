@@ -108,18 +108,19 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
 
       let options = BlobUploadOptions(Conditions = conditions)
 
-      let upload () =
-        container.GetBlobClient(blobName slug).UploadAsync(BinaryData.FromString text, options, ct)
+      let write () =
+        cancellableTaskResult {
+          let! response = container.GetBlobClient(blobName slug).UploadAsync(BinaryData.FromString text, options, ct)
+          return Written(response.Value.ETag.ToString())
+        }
 
       try
         try
-          let! response = upload ()
-          return Written(response.Value.ETag.ToString())
+          return! write ()
         with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
           // Azurite starts with no container.
           do! container.CreateIfNotExistsAsync(cancellationToken = ct) |> Task.ignore
-          let! response = upload ()
-          return Written(response.Value.ETag.ToString())
+          return! write ()
       with :? RequestFailedException as error when error.Status = 412 || error.ErrorCode = "BlobAlreadyExists" ->
         return ConditionFailed
     }

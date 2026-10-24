@@ -36,7 +36,6 @@ let private fields (model: Shell.Model) =
   | Some document -> document.Fields
   | None -> { Title = ""; Excerpt = ""; Body = "" }
 
-/// A textarea grows with its text, so a long title wraps on a phone.
 let private fit (element: obj) =
   element?style?height <- "auto"
 
@@ -67,11 +66,16 @@ let private topBar (back: MouseEvent -> unit) (model: unit -> Shell.Model) =
 
     p (class' = "editor-status", role = "status", ariaLive = "polite") { statusText (model ()) }
 
-    // Each slot gets its content in a later version.
     div (class' = "editor-actions") {
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/258): Preview
       button (type' = "button", class' = "text", disabled = true) { "Preview" }
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/256): Details
       button (type' = "button", class' = "text", disabled = true) { "Details" }
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/259): Publish
       button (type' = "button", class' = "editor-primary", disabled = true) { primaryText (model ()) }
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): the actions menu
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): the actions menu
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): the actions menu
       button (type' = "button", class' = "text", disabled = true, ariaLabel = "More actions") { "•••" }
     }
   }
@@ -108,7 +112,6 @@ let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
         excerpt.Value <- Some element
         follow element (fun () -> (fields (model ())).Excerpt))
 
-    // The editor reads the text once. After that, the author's typing is the source.
     div(class' = "editor-body").ref (fun host ->
       let view =
         untrack (fun () ->
@@ -135,15 +138,12 @@ let private loading (model: unit -> Shell.Model) =
       }
     }
 
-/// The page of the editor. `back` follows the link to the post list.
 [<SolidComponent>]
 let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: MouseEvent -> unit) (heading: unit -> string) =
-  // The listeners are on the window, so the page removes them when the author leaves the editor.
   let listen (name: string) (handler: Event -> unit) =
     window.addEventListener (name, handler)
     onCleanup (fun () -> window.removeEventListener (name, handler))
 
-  // ⌘S saves at once. The browser would save the page.
   listen "keydown" (fun event ->
     let key = event :?> KeyboardEvent
 
@@ -158,7 +158,6 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
   listen "pointermove" fade
   listen "touchstart" fade
 
-  // A page that closes with text that the API does not have asks the author first.
   listen "beforeunload" (fun event ->
     match (model ()).Editor with
     | Some editor when Editor.isAtRisk editor -> event.preventDefault ()
