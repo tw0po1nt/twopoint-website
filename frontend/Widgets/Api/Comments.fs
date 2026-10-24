@@ -17,6 +17,19 @@ type NewComment =
   { ValidationId : string
     Comment : string }
 
+type PostedComment =
+  { Id : string
+    CreatedDate : string
+    Commenter : string
+    Content : string
+    Approval : string }
+
+/// The posted comment comes beside `data`, which stays null.
+type PostCommentAnswer =
+  { Success : bool
+    Message : string option
+    Comment : PostedComment option }
+
 [<RequireQualifiedAccess>]
 module Comments =
 
@@ -25,16 +38,21 @@ module Comments =
   open Fetch
   open Thoth.Json
 
-  let private invalid = { Success = false; Message = Some "An invalid response was received"; Data = None }
+  let private invalidMessage = Some "An invalid response was received"
 
-  let inline private request<'T> (url: string) (properties: RequestProperties list) : Promise<ApiResponse<'T>> = promise {
+  let private invalid = { Success = false; Message = invalidMessage; Data = None }
+
+  let inline private answer<'Answer> (url: string) (properties: RequestProperties list) (invalid: 'Answer) : Promise<'Answer> = promise {
     let! response = fetchUnsafe url (requestHeaders [ Accept "application/json" ] :: properties)
     let! text = response.text ()
 
     return
-      Decode.Auto.fromString<ApiResponse<'T>>(text, caseStrategy = CamelCase)
+      Decode.Auto.fromString<'Answer>(text, caseStrategy = CamelCase)
       |> Result.defaultValue invalid
   }
+
+  let inline private request<'T> (url: string) (properties: RequestProperties list) : Promise<ApiResponse<'T>> =
+    answer url properties invalid
 
   let getCommentsForPost uri slug : Promise<ApiResponse<Comment list>> =
     request $"{uri}/api/blog/posts/{slug}/comments" [ Method HttpMethod.GET ]
@@ -45,8 +63,8 @@ module Comments =
       Body(U3.Case3(Encode.Auto.toString commenterValidation))
     ]
 
-  let postComment uri slug (newComment: NewComment) : Promise<ApiResponse<unit>> =
-    request $"{uri}/api/blog/posts/{slug}/comments" [
+  let postComment uri slug (newComment: NewComment) : Promise<PostCommentAnswer> =
+    answer $"{uri}/api/blog/posts/{slug}/comments" [
       Method HttpMethod.POST
       Body(U3.Case3(Encode.Auto.toString newComment))
-    ]
+    ] { Success = false; Message = invalidMessage; Comment = None }

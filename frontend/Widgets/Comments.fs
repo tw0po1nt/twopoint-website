@@ -24,13 +24,18 @@ type CommentList =
   | Loaded of Comment list
   | NotLoaded of reason: string
 
+type Approval =
+  | Approved
+  /// A comment of a new commenter shows after the author approves it.
+  | AwaitsApproval
+
 type Status =
   | Editing
   | Validated
   | Validating
   | ValidationSent of email: string
   | Posting
-  | Posted
+  | Posted of Approval
   | Failed of reason: string
 
 type Model =
@@ -56,7 +61,7 @@ type Msg =
   | CommentLeft
   | Submitted
   | ValidationAnswered of ApiResponse<unit>
-  | PostAnswered of ApiResponse<unit>
+  | PostAnswered of PostCommentAnswer
   | Unanswered
 
 type Effect =
@@ -118,7 +123,7 @@ let isSending (model: Model) =
   | Editing
   | Validated
   | ValidationSent _
-  | Posted
+  | Posted _
   | Failed _ -> false
 
 /// After a sent validation, the form stays locked until the reader comes back through the link in the email.
@@ -129,7 +134,7 @@ let isLocked (model: Model) =
   | ValidationSent _ -> true
   | Editing
   | Validated
-  | Posted
+  | Posted _
   | Failed _ -> false
 
 /// The backend adds the validation ID to the query of this URL.
@@ -161,8 +166,24 @@ let private refused = "The comment did not go through. Try again later."
 
 let private unanswered = "The site cannot get to the server. Try again later."
 
-let private failed (response: ApiResponse<unit>) =
-  Failed(response.Message |> Option.defaultValue refused)
+let private failed (message: string option) =
+  Failed(message |> Option.defaultValue refused)
+
+let private posted (answer: PostCommentAnswer) (list: CommentList) =
+  match answer.Comment with
+  | Some comment when comment.Approval = "approved" ->
+    let shown =
+      { Id = comment.Id
+        CreatedDate = comment.CreatedDate
+        Commenter = comment.Commenter
+        Content = comment.Content }
+
+    match list with
+    | Loaded comments -> Approved, Loaded(comments @ [ shown ])
+    | Loading
+    | NotLoaded _ -> Approved, list
+  | Some _
+  | None -> AwaitsApproval, list
 
 let private submit (model: Model) =
   let email = model.Email.Trim()
@@ -200,11 +221,13 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     None
   | Submitted -> submit model
   | ValidationAnswered response when response.Success -> { model with Status = ValidationSent(model.Email.Trim()) }, None
-  | ValidationAnswered response -> { model with Status = failed response }, None
-  | PostAnswered response when response.Success ->
+  | ValidationAnswered response -> { model with Status = failed response.Message }, None
+  | PostAnswered answer when answer.Success ->
+    let approval, list = posted answer model.List
+
     { empty model.PageUrl model.Validations with
-        List = model.List
-        Status = Posted },
+        List = list
+        Status = Posted approval },
     None
-  | PostAnswered response -> { model with Status = failed response }, None
+  | PostAnswered answer -> { model with Status = failed answer.Message }, None
   | Unanswered -> { model with Status = Failed unanswered }, None

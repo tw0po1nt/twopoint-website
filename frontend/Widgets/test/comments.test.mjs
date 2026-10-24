@@ -135,10 +135,34 @@ test('a known email address posts the comment with its stored validation ID and 
   const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
   assert.equal(posted.length, 2, 'A second post request');
   assert.deepEqual(JSON.parse(posted[1].init.body), { ValidationId: 'validation-1', Comment: 'Nice post & thanks' });
-  assert.match(status().textContent, /Your comment is posted/);
+  assert.equal(status().textContent, 'Your comment is posted. It shows here after the author approves it.');
   assert.equal(field('email').value, '', 'The email input is empty');
   assert.equal(field('comment').value, '', 'The comment input is empty');
   assert.equal(mount.querySelectorAll('.comment').length, 2, 'The list stays');
+});
+
+test('the comment of a trusted commenter shows in the list at once', async () => {
+  answer = () =>
+    json(200, {
+      success: true,
+      message: null,
+      data: null,
+      comment: { id: '3', createdDate: '2026-10-19T08:00:00Z', commenter: 'Reader', content: 'Trusted words', approval: 'approved' },
+    });
+  type(field('email'), 'known@example.com');
+  type(field('comment'), 'Trusted words');
+  submit();
+  await settle();
+
+  assert.equal(status().className, 'comment-status is-done');
+  assert.equal(status().textContent, 'Your comment is posted.');
+  assert.equal(mount.querySelector('.comments-count').textContent, '3 comments');
+
+  const items = [...mount.querySelectorAll('.comment')];
+  assert.equal(items.length, 3, 'The comment is in the list');
+  assert.equal(items[2].querySelector('.comment-meta').textContent, '2026-10-19 · Reader');
+  assert.equal(items[2].querySelector('.comment-text').textContent, 'Trusted words');
+  assert.equal(field('comment').value, '', 'The comment input is empty');
 });
 
 test('a request with no answer shows that the site cannot get to the server', async () => {

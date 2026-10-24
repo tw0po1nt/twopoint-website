@@ -85,7 +85,7 @@ let private statusClass (model: Comments.Model) =
   | Comments.Failed _ -> "comment-status is-failed"
   | Comments.Validated
   | Comments.ValidationSent _
-  | Comments.Posted -> "comment-status is-done"
+  | Comments.Posted _ -> "comment-status is-done"
   | Comments.Editing
   | Comments.Validating
   | Comments.Posting -> "comment-status"
@@ -96,7 +96,8 @@ let private statusText (model: Comments.Model) =
   | Comments.Validated -> "Your email address is verified. Select [post comment] to post your comment."
   | Comments.ValidationSent email ->
     $"The site sent an email to {email}. Open the link in that email to verify your address, then post your comment."
-  | Comments.Posted -> "Your comment is posted. It shows here after the author approves it."
+  | Comments.Posted Comments.Approved -> "Your comment is posted."
+  | Comments.Posted Comments.AwaitsApproval -> "Your comment is posted. It shows here after the author approves it."
   | Comments.Editing
   | Comments.Validating
   | Comments.Posting -> ""
