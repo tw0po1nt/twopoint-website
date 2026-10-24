@@ -12,6 +12,7 @@
     <Compile Include="Comms\CommsDb.fs" />
     <Compile Include="Comms\Comms.fs" />
     <Compile Include="Posts\PostDb.fs" />
+    <Compile Include="Posts\PostStore.fs" />
     <Compile Include="Posts\PostEmails.fs" />
     <Compile Include="Posts\PostDependencies.fs" />
     <Compile Include="Subscriptions\SubscriptionDb.fs" />

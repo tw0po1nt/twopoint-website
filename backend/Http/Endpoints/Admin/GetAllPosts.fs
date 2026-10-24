@@ -8,6 +8,7 @@ open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
+open Azure.Storage.Blobs
 open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
@@ -26,7 +27,9 @@ type PostCommentStatsDto =
 type PostDto =
   { Slug : string
     Title : string
-    CreatedDate : DateTime
+    State : string
+    PendingEdit : bool
+    PublishDate : Nullable<DateTime>
     CommentStats : PostCommentStatsDto }
 
 [<AutoOpen>]
@@ -38,11 +41,20 @@ module PostTypesExt =
         Approved = this.Approved
         Rejected = this.Rejected }
 
-  type PostInfo with
+  type PostState with
+    member this.Name =
+      match this with
+      | Draft -> "draft"
+      | Published -> "published"
+      | Upcoming -> "upcoming"
+
+  type PostListing with
     member this.ToDto() =
       { PostDto.Slug = this.Slug.ToString()
-        Title = this.Title.ToString()
-        CreatedDate = this.CreatedDate
+        Title = this.Title
+        State = this.State.Name
+        PendingEdit = this.HasPendingEdit
+        PublishDate = Option.toNullable this.PublishDate
         CommentStats = this.CommentStats.ToDto() }
 
 module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
@@ -52,7 +64,8 @@ type GetAllPosts (
   emailClient: EmailClient,
   messaging : FirebaseMessaging,
   logger : ILogger<GetAllPosts>,
-  tableServiceClient: TableServiceClient
+  tableServiceClient: TableServiceClient,
+  postStoreClient: BlobServiceClient
 ) =
 
   [<Function("Admin-Posts-GetAll")>]
@@ -82,10 +95,14 @@ type GetAllPosts (
           tableServiceClient,
           logger
         )
+        let postStore = PostStore(postStoreClient, logger)
         let getAllPosts = TwoPoint.Core.Posts.Queries.GetAllPosts.withDependencies {
           new GetAllPostsQuery.Dependencies with
 
-          member this.GetAllPosts () = postDependencies.GetAllPosts()
+          member _.GetUtcNow () = DateTime.UtcNow
+          member _.GetPublishedPosts () = postStore.GetPublishedPosts()
+          member _.GetWorkingPosts () = postStore.GetWorkingPosts()
+          member _.GetPostsInTable () = postDependencies.GetAllPosts()
         }
 
         let! postsResult = getAllPosts()

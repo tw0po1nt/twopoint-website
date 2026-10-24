@@ -226,6 +226,27 @@ let private ofPageRoot context (root: YamlNode) =
 let parsePage (startLine: int) (yaml: string) : Result<string * string, Problem list> =
   load "front matter" startLine yaml ofPageRoot
 
+let private ofSummaryRoot context (root: YamlNode) =
+  let field name (parse: Parse<'a>) =
+    match root with
+    | :? YamlMappingNode as mapping ->
+      mapping.Children
+      |> Seq.tryPick (fun (KeyValue(key, value)) ->
+        match key with
+        | :? YamlScalarNode as scalar when scalar.Value = name -> Some value
+        | _ -> None)
+      |> Option.bind (parse context name >> Result.toOption)
+    | _ -> None
+
+  Ok
+    { Title = field "title" text
+      PublishDate = field "publishDate" utcTime }
+
+/// A draft can lack fields, so a field that is missing or wrong gives `None` and no problem.
+let parseSummary (yaml: string) : PostSummary =
+  load "front matter" 1 yaml ofSummaryRoot
+  |> Result.defaultValue { Title = None; PublishDate = None }
+
 let private ofSeriesRoot (slug: string) context (root: YamlNode) =
   result {
     let! fields = mapping context "" root [ "title"; "excerpt"; "image" ]

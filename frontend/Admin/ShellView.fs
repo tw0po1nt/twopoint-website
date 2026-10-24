@@ -12,6 +12,7 @@ open Oxpecker.Solid.Aria
 let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
+  | Shell.LoadPosts -> Shell.Posts(Posts.Answered(Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
   | Shell.TrustCommenter comment -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
@@ -40,6 +41,7 @@ let private changeCommenter (token: string) (commenterId: string) (action: Comme
 let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
+  | Shell.LoadPosts -> Api.getPosts (Config.api ()) token |> Promise.map (Posts.Answered >> Shell.Posts)
   | Shell.LoadQueue ->
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
@@ -565,6 +567,67 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
   | Commenter.NotLoaded reason ->
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The commenter did not load.").Has(p () { reason }) }
 
+let private stateTone (state: Api.PostState) =
+  match state with
+  | Api.Draft -> Parts.Plain
+  | Api.Published -> Parts.Good
+  | Api.Upcoming -> Parts.Info
+
+[<SolidComponent>]
+let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
+  let route = Shell.Router >> dispatch
+  let stats = post.CommentStats
+  let date = post.PublishDate |> Option.map Posts.dateText |> Option.defaultValue "No publish date"
+
+  article (id = post.Slug, class' = "card card-body queue-row") {
+    div (class' = "row-top") {
+      p (class' = "strong") { post.Title }
+
+      div () {
+        Parts.badge (stateTone post.State) (Posts.stateText post.State)
+
+        Show(when' = post.PendingEdit) { Parts.badge Parts.Warn "Pending edit" }
+      }
+    }
+
+    p (class' = "muted small") { $"{post.Slug} · {date}" }
+
+    p (class' = "muted small") {
+      $"{stats.New} new, {stats.Approved} approved, {stats.Rejected} rejected comments · "
+      routeLink route (PostComments post.Slug) "Comments"
+    }
+  }
+
+[<SolidComponent>]
+let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
+  match model.Posts, Posts.shown model with
+  | Posts.Waiting, _ ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Posts.Loaded _, [] ->
+    Fragment() {
+      Parts.emptyState Icon.Inbox (Posts.emptyText model.Filter) (p () { "Each post of the post store comes here." })
+    }
+  | Posts.Loaded _, posts ->
+    Fragment() {
+      div (class' = "queue") { For(each = Array.ofList posts) { yield fun post _ -> postRow dispatch post } }
+    }
+  | Posts.NotLoaded reason, _ ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The posts did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
+  let filter = Posts.Filtered >> Shell.Posts >> dispatch
+
+  Fragment() {
+    div (class' = "filter-bar") { Parts.tabs "Show" Posts.filters (fun () -> model.Filter) filter }
+    postList dispatch model
+  }
+
 [<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
@@ -589,6 +652,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   | ModerationQueue -> Fragment() { queue dispatch model.Queue }
   | PostComments slug ->
     Fragment() { postComments dispatch (model.PostComments |> Option.defaultValue (PostComments.init slug)) }
+  | Posts -> Fragment() { posts dispatch model.Posts }
   | Commenters -> Fragment() { commenters dispatch model.Commenters }
   | Commenter commenterId ->
     Fragment() { commenterPage dispatch (model.Commenter |> Option.defaultValue (Commenter.init commenterId)) }
@@ -603,7 +667,6 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
           "."
         })
     }
-  | Posts
   | Post _
   | Series
   | Subscriptions as route ->

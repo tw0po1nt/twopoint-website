@@ -16,6 +16,7 @@
     <Compile Include="Dashboard.fs" />
     <Compile Include="Rebuild.fs" />
     <Compile Include="Queue.fs" />
+    <Compile Include="Posts.fs" />
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />
     <Compile Include="Commenter.fs" />

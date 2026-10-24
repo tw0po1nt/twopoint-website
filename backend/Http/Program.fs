@@ -5,6 +5,7 @@ open Azure.Communication.Email
 open Azure.Data.Tables
 open Azure.Identity
 open Azure.Messaging.ServiceBus
+open Azure.Storage.Blobs
 open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Builder
@@ -59,6 +60,12 @@ let main args =
   // Azure Table Storage
   let tableServiceClient = TableServiceClient(config.Azure.TableStorageUri, credential)
 
+  // Azure Blob Storage: the post store. Azurite takes no token, so the local stage signs with its development account.
+  let postStoreClient =
+    if TwoPoint.Site.Render.Azurite.isUrl config.Azure.PostStoreUri
+    then BlobServiceClient "UseDevelopmentStorage=true"
+    else BlobServiceClient(config.Azure.PostStoreUri, credential)
+
   // Email client
   let resourceEndpoint = config.Azure.CommsResourceEndpoint
   let emailClient = EmailClient(resourceEndpoint,  credential)
@@ -76,6 +83,7 @@ let main args =
   builder.Services.AddScoped<Config>(fun _ -> config) |> ignore
   builder.Services.AddScoped<EmailClient>(fun _ -> emailClient) |> ignore
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore
+  builder.Services.AddSingleton<BlobServiceClient>(fun _ -> postStoreClient) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore
   builder.Services.AddSingleton<FirebaseMessaging>(fun _ -> FirebaseMessaging.DefaultInstance) |> ignore
 

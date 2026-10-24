@@ -122,6 +122,11 @@ type Series =
 /// A term and its line in the post file.
 type PlacedTerm = { Term: Term; Line: int }
 
+/// The fields that a list of posts shows. A field that is missing or wrong is `None`.
+type PostSummary =
+  { Title: string option
+    PublishDate: DateTimeOffset option }
+
 type FrontMatter =
   { PublishDate: DateTimeOffset
     UpdateDate: DateTimeOffset option
