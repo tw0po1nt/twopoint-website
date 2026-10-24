@@ -13,6 +13,7 @@ type Dependency =
   | BlobStorage = 4
   | ServiceBus = 5
   | GitHub = 6
+  | WebPush = 7
 
 type DependencyErrorType =
   | Validation of message: string

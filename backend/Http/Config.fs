@@ -37,9 +37,17 @@ type DeployConfig =
     StagingRepo : Repo
     GitHubApp : GitHubAppConfig option }
 
+/// The local backend sets PrivateKey. The deployed backend sets PrivateKeyFromKeyVault, the name of a Key Vault secret.
+type WebPushConfig =
+  { Subject : string
+    PublicKey : string
+    PrivateKey : string option
+    PrivateKeyFromKeyVault : string option }
+
 type Config =
   { Azure : AzureConfig
     Firebase : FirebaseConfig
+    WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
     Welcome : WelcomeConfig option
     Deploy : DeployConfig option }
@@ -80,6 +88,18 @@ module Config =
             ServiceAccountJsonFromKeyVault = serviceAccountJsonFromKeyVault }
       }
 
+      let! webPush = Bind.optSection "WebPush" <| bind {
+        let! subject = Bind.valueAt "Subject" Bind.string
+        let! publicKey = Bind.valueAt "PublicKey" Bind.string
+        let! privateKey = Bind.optValueAt "PrivateKey" Bind.string
+        let! privateKeyFromKeyVault = Bind.optValueAt "PrivateKeyFromKeyVault" Bind.string
+        return
+          { Subject = subject
+            PublicKey = publicKey
+            PrivateKey = privateKey
+            PrivateKeyFromKeyVault = privateKeyFromKeyVault }
+      }
+
       let bindValidRedirectUri =  bind {
         let! uri = Bind.valueAt "Uri" (Bind.uri UriKind.Absolute)
         return { Uri = uri }
@@ -114,6 +134,7 @@ module Config =
       return
         { Azure = azure
           Firebase = firebase
+          WebPush = webPush
           ValidRedirectUris = validRedirectUris
           Welcome = welcome
           Deploy = deploy }
