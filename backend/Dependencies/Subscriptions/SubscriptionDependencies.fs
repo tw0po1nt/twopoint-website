@@ -1,11 +1,11 @@
 namespace TwoPoint.Dependencies.Subscriptions
 
-open TwoPoint.Dependencies.Posts
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
+open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
 open Azure.Data.Tables
 open FsToolkit.ErrorHandling
