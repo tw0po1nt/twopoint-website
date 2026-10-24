@@ -21,6 +21,9 @@
     <Compile Include="Endpoints\Blog\Subscribe.fs" />
     <Compile Include="Endpoints\Blog\Unsubscribe.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
+    <Compile Include="Endpoints\Admin\GetPost.fs" />
+    <Compile Include="Endpoints\Admin\CreateDraft.fs" />
+    <Compile Include="Endpoints\Admin\SaveDraft.fs" />
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />
     <Compile Include="Endpoints\Admin\GetModerationQueue.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
