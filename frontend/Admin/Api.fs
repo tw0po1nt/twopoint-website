@@ -26,7 +26,8 @@ type Commenter =
   { Id: string
     Email: string
     Name: string
-    Status: CommenterStatus }
+    Status: CommenterStatus
+    CreatedDate: string }
 
 [<RequireQualifiedAccess>]
 type CommentApproval =
@@ -41,10 +42,14 @@ type Comment =
     Status: CommentApproval
     Content: string }
 
-type QueuedComment =
+type PostedComment =
   { PostSlug: string
     PostTitle: string
     Comment: Comment }
+
+type CommenterComments =
+  { Commenter: Commenter
+    Comments: PostedComment list }
 
 type Approval =
   | Approved
@@ -176,7 +181,7 @@ let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failu
       | _ -> Error Invalid)
   )
 
-let getModerationQueue (api: string) (token: string) : JS.Promise<Result<QueuedComment list, Failure>> =
+let getModerationQueue (api: string) (token: string) : JS.Promise<Result<PostedComment list, Failure>> =
   send HttpMethod.GET api token "internal/comments"
 
 let getPostComments (api: string) (token: string) (slug: string) : JS.Promise<Result<Comment list, Failure>> =
@@ -202,8 +207,25 @@ let changeApproval
 let deleteComment (api: string) (token: string) (slug: string) (comment: Comment) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token (commentPath slug comment) None
 
-let trustCommenter (api: string) (token: string) (commenter: Commenter) : JS.Promise<Result<unit, Failure>> =
-  Encode.object [ "status", Encode.string (commenterStatusName Trusted) ]
+let private commenterPath (commenterId: string) =
+  $"internal/commenters/{JS.encodeURIComponent commenterId}"
+
+let getCommenters (api: string) (token: string) : JS.Promise<Result<Commenter list, Failure>> =
+  send HttpMethod.GET api token "internal/commenters"
+
+let getCommenter (api: string) (token: string) (commenterId: string) : JS.Promise<Result<CommenterComments, Failure>> =
+  send HttpMethod.GET api token (commenterPath commenterId)
+
+let changeCommenterStatus
+  (api: string)
+  (token: string)
+  (commenterId: string)
+  (status: CommenterStatus)
+  : JS.Promise<Result<unit, Failure>> =
+  Encode.object [ "status", Encode.string (commenterStatusName status) ]
   |> Encode.toString 0
   |> Some
-  |> act HttpMethod.PUT api token $"internal/commenters/{JS.encodeURIComponent commenter.Id}"
+  |> act HttpMethod.PUT api token (commenterPath commenterId)
+
+let deleteCommenter (api: string) (token: string) (commenterId: string) : JS.Promise<Result<unit, Failure>> =
+  act HttpMethod.DELETE api token (commenterPath commenterId) None

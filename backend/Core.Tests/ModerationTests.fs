@@ -104,7 +104,7 @@ let private approvalTests =
     }
   ]
 
-type private FakeQueueDependencies(comments : QueuedComment list) =
+type private FakeQueueDependencies(comments : PostedComment list) =
   let requests = ResizeArray<CommentApproval list>()
 
   member _.Requests = List.ofSeq requests
@@ -385,5 +385,161 @@ let private statusTests =
     }
   ]
 
+let private otherCommenterId = "8e1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e22"
+
+let private commentOf (validationId : string) (id : string) (createdDate : string) =
+  let posted = comment id createdDate CommentApproval.Approved
+  { posted with Commenter = { posted.Commenter with ValidationId = CommenterValidationId.create validationId |> ok } }
+
+type private FakeCommenterStore(commenters : Commenter list, comments : Comment list, postedAfterFirstRead : Comment list) =
+  let commenters = ResizeArray commenters
+  let comments = ResizeArray comments
+  let postedAfterFirstRead = ResizeArray postedAfterFirstRead
+  let sent = ResizeArray<Commenter>()
+
+  new(commenters, comments) = FakeCommenterStore(commenters, comments, [])
+
+  member _.Commenters = List.ofSeq commenters
+  member _.Comments = List.ofSeq comments
+  member _.Sent = List.ofSeq sent
+
+  interface DeleteCommenter.Dependencies with
+    member _.GetCommenterByValidationId validationId =
+      commenters |> Seq.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
+    member _.GetCommentsOfCommenter commenter =
+      let read =
+        comments
+        |> Seq.filter (fun comment -> comment.Commenter.ValidationId = commenter.ValidationId)
+        |> List.ofSeq
+      comments.AddRange postedAfterFirstRead
+      postedAfterFirstRead.Clear()
+      CancellableTaskResult.singleton read
+    member _.DeleteComment comment =
+      comments.RemoveAll(fun stored -> stored.Id = comment.Id) |> ignore
+      CancellableTaskResult.singleton ()
+    member _.DeleteCommenter commenter =
+      commenters.RemoveAll(fun stored -> stored.ValidationId = commenter.ValidationId) |> ignore
+      CancellableTaskResult.singleton ()
+
+  interface ValidateCommenter.Dependencies with
+    member _.GetCommenterByEmailAddress emailAddress =
+      commenters |> Seq.tryFind (fun commenter -> commenter.EmailAddress = emailAddress) |> CancellableTaskResult.singleton
+    member _.GetValidRedirectUris () = CancellableTaskResult.singleton [ Uri "https://twopoint.dev" ]
+    member _.CreateCommenter emailAddress name status =
+      let created =
+        Commenter.create otherCommenterId (emailAddress.ToString()) (name |> Option.map _.ToString()) "2026-03-01T00:00:00.0000000Z" (status.ToString())
+        |> ok
+      commenters.Add created
+      CancellableTaskResult.singleton created
+    member _.SendCommenterValidationEmail commenter _ =
+      sent.Add commenter
+      CancellableTaskResult.singleton "operation"
+
+let private deleteCommenter (store : FakeCommenterStore) =
+  let dto = { CommenterDeletion.Dto.ValidationId = CommenterDeletion.ValidationId commenterId }
+  (DeleteCommenter.withDependencies store dto CancellationToken.None).Result
+
+let private validateAgain (store : FakeCommenterStore) =
+  let dto =
+    { CommenterValidation.Dto.EmailAddress = CommenterValidation.EmailAddress "commenter@example.com"
+      CommenterValidation.Dto.Name = Some (CommenterValidation.Name "Commenter")
+      CommenterValidation.Dto.RedirectUri = CommenterValidation.RedirectUri "https://twopoint.dev/posts/older-post" }
+  (ValidateCommenter.withDependencies store dto CancellationToken.None).Result
+
+let private otherComment = commentOf "9f1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e23" "4c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f44" "2026-02-04T00:00:00.0000000Z"
+
+let private deleteTests =
+  testList "DeleteCommenter" [
+    test "a delete removes each comment of the commenter, and the address can verify again" {
+      let store = FakeCommenterStore ([ commenter CommenterStatus.Banned ], commentsOfCommenter @ [ otherComment ])
+
+      match deleteCommenter store with
+      | Ok (DeleteCommenter.Event.Deleted deleted) ->
+        Expect.equal deleted.ValidationId (commenter CommenterStatus.Banned).ValidationId "Expected the deleted commenter"
+        Expect.isEmpty store.Commenters "Expected no commenter in the store"
+        Expect.equal store.Comments [ otherComment ] "Expected only the comment of another commenter"
+      | other -> failtestf "Expected Deleted, got %A" other
+
+      match validateAgain store with
+      | Ok (ValidateCommenter.Event.Validated verified) ->
+        Expect.equal verified.Status CommenterStatus.New "Expected a new commenter"
+        Expect.notEqual verified.ValidationId (commenter CommenterStatus.Banned).ValidationId "Expected a new validation ID"
+        Expect.equal store.Sent [ verified ] "Expected one verification email"
+      | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "a comment that the commenter posts during the delete is also removed" {
+      let posted = commentOf commenterId "5c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f45" "2026-02-05T00:00:00.0000000Z"
+      let store = FakeCommenterStore ([ commenter CommenterStatus.New ], commentsOfCommenter @ [ otherComment ], [ posted ])
+
+      match deleteCommenter store with
+      | Ok (DeleteCommenter.Event.Deleted _) ->
+        Expect.equal store.Comments [ otherComment ] "Expected only the comment of another commenter"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "a missing commenter gets no delete" {
+      let store = FakeCommenterStore ([], [ otherComment ])
+
+      match deleteCommenter store with
+      | Error (Logic (DeleteCommenter.CommenterNotFound _)) ->
+        Expect.equal store.Comments [ otherComment ] "Expected each comment to stay"
+      | other -> failtestf "Expected CommenterNotFound, got %A" other
+    }
+  ]
+
+let private commenterAt (validationId : string) (createdDate : string) =
+  Commenter.create validationId $"{validationId}@example.com" None createdDate "new" |> ok
+
+type private FakeCommentersDependencies(commenters : Commenter list) =
+  interface GetAllCommenters.Dependencies with
+    member _.GetAllCommenters () = CancellableTaskResult.singleton commenters
+
+type private FakeCommenterDependencies(existing : Commenter option, comments : PostedComment list) =
+  interface GetCommenter.Dependencies with
+    member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
+    member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
+
+let private getCommenter (dependencies : FakeCommenterDependencies) =
+  (GetCommenter.withDependencies dependencies commenterId CancellationToken.None).Result
+
+let private commenterQueryTests =
+  testList "Commenter queries" [
+    test "the commenters come newest first" {
+      let oldest = commenterAt "1e1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21" "2026-01-01T00:00:00.0000000Z"
+      let newest = commenterAt "2e1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21" "2026-01-03T00:00:00.0000000Z"
+      let middle = commenterAt "3e1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21" "2026-01-02T00:00:00.0000000Z"
+
+      Expect.equal
+        (GetAllCommenters.withDependencies (FakeCommentersDependencies [ oldest; newest; middle ]) () CancellationToken.None).Result
+        (Ok [ newest; middle; oldest ])
+        "Expected the newest commenter first"
+    }
+
+    test "a commenter comes with each comment, oldest first" {
+      let newest = queued olderPost "2026-02-03T00:00:00.0000000Z"
+      let oldest = queued latestPost "2026-02-01T00:00:00.0000000Z"
+
+      Expect.equal
+        (getCommenter (FakeCommenterDependencies (Some (commenter CommenterStatus.Trusted), [ newest; oldest ])))
+        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] }))
+        "Expected the oldest comment first"
+    }
+
+    test "a missing commenter is none" {
+      Expect.equal (getCommenter (FakeCommenterDependencies (None, []))) (Ok None) "Expected no commenter"
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Moderation" [ approvalTests; queueTests; postCommentsTests; postCommentTests; validationTests; statusTests ]
+let tests =
+  testList "Moderation" [
+    approvalTests
+    queueTests
+    postCommentsTests
+    postCommentTests
+    validationTests
+    statusTests
+    deleteTests
+    commenterQueryTests
+  ]

@@ -17,17 +17,17 @@ open Microsoft.Extensions.Logging
 open System.Net
 open System.Threading
 
-type QueuedCommentDto =
+type PostedCommentDto =
   { PostSlug : string
     PostTitle : string
     Comment : AdminCommentDto }
 
 [<AutoOpen>]
-module QueuedCommentExt =
+module PostedCommentExt =
 
-  type QueuedComment with
+  type PostedComment with
     member this.ToDto() =
-      { QueuedCommentDto.PostSlug = this.Post.ToString()
+      { PostedCommentDto.PostSlug = this.Post.ToString()
         PostTitle = this.PostTitle.ToString()
         Comment = this.Comment.ToDto() }
 

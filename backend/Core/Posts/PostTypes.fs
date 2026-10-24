@@ -200,10 +200,14 @@ module PostInfo =
     return { Slug = slug; Title = title;  CreatedDate = createdDate; CommentStats = commentStats }
   }
 
-type QueuedComment =
+type PostedComment =
   { Post : Slug
     PostTitle : NonEmptyString
     Comment : Comment }
+
+type CommenterComments =
+  { Commenter : Commenter
+    Comments : PostedComment list }
 
 type Post =
   { Id: Slug

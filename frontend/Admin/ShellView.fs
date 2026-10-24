@@ -18,6 +18,10 @@ let private fail (call: Shell.Call) =
   | Shell.LoadPostComments slug -> Shell.PostComments(PostComments.Answered(slug, Error Api.Unanswered))
   | Shell.ModeratePostComment(_, comment, action) ->
     Shell.PostComments(PostComments.Done(comment.Id, action, Error Api.Unanswered))
+  | Shell.LoadCommenters -> Shell.Commenters(Commenters.Answered(Error Api.Unanswered))
+  | Shell.LoadCommenter commenterId -> Shell.Commenter(Commenter.Answered(commenterId, Error Api.Unanswered))
+  | Shell.ChangeCommenter(commenterId, action) ->
+    Shell.Commenter(Commenter.Done(commenterId, action, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -28,6 +32,11 @@ let private moderate (token: string) (slug: string) (comment: Api.Comment) (acti
   | Queue.Reject -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Rejected
   | Queue.Delete -> Api.deleteComment (Config.api ()) token slug comment
 
+let private changeCommenter (token: string) (commenterId: string) (action: Commenter.Action) =
+  match Commenter.statusAfter action with
+  | Some status -> Api.changeCommenterStatus (Config.api ()) token commenterId status
+  | None -> Api.deleteCommenter (Config.api ()) token commenterId
+
 let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
@@ -35,7 +44,7 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
   | Shell.TrustCommenter comment ->
-    Api.trustCommenter (Config.api ()) token comment.Comment.Commenter
+    Api.changeCommenterStatus (Config.api ()) token comment.Comment.Commenter.Id Api.Trusted
     |> Promise.map (fun result -> Shell.Queue(Queue.Trusted(comment.Comment.Id, result)))
   | Shell.Moderate(comment, action) ->
     moderate token comment.PostSlug comment.Comment action
@@ -46,6 +55,15 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   | Shell.ModeratePostComment(slug, comment, action) ->
     moderate token slug comment action
     |> Promise.map (fun result -> Shell.PostComments(PostComments.Done(comment.Id, action, result)))
+  | Shell.LoadCommenters ->
+    Api.getCommenters (Config.api ()) token
+    |> Promise.map (Commenters.Answered >> Shell.Commenters)
+  | Shell.LoadCommenter commenterId ->
+    Api.getCommenter (Config.api ()) token commenterId
+    |> Promise.map (fun result -> Shell.Commenter(Commenter.Answered(commenterId, result)))
+  | Shell.ChangeCommenter(commenterId, action) ->
+    changeCommenter token commenterId action
+    |> Promise.map (fun result -> Shell.Commenter(Commenter.Done(commenterId, action, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
 let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
@@ -257,13 +275,15 @@ let private statusTone (status: Api.CommenterStatus) =
   | Api.Banned -> Parts.Bad
 
 [<SolidComponent>]
-let private commenterHead (commenter: Api.Commenter) =
+let private commenterHead (dispatch: Shell.Msg -> unit) (commenter: Api.Commenter) =
+  let route = Shell.Router >> dispatch
+
   div (class' = "queue-head") {
     Parts.avatar commenter.Name
 
     div (class' = "grow") {
       p (class' = "strong") {
-        commenter.Name
+        routeLink route (Commenter commenter.Id) commenter.Name
         " "
         Parts.badge (statusTone commenter.Status) (Queue.statusText commenter.Status)
       }
@@ -335,7 +355,7 @@ let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
   let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
 
   article (id = comment.Id, class' = "card card-body queue-row") {
-    commenterHead comment.Commenter
+    commenterHead dispatch comment.Commenter
     p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
     p (class' = "queue-text") { comment.Content }
     rowEnd dispatch comment.Id choose row.State (Queue.actions comment.Commenter.Status)
@@ -375,7 +395,7 @@ let private postCommentRow (dispatch: Shell.Msg -> unit) (row: PostComments.Row)
 
   article (id = comment.Id, class' = "card card-body queue-row") {
     div (class' = "row-top") {
-      commenterHead comment.Commenter
+      commenterHead dispatch comment.Commenter
       Parts.badge (approvalTone comment.Status) (PostComments.approvalText comment.Status)
     }
 
@@ -414,6 +434,138 @@ let private postComments (dispatch: Shell.Msg -> unit) (model: PostComments.Mode
   }
 
 [<SolidComponent>]
+let private commenterRow (dispatch: Shell.Msg -> unit) (commenter: Api.Commenter) =
+  article (id = commenter.Id, class' = "card card-body queue-row") {
+    commenterHead dispatch commenter
+    p (class' = "muted small") { $"First date: {Commenters.dateText commenter.CreatedDate}" }
+  }
+
+[<SolidComponent>]
+let private commenterList (dispatch: Shell.Msg -> unit) (model: Commenters.Model) =
+  match model.Commenters, Commenters.shown model with
+  | Commenters.Waiting, _ ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Commenters.Loaded _, [] ->
+    Fragment() {
+      Parts.emptyState
+        Icon.Inbox
+        (Commenters.emptyText model.Filter)
+        (p () { "Each person who verifies an email address to comment comes here." })
+    }
+  | Commenters.Loaded _, commenters ->
+    Fragment() {
+      div (class' = "queue") {
+        For(each = Array.ofList commenters) { yield fun commenter _ -> commenterRow dispatch commenter }
+      }
+    }
+  | Commenters.NotLoaded reason, _ ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The commenters did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private commenters (dispatch: Shell.Msg -> unit) (model: Commenters.Model) =
+  let filter = Commenters.Filtered >> Shell.Commenters >> dispatch
+
+  Fragment() {
+    div (class' = "filter-bar") { Parts.tabs "Status" Commenters.filters (fun () -> model.Filter) filter }
+    commenterList dispatch model
+  }
+
+[<SolidComponent>]
+let private commenterAction (dispatch: Shell.Msg -> unit) (sending: bool) (action: Commenter.Action) =
+  let choose () =
+    match action with
+    | Commenter.Delete -> dispatch (Shell.Opened Shell.DeleteCommenterDialog)
+    | Commenter.Trust
+    | Commenter.Untrust
+    | Commenter.Ban
+    | Commenter.Unban -> dispatch (Shell.Commenter(Commenter.Chosen action))
+
+  let kind =
+    match action with
+    | Commenter.Trust -> Parts.Accent
+    | Commenter.Delete -> Parts.Ghost
+    | Commenter.Untrust
+    | Commenter.Ban
+    | Commenter.Unban -> Parts.Secondary
+
+  Parts
+    .Button(kind = kind, size = Parts.Small, disabled = sending, onClick = fun _ -> choose ())
+    .Has(Fragment() { Commenter.label action })
+
+[<SolidComponent>]
+let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedComment) =
+  let route = Shell.Router >> dispatch
+
+  article (id = comment.Comment.Id, class' = "card card-body queue-row") {
+    div (class' = "row-top") {
+      p (class' = "small") {
+        "On "
+        routeLink route (PostComments comment.PostSlug) comment.PostTitle
+        span (class' = "muted") { $" on {Commenters.dateText comment.Comment.CreatedDate}" }
+      }
+
+      Parts.badge (approvalTone comment.Comment.Status) (PostComments.approvalText comment.Comment.Status)
+    }
+
+    p (class' = "queue-text") { comment.Comment.Content }
+  }
+
+[<SolidComponent>]
+let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model) =
+  match model.Page with
+  | Commenter.Waiting ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Commenter.Loaded(page, state) ->
+    let commenter = page.Commenter
+
+    Fragment() {
+      div (class' = "queue") {
+        div (class' = "card card-body queue-row commenter") {
+          div (class' = "queue-head") {
+            Parts.avatar commenter.Name
+            p (class' = "strong grow") { commenter.Name }
+          }
+
+          dl (class' = "fields") {
+            dt () { "Email" }
+            dd () { commenter.Email }
+            dt () { "Status" }
+            dd () { Parts.badge (statusTone commenter.Status) (Queue.statusText commenter.Status) }
+            dt () { "First date" }
+            dd () { Commenters.dateText commenter.CreatedDate }
+          }
+
+          Show(when' = (Commenter.failure state).IsSome) {
+            Parts.Alert(tone = Parts.Bad).Has(p () { Commenter.failure state |> Option.defaultValue "" })
+          }
+
+          div (class' = "actions") {
+            For(each = Array.ofList (Commenter.actions commenter.Status)) {
+              yield fun action _ -> commenterAction dispatch (Commenter.sends state) action
+            }
+          }
+        }
+
+        h2 () { "Comments" }
+
+        Show(when' = List.isEmpty page.Comments) { p (class' = "muted") { "This commenter has no comments." } }
+        For(each = Array.ofList page.Comments) { yield fun comment _ -> commenterComment dispatch comment }
+      }
+    }
+  | Commenter.NotLoaded reason ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The commenter did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
 
@@ -437,6 +589,9 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   | ModerationQueue -> Fragment() { queue dispatch model.Queue }
   | PostComments slug ->
     Fragment() { postComments dispatch (model.PostComments |> Option.defaultValue (PostComments.init slug)) }
+  | Commenters -> Fragment() { commenters dispatch model.Commenters }
+  | Commenter commenterId ->
+    Fragment() { commenterPage dispatch (model.Commenter |> Option.defaultValue (Commenter.init commenterId)) }
   | NotFound _ ->
     Fragment() {
       Parts.emptyState
@@ -450,7 +605,6 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
     }
   | Posts
   | Post _
-  | Commenters
   | Series
   | Subscriptions as route ->
     Fragment() {
@@ -495,6 +649,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
   let close () =
     match (model ()).Overlay with
     | Some(Shell.DeleteDialog _ as overlay) -> dispatch (Shell.Closed overlay)
+    | Some Shell.DeleteCommenterDialog
     | Some Shell.MoreSheet
     | Some Shell.SignOutDialog
     | None -> ()
@@ -508,6 +663,24 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     "Delete the comment?"
     (p () {
       "The comment and its history go away permanently. To hide the comment from readers and keep it, reject it."
+    })
+    (Fragment() {
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
+      Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
+    })
+
+[<SolidComponent>]
+let private deleteCommenterDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Closed Shell.DeleteCommenterDialog)
+  let confirm () = Shell.deleteCommenterChosen (model ()) |> Option.iter dispatch
+
+  Parts.modalDialog
+    "delete-commenter"
+    (fun () -> (Shell.deleteCommenterChosen (model ())).IsSome)
+    close
+    "Delete the commenter?"
+    (p () {
+      "The commenter and each comment of the commenter go away permanently. The email address can verify again later, as a new commenter. To keep the commenter from commenting, ban the commenter."
     })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
@@ -667,4 +840,5 @@ let view (signIn: SignIn) =
       })
 
     deleteDialog dispatch model
+    deleteCommenterDialog dispatch model
   }

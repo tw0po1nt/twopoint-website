@@ -13,7 +13,7 @@ type RowState =
   | NotDone of Action * reason: string
 
 type Row =
-  { Comment: Api.QueuedComment
+  { Comment: Api.PostedComment
     State: RowState }
 
 type Model =
@@ -22,15 +22,15 @@ type Model =
   | NotLoaded of reason: string
 
 type Msg =
-  | Answered of Result<Api.QueuedComment list, Api.Failure>
+  | Answered of Result<Api.PostedComment list, Api.Failure>
   /// A delete comes here only after the confirmation.
   | Chosen of commentId: string * Action
   | Trusted of commentId: string * Result<unit, Api.Failure>
   | Done of commentId: string * Action * Result<unit, Api.Failure>
 
 type Effect =
-  | Trust of Api.QueuedComment
-  | Moderate of Api.QueuedComment * Action
+  | Trust of Api.PostedComment
+  | Moderate of Api.PostedComment * Action
 
 let init: Model = Waiting
 

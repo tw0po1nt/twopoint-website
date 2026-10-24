@@ -17,6 +17,8 @@
     <Compile Include="Rebuild.fs" />
     <Compile Include="Queue.fs" />
     <Compile Include="PostComments.fs" />
+    <Compile Include="Commenters.fs" />
+    <Compile Include="Commenter.fs" />
     <Compile Include="Shell.fs" />
     <Compile Include="Menu.fs" />
     <Compile Include="Icon.fs" />

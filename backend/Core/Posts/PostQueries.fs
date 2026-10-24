@@ -106,15 +106,68 @@ module GetCommentsForPost =
 [<RequireQualifiedAccess>]
 module GetModerationQueue =
 
-  type Query = unit -> CancellableTask<QueryResult<QueuedComment list>>
+  type Query = unit -> CancellableTask<QueryResult<PostedComment list>>
 
   type Dependencies =
     abstract member GetCommentsOnAllPosts:
       approvals: CommentApproval list
-        -> DependencyResult<QueuedComment list>
+        -> DependencyResult<PostedComment list>
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun () ->
       dependencies.GetCommentsOnAllPosts [ CommentApproval.New ]
       |> CancellableTaskResult.mapError QueryError.Dependency
       |> CancellableTaskResult.map (List.sortBy _.Comment.CreatedDate)
+
+// ====================================================================================================================
+// Get all commenters
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetAllCommenters =
+
+  type Query = unit -> CancellableTask<QueryResult<Commenter list>>
+
+  type Dependencies =
+    abstract member GetAllCommenters: unit -> DependencyResult<Commenter list>
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun () ->
+      dependencies.GetAllCommenters()
+      |> CancellableTaskResult.mapError QueryError.Dependency
+      |> CancellableTaskResult.map (List.sortByDescending _.CreatedDate)
+
+// ====================================================================================================================
+// Get commenter
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetCommenter =
+
+  type Query = string -> CancellableTask<QueryResult<CommenterComments option>>
+
+  type Dependencies =
+    abstract member GetCommenterByValidationId:
+      validationId: CommenterValidationId
+        -> DependencyResult<Commenter option>
+    abstract member GetCommentsOfCommenter:
+      commenter: Commenter
+        -> DependencyResult<PostedComment list>
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun validationId -> cancellableTaskResult {
+      let! validationId =
+        validationId
+        |> CommenterValidationId.create
+        |> Result.mapError QueryError.Validation
+      let! commenter =
+        dependencies.GetCommenterByValidationId validationId
+        |> CancellableTaskResult.mapError QueryError.Dependency
+      return!
+        commenter
+        |> Option.traverseCancellableTaskResult (fun commenter -> cancellableTaskResult {
+          let! comments = dependencies.GetCommentsOfCommenter commenter
+          return { Commenter = commenter; Comments = comments |> List.sortBy _.Comment.CreatedDate }
+        })
+        |> CancellableTaskResult.mapError QueryError.Dependency
+    }
