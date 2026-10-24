@@ -32,4 +32,9 @@ let parse (images: IImageSize) (stage: Stage) (series: Series list) (file: strin
   }
   |> FileProblems.ofResult file bodyStart
 
+let summary (text: string) : PostSummary =
+  match Body.frontMatter (Markdown.Parse(text, Body.pipeline)) with
+  | Some block -> FrontMatter.parseSummary (block.Lines.ToString())
+  | None -> { Title = None; PublishDate = None }
+
 let urlPath (post: Post) = $"/posts/{post.Slug}/"
