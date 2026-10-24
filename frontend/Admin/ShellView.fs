@@ -26,6 +26,8 @@ let private fail (call: Shell.Call) =
   | Shell.LoadSubscriptions -> Shell.Subscriptions(Subscriptions.Answered(Error Api.Unanswered))
   | Shell.LoadSubscriptionDeliveries subscriptionId ->
     Shell.Subscriptions(Subscriptions.DeliveriesAnswered(subscriptionId, Error Api.Unanswered))
+  | Shell.CancelSubscription subscriptionId -> Shell.Subscriptions(Subscriptions.Canceled(subscriptionId, Error Api.Unanswered))
+  | Shell.DeleteSubscription subscriptionId -> Shell.Subscriptions(Subscriptions.Deleted(subscriptionId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -75,6 +77,12 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   | Shell.LoadSubscriptionDeliveries subscriptionId ->
     Api.getSubscriptionDeliveries (Config.api ()) token subscriptionId
     |> Promise.map (fun result -> Shell.Subscriptions(Subscriptions.DeliveriesAnswered(subscriptionId, result)))
+  | Shell.CancelSubscription subscriptionId ->
+    Api.cancelSubscription (Config.api ()) token subscriptionId
+    |> Promise.map (fun result -> Shell.Subscriptions(Subscriptions.Canceled(subscriptionId, result)))
+  | Shell.DeleteSubscription subscriptionId ->
+    Api.deleteSubscription (Config.api ()) token subscriptionId
+    |> Promise.map (fun result -> Shell.Subscriptions(Subscriptions.Deleted(subscriptionId, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
 let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
@@ -742,7 +750,23 @@ let private deliveryList (deliveries: Subscriptions.Deliveries) =
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The deliveries did not load.").Has(p () { reason }) }
 
 [<SolidComponent>]
-let private subscriptionDetails (model: Subscriptions.Model) =
+let private subscriptionAction (dispatch: Shell.Msg -> unit) (subscriptionId: string) (sending: bool) (action: Subscriptions.Action) =
+  let choose () =
+    match action with
+    | Subscriptions.Delete -> dispatch (Shell.Opened Shell.DeleteSubscriptionDialog)
+    | Subscriptions.Cancel -> dispatch (Shell.Subscriptions(Subscriptions.Chosen(subscriptionId, action)))
+
+  let kind =
+    match action with
+    | Subscriptions.Cancel -> Parts.Secondary
+    | Subscriptions.Delete -> Parts.Ghost
+
+  Parts
+    .Button(kind = kind, size = Parts.Small, disabled = sending, onClick = fun _ -> choose ())
+    .Has(Fragment() { Subscriptions.label action })
+
+[<SolidComponent>]
+let private subscriptionDetails (dispatch: Shell.Msg -> unit) (model: Subscriptions.Model) =
   match Subscriptions.tryOpened model, model.Sheet with
   | Some subscription, Some sheet ->
     Fragment() {
@@ -762,6 +786,16 @@ let private subscriptionDetails (model: Subscriptions.Model) =
         }
       }
 
+      Show(when' = (Subscriptions.failure sheet.State).IsSome) {
+        Parts.Alert(tone = Parts.Bad).Has(p () { Subscriptions.failure sheet.State |> Option.defaultValue "" })
+      }
+
+      div (class' = "actions") {
+        For(each = Array.ofList (Subscriptions.actions subscription)) {
+          yield fun action _ -> subscriptionAction dispatch subscription.Id (Subscriptions.sends sheet.State) action
+        }
+      }
+
       h3 () { "Deliveries" }
       deliveryList sheet.Deliveries
     }
@@ -778,7 +812,7 @@ let private subscriptionSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shel
     "Subscription"
     (Fragment() {
       Parts.sheetHead "Subscription" close
-      Parts.sheetBody (subscriptionDetails (model ()).Subscriptions)
+      Parts.sheetBody (subscriptionDetails dispatch (model ()).Subscriptions)
     })
 
 [<SolidComponent>]
@@ -866,6 +900,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     match (model ()).Overlay with
     | Some(Shell.DeleteDialog _ as overlay) -> dispatch (Shell.Closed overlay)
     | Some Shell.DeleteCommenterDialog
+    | Some Shell.DeleteSubscriptionDialog
     | Some Shell.MoreSheet
     | Some Shell.SignOutDialog
     | None -> ()
@@ -897,6 +932,24 @@ let private deleteCommenterDialog (dispatch: Shell.Msg -> unit) (model: unit -> 
     "Delete the commenter?"
     (p () {
       "The commenter and each comment of the commenter go away permanently. The email address can verify again later, as a new commenter. To keep the commenter from commenting, ban the commenter."
+    })
+    (Fragment() {
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
+      Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
+    })
+
+[<SolidComponent>]
+let private deleteSubscriptionDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Closed Shell.DeleteSubscriptionDialog)
+  let confirm () = Shell.deleteSubscriptionChosen (model ()) |> Option.iter dispatch
+
+  Parts.modalDialog
+    "delete-subscription"
+    (fun () -> (Shell.deleteSubscriptionChosen (model ())).IsSome)
+    close
+    "Delete the subscription?"
+    (p () {
+      "The subscription and each delivery record of the subscription go away permanently. The reader gets no email. To keep the record, cancel the subscription."
     })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
@@ -1061,5 +1114,6 @@ let view (signIn: SignIn) =
 
     deleteDialog dispatch model
     deleteCommenterDialog dispatch model
+    deleteSubscriptionDialog dispatch model
     subscriptionSheet dispatch model
   }

@@ -16,7 +16,19 @@ type Deliveries =
   | DeliveriesLoaded of Api.Delivery list
   | DeliveriesNotLoaded of reason: string
 
-type Sheet = { Id: string; Deliveries: Deliveries }
+type Action =
+  | Cancel
+  | Delete
+
+type State =
+  | Ready
+  | Sending of Action
+  | NotDone of Action * reason: string
+
+type Sheet =
+  { Id: string
+    Deliveries: Deliveries
+    State: State }
 
 type Model =
   { Filter: Filter
@@ -31,8 +43,15 @@ type Msg =
   | Opened of subscriptionId: string
   | Closed
   | DeliveriesAnswered of subscriptionId: string * Result<Api.Delivery list, Api.Failure>
+  /// A delete comes here only after the confirmation.
+  | Chosen of subscriptionId: string * Action
+  | Canceled of subscriptionId: string * Result<Api.Subscription, Api.Failure>
+  | Deleted of subscriptionId: string * Result<unit, Api.Failure>
 
-type Effect = LoadDeliveries of subscriptionId: string
+type Effect =
+  | LoadDeliveries of subscriptionId: string
+  | CancelSubscription of subscriptionId: string
+  | DeleteSubscription of subscriptionId: string
 
 type Counts = { Active: int; Inactive: int }
 
@@ -49,11 +68,43 @@ let reload (model: Model) =
 
 let filters = [ All, "All"; Active, "Active"; Inactive, "Inactive" ]
 
+/// The author cannot reactivate a subscription, so a canceled subscription has only the delete.
+let actions (subscription: Api.Subscription) =
+  if subscription.IsActive then [ Cancel; Delete ] else [ Delete ]
+
+let label (action: Action) =
+  match action with
+  | Cancel -> "Cancel subscription"
+  | Delete -> "Delete"
+
+let sends (state: State) =
+  match state with
+  | Sending _ -> true
+  | Ready
+  | NotDone _ -> false
+
+let failure (state: State) =
+  match state with
+  | NotDone(Cancel, reason) -> Some $"The cancel did not complete. {reason}"
+  | NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Ready
+  | Sending _ -> None
+
 let private find (subscriptionId: string) (model: Model) =
   match model.Subscriptions with
   | Loaded subscriptions -> subscriptions |> List.tryFind (fun subscription -> subscription.Id = subscriptionId)
   | Waiting
   | NotLoaded _ -> None
+
+let private notDone (subscriptionId: string) (action: Action) (failure: Api.Failure) (model: Model) =
+  { model with
+      Sheet =
+        model.Sheet
+        |> Option.map (fun sheet ->
+          if sheet.Id = subscriptionId then
+            { sheet with State = NotDone(action, Api.reason failure) }
+          else
+            sheet) }
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg, model.Sheet with
@@ -68,7 +119,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
           Sheet =
             Some
               { Id = subscriptionId
-                Deliveries = DeliveriesWaiting } },
+                Deliveries = DeliveriesWaiting
+                State = Ready } },
       Some(LoadDeliveries subscriptionId)
     | None -> model, None
   | Closed, _ -> { model with Sheet = None }, None
@@ -82,6 +134,47 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
         Sheet = Some { sheet with Deliveries = deliveries } },
     None
   | DeliveriesAnswered _, _ -> model, None
+  | Chosen(subscriptionId, action), Some sheet when sheet.Id = subscriptionId ->
+    match sheet.State, find subscriptionId model with
+    | (Ready | NotDone _), Some subscription when List.contains action (actions subscription) ->
+      { model with
+          Sheet = Some { sheet with State = Sending action } },
+      Some(
+        match action with
+        | Cancel -> CancelSubscription subscriptionId
+        | Delete -> DeleteSubscription subscriptionId
+      )
+    | _ -> model, None
+  | Chosen _, _ -> model, None
+  | Canceled(subscriptionId, Ok canceled), _ ->
+    { model with
+        Subscriptions =
+          match model.Subscriptions with
+          | Loaded subscriptions ->
+            Loaded(
+              subscriptions
+              |> List.map (fun subscription -> if subscription.Id = subscriptionId then canceled else subscription)
+            )
+          | other -> other
+        Sheet =
+          model.Sheet
+          |> Option.map (fun sheet ->
+            if sheet.Id = subscriptionId then
+              { sheet with State = Ready }
+            else
+              sheet) },
+    None
+  | Canceled(subscriptionId, Error failure), _ -> notDone subscriptionId Cancel failure model, None
+  | Deleted(subscriptionId, Ok()), _ ->
+    { model with
+        Subscriptions =
+          match model.Subscriptions with
+          | Loaded subscriptions ->
+            Loaded(subscriptions |> List.filter (fun subscription -> subscription.Id <> subscriptionId))
+          | other -> other
+        Sheet = model.Sheet |> Option.filter (fun sheet -> sheet.Id <> subscriptionId) },
+    None
+  | Deleted(subscriptionId, Error failure), _ -> notDone subscriptionId Delete failure model, None
 
 let private matches (search: string) (subscription: Api.Subscription) =
   let contains (text: string) =

@@ -15,6 +15,8 @@ type Call =
   | ChangeCommenter of commenterId: string * Commenter.Action
   | LoadSubscriptions
   | LoadSubscriptionDeliveries of subscriptionId: string
+  | CancelSubscription of subscriptionId: string
+  | DeleteSubscription of subscriptionId: string
   | RebuildSite
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -23,6 +25,7 @@ type Overlay =
   | SignOutDialog
   | DeleteDialog of commentId: string
   | DeleteCommenterDialog
+  | DeleteSubscriptionDialog
 
 type Model =
   { Router: Router.Model
@@ -254,17 +257,32 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       next,
       effect
       |> Option.map (fun (Commenter.Change(commenterId, action)) -> Send [ ChangeCommenter(commenterId, action) ])
+  | Subscriptions(Subscriptions.Chosen(_, Subscriptions.Delete)) when model.Overlay <> Some DeleteSubscriptionDialog ->
+    model, None
   | Subscriptions msg ->
     let subscriptions, effect = Subscriptions.update msg model.Subscriptions
-    let next = { model with Subscriptions = subscriptions }
+
+    let next =
+      { model with
+          Subscriptions = subscriptions
+          Overlay =
+            match msg with
+            | Subscriptions.Chosen(_, Subscriptions.Delete) -> None
+            | _ -> model.Overlay }
 
     match msg with
     | Subscriptions.Answered(Error Api.Refused)
-    | Subscriptions.DeliveriesAnswered(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Subscriptions.DeliveriesAnswered(_, Error Api.Refused)
+    | Subscriptions.Canceled(_, Error Api.Refused)
+    | Subscriptions.Deleted(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
     | _ ->
       next,
       effect
-      |> Option.map (fun (Subscriptions.LoadDeliveries subscriptionId) -> Send [ LoadSubscriptionDeliveries subscriptionId ])
+      |> Option.map (fun effect ->
+        match effect with
+        | Subscriptions.LoadDeliveries subscriptionId -> Send [ LoadSubscriptionDeliveries subscriptionId ]
+        | Subscriptions.CancelSubscription subscriptionId -> Send [ CancelSubscription subscriptionId ]
+        | Subscriptions.DeleteSubscription subscriptionId -> Send [ DeleteSubscription subscriptionId ])
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None
@@ -281,6 +299,7 @@ let deleteChosen (model: Model) =
     |> Option.map (fun _ -> PostComments(PostComments.Chosen(commentId, Queue.Delete)))
   | Some(DeleteDialog _), _
   | Some DeleteCommenterDialog, _
+  | Some DeleteSubscriptionDialog, _
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
@@ -293,6 +312,19 @@ let deleteCommenterChosen (model: Model) =
     |> Option.map (fun _ -> Commenter(Commenter.Chosen Commenter.Delete))
   | Some DeleteCommenterDialog, _
   | Some(DeleteDialog _), _
+  | Some DeleteSubscriptionDialog, _
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
+
+let deleteSubscriptionChosen (model: Model) =
+  match model.Overlay, model.Router.Route, model.Subscriptions.Sheet with
+  | Some DeleteSubscriptionDialog, Route.Subscriptions, Some sheet ->
+    Subscriptions.tryOpened model.Subscriptions
+    |> Option.map (fun _ -> Subscriptions(Subscriptions.Chosen(sheet.Id, Subscriptions.Delete)))
+  | Some DeleteSubscriptionDialog, _, _
+  | Some DeleteCommenterDialog, _, _
+  | Some(DeleteDialog _), _, _
+  | Some MoreSheet, _, _
+  | Some SignOutDialog, _, _
+  | None, _, _ -> None
