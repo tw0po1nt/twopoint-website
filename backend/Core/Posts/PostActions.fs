@@ -672,3 +672,97 @@ module UpdateCommenterStatus =
            (DependencyResult.toActionResult Event.Updated)
            (Logic >> ActionResult.failure)
     }
+
+// ====================================================================================================================
+// Delete commenter
+// ====================================================================================================================
+
+// Input
+
+type CommenterDeletion = { ValidationId : CommenterValidationId }
+
+module CommenterDeletion =
+
+  type ValidationId = ValidationId of string
+
+  type Dto = { ValidationId : ValidationId }
+
+  let create (dto : Dto) = validation {
+    let (ValidationId validationId) = dto.ValidationId
+    let! validationId = CommenterValidationId.create validationId
+    return { CommenterDeletion.ValidationId = validationId }
+  }
+
+[<RequireQualifiedAccess>]
+module DeleteCommenter =
+
+  // Output
+
+  type Error = CommenterNotFound of CommenterValidationId
+  type Success = Deleted of commenter: Commenter * comments: Comment list
+  type Decision = Decision<Success, Error>
+  type Event = Deleted of Commenter
+
+  // Logic
+
+  type Logic =
+    Commenter option
+      -> Comment list
+      -> CommenterDeletion
+      -> Decision
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic =
+      fun existingCommenter comments deletion -> result {
+        let! commenter = existingCommenter |> Result.requireSome (CommenterNotFound deletion.ValidationId)
+        return Success.Deleted (commenter, comments)
+      }
+
+  // Action
+
+  type Action = CommenterDeletion.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
+    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<Comment list>
+    abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
+    abstract member DeleteCommenter: commenter: Commenter -> DependencyResult<unit>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+
+    // The commenter goes last, so that a second try after a failed delete finds the comments that are left.
+    let handleCommenterDeleted (Success.Deleted (commenter, comments)) : DependencyResult<Commenter> =
+      cancellableTaskResult {
+        for comment in comments do
+          do! dependencies.DeleteComment comment
+        do! dependencies.DeleteCommenter commenter
+        return commenter
+      }
+
+    fun commenterDeletion -> cancellableTaskResult {
+      let! (commenterDeletion : CommenterDeletion) =
+        commenterDeletion
+        |> CommenterDeletion.create
+        |> Result.mapError ActionError<Error>.Validation
+
+      let! existingCommenter =
+        dependencies.GetCommenterByValidationId commenterDeletion.ValidationId
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! comments =
+        match existingCommenter with
+        | Some commenter ->
+          dependencies.GetCommentsOfCommenter commenter
+          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+        | None -> CancellableTaskResult.singleton []
+
+      let decision = Logic.decide existingCommenter comments commenterDeletion
+
+      return!
+        decision
+        |> Result.traverseCancellableTask handleCommenterDeleted
+        |> CancellableTaskResult.foldResult
+          (DependencyResult.toActionResult Event.Deleted)
+          (Logic >> ActionResult.failure)
+    }

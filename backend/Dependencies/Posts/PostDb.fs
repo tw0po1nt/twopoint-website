@@ -258,6 +258,7 @@ type internal IPostDb =
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
   abstract member CreatePost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
   
+  abstract member GetAllCommenters: unit -> CancellableTaskResult<DbCommenter list, DependencyError>
   abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member GetCommenterByValidationId: validationId: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member CreateCommenter: commenter: DbCommenter -> CancellableTaskResult<DbCommenter, DependencyError>
@@ -265,6 +266,7 @@ type internal IPostDb =
     commenter: DbCommenter
       -> status: string
       -> CancellableTaskResult<DbCommenter, DependencyError>
+  abstract member DeleteCommenter: validationId: string -> CancellableTaskResult<unit, DependencyError>
   
   abstract member GetCommentsForPost:
     approvals: string list
@@ -377,6 +379,9 @@ module internal PostDb =
       member _.CreatePost post =
         post.ToEntity() |> add postsTable PostDbError.validation DbPost.FromEntity
 
+      member _.GetAllCommenters () =
+        toList commentersTable DbCommenter.FromEntity
+
       member _.GetCommenterByEmailAddress emailAddress =
         eq "EmailAddress" emailAddress |> trySingleQuery commentersTable DbCommenter.FromEntity None
       
@@ -391,6 +396,9 @@ module internal PostDb =
         <| fun entity ->
           entity["Status"] <- status
           entity
+
+      member _.DeleteCommenter validationId =
+        eq "PartitionKey" validationId + eq "RowKey" validationId |> delete commentersTable PostDbError.validation
         
       member _.GetCommentsForPost approvals post = cancellableTaskResult {
         // Get comments

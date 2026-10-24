@@ -102,6 +102,14 @@ type PostDependencies(
     return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
   }
 
+  member _.GetAllCommenters () = cancellableTaskResult {
+    let! dbCommenters = postDb.GetAllCommenters()
+    return!
+      dbCommenters
+      |> List.traverseValidationA (fun (dbo: DbCommenter) -> dbo.ToCommenter())
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetCommenterByEmailAddress emailAddress = cancellableTaskResult {
     let! dbCommenter = postDb.GetCommenterByEmailAddress (emailAddress.ToString())
 
@@ -187,15 +195,19 @@ type PostDependencies(
   }
 
   member _.GetCommentsOfCommenter (commenter : Commenter) = cancellableTaskResult {
-    let! dbComments =
-      postDb.GetCommentsOfCommenter (CommentApproval.all |> List.map _.ToString()) (DbCommenter.FromCommenter commenter)
+    let! dbPosts, dbComments =
+      CancellableTaskResult.parallelZip
+        (postDb.GetAllPosts())
+        (postDb.GetCommentsOfCommenter allApprovals (DbCommenter.FromCommenter commenter))
     return!
       dbComments
-      |> List.traverseValidationA (
-        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
-      )
+      |> List.traverseValidationA (fun (comment: DbComment, commenter, status) ->
+        let post = dbPosts |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
+        comment.ToQueuedComment(post, status, commenter))
       |> DependencyError.ofValidation source
   }
+
+  member _.DeleteCommenter (commenter : Commenter) = commenter.ValidationId.ToString() |> postDb.DeleteCommenter
 
   member _.GetCommentById commentId = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())

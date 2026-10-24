@@ -26,6 +26,9 @@
     <Compile Include="Endpoints\Admin\GetModerationQueue.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommenterStatus.fs" />
+    <Compile Include="Endpoints\Admin\GetAllCommenters.fs" />
+    <Compile Include="Endpoints\Admin\GetCommenter.fs" />
+    <Compile Include="Endpoints\Admin\DeleteCommenter.fs" />
     <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
     <Compile Include="Endpoints\Admin\StartNewPostDelivery.fs" />

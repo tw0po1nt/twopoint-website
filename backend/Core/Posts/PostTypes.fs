@@ -205,6 +205,10 @@ type QueuedComment =
     PostTitle : NonEmptyString
     Comment : Comment }
 
+type CommenterComments =
+  { Commenter : Commenter
+    Comments : QueuedComment list }
+
 type Post =
   { Id: Slug
     Info : PostInfo }

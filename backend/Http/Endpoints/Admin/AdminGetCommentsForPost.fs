@@ -21,7 +21,8 @@ type AdminCommenterDto =
   { Id : string
     Email : string
     Name : string
-    Status : string }
+    Status : string
+    CreatedDate : DateTime }
 
 type AdminCommentDto =
   { Id : string
@@ -38,7 +39,8 @@ module CommentTypesExt =
       { AdminCommenterDto.Id = this.ValidationId.ToString()
         Email = this.EmailAddress.ToString()
         Name = this.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
-        Status = this.Status.ToString() }
+        Status = this.Status.ToString()
+        CreatedDate = this.CreatedDate }
 
   type Comment with
     member this.ToDto() =
