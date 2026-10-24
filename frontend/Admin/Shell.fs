@@ -20,6 +20,8 @@ type Call =
   | LoadDevices
   /// Reads the subscription of the browser with no prompt, and sends it.
   | SyncDevice
+  /// Like SyncDevice, and subscribes first when the browser has no subscription.
+  | ResyncDevice
   | RegisterDevice of PushKeys
   | RemoveDevice of deviceId: string
   | RebuildSite
@@ -69,6 +71,7 @@ type Effect =
   | Send of calls: Call list
   /// Asks the browser for the permission and the subscription. A click starts it, so no token call comes first.
   | Subscribe
+  | Unsubscribe
 
 let private enter (route: Route) (model: Model) =
   let left =
@@ -156,7 +159,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
             | _ -> model.Overlay }
 
     if model.Session.Status = Session.Starting && Session.isActive session then
-      let sync = if model.Notifications.Registration = Notifications.Registering then [ SyncDevice ] else []
+      let sync = if Notifications.canSync model.Notifications.Environment then [ SyncDevice ] else []
       next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (enter model.Router.Route model) @ sync))
     else
       next, Option.map SignIn effect
@@ -302,19 +305,22 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Notifications.DevicesAnswered(Error Api.Refused)
     | Notifications.RegisterAnswered(Error Api.Refused)
     | Notifications.Removed(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
-    // A start with the permission granted sends the subscription when the session is active.
-    | Notifications.Detected _ when notifications.Registration = Notifications.Registering && Session.isActive model.Session ->
-      next, Some(Send [ SyncDevice ])
     | Notifications.RegisterAnswered(Ok(Some _)) when model.Router.Route = Route.Settings -> next, Some(Send [ LoadDevices ])
     | _ ->
+      // Before the session is active, the start sends the sync.
+      let sync call =
+        if Session.isActive model.Session then Some(Send [ call ]) else None
+
       next,
       effect
-      |> Option.map (fun effect ->
+      |> Option.bind (fun effect ->
         match effect with
-        | Notifications.Subscribe -> Subscribe
-        | Notifications.Register keys -> Send [ RegisterDevice keys ]
-        | Notifications.Sync -> Send [ SyncDevice ]
-        | Notifications.Remove deviceId -> Send [ RemoveDevice deviceId ])
+        | Notifications.Subscribe -> Some Subscribe
+        | Notifications.Unsubscribe -> Some Unsubscribe
+        | Notifications.Register keys -> Some(Send [ RegisterDevice keys ])
+        | Notifications.Sync -> sync SyncDevice
+        | Notifications.Resync -> sync ResyncDevice
+        | Notifications.Remove deviceId -> Some(Send [ RemoveDevice deviceId ]))
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None

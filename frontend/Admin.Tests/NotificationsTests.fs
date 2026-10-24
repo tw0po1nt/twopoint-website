@@ -138,16 +138,69 @@ let tests =
         Expect.equal model.Registration (Notifications.RegistrationFailed "Bad endpoint.") "The reason"
       }
 
-      test "a changed subscription registers again" {
+      test "a changed subscription registers again, and subscribes if the browser has none" {
         let model = detect (environment Notifications.Supported Notifications.Granted)
         let _, effect = send Notifications.SubscriptionChanged model
-        Expect.equal effect (Some Notifications.Sync) "Sync"
+        Expect.equal effect (Some Notifications.Resync) "Resync"
       }
 
       test "a changed subscription with no permission does nothing" {
         let model = detect (environment Notifications.Supported Notifications.Undecided)
         let _, effect = send Notifications.SubscriptionChanged model
         Expect.isNone effect "No effect"
+      }
+
+      test "a changed subscription with no VAPID key does nothing" {
+        let model = detect { environment Notifications.Supported Notifications.Granted with Configured = false }
+        let _, effect = send Notifications.SubscriptionChanged model
+        Expect.isNone effect "No effect"
+      }
+
+      test "a load that can sync asks for a sync, and another load asks for nothing" {
+        let _, granted = Notifications.update (Notifications.Detected(environment Notifications.Supported Notifications.Granted)) Notifications.init
+        Expect.equal granted (Some Notifications.Sync) "Sync"
+
+        for env in
+          [ environment Notifications.Supported Notifications.Undecided
+            environment Notifications.Supported Notifications.Denied
+            environment Notifications.NeedsHomeScreen Notifications.Granted
+            { environment Notifications.Supported Notifications.Granted with Configured = false } ] do
+          Expect.isNone (snd (Notifications.update (Notifications.Detected env) Notifications.init)) $"{env}"
+      }
+
+      test "a registered device is the device of this browser" {
+        let model = detect (environment Notifications.Supported Notifications.Granted)
+        let model, _ = send (Notifications.RegisterAnswered(Ok(Some mac))) model
+        Expect.equal model.ThisDevice (Some "aaaa") "This device"
+      }
+
+      test "the removal of the device of this browser unsubscribes it, and the section is off" {
+        let model = detect (environment Notifications.Supported Notifications.Granted)
+        let model, _ = send (Notifications.RegisterAnswered(Ok(Some mac))) model
+        let model, _ = send (Notifications.DevicesAnswered(Ok [ mac; phone ])) model
+        let model, _ = send (Notifications.RemoveClicked "aaaa") model
+        let model, effect = send (Notifications.Removed("aaaa", Ok())) model
+        Expect.equal effect (Some Notifications.Unsubscribe) "Unsubscribe"
+        Expect.equal model.ThisDevice None "No device"
+        Expect.equal (Notifications.section model) Notifications.Off "Off"
+      }
+
+      test "the removal of another device keeps the subscription" {
+        let model = detect (environment Notifications.Supported Notifications.Granted)
+        let model, _ = send (Notifications.RegisterAnswered(Ok(Some mac))) model
+        let model, _ = send (Notifications.DevicesAnswered(Ok [ mac; phone ])) model
+        let model, _ = send (Notifications.RemoveClicked "bbbb") model
+        let model, effect = send (Notifications.Removed("bbbb", Ok())) model
+        Expect.isNone effect "No effect"
+        Expect.equal (Notifications.section model) Notifications.On "On"
+      }
+
+      test "a failed removal of the device of this browser keeps the subscription" {
+        let model = detect (environment Notifications.Supported Notifications.Granted)
+        let model, _ = send (Notifications.RegisterAnswered(Ok(Some mac))) model
+        let model, effect = send (Notifications.Removed("aaaa", Error Api.Unanswered)) model
+        Expect.isNone effect "No effect"
+        Expect.equal model.ThisDevice (Some "aaaa") "Still this device"
       }
     ]
 
@@ -239,6 +292,27 @@ let tests =
         let model, _ = Shell.update (Shell.Notifications(Notifications.DevicesAnswered(Ok [ mac ]))) model
         let _, effect = Shell.update (Shell.Notifications(Notifications.RemoveClicked "aaaa")) model
         Expect.equal effect (Some(Shell.Send [ Shell.RemoveDevice "aaaa" ])) "Remove"
+      }
+
+      test "a changed subscription sends the resync call once the session is active" {
+        let model, _ = started "/" (environment Notifications.Supported Notifications.Granted)
+        let _, effect = Shell.update (Shell.Notifications Notifications.SubscriptionChanged) model
+        Expect.equal effect (Some(Shell.Send [ Shell.ResyncDevice ])) "Resync"
+      }
+
+      test "a changed subscription before the session is active sends nothing, because the start syncs" {
+        let model, _ = Shell.init "/"
+        let model, _ = Shell.update (Shell.Notifications(Notifications.Detected(environment Notifications.Supported Notifications.Granted))) model
+        let _, effect = Shell.update (Shell.Notifications Notifications.SubscriptionChanged) model
+        Expect.isNone effect "No call"
+      }
+
+      test "the removal of the device of this browser unsubscribes the browser" {
+        let model, _ = started "/settings" (environment Notifications.Supported Notifications.Granted)
+        let model, _ = Shell.update (Shell.Notifications(Notifications.RegisterAnswered(Ok(Some mac)))) model
+        let model, _ = Shell.update (Shell.Notifications(Notifications.DevicesAnswered(Ok [ mac ]))) model
+        let _, effect = Shell.update (Shell.Notifications(Notifications.Removed("aaaa", Ok()))) model
+        Expect.equal effect (Some Shell.Unsubscribe) "Unsubscribe"
       }
 
       test "a refused token on the device list shows the banner" {

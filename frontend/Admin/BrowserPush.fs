@@ -32,6 +32,9 @@ type private Json =
 [<Emit "$0.toJSON()">]
 let private toJson (subscription: obj) : Json = jsNative
 
+[<Emit "$0.unsubscribe()">]
+let private endSubscription (subscription: obj) : JS.Promise<bool> = jsNative
+
 [<Emit "navigator.serviceWorker.addEventListener('message', (event) => { if (event.data && event.data.type === 'pushsubscriptionchange') $0() })">]
 let private onWorkerMessage (listener: unit -> unit) : unit = jsNative
 
@@ -42,7 +45,7 @@ let private keysOf (subscription: obj) : PushKeys =
      p256dh = json.keys.p256dh
      auth = json.keys.auth |}
 
-let create () : Push =
+let create (publicKey: string) : Push =
   { new Push with
       member _.support() =
         if hasPushManager () then "supported"
@@ -50,6 +53,8 @@ let create () : Push =
         else "unsupported"
 
       member _.permission() = notificationPermission ()
+
+      member _.publicKey() = publicKey
 
       member _.subscription() =
         ready ()
@@ -69,11 +74,19 @@ let create () : Push =
               getSubscription registration
               |> Promise.bind (fun existing ->
                 match existing with
-                | null -> subscribeWith registration (Config.vapidPublicKey ())
+                | null -> subscribeWith registration publicKey
                 | existing -> Promise.lift existing))
             |> Promise.map (keysOf >> Some)
           else
             Promise.lift None)
+
+      member _.unsubscribe() =
+        ready ()
+        |> Promise.bind getSubscription
+        |> Promise.bind (fun subscription ->
+          match subscription with
+          | null -> Promise.lift ()
+          | subscription -> endSubscription subscription |> Promise.map ignore)
 
       member _.onSubscriptionChange listener =
         if hasPushManager () then

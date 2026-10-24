@@ -41,25 +41,22 @@ const push = stubPush({
   },
 });
 
-const { config } = await load('http://localhost:4322/', { respond, push });
+await load('http://localhost:4322/', { respond, push });
 
-// A build with no VAPID public key cannot register a device, so these tests wait for a key.
-const skip = config.vapidPublicKey ? false : 'The build has no VAPID public key.';
-
-test('a load with the permission granted sends the subscription again with no prompt and no click', { skip }, () => {
+test('a load with the permission granted sends the subscription again with no prompt and no click', () => {
   assert.deepEqual(prompts, []);
   assert.ok(!push.events.includes('subscribe'), 'The page does not subscribe');
   assert.deepEqual(registers, [{ authorization: 'Bearer token-1', body: keys }]);
 });
 
-test('a changed subscription is sent again', { skip }, async () => {
+test('a changed subscription is sent again', async () => {
   listener();
   await settle();
   assert.equal(registers.length, 2);
   assert.deepEqual(prompts, []);
 });
 
-test('the Settings page shows that the notifications are on, with no button', { skip }, async () => {
+test('the Settings page shows that the notifications are on, with no button', async () => {
   const link = [...document.querySelectorAll('nav.side-nav a')].find((item) => item.getAttribute('href') === '/settings');
   link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
   await settle();

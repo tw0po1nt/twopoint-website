@@ -30,6 +30,7 @@ let private fail (call: Shell.Call) =
   | Shell.DeleteSubscription subscriptionId -> Shell.Subscriptions(Subscriptions.Deleted(subscriptionId, Error Api.Unanswered))
   | Shell.LoadDevices -> Shell.Notifications(Notifications.DevicesAnswered(Error Api.Unanswered))
   | Shell.SyncDevice
+  | Shell.ResyncDevice
   | Shell.RegisterDevice _ -> Shell.Notifications(Notifications.RegisterAnswered(Error Api.Unanswered))
   | Shell.RemoveDevice deviceId -> Shell.Notifications(Notifications.Removed(deviceId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
@@ -96,6 +97,16 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
     |> Promise.map (Notifications.DevicesAnswered >> Shell.Notifications)
   | Shell.SyncDevice ->
     push.subscription ()
+    |> Promise.bind (fun keys ->
+      match keys with
+      | Some keys -> register token keys
+      | None -> Promise.lift (Shell.Notifications(Notifications.RegisterAnswered(Ok None))))
+  | Shell.ResyncDevice ->
+    push.subscription ()
+    |> Promise.bind (fun keys ->
+      match keys with
+      | Some _ -> Promise.lift keys
+      | None -> push.subscribe ())
     |> Promise.bind (fun keys ->
       match keys with
       | Some keys -> register token keys
@@ -167,6 +178,10 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
   | Shell.SignIn effect -> signInWith signIn push effect dispatch
   | Shell.Send calls -> calls |> List.iter (send signIn push dispatch)
   | Shell.Subscribe -> subscribe push dispatch
+  | Shell.Unsubscribe ->
+    push.unsubscribe ()
+    |> Promise.catch (fun error -> console.error ("admin: the push unsubscribe failed.", error))
+    |> Promise.start
 
 let private site = "https://twopoint.dev"
 
@@ -1073,7 +1088,7 @@ let view (signIn: SignIn) (push: Push) =
   let model, dispatch =
     Mvu.run (Shell.init window.location.pathname) Shell.update (perform signIn push)
 
-  dispatch (Shell.Notifications(Notifications.Detected(Notifications.detect push (Config.vapidPublicKey () <> ""))))
+  dispatch (Shell.Notifications(Notifications.Detected(Notifications.detect push)))
   push.onSubscriptionChange (fun () -> dispatch (Shell.Notifications Notifications.SubscriptionChanged))
 
   let route = Shell.Router >> dispatch

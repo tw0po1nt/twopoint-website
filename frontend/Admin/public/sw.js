@@ -1,13 +1,14 @@
 // The push worker. The page registers it at /sw.js, so its scope is the whole admin.
 
-// A worker has no token for the API. It makes the new subscription, then tells each open page to send it.
+// Chrome and Firefox can send the event with no old subscription, and the page then subscribes.
 const resubscribe = async (event) => {
   const key = event.oldSubscription?.options?.applicationServerKey;
 
-  if (key) {
+  if (!event.newSubscription && key) {
     await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   }
 
+  // A worker has no token for the API, so each open page sends the subscription.
   const pages = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 
   for (const page of pages) {

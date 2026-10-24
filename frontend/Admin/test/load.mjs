@@ -65,7 +65,7 @@ export const stubSignIn = (members = {}) => {
   };
 };
 
-// The stub push has no subscription and the permission "default". A test replaces a member to change that.
+// The stub push has a public key, no subscription, and the permission "default". A test replaces a member to change that.
 export const stubPush = (members = {}) => {
   const events = [];
 
@@ -74,6 +74,7 @@ export const stubPush = (members = {}) => {
     port: {
       support: () => 'supported',
       permission: () => 'default',
+      publicKey: () => 'BJfO8M7cCATrska2CFKeyAYsUaYU5kOMsHea2Evge-a5F1Vu9FGp3XxlGX9MjbssjX9QCV1DsaNj0B-ExteCxk4',
       subscription: async () => {
         events.push('subscription');
         return undefined;
@@ -81,6 +82,9 @@ export const stubPush = (members = {}) => {
       subscribe: async () => {
         events.push('subscribe');
         return undefined;
+      },
+      unsubscribe: async () => {
+        events.push('unsubscribe');
       },
       onSubscriptionChange: () => {
         events.push('onSubscriptionChange');

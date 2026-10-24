@@ -8,13 +8,11 @@ const respond = (url) =>
 
 const push = stubPush({ permission: () => 'denied' });
 
-const { config } = await load('http://localhost:4322/settings', { respond, push });
-
-const skip = config.vapidPublicKey ? false : 'The build has no VAPID public key.';
+await load('http://localhost:4322/settings', { respond, push });
 
 const section = () => document.querySelector('main .notifications');
 
-test('with the permission denied, the section tells the author to change the browser setting', { skip }, () => {
+test('with the permission denied, the section tells the author to change the browser setting', () => {
   assert.match(section().textContent, /The browser blocks notifications for this site\. Change the browser setting/);
   assert.ok(![...section().querySelectorAll('button')].some((button) => button.textContent.includes('Turn on')));
 });

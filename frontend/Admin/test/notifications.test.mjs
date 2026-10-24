@@ -44,10 +44,7 @@ const push = stubPush({
   },
 });
 
-const { config } = await load('http://localhost:4322/settings', { respond, push });
-
-// A build with no VAPID public key cannot turn on notifications, so the tests of the flow wait for a key.
-const skip = config.vapidPublicKey ? false : 'The build has no VAPID public key.';
+await load('http://localhost:4322/settings', { respond, push });
 
 const section = () => document.querySelector('main .notifications');
 const rows = () => [...document.querySelectorAll('main .device-row')].map((row) => row.id);
@@ -60,7 +57,7 @@ test('a load shows no permission prompt and sends no subscription', () => {
   assert.ok(push.events.includes('onSubscriptionChange'), 'The page listens for a changed subscription');
 });
 
-test('the Notifications section offers the button, and lists each registered device', { skip }, () => {
+test('the Notifications section offers the button, and lists each registered device', () => {
   assert.match(section().textContent, /This device gets no notifications\./);
   assert.ok([...section().querySelectorAll('button')].some((button) => button.textContent.trim() === 'Turn on notifications on this device'));
   assert.deepEqual(rows(), ['aaaa', 'bbbb']);
@@ -71,7 +68,7 @@ test('the Notifications section offers the button, and lists each registered dev
   assert.match(first, /Last used 2026-03-02/);
 });
 
-test('the button subscribes from the click, then sends the subscription with the token', { skip }, async () => {
+test('the button subscribes from the click, then sends the subscription with the token', async () => {
   press('Turn on notifications on this device', section());
   await settle();
 
@@ -80,16 +77,21 @@ test('the button subscribes from the click, then sends the subscription with the
   assert.deepEqual(rows(), ['cccc', 'aaaa', 'bbbb'], 'The list loads again');
 });
 
-test('Remove deletes the device, and the row goes away', { skip }, async () => {
+test('Remove deletes the device, and the row goes away', async () => {
   press('Remove', document.getElementById('aaaa'));
   await settle();
 
   assert.deepEqual(writes.at(-1), { method: 'DELETE', authorization: 'Bearer token-1', id: 'aaaa' });
   assert.deepEqual(rows(), ['cccc', 'bbbb']);
+  assert.ok(!push.events.includes('unsubscribe'), 'Another device keeps the subscription of this browser');
 });
 
-test('a build with no VAPID public key says that it cannot turn on notifications, and still lists the devices', { skip: !skip }, () => {
-  assert.match(section().textContent, /The admin config has no VAPID public key/);
-  assert.ok(![...section().querySelectorAll('button')].some((button) => button.textContent.includes('Turn on')));
-  assert.deepEqual(rows(), ['aaaa', 'bbbb']);
+test('Remove on the device of this browser also ends its subscription, and the section is off', async () => {
+  press('Remove', document.getElementById('cccc'));
+  await settle();
+
+  assert.deepEqual(writes.at(-1), { method: 'DELETE', authorization: 'Bearer token-1', id: 'cccc' });
+  assert.deepEqual(rows(), ['bbbb']);
+  assert.equal(push.events.filter((event) => event === 'unsubscribe').length, 1);
+  assert.match(section().textContent, /This device gets no notifications\./);
 });

@@ -33,6 +33,8 @@ type Model =
   { Environment: Environment
     Registration: Registration
     Devices: Devices
+    /// The id of the device that this browser registered.
+    ThisDevice: string option
     Removing: string list
     RemoveFailure: string option }
 
@@ -53,7 +55,11 @@ type Effect =
   | Register of PushKeys
   /// Reads the subscription of the browser, with no prompt, and sends it.
   | Sync
+  /// Sends the subscription of the browser, and subscribes first when the browser has none.
+  | Resync
   | Remove of deviceId: string
+  /// Ends the subscription of this browser.
+  | Unsubscribe
 
 let permissionOf (name: string) =
   match name with
@@ -67,10 +73,14 @@ let supportOf (name: string) =
   | "home-screen" -> NeedsHomeScreen
   | _ -> Unsupported
 
-let detect (push: Push) (configured: bool) =
+let detect (push: Push) =
   { Support = supportOf (push.support ())
     Permission = permissionOf (push.permission ())
-    Configured = configured }
+    Configured = push.publicKey () <> "" }
+
+/// A browser with the permission can send its subscription with no prompt.
+let canSync (environment: Environment) =
+  environment.Permission = Granted && environment.Support = Supported && environment.Configured
 
 let init =
   { Environment =
@@ -79,6 +89,7 @@ let init =
         Configured = false }
     Registration = Unregistered
     Devices = Waiting
+    ThisDevice = None
     Removing = []
     RemoveFailure = None }
 
@@ -87,19 +98,13 @@ let reload (model: Model) =
       Devices = Waiting
       RemoveFailure = None }
 
-let private reason (failure: Api.Failure) = Api.reason failure
-
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | Detected environment ->
     { model with
         Environment = environment
-        Registration =
-          if environment.Permission = Granted && environment.Support = Supported && environment.Configured then
-            Registering
-          else
-            Unregistered },
-    None
+        Registration = if canSync environment then Registering else Unregistered },
+    (if canSync environment then Some Sync else None)
   | TurnOnClicked -> { model with Registration = Registering }, Some Subscribe
   | Subscribed(permission, Ok(Some keys)) ->
     { model with
@@ -115,16 +120,17 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
         Environment = { model.Environment with Permission = permission }
         Registration = RegistrationFailed message },
     None
-  | RegisterAnswered(Ok(Some _)) -> { model with Registration = Registered }, None
+  | RegisterAnswered(Ok(Some device)) ->
+    { model with
+        Registration = Registered
+        ThisDevice = Some device.Id },
+    None
   | RegisterAnswered(Ok None) -> { model with Registration = Unregistered }, None
-  | RegisterAnswered(Error failure) -> { model with Registration = RegistrationFailed(reason failure) }, None
+  | RegisterAnswered(Error failure) -> { model with Registration = RegistrationFailed(Api.reason failure) }, None
   | SubscriptionChanged ->
-    if model.Environment.Permission = Granted && model.Environment.Support = Supported then
-      model, Some Sync
-    else
-      model, None
+    if canSync model.Environment then model, Some Resync else model, None
   | DevicesAnswered(Ok devices) -> { model with Devices = Loaded devices }, None
-  | DevicesAnswered(Error failure) -> { model with Devices = NotLoaded(reason failure) }, None
+  | DevicesAnswered(Error failure) -> { model with Devices = NotLoaded(Api.reason failure) }, None
   | RemoveClicked deviceId ->
     { model with
         Removing = deviceId :: model.Removing
@@ -133,17 +139,30 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Removed(deviceId, result) ->
     let removing = model.Removing |> List.filter (fun id -> id <> deviceId)
 
-    match result, model.Devices with
-    | Ok(), Loaded devices ->
+    match result with
+    | Ok() ->
+      let devices =
+        match model.Devices with
+        | Loaded devices -> Loaded(devices |> List.filter (fun device -> device.Id <> deviceId))
+        | Waiting
+        | NotLoaded _ -> model.Devices
+
+      if model.ThisDevice = Some deviceId then
+        { model with
+            Removing = removing
+            Devices = devices
+            ThisDevice = None
+            Registration = Unregistered },
+        Some Unsubscribe
+      else
+        { model with
+            Removing = removing
+            Devices = devices },
+        None
+    | Error failure ->
       { model with
           Removing = removing
-          Devices = Loaded(devices |> List.filter (fun device -> device.Id <> deviceId)) },
-      None
-    | Ok(), _ -> { model with Removing = removing }, None
-    | Error failure, _ ->
-      { model with
-          Removing = removing
-          RemoveFailure = Some(reason failure) },
+          RemoveFailure = Some(Api.reason failure) },
       None
 
 type Section =

@@ -58,7 +58,29 @@ test('after a pushsubscriptionchange event, the worker subscribes again with the
   assert.deepEqual(types(worker), [['one', 'pushsubscriptionchange'], ['two', 'pushsubscriptionchange']]);
 });
 
-test('a pushsubscriptionchange event with no old key still tells the open pages, so the page can subscribe', async () => {
+test('a pushsubscriptionchange event with a new subscription does not subscribe again, and tells the open pages', async () => {
+  const worker = start({ pages: ['one'] });
+  const applicationServerKey = new Uint8Array([4, 1, 2]);
+
+  await fire(worker, 'pushsubscriptionchange', {
+    newSubscription: {},
+    oldSubscription: { options: { applicationServerKey } },
+  });
+
+  assert.equal(worker.subscribed.length, 0);
+  assert.deepEqual(types(worker), [['one', 'pushsubscriptionchange']]);
+});
+
+test('a pushsubscriptionchange event with a null old subscription does not subscribe, and tells the open pages', async () => {
+  const worker = start({ pages: ['one'] });
+
+  await fire(worker, 'pushsubscriptionchange', { oldSubscription: null, newSubscription: null });
+
+  assert.equal(worker.subscribed.length, 0);
+  assert.deepEqual(types(worker), [['one', 'pushsubscriptionchange']]);
+});
+
+test('a pushsubscriptionchange event with no field does not subscribe, and tells the open pages', async () => {
   const worker = start({ pages: ['one'] });
 
   await fire(worker, 'pushsubscriptionchange', {});
