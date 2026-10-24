@@ -77,7 +77,7 @@ let label (action: Action) =
   | Cancel -> "Cancel subscription"
   | Delete -> "Delete"
 
-let sends (state: State) =
+let isSending (state: State) =
   match state with
   | Sending _ -> true
   | Ready
@@ -96,15 +96,14 @@ let private find (subscriptionId: string) (model: Model) =
   | Waiting
   | NotLoaded _ -> None
 
-let private notDone (subscriptionId: string) (action: Action) (failure: Api.Failure) (model: Model) =
+let private withState (subscriptionId: string) (state: State) (model: Model) =
   { model with
       Sheet =
         model.Sheet
-        |> Option.map (fun sheet ->
-          if sheet.Id = subscriptionId then
-            { sheet with State = NotDone(action, Api.reason failure) }
-          else
-            sheet) }
+        |> Option.map (fun sheet -> if sheet.Id = subscriptionId then { sheet with State = state } else sheet) }
+
+let private notDone (subscriptionId: string) (action: Action) (failure: Api.Failure) (model: Model) =
+  withState subscriptionId (NotDone(action, Api.reason failure)) model
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg, model.Sheet with
@@ -147,6 +146,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | _ -> model, None
   | Chosen _, _ -> model, None
   | Canceled(subscriptionId, Ok canceled), _ ->
+    let model = withState subscriptionId Ready model
+
     { model with
         Subscriptions =
           match model.Subscriptions with
@@ -155,14 +156,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
               subscriptions
               |> List.map (fun subscription -> if subscription.Id = subscriptionId then canceled else subscription)
             )
-          | other -> other
-        Sheet =
-          model.Sheet
-          |> Option.map (fun sheet ->
-            if sheet.Id = subscriptionId then
-              { sheet with State = Ready }
-            else
-              sheet) },
+          | other -> other },
     None
   | Canceled(subscriptionId, Error failure), _ -> notDone subscriptionId Cancel failure model, None
   | Deleted(subscriptionId, Ok()), _ ->

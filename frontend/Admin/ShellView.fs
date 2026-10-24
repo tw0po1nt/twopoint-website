@@ -792,7 +792,7 @@ let private subscriptionDetails (dispatch: Shell.Msg -> unit) (model: Subscripti
 
       div (class' = "actions") {
         For(each = Array.ofList (Subscriptions.actions subscription)) {
-          yield fun action _ -> subscriptionAction dispatch subscription.Id (Subscriptions.sends sheet.State) action
+          yield fun action _ -> subscriptionAction dispatch subscription.Id (Subscriptions.isSending sheet.State) action
         }
       }
 
@@ -952,7 +952,7 @@ let private deleteSubscriptionDialog (dispatch: Shell.Msg -> unit) (model: unit 
       "The subscription and each delivery record of the subscription go away permanently. The reader gets no email. To keep the record, cancel the subscription."
     })
     (Fragment() {
-      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Keep" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
     })
 

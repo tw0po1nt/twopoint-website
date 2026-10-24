@@ -288,7 +288,6 @@ let getSubscriptions (api: string) (token: string) : JS.Promise<Result<Subscript
 let private subscriptionPath (subscriptionId: string) =
   $"internal/subscriptions/{JS.encodeURIComponent subscriptionId}"
 
-/// The answer is the subscription as the backend stored it, with its canceled date.
 let cancelSubscription (api: string) (token: string) (subscriptionId: string) : JS.Promise<Result<Subscription, Failure>> =
   send HttpMethod.POST api token $"{subscriptionPath subscriptionId}/cancellations"
 

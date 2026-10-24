@@ -197,7 +197,7 @@ test('Cancel subscription cancels an active subscription, sets the canceled date
   );
 });
 
-test('Delete asks for a confirmation, and Cancel in the dialog deletes nothing', async () => {
+test('Delete asks for a confirmation, and Keep in the dialog deletes nothing', async () => {
   press('Delete', sheet());
   await settle();
 
@@ -205,7 +205,7 @@ test('Delete asks for a confirmation, and Cancel in the dialog deletes nothing',
   assert.equal(dialog.open, true);
   assert.deepEqual(actions.filter((action) => action.method === 'DELETE'), []);
 
-  press('Cancel', dialog);
+  press('Keep', dialog);
   await settle();
   assert.equal(dialog.open, false);
   assert.deepEqual(actions.filter((action) => action.method === 'DELETE'), []);
