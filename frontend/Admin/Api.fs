@@ -285,6 +285,15 @@ let deleteCommenter (api: string) (token: string) (commenterId: string) : JS.Pro
 let getSubscriptions (api: string) (token: string) : JS.Promise<Result<Subscription list, Failure>> =
   send HttpMethod.GET api token "internal/subscriptions"
 
+let private subscriptionPath (subscriptionId: string) =
+  $"internal/subscriptions/{JS.encodeURIComponent subscriptionId}"
+
+let cancelSubscription (api: string) (token: string) (subscriptionId: string) : JS.Promise<Result<Subscription, Failure>> =
+  send HttpMethod.POST api token $"{subscriptionPath subscriptionId}/cancellations"
+
+let deleteSubscription (api: string) (token: string) (subscriptionId: string) : JS.Promise<Result<unit, Failure>> =
+  act HttpMethod.DELETE api token (subscriptionPath subscriptionId) None
+
 let getSubscriptionDeliveries
   (api: string)
   (token: string)

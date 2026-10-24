@@ -26,7 +26,10 @@ let private delivery id deliveryType : Api.Delivery =
 
 let private counts active inactive : Subscriptions.Counts = { Active = active; Inactive = inactive }
 
-let private sheet id deliveries : Subscriptions.Sheet = { Id = id; Deliveries = deliveries }
+let private sheet id deliveries : Subscriptions.Sheet =
+  { Id = id
+    Deliveries = deliveries
+    State = Subscriptions.Ready }
 
 let private start (path: string) =
   let model, _ = Shell.init path
@@ -231,9 +234,125 @@ let private sheetTests =
     }
   ]
 
+let private actionTests =
+  testList "Subscription actions" [
+    test "an active subscription can be canceled or deleted, and an inactive subscription only deleted" {
+      Expect.equal (Subscriptions.actions ada) [ Subscriptions.Cancel; Subscriptions.Delete ] "Active"
+      Expect.equal (Subscriptions.actions grace) [ Subscriptions.Delete ] "Inactive"
+    }
+
+    test "a cancel sends the call and marks the sheet as sending" {
+      let model, _ = send (Subscriptions.Opened "ada") (listed ())
+      let model, effect = send (Subscriptions.Chosen("ada", Subscriptions.Cancel)) model
+
+      Expect.equal effect (Some(Shell.Send [ Shell.CancelSubscription "ada" ])) "The call"
+
+      Expect.equal
+        (model.Subscriptions.Sheet |> Option.map _.State)
+        (Some(Subscriptions.Sending Subscriptions.Cancel))
+        "Sending"
+    }
+
+    test "a cancel of an inactive subscription sends no call" {
+      let model, _ = send (Subscriptions.Opened "grace") (listed ())
+      let _, effect = send (Subscriptions.Chosen("grace", Subscriptions.Cancel)) model
+      Expect.isNone effect "No call"
+    }
+
+    test "a second choice while the call is out sends no call" {
+      let model, _ = send (Subscriptions.Opened "ada") (listed ())
+      let model, _ = send (Subscriptions.Chosen("ada", Subscriptions.Cancel)) model
+      let _, effect = send (Subscriptions.Chosen("ada", Subscriptions.Delete)) model
+      Expect.isNone effect "No call"
+    }
+
+    test "a canceled subscription is inactive with the date from the API, and the sheet stays open" {
+      let model, _ = send (Subscriptions.Opened "ada") (listed ())
+      let model, _ = send (Subscriptions.Chosen("ada", Subscriptions.Cancel)) model
+
+      let canceled =
+        { ada with
+            IsActive = false
+            CanceledDate = Some "2026-03-01T12:00:00Z" }
+
+      let model, effect = send (Subscriptions.Canceled("ada", Ok canceled)) model
+
+      Expect.isNone effect "No call"
+      Expect.equal (Subscriptions.tryOpened model.Subscriptions) (Some canceled) "Canceled"
+      Expect.equal (model.Subscriptions.Sheet |> Option.map _.State) (Some Subscriptions.Ready) "Ready"
+      Expect.equal (Subscriptions.counts model.Subscriptions) (Some(counts 1 3)) "The counts follow"
+    }
+
+    test "a cancel that did not complete shows the reason and keeps the subscription" {
+      let model, _ = send (Subscriptions.Opened "ada") (listed ())
+      let model, _ = send (Subscriptions.Chosen("ada", Subscriptions.Cancel)) model
+      let model, _ = send (Subscriptions.Canceled("ada", Error Api.Unanswered)) model
+
+      Expect.equal (Subscriptions.tryOpened model.Subscriptions) (Some ada) "Unchanged"
+
+      Expect.equal
+        (model.Subscriptions.Sheet |> Option.bind (fun sheet -> Subscriptions.failure sheet.State))
+        (Some $"The cancel did not complete. {Api.reason Api.Unanswered}")
+        "The reason"
+    }
+
+    test "a delete sends the call only after the confirmation of the shell" {
+      let model, _ = send (Subscriptions.Opened "ada") (listed ())
+      let choice = Shell.Subscriptions(Subscriptions.Chosen("ada", Subscriptions.Delete))
+      let unconfirmed, effect = Shell.update choice model
+
+      Expect.isNone effect "No call without the dialog"
+      Expect.equal unconfirmed model "No change"
+
+      let opened, _ = Shell.update (Shell.Opened Shell.DeleteSubscriptionDialog) model
+      Expect.equal (Shell.deleteSubscriptionChosen opened) (Some choice) "The dialog confirms"
+
+      let confirmed, effect = Shell.update choice opened
+      Expect.equal effect (Some(Shell.Send [ Shell.DeleteSubscription "ada" ])) "The call"
+      Expect.isNone confirmed.Overlay "The dialog closes"
+    }
+
+    test "the dialog has nothing to confirm without an open sheet" {
+      let model, _ = Shell.update (Shell.Opened Shell.DeleteSubscriptionDialog) (listed ())
+      Expect.isNone (Shell.deleteSubscriptionChosen model) "No sheet"
+    }
+
+    test "a deleted subscription leaves the list, and the sheet closes" {
+      let model, _ = send (Subscriptions.Opened "grace") (listed ())
+      let model, _ = send (Subscriptions.Chosen("grace", Subscriptions.Delete)) model
+      let model, effect = send (Subscriptions.Deleted("grace", Ok())) model
+
+      Expect.isNone effect "No call"
+      Expect.isNone model.Subscriptions.Sheet "No sheet"
+      Expect.equal (shown model) [ "ada"; "alan"; "edsger" ] "Gone"
+    }
+
+    test "a delete that did not complete shows the reason and keeps the subscription" {
+      let model, _ = send (Subscriptions.Opened "grace") (listed ())
+      let model, _ = send (Subscriptions.Chosen("grace", Subscriptions.Delete)) model
+      let model, _ = send (Subscriptions.Deleted("grace", Error(Api.Failed "Boom."))) model
+
+      Expect.equal (shown model) [ "ada"; "grace"; "alan"; "edsger" ] "Kept"
+
+      Expect.equal
+        (model.Subscriptions.Sheet |> Option.bind (fun sheet -> Subscriptions.failure sheet.State))
+        (Some "The delete did not complete. Boom.")
+        "The reason"
+    }
+
+    test "a refused cancel or delete opens the refusal banner" {
+      let model, _ = send (Subscriptions.Opened "ada") (listed ())
+      let canceled, _ = send (Subscriptions.Canceled("ada", Error Api.Refused)) model
+      Expect.equal canceled.Session.Status Session.Refused "Refused cancel"
+      let deleted, _ = send (Subscriptions.Deleted("ada", Error Api.Refused)) model
+      Expect.equal deleted.Session.Status Session.Refused "Refused delete"
+    }
+  ]
+
 [<Tests>]
 let tests =
   testList "Subscriptions page" [
     tests'
     sheetTests
+    actionTests
   ]

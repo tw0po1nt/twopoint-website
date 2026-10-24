@@ -13,13 +13,14 @@ let ok result =
 
 let subscriptionId = SubscriptionId.create "2f1c4ed9-6a5b-4f0e-9a43-3d2b8c1e7a10" |> ok
 
-let subscription isActive =
+let canceledStatus = Canceled(DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc))
+
+let subscription (status : SubscriptionStatus) =
   { Id = subscriptionId
     CreatedDate = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
     EmailAddress = EmailAddress.create "reader@example.com" |> ok
     Name = NonEmptyString.create None "Reader" |> ok |> Some
-    IsActive = isActive
-    CanceledDate = if isActive then None else Some (DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)) }
+    Status = status }
 
 let post slug (createdDate : string) =
   Post.create slug "A post" createdDate PostCommentStats.Zero |> ok

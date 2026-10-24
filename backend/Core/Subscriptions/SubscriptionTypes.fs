@@ -53,21 +53,29 @@ type SubscriptionDelivery =
     Type : SubscriptionDeliveryType
     Post : Slug }
 
+type SubscriptionStatus =
+  | Active
+  | Canceled of DateTime
+
 type Subscription =
   { Id : SubscriptionId
     CreatedDate : DateTime
     EmailAddress : EmailAddress
     Name : NonEmptyString option
-    IsActive : bool
-    CanceledDate : DateTime option }
+    Status : SubscriptionStatus }
 
 module Subscription =
 
   let cancel (canceledDateUtc : DateTime) (subscription : Subscription) =
-    { subscription with IsActive = false; CanceledDate = Some canceledDateUtc }
+    { subscription with Status = Canceled canceledDateUtc }
 
   let reactivate (subscription : Subscription) =
-    { subscription with IsActive = true; CanceledDate = None }
+    { subscription with Status = Active }
+
+  let isActive (subscription : Subscription) =
+    match subscription.Status with
+    | Active -> true
+    | Canceled _ -> false
 
 type DeliveredPost =
   { Delivery : SubscriptionDelivery

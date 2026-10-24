@@ -54,37 +54,91 @@ let private subscribe (dependencies : FakeReactivateDependencies) =
       NewSubscription.Dto.Name = None }
   (CreateSubscription.withDependencies dependencies dto CancellationToken.None).Result
 
+type private FakeDeleteDependencies(existing : Subscription option, deliveries : SubscriptionDelivery list) =
+  let log = ResizeArray<string>()
+
+  member _.Log = List.ofSeq log
+
+  interface DeleteSubscription.Dependencies with
+    member _.GetSubscriptionById _ = CancellableTaskResult.singleton existing
+    member _.GetDeliveriesForSubscription _ = CancellableTaskResult.singleton deliveries
+    member _.DeleteDelivery _ delivery =
+      log.Add $"delivery {delivery.Id}"
+      CancellableTaskResult.singleton ()
+    member _.DeleteSubscription subscription =
+      log.Add $"subscription {subscription.Id}"
+      CancellableTaskResult.singleton ()
+
+let private delete (dependencies : FakeDeleteDependencies) (id : string) =
+  let dto = { SubscriptionDeletion.Dto.SubscriptionId = SubscriptionDeletion.SubscriptionId id }
+  (DeleteSubscription.withDependencies dependencies dto CancellationToken.None).Result
+
 let private actionTests =
   testList "Subscription actions" [
     test "a cancellation makes the subscription inactive and sets the canceled date" {
-      let dependencies = FakeCancelDependencies (Some (subscription true))
+      let dependencies = FakeCancelDependencies (Some (subscription Active))
 
       match cancel dependencies with
       | Ok (CancelSubscription.Event.Cancelled canceled) ->
-        Expect.isFalse canceled.IsActive "Expected an inactive subscription"
-        Expect.equal canceled.CanceledDate (Some utcNow) "Expected the date of the cancellation"
+        Expect.equal canceled.Status (Canceled utcNow) "Expected the date of the cancellation"
         Expect.equal dependencies.Saved [ canceled ] "Expected one save"
       | other -> failtestf "Expected a cancellation, got %A" other
     }
 
+    test "a cancellation needs no way to send an email" {
+      let sendMembers =
+        typeof<CancelSubscription.Dependencies>.GetMethods() |> Array.filter (fun m -> m.Name.Contains "Send")
+      Expect.isEmpty sendMembers "Expected no way to send an email"
+    }
+
     test "a second cancellation keeps the first canceled date and saves nothing" {
-      let existing = subscription false
+      let existing = subscription canceledStatus
       let dependencies = FakeCancelDependencies (Some existing)
 
       match cancel dependencies with
       | Ok (CancelSubscription.Event.Cancelled canceled) ->
-        Expect.equal canceled.CanceledDate existing.CanceledDate "Expected the first date"
+        Expect.equal canceled.Status existing.Status "Expected the first date"
         Expect.isEmpty dependencies.Saved "Expected no save"
       | other -> failtestf "Expected a cancellation, got %A" other
     }
 
+    test "a delete removes each delivery of the subscription, then the subscription" {
+      let welcome = delivery Welcome olderPost
+      let newPost = delivery NewPost latestPost
+      let existing = subscription Active
+      let dependencies = FakeDeleteDependencies (Some existing, [ welcome; newPost ])
+
+      match delete dependencies (subscriptionId.ToString()) with
+      | Ok (DeleteSubscription.Event.Deleted deleted) ->
+        Expect.equal deleted existing "Expected the deleted subscription"
+        Expect.equal
+          dependencies.Log
+          [ $"delivery {welcome.Id}"; $"delivery {newPost.Id}"; $"subscription {existing.Id}" ]
+          "Expected the deliveries before the subscription"
+      | other -> failtestf "Expected a delete, got %A" other
+    }
+
+    test "a delete of an unknown subscription removes nothing" {
+      let dependencies = FakeDeleteDependencies (None, [])
+
+      match delete dependencies (subscriptionId.ToString()) with
+      | Error (Logic (DeleteSubscription.Error.SubscriptionNotFound _)) ->
+        Expect.isEmpty dependencies.Log "Expected no delete"
+      | other -> failtestf "Expected not found, got %A" other
+    }
+
+    test "a delete with an id that is not a guid is a validation error" {
+      match delete (FakeDeleteDependencies (None, [])) "not-a-guid" with
+      | Error actionError -> Expect.isTrue actionError.IsValidation "Expected a validation error"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+
     test "a reactivation makes the subscription active and clears the canceled date" {
-      let dependencies = FakeReactivateDependencies (Some (subscription false))
+      let dependencies = FakeReactivateDependencies (Some (subscription canceledStatus))
 
       match subscribe dependencies with
       | Ok (CreateSubscription.Event.Reactivated reactivated) ->
-        Expect.isTrue reactivated.IsActive "Expected an active subscription"
-        Expect.isNone reactivated.CanceledDate "Expected no canceled date"
+        Expect.equal reactivated.Status Active "Expected an active subscription"
         Expect.equal dependencies.Saved [ reactivated ] "Expected one save"
       | other -> failtestf "Expected a reactivation, got %A" other
     }
@@ -92,8 +146,8 @@ let private actionTests =
 
 let private otherId = SubscriptionId.create "8d0b7a3e-1c2f-4e5a-9b6d-7f8e9a0b1c2d" |> ok
 
-let private older = { subscription true with Id = otherId; CreatedDate = DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc) }
-let private newer = subscription false
+let private older = { subscription Active with Id = otherId; CreatedDate = DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc) }
+let private newer = subscription canceledStatus
 
 type private FakeListDependencies(subscriptions : Subscription list) =
   interface GetAllSubscriptions.Dependencies with

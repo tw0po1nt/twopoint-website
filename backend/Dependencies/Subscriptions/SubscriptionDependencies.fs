@@ -57,7 +57,6 @@ type SubscriptionDependencies(
         CreatedDate = createdDateUtc 
         EmailAddress = newSubscription.EmailAddress |> EmailAddress.value
         Name = newSubscription.Name |> Option.map NonEmptyString.value
-        IsActive = true
         CanceledDate = None }
     let! (dbSubscription: DbSubscription) = subscriptionDb.CreateSubscription newSubscription
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
@@ -77,6 +76,11 @@ type SubscriptionDependencies(
       |> List.traverseValidationA (fun (dbo: DbSubscriptionDelivery) -> dbo.ToSubscriptionDelivery())
       |> DependencyError.ofValidation source
   }
+
+  member _.DeleteSubscription (subscription : Subscription) = subscriptionDb.DeleteSubscription (subscription.Id.ToString())
+
+  member _.DeleteDelivery (subscription : Subscription) (delivery : SubscriptionDelivery) =
+    subscriptionDb.DeleteDelivery (subscription.Id.ToString()) (delivery.Id.ToString())
 
   member _.GetPostsBySlugs (slugs : Slug list) = cancellableTaskResult {
     let! (dbPosts: DbPost list) = postDb.GetAllPosts()

@@ -64,7 +64,7 @@ let private newsletterTests =
   ]
 
 let private otherSubscription =
-  { subscription true with
+  { subscription Active with
       Id = SubscriptionId.create "8d0b7a3e-1c2f-4e5a-9b6d-7f8e9a0b1c2d" |> ok
       EmailAddress = EmailAddress.create "other@example.com" |> ok }
 
@@ -72,8 +72,8 @@ let private recipientTests =
   testList "Logic.recipients" [
     test "only active subscriptions get a delivery" {
       Expect.equal
-        (StartNewPostDelivery.Logic.recipients [ subscription true; subscription false; otherSubscription ])
-        [ subscription true; otherSubscription ]
+        (StartNewPostDelivery.Logic.recipients [ subscription Active; subscription canceledStatus; otherSubscription ])
+        [ subscription Active; otherSubscription ]
         "Expected the active subscriptions"
     }
   ]
@@ -98,7 +98,7 @@ let private run intro (dependencies : FakeDependencies) =
       NewPostDeliveryStart.Dto.Intro = intro |> Option.map NewPostDeliveryStart.Intro }
   (StartNewPostDelivery.withDependencies dependencies start CancellationToken.None).Result
 
-let private allSubscriptions = [ subscription true; subscription false; otherSubscription ]
+let private allSubscriptions = [ subscription Active; subscription canceledStatus; otherSubscription ]
 
 let private actionTests =
   testList "withDependencies" [
@@ -108,14 +108,14 @@ let private actionTests =
       match run (Some "Hello") dependencies with
       | Ok (StartNewPostDelivery.Started (post, recipients)) ->
         Expect.equal post latestPost "Expected the post"
-        Expect.equal recipients [ subscription true; otherSubscription ] "Expected the active subscriptions"
+        Expect.equal recipients [ subscription Active; otherSubscription ] "Expected the active subscriptions"
       | other -> failtestf "Expected Started, got %A" other
 
       match dependencies.Queued with
       | [ post, Some intro, recipients ] ->
         Expect.equal post latestPost "Expected the post"
         Expect.equal (NonEmptyString.value intro) "Hello" "Expected the intro"
-        Expect.equal recipients [ subscription true; otherSubscription ] "Expected the active subscriptions"
+        Expect.equal recipients [ subscription Active; otherSubscription ] "Expected the active subscriptions"
       | other -> failtestf "Expected one queue call, got %A" other
     }
 

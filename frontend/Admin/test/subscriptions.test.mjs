@@ -24,9 +24,24 @@ const deliveries = [
 ];
 
 const reads = [];
+const actions = [];
 
-const respond = (url) => {
+const respond = (url, init = {}) => {
   const path = url.replace(/^.*\/api\//, '');
+
+  if (init.method === 'POST' && path === 'internal/subscriptions/ada/cancellations') {
+    actions.push({ method: init.method, url: path });
+    return answer(200, {
+      success: true,
+      message: null,
+      data: { ...subscriptions[0], isActive: false, canceledDate: '2026-03-01T12:00:00Z' },
+    });
+  }
+
+  if (init.method === 'DELETE') {
+    actions.push({ method: init.method, url: path });
+    return answer(200, { success: true, message: null, data: null });
+  }
 
   if (path === 'internal/subscriptions') {
     reads.push(path);
@@ -154,4 +169,59 @@ test('the filter stays after a visit to another page, and the list loads again',
   assert.equal(tab('Inactive').getAttribute('aria-selected'), 'true');
   assert.deepEqual(rows(), ['grace']);
   assert.equal(reads.filter((path) => path === 'internal/subscriptions').length, 2);
+});
+
+test('Cancel subscription cancels an active subscription, sets the canceled date, and keeps the sheet open', async () => {
+  tab('All').click();
+  await settle();
+
+  press('Details', document.getElementById('ada'));
+  await settle();
+  assert.deepEqual(
+    [...sheet().querySelectorAll('.actions button')].map((item) => item.textContent.trim()),
+    ['Cancel subscription', 'Delete'],
+  );
+
+  press('Cancel subscription', sheet());
+  await settle();
+
+  assert.deepEqual(actions, [{ method: 'POST', url: 'internal/subscriptions/ada/cancellations' }]);
+  assert.equal(sheet().open, true);
+  assert.match(sheet().textContent, /Canceled/);
+  assert.match(sheet().textContent, /2026-03-01/);
+  assert.match(document.getElementById('ada').textContent, /Inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /1 active and 2 inactive/);
+  assert.deepEqual(
+    [...sheet().querySelectorAll('.actions button')].map((item) => item.textContent.trim()),
+    ['Delete'],
+  );
+});
+
+test('Delete asks for a confirmation, and Keep in the dialog deletes nothing', async () => {
+  press('Delete', sheet());
+  await settle();
+
+  const dialog = document.getElementById('delete-subscription');
+  assert.equal(dialog.open, true);
+  assert.deepEqual(actions.filter((action) => action.method === 'DELETE'), []);
+
+  press('Keep', dialog);
+  await settle();
+  assert.equal(dialog.open, false);
+  assert.deepEqual(actions.filter((action) => action.method === 'DELETE'), []);
+  assert.ok(document.getElementById('ada'));
+});
+
+test('Delete in the confirmation deletes the subscription, and the row and the sheet go away', async () => {
+  press('Delete', sheet());
+  await settle();
+
+  const dialog = document.getElementById('delete-subscription');
+  press('Delete', dialog);
+  await settle();
+
+  assert.equal(dialog.open, false);
+  assert.deepEqual(actions.slice(-1), [{ method: 'DELETE', url: 'internal/subscriptions/ada' }]);
+  assert.equal(sheet().open, false);
+  assert.deepEqual(rows(), ['grace', 'alan']);
 });
