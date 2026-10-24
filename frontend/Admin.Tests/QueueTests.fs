@@ -14,7 +14,8 @@ let private queued id (name: string) status : Api.QueuedComment =
           { Id = $"{name.ToLower()}-id"
             Email = $"{name.ToLower()}@example.com"
             Name = name
-            Status = status }
+            Status = status
+            CreatedDate = "2026-01-01T00:00:00Z" }
         Status = Api.CommentApproval.New
         Content = "A comment" } }
 

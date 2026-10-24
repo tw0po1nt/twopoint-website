@@ -9,6 +9,9 @@ type Call =
   | Moderate of comment: Api.QueuedComment * Queue.Action
   | LoadPostComments of slug: string
   | ModeratePostComment of slug: string * comment: Api.Comment * Queue.Action
+  | LoadCommenters
+  | LoadCommenter of commenterId: string
+  | ChangeCommenter of commenterId: string * Commenter.Action
   | RebuildSite
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -16,6 +19,7 @@ type Overlay =
   | MoreSheet
   | SignOutDialog
   | DeleteDialog of commentId: string
+  | DeleteCommenterDialog
 
 type Model =
   { Router: Router.Model
@@ -24,6 +28,8 @@ type Model =
     Rebuild: Rebuild.Model
     Queue: Queue.Model
     PostComments: PostComments.Model option
+    Commenters: Commenters.Model
+    Commenter: Commenter.Model option
     Overlay: Overlay option }
 
 type Msg =
@@ -33,6 +39,8 @@ type Msg =
   | Rebuild of Rebuild.Msg
   | Queue of Queue.Msg
   | PostComments of PostComments.Msg
+  | Commenters of Commenters.Msg
+  | Commenter of Commenter.Msg
   | Opened of Overlay
   /// The browser closed the overlay, for example after the Esc key.
   | Closed of Overlay
@@ -43,18 +51,25 @@ type Effect =
   | SignIn of Session.Effect<Call>
   | Send of calls: Call list
 
-let private pageOf (route: Route) =
+/// The page of the route gets a new model, and the calls load it.
+let private enter (route: Route) (model: Model) =
+  let left =
+    { model with
+        PostComments = None
+        Commenter = None }
+
   match route with
-  | Route.PostComments slug -> Some(PostComments.init slug), [ LoadPostComments slug ]
+  | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
+  | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
+  | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
   | Route.Dashboard
   | Route.Posts
   | Route.Post _
   | Route.ModerationQueue
-  | Route.Commenters
   | Route.Series
   | Route.Subscriptions
   | Route.Settings
-  | Route.NotFound _ -> None, []
+  | Route.NotFound _ -> left, []
 
 let init (path: string) : Model * Effect option =
   let session, effect = Session.init ()
@@ -65,8 +80,12 @@ let init (path: string) : Model * Effect option =
     Dashboard = Dashboard.init
     Rebuild = Rebuild.init
     Queue = Queue.init
-    PostComments = fst (pageOf router.Route)
-    Overlay = None },
+    PostComments = None
+    Commenters = Commenters.init
+    Commenter = None
+    Overlay = None }
+  |> enter router.Route
+  |> fst,
   Option.map SignIn effect
 
 let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
@@ -81,19 +100,22 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | Router msg ->
     let router, effect = Router.update msg model.Router
-    let entered = router.Route <> model.Router.Route
-    let postComments, pageCalls = pageOf router.Route
+
+    let page, pageCalls =
+      if router.Route <> model.Router.Route then
+        enter router.Route model
+      else
+        model, []
 
     let calls =
-      if entered && model.Session.Status <> Session.Starting then
+      if model.Session.Status <> Session.Starting then
         pageCalls
       else
         []
 
     let next =
-      { model with
+      { page with
           Router = router
-          PostComments = if entered then postComments else model.PostComments
           Overlay = None }
 
     match effect, calls with
@@ -112,7 +134,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
             | _ -> model.Overlay }
 
     if model.Session.Status = Session.Starting && Session.isActive session then
-      next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (pageOf model.Router.Route)))
+      next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (enter model.Router.Route model)))
     else
       next, Option.map SignIn effect
   | Dashboard msg ->
@@ -177,6 +199,45 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       next,
       effect
       |> Option.map (fun (PostComments.Moderate(slug, comment, action)) -> Send [ ModeratePostComment(slug, comment, action) ])
+  | Commenters msg ->
+    let next = { model with Commenters = Commenters.update msg model.Commenters }
+
+    match msg with
+    | Commenters.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Commenters.Answered _
+    | Commenters.Filtered _ -> next, None
+  | Commenter(Commenter.Chosen Commenter.Delete) when model.Overlay <> Some DeleteCommenterDialog -> model, None
+  | Commenter msg ->
+    let page, effect =
+      match model.Commenter with
+      | Some page ->
+        let page, effect = Commenter.update msg page
+        Some page, effect
+      | None -> None, None
+
+    let next =
+      { model with
+          Commenter = page
+          Overlay =
+            match msg with
+            | Commenter.Chosen Commenter.Delete -> None
+            | _ -> model.Overlay }
+
+    match msg with
+    | Commenter.Answered(_, Error Api.Refused)
+    | Commenter.Done(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Commenter.Done(commenterId, Commenter.Delete, Ok()) when next.Router.Route = Route.Commenter commenterId ->
+      match update (Router(Router.LinkFollowed(Route.path Route.Commenters))) next with
+      | next, Some(Navigate(push, calls)) -> next, Some(Navigate(push, calls @ [ LoadQueue ]))
+      | next, _ -> next, Some(Send [ LoadQueue ])
+    // A change of the commenter can change the comments in the moderation queue.
+    | Commenter.Done(_, _, Ok()) -> next, Some(Send [ LoadQueue ])
+    | Commenter.Answered _
+    | Commenter.Chosen _
+    | Commenter.Done(_, _, Error _) ->
+      next,
+      effect
+      |> Option.map (fun (Commenter.Change(commenterId, action)) -> Send [ ChangeCommenter(commenterId, action) ])
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None
@@ -191,6 +252,20 @@ let deleteChosen (model: Model) =
     model.PostComments
     |> Option.bind (PostComments.tryFind commentId)
     |> Option.map (fun _ -> PostComments(PostComments.Chosen(commentId, Queue.Delete)))
+  | Some(DeleteDialog _), _
+  | Some DeleteCommenterDialog, _
+  | Some MoreSheet, _
+  | Some SignOutDialog, _
+  | None, _ -> None
+
+/// None when the commenter page has no commenter.
+let deleteCommenterChosen (model: Model) =
+  match model.Overlay, model.Router.Route with
+  | Some DeleteCommenterDialog, Route.Commenter _ ->
+    model.Commenter
+    |> Option.bind Commenter.tryCommenter
+    |> Option.map (fun _ -> Commenter(Commenter.Chosen Commenter.Delete))
+  | Some DeleteCommenterDialog, _
   | Some(DeleteDialog _), _
   | Some MoreSheet, _
   | Some SignOutDialog, _

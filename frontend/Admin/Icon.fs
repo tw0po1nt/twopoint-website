@@ -53,7 +53,8 @@ let ofRoute (route: Route) =
   | Post _
   | PostComments _ -> Posts
   | ModerationQueue -> Comments
-  | Route.Commenters -> Commenters
+  | Route.Commenters
+  | Route.Commenter _ -> Commenters
   | Route.Series -> Series
   | Route.Subscriptions -> Subscriptions
   | Route.Settings -> Settings

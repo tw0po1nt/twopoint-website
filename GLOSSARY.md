@@ -117,7 +117,8 @@ _Avoid_: Announcement, broadcast, blast
 
 **Commenter**:
 A person who verified an email address to comment on posts. A commenter is new, trusted, or
-banned.
+banned. A delete removes the commenter and each comment of the commenter. The email address can
+then verify again, and it becomes a new commenter.
 _Avoid_: User, reader
 
 **Comment**:

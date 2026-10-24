@@ -11,6 +11,7 @@ let private routes =
     PostComments "fable-reminders-part-2", "/posts/fable-reminders-part-2/comments"
     ModerationQueue, "/comments"
     Commenters, "/commenters"
+    Commenter "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21", "/commenters/7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
     Series, "/series"
     Subscriptions, "/subscriptions"
     Settings, "/settings" ]

@@ -9,6 +9,7 @@ type Route =
   | PostComments of slug: string
   | ModerationQueue
   | Commenters
+  | Commenter of id: string
   | Series
   | Subscriptions
   | Settings
@@ -25,6 +26,7 @@ module Route =
     | [ "posts"; slug; "comments" ] -> PostComments(Uri.UnescapeDataString slug)
     | [ "comments" ] -> ModerationQueue
     | [ "commenters" ] -> Commenters
+    | [ "commenters"; id ] -> Commenter(Uri.UnescapeDataString id)
     | [ "series" ] -> Series
     | [ "subscriptions" ] -> Subscriptions
     | [ "settings" ] -> Settings
@@ -38,6 +40,7 @@ module Route =
     | PostComments slug -> $"/posts/{Uri.EscapeDataString slug}/comments"
     | ModerationQueue -> "/comments"
     | Commenters -> "/commenters"
+    | Commenter id -> $"/commenters/{Uri.EscapeDataString id}"
     | Series -> "/series"
     | Subscriptions -> "/subscriptions"
     | Settings -> "/settings"

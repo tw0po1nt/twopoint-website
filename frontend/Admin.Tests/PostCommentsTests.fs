@@ -11,7 +11,8 @@ let private comment id approval : Api.Comment =
       { Id = "ada-id"
         Email = "ada@example.com"
         Name = "Ada"
-        Status = Api.New }
+        Status = Api.New
+        CreatedDate = "2026-01-01T00:00:00Z" }
     Status = approval
     Content = "A comment" }
 
