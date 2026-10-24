@@ -13,6 +13,7 @@
     <Compile Include="SlugTests.fs" />
     <Compile Include="FrontMatterTests.fs" />
     <Compile Include="PostSummaryTests.fs" />
+    <Compile Include="PostTextTests.fs" />
     <Compile Include="BodyTests.fs" />
     <Compile Include="HighlightTests.fs" />
     <Compile Include="DirectiveTests.fs" />
