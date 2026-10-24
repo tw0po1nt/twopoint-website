@@ -44,7 +44,10 @@ The local backend has its own key pair in `backend/Http/local.settings.json.temp
      "WebPush__PrivateKeyFromKeyVault=web-push-vapid-private-key"
    ```
 
-4. Keep `PUBLIC_KEY`. The admin config needs the same value.
+4. Write `PUBLIC_KEY` to `vapidPublicKey` in the `release` section of `frontend/Admin/config.json`.
+   The admin sends it to the browser when the author turns on notifications. With an empty value,
+   the Settings page says that the build cannot turn on notifications. The `dev` section has the
+   key pair of the local backend.
 5. Delete `vapid.pem` and `vapid.hex`.
 
 A new key pair makes each registered device useless. Each device must subscribe again.

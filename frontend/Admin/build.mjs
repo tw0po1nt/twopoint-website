@@ -1,7 +1,7 @@
 import { transformAsync } from '@babel/core';
 import solid from 'babel-preset-solid';
 import * as esbuild from 'esbuild';
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const fableDir = 'build/fable';
@@ -101,6 +101,9 @@ const reloadTag = dev ? `  <script type="module" src="${files.reload}"></script>
 await writeFile(path.join(outDir, 'index.html'), index.replace('</head>', `${reloadTag}</head>`));
 await writeFile(path.join(outDir, 'redirect', 'index.html'), await page('redirect/index.html', { '/bundle/bridge.js': files.bridge }));
 await copyFile('staticwebapp.config.json', path.join(outDir, 'staticwebapp.config.json'));
+
+// The push worker, the manifest, and the icons keep their names, because the browser finds them at fixed paths.
+await cp('public', outDir, { recursive: true });
 
 // The dev server serves this folder, so the build writes each new file first and deletes the old files last.
 const kept = new Set(outputs.map((file) => path.basename(file)));

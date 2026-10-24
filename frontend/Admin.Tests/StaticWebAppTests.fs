@@ -17,7 +17,10 @@ let private build =
     [ "/index.html", "<p>admin</p>"
       "/redirect/index.html", "<p>bridge</p>"
       "/bundle/admin-ABC.js", "admin();"
-      "/bundle/style-DEF.css", "p {}" ]
+      "/bundle/style-DEF.css", "p {}"
+      "/sw.js", "self;"
+      "/manifest.webmanifest", "{}"
+      "/icons/icon-192.png", "png" ]
 
 let private find (files: Map<string, string>) (path: string) =
   match Map.tryFind path files with
@@ -65,6 +68,30 @@ let tests =
       Expect.equal script.Status 200 "The script"
       Expect.stringStarts script.Headers["Content-Type"] "text/javascript" "A script"
       Expect.stringStarts (get "/bundle/style-DEF.css").Headers["Content-Type"] "text/css" "A style sheet"
+    }
+
+    test "the manifest has the web app manifest content type" {
+      let reply = get "/manifest.webmanifest"
+      Expect.equal reply.Status 200 "The manifest"
+      Expect.equal reply.Headers["Content-Type"] "application/manifest+json" "The type"
+    }
+
+    test "the push worker is a script that the browser always checks" {
+      let reply = get "/sw.js"
+      Expect.equal (reply.Status, body reply) (200, "self;") "The worker"
+      Expect.stringStarts reply.Headers["Content-Type"] "text/javascript" "A script"
+      Expect.equal (Map.tryFind "Cache-Control" reply.Headers) (Some "no-cache") "No stale worker"
+    }
+
+    test "an icon is a PNG image" {
+      Expect.equal (get "/icons/icon-192.png").Headers["Content-Type"] "image/png" "The type"
+    }
+
+    test "the worker, the manifest, and the icons get a 404 rather than the app page" {
+      let files = Map [ "/index.html", "<p>admin</p>" ]
+
+      for path in [ "/sw.js"; "/manifest.webmanifest"; "/icons/icon-512.png" ] do
+        Expect.equal (StaticWebApp.reply config (find files) path).Status 404 path
     }
 
     test "a path before the first build gets a 503" {
