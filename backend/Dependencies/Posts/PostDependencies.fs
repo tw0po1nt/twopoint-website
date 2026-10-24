@@ -157,14 +157,8 @@ type PostDependencies(
   }
 
   member _.UpdateCommenterStatus (commenter : Commenter) status = cancellableTaskResult {
-    let dbCommenter =
-      { DbCommenter.ValidationId = commenter.ValidationId.ToString()
-        EmailAddress = commenter.EmailAddress |> EmailAddress.value
-        Name = commenter.Name |> Option.map NonEmptyString.value
-        CreatedDate = commenter.CreatedDate
-        Status = commenter.Status.ToString().ToLower() }
     let dbStatus = status.ToString().ToLower()
-    let! (dbCommenter: DbCommenter) = postDb.UpdateCommenterStatus dbCommenter dbStatus
+    let! (dbCommenter: DbCommenter) = postDb.UpdateCommenterStatus (DbCommenter.FromCommenter commenter) dbStatus
     return! dbCommenter.ToCommenter() |> DependencyError.ofValidation source
   }
 
@@ -192,9 +186,9 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.GetCommentsOfCommenter (validationId : CommenterValidationId) = cancellableTaskResult {
+  member _.GetCommentsOfCommenter (commenter : Commenter) = cancellableTaskResult {
     let! dbComments =
-      postDb.GetCommentsOfCommenter (CommentApproval.all |> List.map _.ToString()) (validationId.ToString())
+      postDb.GetCommentsOfCommenter (CommentApproval.all |> List.map _.ToString()) (DbCommenter.FromCommenter commenter)
     return!
       dbComments
       |> List.traverseValidationA (

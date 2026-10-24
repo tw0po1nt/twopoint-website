@@ -600,7 +600,8 @@ module UpdateCommenterStatus =
     let isAllowed (current : CommenterStatus) (requested : CommenterStatus) =
       match current, requested with
       | CommenterStatus.Banned, CommenterStatus.Trusted -> false
-      | _ -> true
+      | CommenterStatus.Banned, (CommenterStatus.New | CommenterStatus.Banned)
+      | (CommenterStatus.New | CommenterStatus.Trusted), (CommenterStatus.New | CommenterStatus.Trusted | CommenterStatus.Banned) -> true
 
     let rejections (comments : Comment list) (requested : CommenterStatus) =
       match requested with
@@ -625,7 +626,7 @@ module UpdateCommenterStatus =
 
   type Dependencies =
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
-    abstract member GetCommentsOfCommenter: validationId: CommenterValidationId -> DependencyResult<Comment list>
+    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<Comment list>
     abstract member UpdateCommenterStatus:
       commenter: Commenter
         -> status: CommenterStatus
@@ -656,8 +657,11 @@ module UpdateCommenterStatus =
          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
        let! comments =
-         dependencies.GetCommentsOfCommenter statusUpdate.ValidationId
-         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+         match existingCommenter with
+         | Some commenter ->
+           dependencies.GetCommentsOfCommenter commenter
+           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+         | None -> CancellableTaskResult.singleton []
 
        let decision = Logic.decide existingCommenter comments statusUpdate
 

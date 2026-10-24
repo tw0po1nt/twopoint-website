@@ -112,7 +112,14 @@ type internal DbCommenter =
     entity["Name"] <- this.Name |> Option.toObj
     entity["Status"] <- this.Status
     entity
-    
+
+  static member FromCommenter (commenter : Commenter) =
+    { ValidationId = commenter.ValidationId.ToString()
+      EmailAddress = commenter.EmailAddress |> EmailAddress.value
+      Name = commenter.Name |> Option.map NonEmptyString.value
+      CreatedDate = commenter.CreatedDate
+      Status = commenter.Status.ToString().ToLower() }
+
   member this.ToCommenter() =
     Commenter.create
       this.ValidationId
@@ -268,7 +275,7 @@ type internal IPostDb =
       -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentsOfCommenter:
     approvals: string list
-      -> commenterId: string
+      -> commenter: DbCommenter
       -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
@@ -309,7 +316,10 @@ module internal PostDb =
       
     let where table onEntity filter =
       Db.where tableServiceClient logger db table onEntity filter
-      
+
+    let whereAnyKey table onEntity toFilter keys =
+      Db.whereAnyKey tableServiceClient logger db table onEntity toFilter keys
+
     let add table onError onEntity entity =
       Db.add tableServiceClient logger db table onError onEntity entity
       
@@ -388,19 +398,19 @@ module internal PostDb =
         let dbComments = dbComments |> List.toArray
       
         // for every comment, get the commenter
-        let commenterIds = dbComments |> Array.map _.CommenterId
-        let commentersFilter = (Empty, commenterIds) ||> Array.fold (fun filter commenterId ->
-          filter * (eq "PartitionKey" commenterId + eq "RowKey" commenterId)
-        )
-        let getCommenters = commentersFilter |> where commentersTable DbCommenter.FromEntity
-        
+        let getCommenters =
+          dbComments
+          |> Array.map _.CommenterId
+          |> whereAnyKey commentersTable DbCommenter.FromEntity (fun commenterId ->
+            eq "PartitionKey" commenterId + eq "RowKey" commenterId
+          )
+
         // for every comment, get the comment statuses
-        let commentIds = dbComments |> Array.map _.Id
-        let commentStatusesFilter = (Empty, commentIds) ||> Array.fold (fun filter commentId ->
-          filter * eq "PartitionKey" commentId
-        )
-        let getCommentStatuses = commentStatusesFilter |> where commentStatusesTable DbCommentStatus.FromEntity
-        
+        let getCommentStatuses =
+          dbComments
+          |> Array.map _.Id
+          |> whereAnyKey commentStatusesTable DbCommentStatus.FromEntity (eq "PartitionKey")
+
         let! commenters, statuses = CancellableTaskResult.parallelZip getCommenters getCommentStatuses
         
         return! withLatestStatus approvals dbComments commenters statuses
@@ -416,21 +426,15 @@ module internal PostDb =
         return! withLatestStatus approvals (dbComments |> List.toArray) commenters statuses
       }
 
-      member this.GetCommentsOfCommenter approvals commenterId = cancellableTaskResult {
-        let! dbComments = eq "CommenterId" commenterId |> where commentsTable DbComment.FromEntity
-        match dbComments with
-        | [] -> return []
-        | dbComments ->
-          let dbComments = dbComments |> List.toArray
-          let commentStatusesFilter = (Empty, dbComments |> Array.map _.Id) ||> Array.fold (fun filter commentId ->
-            filter * eq "PartitionKey" commentId
-          )
-          let! dbCommenter, statuses =
-            CancellableTaskResult.parallelZip
-              (this.GetCommenterByValidationId commenterId)
-              (commentStatusesFilter |> where commentStatusesTable DbCommentStatus.FromEntity)
+      member _.GetCommentsOfCommenter approvals commenter = cancellableTaskResult {
+        let! dbComments = eq "CommenterId" commenter.ValidationId |> where commentsTable DbComment.FromEntity
+        let dbComments = dbComments |> List.toArray
+        let! statuses =
+          dbComments
+          |> Array.map _.Id
+          |> whereAnyKey commentStatusesTable DbCommentStatus.FromEntity (eq "PartitionKey")
 
-          return! withLatestStatus approvals dbComments (dbCommenter |> Option.toList) statuses
+        return! withLatestStatus approvals dbComments [ commenter ] statuses
       }
 
       member this.GetCommentById commentId = cancellableTaskResult {

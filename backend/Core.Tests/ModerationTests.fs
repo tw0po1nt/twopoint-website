@@ -262,13 +262,17 @@ let private validationTests =
 type private FakeStatusDependencies(existing : Commenter option, comments : Comment list) =
   let updates = ResizeArray<CommenterStatus>()
   let approvals = ResizeArray<CommentId * CommentApproval>()
+  let commentReads = ResizeArray<Commenter>()
 
   member _.Updates = List.ofSeq updates
   member _.Approvals = List.ofSeq approvals
+  member _.CommentReads = List.ofSeq commentReads
 
   interface UpdateCommenterStatus.Dependencies with
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
-    member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
+    member _.GetCommentsOfCommenter commenter =
+      commentReads.Add commenter
+      CancellableTaskResult.singleton comments
     member _.UpdateCommenterStatus commenter status =
       updates.Add status
       CancellableTaskResult.singleton { commenter with Status = status }
@@ -369,12 +373,14 @@ let private statusTests =
       Expect.isEmpty dependencies.Approvals "Expected no comment change"
     }
 
-    test "a missing commenter gets no update" {
-      let dependencies = FakeStatusDependencies (None, [])
+    test "a missing commenter gets no update, and the action reads no comment" {
+      let dependencies = FakeStatusDependencies (None, commentsOfCommenter)
 
-      match updateStatus dependencies CommenterStatus.Trusted with
+      match updateStatus dependencies CommenterStatus.Banned with
       | Error (Logic (UpdateCommenterStatus.CommenterNotFound _)) ->
         Expect.isEmpty dependencies.Updates "Expected no update"
+        Expect.isEmpty dependencies.CommentReads "Expected no read of the comments"
+        Expect.isEmpty dependencies.Approvals "Expected no comment change"
       | other -> failtestf "Expected CommenterNotFound, got %A" other
     }
   ]
