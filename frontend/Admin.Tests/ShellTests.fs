@@ -7,6 +7,9 @@ open Expecto
 let private post slug fresh : Api.Post =
   { Slug = slug
     Title = slug
+    State = Api.Published
+    PendingEdit = false
+    PublishDate = Some "2026-01-02T03:04:05Z"
     CommentStats = { New = fresh; Approved = 1; Rejected = 0 } }
 
 [<Tests>]

@@ -4,6 +4,7 @@ module TwoPoint.Admin.Shell
 /// Each API call of the admin. A call needs a token.
 type Call =
   | LoadDashboard
+  | LoadPosts
   | LoadQueue
   | TrustCommenter of comment: Api.PostedComment
   | Moderate of comment: Api.PostedComment * Queue.Action
@@ -26,6 +27,7 @@ type Model =
     Session: Session.Model<Call>
     Dashboard: Dashboard.Model
     Rebuild: Rebuild.Model
+    Posts: Posts.Model
     Queue: Queue.Model
     PostComments: PostComments.Model option
     Commenters: Commenters.Model
@@ -37,6 +39,7 @@ type Msg =
   | Session of Session.Msg<Call>
   | Dashboard of Dashboard.Msg
   | Rebuild of Rebuild.Msg
+  | Posts of Posts.Msg
   | Queue of Queue.Msg
   | PostComments of PostComments.Msg
   | Commenters of Commenters.Msg
@@ -58,11 +61,11 @@ let private enter (route: Route) (model: Model) =
         Commenter = None }
 
   match route with
+  | Route.Posts -> { left with Posts = Posts.reload model.Posts }, [ LoadPosts ]
   | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
   | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
   | Route.Dashboard
-  | Route.Posts
   | Route.Post _
   | Route.ModerationQueue
   | Route.Series
@@ -78,6 +81,7 @@ let init (path: string) : Model * Effect option =
     Session = session
     Dashboard = Dashboard.init
     Rebuild = Rebuild.init
+    Posts = Posts.init
     Queue = Queue.init
     PostComments = None
     Commenters = Commenters.init
@@ -149,6 +153,13 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Rebuild.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | _ -> next, effect |> Option.map (fun Rebuild.Dispatch -> Send [ RebuildSite ])
+  | Posts msg ->
+    let next = { model with Posts = Posts.update msg model.Posts }
+
+    match msg with
+    | Posts.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Posts.Answered _
+    | Posts.Filtered _ -> next, None
   | Queue(Queue.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) -> model, None
   | Queue msg ->
     let queue, effect = Queue.update msg model.Queue

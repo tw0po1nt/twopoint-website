@@ -12,9 +12,17 @@ type CommentStats =
     Approved: int
     Rejected: int }
 
+type PostState =
+  | Draft
+  | Published
+  | Upcoming
+
 type Post =
   { Slug: string
     Title: string
+    State: PostState
+    PendingEdit: bool
+    PublishDate: string option
     CommentStats: CommentStats }
 
 type CommenterStatus =
@@ -78,6 +86,15 @@ let reason (failure: Failure) =
   | Invalid -> "The API sent an answer that the admin cannot read."
   | Failed reason -> reason
 
+let private postState: Decoder<PostState> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "draft" -> Decode.succeed Draft
+    | "published" -> Decode.succeed Published
+    | "upcoming" -> Decode.succeed Upcoming
+    | _ -> Decode.fail $"The post state '{name}' is not known.")
+
 let private commenterStatusName (status: CommenterStatus) =
   match status with
   | New -> "new"
@@ -110,6 +127,7 @@ let private commentApproval: Decoder<CommentApproval> =
 
 let private coders =
   Extra.empty
+  |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
 
