@@ -11,23 +11,48 @@ type Posts =
   | Loaded of Api.Post list
   | NotLoaded of reason: string
 
-type Model = { Filter: Filter; Posts: Posts }
+type Model =
+  { Filter: Filter
+    Posts: Posts
+    /// The call that makes a draft is in flight.
+    Creating: bool
+    CreateFailure: string option }
 
 type Msg =
   | Answered of Result<Api.Post list, Api.Failure>
   | Filtered of Filter
+  | NewDraftClicked
+  | DraftCreated of Result<Api.CreatedDraft, Api.Failure>
 
-let init = { Filter = All; Posts = Waiting }
+type Effect = CreateDraft
+
+let init =
+  { Filter = All
+    Posts = Waiting
+    Creating = false
+    CreateFailure = None }
 
 let reload (model: Model) = { model with Posts = Waiting }
 
 let filters = [ All, "All"; Drafts, "Drafts"; PendingEdits, "Pending edits" ]
 
-let update (msg: Msg) (model: Model) : Model =
+let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
-  | Answered(Ok posts) -> { model with Posts = Loaded posts }
-  | Answered(Error failure) -> { model with Posts = NotLoaded(Api.reason failure) }
-  | Filtered filter -> { model with Filter = filter }
+  | Answered(Ok posts) -> { model with Posts = Loaded posts }, None
+  | Answered(Error failure) -> { model with Posts = NotLoaded(Api.reason failure) }, None
+  | Filtered filter -> { model with Filter = filter }, None
+  | NewDraftClicked when model.Creating -> model, None
+  | NewDraftClicked ->
+    { model with
+        Creating = true
+        CreateFailure = None },
+    Some CreateDraft
+  | DraftCreated(Ok _) -> { model with Creating = false }, None
+  | DraftCreated(Error failure) ->
+    { model with
+        Creating = false
+        CreateFailure = Some(Api.reason failure) },
+    None
 
 let shown (model: Model) =
   match model.Posts, model.Filter with

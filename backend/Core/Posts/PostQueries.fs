@@ -79,6 +79,63 @@ module GetAllPosts =
     }
 
 // ====================================================================================================================
+// Get the document of a post
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetPostDocument =
+
+  type Query = string -> CancellableTask<QueryResult<PostDocument option>>
+
+  type Dependencies =
+    abstract member GetUtcNow: unit -> DateTime
+    abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    let document
+      (utcNow : DateTime)
+      (slug : Slug)
+      (published : StoredBlob option)
+      (working : StoredBlob option)
+      : PostDocument option =
+      match published, working with
+      | None, None -> None
+      | _ ->
+        let publishDate =
+          published
+          |> Option.bind (fun blob -> (TwoPoint.Site.Render.Post.summary blob.Text).PublishDate)
+          |> Option.map _.UtcDateTime
+
+        let state =
+          match published, publishDate with
+          | None, _ -> Draft
+          | Some _, Some date when date > utcNow -> Upcoming
+          | Some _, _ -> Published
+
+        Some
+          { Slug = slug
+            State = state
+            HasPendingEdit = published.IsSome && working.IsSome
+            PublishDate = publishDate
+            ETag = working |> Option.map _.ETag
+            Text = (working |> Option.orElse published).Value.Text
+            PublishedText = published |> Option.map _.Text }
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun slug -> cancellableTaskResult {
+      let! slug = slug |> Slug.create |> Result.mapError QueryError.Validation
+
+      let! published, working =
+        CancellableTaskResult.parallelZip (dependencies.GetPublishedBlob slug) (dependencies.GetWorkingBlob slug)
+        |> CancellableTaskResult.mapError QueryError.Dependency
+
+      return Logic.document (dependencies.GetUtcNow()) slug published working
+    }
+
+// ====================================================================================================================
 // Get post by slug
 // ====================================================================================================================
 

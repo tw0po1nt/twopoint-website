@@ -101,6 +101,138 @@ module CreatePost =
     }
 
 // ====================================================================================================================
+// Create draft
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module DraftSlug =
+
+  /// A term slug can contain `_`, and a post slug cannot.
+  let ofTitle (title : string) =
+    let slug =
+      TwoPoint.Site.Render.Slug.term title
+      |> fun term -> System.Text.RegularExpressions.Regex.Replace(term.Replace('_', '-'), "-+", "-")
+      |> fun term -> term.Trim '-'
+
+    if slug = "" then "untitled" else slug
+
+  /// The slug itself, or else the first of `-2`, `-3`, and so on that no taken slug has.
+  let free (taken : Set<string>) (slug : string) =
+    Seq.initInfinite (fun index -> if index = 0 then slug else $"{slug}-{index + 1}")
+    |> Seq.find (taken.Contains >> not)
+
+[<RequireQualifiedAccess>]
+module CreateDraft =
+
+  type Dto = { Title : string }
+
+  type Error = SlugTaken of Slug
+  type Event = Created of Slug * eTag: string
+
+  type Dependencies =
+    abstract member GetPostSlugs: unit -> DependencyResult<Slug list>
+    abstract member WriteWorkingBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
+
+  type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun dto -> cancellableTaskResult {
+      let! taken =
+        dependencies.GetPostSlugs()
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! slug =
+        DraftSlug.free (taken |> List.map Slug.value |> Set.ofList) (DraftSlug.ofTitle dto.Title)
+        |> Slug.create
+        |> Result.mapError ActionError<Error>.Validation
+
+      let! text =
+        TwoPoint.Site.Render.PostText.compose "" { Title = dto.Title.Trim(); Excerpt = ""; Body = "" }
+        |> Result.mapError (List.singleton >> ActionError<Error>.Validation)
+
+      let! outcome =
+        dependencies.WriteWorkingBlob slug text MustNotExist
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      match outcome with
+      | Written eTag -> return Event.Created(slug, eTag)
+      | ConditionFailed -> return! Result.Error(ActionError.Logic(SlugTaken slug))
+    }
+
+// ====================================================================================================================
+// Save draft
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module SaveDraft =
+
+  /// `IfMatch` is the ETag of the working blob that the editor read. `None` means that the editor read no working blob.
+  type Dto =
+    { Slug : string
+      IfMatch : string option
+      Title : string
+      Excerpt : string
+      Body : string }
+
+  type Error =
+    | PostNotFound of Slug
+    /// The YAML parser cannot read the front matter of the stored text. A save would drop the other fields.
+    | FrontMatterUnreadable of reason: string
+    /// The working blob changed after the editor read it, or the editor read a blob that no longer exists.
+    | Stale
+
+  type Event = Saved of eTag: string
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    /// The text to edit and the condition of the write. A first save of a published post edits the published text.
+    let decide
+      (slug : Slug)
+      (published : StoredBlob option)
+      (working : StoredBlob option)
+      (ifMatch : string option)
+      : Decision<string * WriteCondition, Error> =
+      match published, working, ifMatch with
+      | None, None, _ -> Decision.failure (PostNotFound slug)
+      | _, Some blob, Some eTag when blob.ETag = eTag -> Decision.success (blob.Text, MatchesETag eTag)
+      | _, Some _, _ -> Decision.failure Stale
+      | _, None, Some _ -> Decision.failure Stale
+      | Some blob, None, None -> Decision.success (blob.Text, MustNotExist)
+
+  type Dependencies =
+    abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member WriteWorkingBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
+
+  type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun dto -> cancellableTaskResult {
+      let! slug = dto.Slug |> Slug.create |> Result.mapError ActionError<Error>.Validation
+
+      let! published, working =
+        CancellableTaskResult.parallelZip (dependencies.GetPublishedBlob slug) (dependencies.GetWorkingBlob slug)
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! baseText, condition =
+        Logic.decide slug published working dto.IfMatch
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! text =
+        TwoPoint.Site.Render.PostText.compose baseText { Title = dto.Title; Excerpt = dto.Excerpt; Body = dto.Body }
+        |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
+
+      let! outcome =
+        dependencies.WriteWorkingBlob slug text condition
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      match outcome with
+      | Written eTag -> return Event.Saved eTag
+      | ConditionFailed -> return! Result.Error(ActionError.Logic Stale)
+    }
+
+// ====================================================================================================================
 // Validate commenter
 // ====================================================================================================================
 

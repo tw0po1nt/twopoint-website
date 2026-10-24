@@ -17,7 +17,7 @@ let parse (images: IImageSize) (stage: Stage) (series: Series list) (file: strin
       frontMatter
       |> Result.requireSome [ Problem.error (Place.Post 1) "The post has no front matter. Start the file with a '---' line." ]
 
-    let! frontMatter, frontMatterWarnings = FrontMatter.parse series (block.Line + 1) (block.Lines.ToString())
+    let! frontMatter, frontMatterWarnings = FrontMatter.parsePublished series (block.Line + 1) (block.Lines.ToString())
 
     let! body, bodyWarnings =
       Body.ofDocument images stage bodyStart document

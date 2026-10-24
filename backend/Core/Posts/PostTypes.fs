@@ -208,6 +208,28 @@ type PostState =
 /// The text of one blob in the post store.
 type StoredPost = { Slug : Slug; Text : string }
 
+/// The text of one blob in the post store, with the ETag that the store gave the blob.
+type StoredBlob = { Text : string; ETag : string }
+
+/// The store refuses a write when its condition is false.
+type WriteCondition =
+  | MatchesETag of string
+  | MustNotExist
+
+type WriteOutcome =
+  | Written of eTag: string
+  | ConditionFailed
+
+/// `Text` is the pending edit when the post has one, and else the published text. `ETag` is the ETag of the working blob.
+type PostDocument =
+  { Slug : Slug
+    State : PostState
+    HasPendingEdit : bool
+    PublishDate : DateTime option
+    ETag : string option
+    Text : string
+    PublishedText : string option }
+
 type PostListing =
   { Slug : Slug
     Title : string

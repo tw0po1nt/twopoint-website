@@ -34,6 +34,9 @@ let private fail (call: Shell.Call) =
   | Shell.RegisterDevice _ -> Shell.Notifications(Notifications.RegisterAnswered(Error Api.Unanswered))
   | Shell.RemoveDevice deviceId -> Shell.Notifications(Notifications.Removed(deviceId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
+  | Shell.CreateDraft -> Shell.Posts(Posts.DraftCreated(Error Api.Unanswered))
+  | Shell.LoadPost slug -> Shell.Editor(Editor.Answered(slug, Error Api.Unanswered))
+  | Shell.SavePost request -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
@@ -116,6 +119,20 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
     Api.deleteDevice (Config.api ()) token deviceId
     |> Promise.map (fun result -> Shell.Notifications(Notifications.Removed(deviceId, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
+  | Shell.CreateDraft -> Api.createDraft (Config.api ()) token |> Promise.map (Posts.DraftCreated >> Shell.Posts)
+  | Shell.LoadPost slug ->
+    Api.getPost (Config.api ()) token slug
+    |> Promise.map (fun result -> Shell.Editor(Editor.Answered(slug, result)))
+  | Shell.SavePost request ->
+    Api.savePost
+      (Config.api ())
+      token
+      request.Slug
+      request.ETag
+      request.Fields.Title
+      request.Fields.Excerpt
+      request.Fields.Body
+    |> Promise.map (fun result -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, result)))
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()
@@ -182,6 +199,9 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
     push.unsubscribe ()
     |> Promise.catch (fun error -> console.error ("admin: the push unsubscribe failed.", error))
     |> Promise.start
+  | Shell.Autosave version ->
+    window.setTimeout ((fun () -> dispatch (Shell.Editor(Editor.AutosaveElapsed version))), Editor.autosaveDelay)
+    |> ignore
 
 let private site = "https://twopoint.dev"
 
@@ -691,7 +711,25 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
   let filter = Posts.Filtered >> Shell.Posts >> dispatch
 
   Fragment() {
-    div (class' = "filter-bar") { Parts.tabs "Show" Posts.filters (fun () -> model.Filter) filter }
+    div (class' = "filter-bar toolbar") {
+      Parts.tabs "Show" Posts.filters (fun () -> model.Filter) filter
+
+      Parts
+        .Button(
+          kind = Parts.Primary,
+          size = Parts.Small,
+          disabled = model.Creating,
+          onClick = fun _ -> dispatch (Shell.Posts Posts.NewDraftClicked)
+        )
+        .Has(Fragment() { "New draft" })
+    }
+
+    Show(when' = model.CreateFailure.IsSome) {
+      Parts
+        .Alert(tone = Parts.Bad, title = "The draft was not made.")
+        .Has(p () { model.CreateFailure |> Option.defaultValue "" })
+    }
+
     postList dispatch model
   }
 
@@ -982,43 +1020,11 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
         })
     }
   | Subscriptions -> Fragment() { subscriptionList dispatch model.Subscriptions }
-  | Post _
+  // The editor has its own page.
+  | Post _ -> Fragment() { "" }
   | Series as route ->
     Fragment() {
       Parts.emptyState (Icon.ofRoute route) "This page is empty." (p () { "Its content comes in a later version." })
-    }
-
-[<SolidComponent>]
-let private bannerWith (text: string) (action: string) (disabled: bool) (click: unit -> unit) =
-  Parts
-    .Alert(tone = Parts.Warn, extra = "banner")
-    .Has(
-      Fragment() {
-        p () { text }
-
-        Parts
-          .Button(kind = Parts.Primary, size = Parts.Small, disabled = disabled, onClick = fun _ -> click ())
-          .Has(Fragment() { action })
-      }
-    )
-
-[<SolidComponent>]
-let private banner (dispatch: Shell.Msg -> unit) (model: Session.Model<Shell.Call>) =
-  let session = Shell.Session >> dispatch
-
-  match model.Status with
-  | Session.Broken ->
-    Fragment() { bannerWith "The sign-in did not complete." "Sign in" false (fun () -> session Session.SignInClicked) }
-  | Session.Refused ->
-    Fragment() {
-      bannerWith (Session.bannerText model) "Use another account" false (fun () -> session Session.SignInClicked)
-    }
-  | _ ->
-    Fragment() {
-      Show(when' = Session.showsBanner model) {
-        bannerWith (Session.bannerText model) "Sign in again" (model.Status = Session.Renewing) (fun () ->
-          session Session.SignInAgainClicked)
-      }
     }
 
 [<SolidComponent>]
@@ -1172,23 +1178,21 @@ let view (signIn: SignIn) (push: Push) =
         }
       }
 
+      // The editor stays outside the page, so a typed letter does not replace the editor.
       Show(when' = not (showsNavigation ())) {
-        header (class' = "bar") {
-          a (class' = "back", href = Route.path Posts, onClick = follow route Posts) {
-            Icon.view Icon.Back
-            "Posts"
-          }
-        }
+        EditorView.page dispatch model (follow route Posts) (fun () -> Router.title (current ()))
       }
 
-      main (class' = "screen") {
-        banner dispatch (model ()).Session
-        div (class' = "page-head") { h1 () { Router.title (current ()) } }
+      Show(when' = showsNavigation ()) {
+        main (class' = "screen") {
+          Banner.view dispatch (model ()).Session
+          div (class' = "page-head") { h1 () { Router.title (current ()) } }
 
-        // The search input stays outside the page, so a typed letter does not replace the input.
-        Show(when' = (current () = Subscriptions)) { subscriptionsToolbar dispatch model }
+          // The search input stays outside the page, so a typed letter does not replace the input.
+          Show(when' = (current () = Subscriptions)) { subscriptionsToolbar dispatch model }
 
-        content dispatch (model ())
+          content dispatch (model ())
+        }
       }
     }
 

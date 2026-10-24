@@ -19,6 +19,7 @@
     <Compile Include="Rebuild.fs" />
     <Compile Include="Queue.fs" />
     <Compile Include="Posts.fs" />
+    <Compile Include="Editor.fs" />
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />
     <Compile Include="Commenter.fs" />
@@ -28,6 +29,9 @@
     <Compile Include="Menu.fs" />
     <Compile Include="Icon.fs" />
     <Compile Include="Parts.fs" />
+    <Compile Include="Banner.fs" />
+    <Compile Include="CodeMirror.fs" />
+    <Compile Include="EditorView.fs" />
     <Compile Include="ShellView.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Main.fs" />

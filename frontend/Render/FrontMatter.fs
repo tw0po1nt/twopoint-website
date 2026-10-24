@@ -135,7 +135,7 @@ let private fieldNames =
     "image"
     "showOnHomepage" ]
 
-let private ofRoot (records: Series list) context (root: YamlNode) =
+let private ofRoot (state: PostState) (records: Series list) context (root: YamlNode) =
   result {
     let! fields = mapping context "" root fieldNames
     let required name parse = required context 0L fields "" name parse
@@ -148,7 +148,10 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
 
     let! frontMatterOf, ruleFields =
       validation {
-        let! publishDate = required "publishDate" utcTime
+        let! publishDate =
+          match state with
+          | PostState.Published -> required "publishDate" utcTime |> Result.map Some
+          | PostState.Draft -> optional "publishDate" utcTime
         and! updateDate = optional "updateDate" utcTime
         and! title = required "title" text
         and! excerpt = required "excerpt" text
@@ -162,22 +165,26 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
         let tags = defaultArg tags []
         let categoryLine = category |> Option.map _.Line |> Option.defaultValue (keyLine "category")
 
-        let frontMatterOf category =
-          { PublishDate = publishDate
-            UpdateDate = updateDate
-            Title = title
-            Excerpt = excerpt
-            Author = author
-            Category = category
-            CategoryLine = categoryLine
-            PlacedTags = tags
-            Series = series
-            Image = image
-            ShowOnHomepage = defaultArg showOnHomepage true }
+        let frontMatterOf (category: Term option) =
+          match publishDate, category with
+          | Some publishDate, Some category ->
+            Some
+              { PublishDate = publishDate
+                UpdateDate = updateDate
+                Title = title
+                Excerpt = excerpt
+                Author = author
+                Category = category
+                CategoryLine = categoryLine
+                PlacedTags = tags
+                Series = series
+                Image = image
+                ShowOnHomepage = defaultArg showOnHomepage true }
+          | _ -> None
 
         return
           frontMatterOf,
-          { PublishDate = Some publishDate
+          { PublishDate = publishDate
             Category = category |> Option.map _.Term
             CategoryLine = categoryLine
             Tags = tags
@@ -185,11 +192,12 @@ let private ofRoot (records: Series list) context (root: YamlNode) =
             TagsLine = keyLine "tags" }
       }
 
-    let problems = Rules.frontMatter PostState.Published ruleFields
+    let problems = Rules.frontMatter state ruleFields
 
-    match ruleFields.Category with
-    | Some category when not (List.exists Problem.isError problems) -> return frontMatterOf category, problems
-    | _ -> return! Error problems
+    if List.exists Problem.isError problems then
+      return! Error problems
+    else
+      return frontMatterOf ruleFields.Category, problems
   }
 
 let private load (document: string) (startLine: int) (yaml: string) (ofRoot: Context -> YamlNode -> Result<'a, Problem list>) =
@@ -206,8 +214,22 @@ let private load (document: string) (startLine: int) (yaml: string) (ofRoot: Con
     Error [ Problem.error (Place.Post(fileLine context error.Start.Line)) error.Message ]
 
 /// `startLine` is the file line of the opening `---`. The `Ok` value has the warnings.
-let parse (records: Series list) (startLine: int) (yaml: string) : Result<FrontMatter * Problem list, Problem list> =
-  load "front matter" startLine yaml (ofRoot records)
+/// A draft can have no `publishDate` and no `category`, and then the `Ok` value has no front matter.
+let parse
+  (state: PostState)
+  (records: Series list)
+  (startLine: int)
+  (yaml: string)
+  : Result<FrontMatter option * Problem list, Problem list> =
+  load "front matter" startLine yaml (ofRoot state records)
+
+/// A published post has a `publishDate` and a `category`.
+let parsePublished (records: Series list) (startLine: int) (yaml: string) : Result<FrontMatter * Problem list, Problem list> =
+  parse PostState.Published records startLine yaml
+  |> Result.bind (fun (frontMatter, problems) ->
+    match frontMatter with
+    | Some frontMatter -> Ok(frontMatter, problems)
+    | None -> Error [ Problem.error (Place.Post startLine) "The front matter has no publish date or no category." ])
 
 let private ofPageRoot context (root: YamlNode) =
   result {

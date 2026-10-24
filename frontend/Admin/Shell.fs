@@ -25,6 +25,9 @@ type Call =
   | RegisterDevice of PushKeys
   | RemoveDevice of deviceId: string
   | RebuildSite
+  | CreateDraft
+  | LoadPost of slug: string
+  | SavePost of Editor.SaveRequest
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -40,6 +43,7 @@ type Model =
     Dashboard: Dashboard.Model
     Rebuild: Rebuild.Model
     Posts: Posts.Model
+    Editor: Editor.Model option
     Queue: Queue.Model
     PostComments: PostComments.Model option
     Commenters: Commenters.Model
@@ -54,6 +58,7 @@ type Msg =
   | Dashboard of Dashboard.Msg
   | Rebuild of Rebuild.Msg
   | Posts of Posts.Msg
+  | Editor of Editor.Msg
   | Queue of Queue.Msg
   | PostComments of PostComments.Msg
   | Commenters of Commenters.Msg
@@ -72,15 +77,19 @@ type Effect =
   /// Asks the browser for the permission and the subscription. A click starts it, so no token call comes first.
   | Subscribe
   | Unsubscribe
+  /// Starts the autosave timer of the editor.
+  | Autosave of version: int
 
 let private enter (route: Route) (model: Model) =
   let left =
     { model with
+        Editor = None
         PostComments = None
         Commenter = None }
 
   match route with
   | Route.Posts -> { left with Posts = Posts.reload model.Posts }, [ LoadPosts ]
+  | Route.Post slug -> { left with Editor = Some(Editor.init slug) }, [ LoadPost slug ]
   | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
   | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
@@ -88,7 +97,6 @@ let private enter (route: Route) (model: Model) =
     { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
   | Route.Settings -> { left with Notifications = Notifications.reload model.Notifications }, [ LoadDevices ]
   | Route.Dashboard
-  | Route.Post _
   | Route.ModerationQueue
   | Route.Series
   | Route.NotFound _ -> left, []
@@ -102,6 +110,7 @@ let init (path: string) : Model * Effect option =
     Dashboard = Dashboard.init
     Rebuild = Rebuild.init
     Posts = Posts.init
+    Editor = None
     Queue = Queue.init
     PostComments = None
     Commenters = Commenters.init
@@ -121,8 +130,26 @@ let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
   | PostComments.Chosen _
   | PostComments.Done(_, _, Error _) -> queue
 
+/// The author goes to another page, and the editor has text that the API does not have.
+let private leavesUnsavedText (model: Model) (path: string) =
+  match model.Editor with
+  | Some(Editor.Loaded document) -> Route.parse path <> model.Router.Route && Editor.needsSave document
+  | _ -> false
+
 let rec update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
+  | Router((Router.LinkFollowed path | Router.UrlChanged path) as routerMsg) when leavesUnsavedText model path ->
+    match model.Editor with
+    | Some editor ->
+      let editor, effect = Editor.update (Editor.LeaveRequested path) editor
+      let next = { model with Editor = Some editor }
+      let calls = effect |> Option.toList |> List.collect (function Editor.Save request -> [ SavePost request ] | Editor.Autosave _ -> [])
+
+      match routerMsg, calls with
+      | Router.UrlChanged _, calls -> next, Some(Navigate(Router.PushUrl(Route.path model.Router.Route), calls))
+      | Router.LinkFollowed _, [] -> next, None
+      | Router.LinkFollowed _, calls -> next, Some(Send calls)
+    | None -> model, None
   | Router msg ->
     let router, effect = Router.update msg model.Router
 
@@ -177,12 +204,36 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Rebuild.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | _ -> next, effect |> Option.map (fun Rebuild.Dispatch -> Send [ RebuildSite ])
   | Posts msg ->
-    let next = { model with Posts = Posts.update msg model.Posts }
+    let posts, effect = Posts.update msg model.Posts
+    let next = { model with Posts = posts }
 
     match msg with
-    | Posts.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Posts.Answered(Error Api.Refused)
+    | Posts.DraftCreated(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Posts.DraftCreated(Ok draft) -> update (Router(Router.LinkFollowed(Route.path (Route.Post draft.Slug)))) next
     | Posts.Answered _
-    | Posts.Filtered _ -> next, None
+    | Posts.DraftCreated _
+    | Posts.Filtered _
+    | Posts.NewDraftClicked -> next, effect |> Option.map (fun Posts.CreateDraft -> Send [ CreateDraft ])
+  | Editor msg ->
+    match model.Editor with
+    | None -> model, None
+    | Some editor ->
+      let editor, effect = Editor.update msg editor
+      let next = { model with Editor = Some editor }
+
+      match msg, editor with
+      | Editor.Answered(_, Error Api.Refused), _
+      | Editor.SaveAnswered(_, _, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
+      | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
+        update (Router(Router.LinkFollowed path)) next
+      | _ ->
+        next,
+        effect
+        |> Option.map (fun effect ->
+          match effect with
+          | Editor.Autosave version -> Autosave version
+          | Editor.Save request -> Send [ SavePost request ])
   | Queue(Queue.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) -> model, None
   | Queue msg ->
     let queue, effect = Queue.update msg model.Queue

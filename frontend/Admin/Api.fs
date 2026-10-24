@@ -25,6 +25,23 @@ type Post =
     PublishDate: string option
     CommentStats: CommentStats }
 
+/// `ETag` is the ETag of the working blob. A published post with no pending edit has none.
+type PostDocument =
+  { Slug: string
+    State: PostState
+    PendingEdit: bool
+    PublishDate: string option
+    ETag: string option
+    Title: string
+    Excerpt: string
+    Body: string
+    Text: string
+    PublishedText: string option }
+
+type CreatedDraft = { Slug: string; ETag: string }
+
+type SavedPost = { ETag: string }
+
 type CommenterStatus =
   | New
   | Trusted
@@ -101,6 +118,8 @@ type Rebuilt =
 type Failure =
   /// The API answered 401 or 403.
   | Refused
+  /// The API answered 412: the stored text is newer than the text that the request started from.
+  | Stale
   | Unanswered
   | Invalid
   | Failed of reason: string
@@ -108,6 +127,7 @@ type Failure =
 let reason (failure: Failure) =
   match failure with
   | Refused -> "The API refused the token of this account."
+  | Stale -> "The post changed in another place after this page loaded it."
   | Unanswered -> "The API did not answer."
   | Invalid -> "The API sent an answer that the admin cannot read."
   | Failed reason -> reason
@@ -177,21 +197,23 @@ let inline private request<'T>
   (token: string)
   (path: string)
   (body: string option)
+  (preconditions: HttpRequestHeaders list)
   : JS.Promise<Result<ApiResponse<'T>, Failure>> =
   fetchUnsafe $"{api}/api/{path}" [
     Method method
-    requestHeaders [
-      Accept "application/json"
-      Authorization $"Bearer {token}"
-      if body.IsSome then
-        ContentType "application/json"
-    ]
+    requestHeaders (
+      [ Accept "application/json"; Authorization $"Bearer {token}" ]
+      @ preconditions
+      @ (if body.IsSome then [ ContentType "application/json" ] else [])
+    )
     if body.IsSome then
       Body(U3.Case3 body.Value)
   ]
   |> Promise.bind (fun response ->
     if response.Status = 401 || response.Status = 403 then
       Promise.lift (Error Refused)
+    elif response.Status = 412 then
+      Promise.lift (Error Stale)
     else
       response.text ()
       |> Promise.map (fun text ->
@@ -201,8 +223,15 @@ let inline private request<'T>
         | Error _ -> Error Invalid))
   |> Promise.catch (fun _ -> Error Unanswered)
 
-let inline private send<'T> (method: HttpMethod) (api: string) (token: string) (path: string) : JS.Promise<Result<'T, Failure>> =
-  request<'T> method api token path None
+let inline private sendWith<'T>
+  (method: HttpMethod)
+  (api: string)
+  (token: string)
+  (path: string)
+  (body: string option)
+  (preconditions: HttpRequestHeaders list)
+  : JS.Promise<Result<'T, Failure>> =
+  request<'T> method api token path body preconditions
   |> Promise.map (
     Result.bind (fun answer ->
       match answer with
@@ -210,8 +239,11 @@ let inline private send<'T> (method: HttpMethod) (api: string) (token: string) (
       | _ -> Error Invalid)
   )
 
+let inline private send<'T> (method: HttpMethod) (api: string) (token: string) (path: string) : JS.Promise<Result<'T, Failure>> =
+  sendWith<'T> method api token path None []
+
 let private act (method: HttpMethod) (api: string) (token: string) (path: string) (body: string option) =
-  request<unit> method api token path body
+  request<unit> method api token path body []
   |> Promise.map (
     Result.bind (fun answer ->
       match answer with
@@ -311,14 +343,15 @@ let getDevices (api: string) (token: string) : JS.Promise<Result<Device list, Fa
   send HttpMethod.GET api token "internal/notifications/devices"
 
 let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<Result<Device, Failure>> =
-  Encode.object [
-    "endpoint", Encode.string keys.endpoint
-    "p256dh", Encode.string keys.p256dh
-    "auth", Encode.string keys.auth
-  ]
-  |> Encode.toString 0
-  |> Some
-  |> request<Device> HttpMethod.POST api token "internal/notifications/devices"
+  let body =
+    Encode.object [
+      "endpoint", Encode.string keys.endpoint
+      "p256dh", Encode.string keys.p256dh
+      "auth", Encode.string keys.auth
+    ]
+    |> Encode.toString 0
+
+  request<Device> HttpMethod.POST api token "internal/notifications/devices" (Some body) []
   |> Promise.map (
     Result.bind (fun answer ->
       match answer with
@@ -328,3 +361,34 @@ let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<R
 
 let deleteDevice (api: string) (token: string) (deviceId: string) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token $"internal/notifications/devices/{JS.encodeURIComponent deviceId}" None
+
+let private postPath (slug: string) =
+  $"internal/posts/{JS.encodeURIComponent slug}"
+
+let getPost (api: string) (token: string) (slug: string) : JS.Promise<Result<PostDocument, Failure>> =
+  send HttpMethod.GET api token (postPath slug)
+
+let createDraft (api: string) (token: string) : JS.Promise<Result<CreatedDraft, Failure>> =
+  sendWith HttpMethod.POST api token "internal/posts" (Some "{}") []
+
+/// `eTag` is the ETag that the page read. `None` means that the post had no working blob.
+let savePost
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string option)
+  (title: string)
+  (excerpt: string)
+  (body: string)
+  : JS.Promise<Result<string, Failure>> =
+  let precondition =
+    match eTag with
+    | Some eTag -> IfMatch eTag
+    | None -> IfNoneMatch "*"
+
+  let json =
+    Encode.object [ "title", Encode.string title; "excerpt", Encode.string excerpt; "body", Encode.string body ]
+    |> Encode.toString 0
+
+  sendWith<SavedPost> HttpMethod.PUT api token (postPath slug) (Some json) [ precondition ]
+  |> Promise.map (Result.map (fun saved -> saved.ETag))
