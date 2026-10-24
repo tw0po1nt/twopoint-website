@@ -199,6 +199,37 @@
   gap: var(--s-4);
 }
 
+.queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: 720px;
+}
+
+.queue-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.queue-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.queue-row .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
 /* The editor: no navigation, and the colors of Paper. */
 .bar {
   display: flex;

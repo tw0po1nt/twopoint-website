@@ -16,6 +16,7 @@
     <Compile Include="StartNewPostDeliveryTests.fs" />
     <Compile Include="SendNewPostDeliveryTests.fs" />
     <Compile Include="RebuildSiteTests.fs" />
+    <Compile Include="ModerationTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

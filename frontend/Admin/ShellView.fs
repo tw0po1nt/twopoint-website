@@ -12,11 +12,25 @@ open Oxpecker.Solid.Aria
 let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
+  | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
+  | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
+
+let private moderate (token: string) (comment: Api.QueuedComment) (action: Queue.Action) =
+  match action with
+  | Queue.Approve -> Api.changeApproval (Config.api ()) token comment Api.Approved
+  | Queue.Reject -> Api.changeApproval (Config.api ()) token comment Api.Rejected
+  | Queue.Delete -> Api.deleteComment (Config.api ()) token comment
 
 let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
+  | Shell.LoadQueue ->
+    Api.getModerationQueue (Config.api ()) token
+    |> Promise.map (Queue.Answered >> Shell.Queue)
+  | Shell.Moderate(comment, action) ->
+    moderate token comment action
+    |> Promise.map (fun result -> Shell.Queue(Queue.Done(comment.Comment.Id, action, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
 let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
@@ -63,7 +77,7 @@ let private perform (signIn: SignIn) (effect: Shell.Effect) (dispatch: Shell.Msg
   match effect with
   | Shell.Navigate(Router.PushUrl path) -> history.pushState (null, "", path)
   | Shell.SignIn effect -> signInWith signIn effect dispatch
-  | Shell.Send call -> send signIn dispatch call
+  | Shell.Send calls -> calls |> List.iter (send signIn dispatch)
 
 let private site = "https://twopoint.dev"
 
@@ -219,6 +233,81 @@ let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) =
     Show(when' = Rebuild.failed model) { Parts.Alert(tone = Parts.Bad).Has(p () { Rebuild.reason model }) }
   }
 
+let private statusTone (status: Queue.CommenterStatus) =
+  match status with
+  | Queue.New -> Parts.Plain
+  | Queue.Trusted -> Parts.Good
+  | Queue.Banned -> Parts.Bad
+
+[<SolidComponent>]
+let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
+  let comment = row.Comment.Comment
+  let status = Queue.commenterStatus row
+  let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
+
+  article (id = comment.Id, class' = "card card-body queue-row") {
+    div (class' = "queue-head") {
+      Parts.avatar comment.Commenter.Name
+
+      div (class' = "grow") {
+        p (class' = "strong") {
+          comment.Commenter.Name
+          " "
+          Parts.badge (statusTone status) (Queue.statusText status)
+        }
+
+        p (class' = "muted small ellipsis") { comment.Commenter.Email }
+      }
+    }
+
+    p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
+    p (class' = "queue-text") { comment.Content }
+
+    Show(when' = (Queue.reason row).IsSome) {
+      Parts.Alert(tone = Parts.Bad).Has(p () { Queue.reason row |> Option.defaultValue "" })
+    }
+
+    div (class' = "actions") {
+      Parts
+        .Button(kind = Parts.Accent, size = Parts.Small, disabled = Queue.isSending row, onClick = fun _ -> choose Queue.Approve)
+        .Has(Fragment() { "Approve" })
+
+      Parts
+        .Button(size = Parts.Small, disabled = Queue.isSending row, onClick = fun _ -> choose Queue.Reject)
+        .Has(Fragment() { "Reject" })
+
+      Parts
+        .Button(
+          kind = Parts.Ghost,
+          size = Parts.Small,
+          disabled = Queue.isSending row,
+          onClick = fun _ -> dispatch (Shell.Opened(Shell.DeleteDialog comment.Id))
+        )
+        .Has(Fragment() { "Delete" })
+    }
+  }
+
+[<SolidComponent>]
+let private queue (dispatch: Shell.Msg -> unit) (model: Queue.Model) =
+  match model with
+  | Queue.Waiting ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Queue.Loaded [] ->
+    Fragment() {
+      Parts.emptyState Icon.Inbox "The moderation queue is empty." (p () { "Each new comment comes here." })
+    }
+  | Queue.Loaded rows ->
+    Fragment() {
+      div (class' = "queue") { For(each = Array.ofList rows) { yield fun row _ -> queueRow dispatch row } }
+    }
+  | Queue.NotLoaded reason ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The moderation queue did not load.").Has(p () { reason }) }
+
 [<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
@@ -240,6 +329,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
         }
       }
     }
+  | ModerationQueue -> Fragment() { queue dispatch model.Queue }
   | NotFound _ ->
     Fragment() {
       Parts.emptyState
@@ -253,7 +343,6 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
     }
   | Posts
   | Post _
-  | ModerationQueue
   | Commenters
   | Series
   | Subscriptions as route ->
@@ -295,6 +384,39 @@ let private banner (dispatch: Shell.Msg -> unit) (model: Session.Model<Shell.Cal
     }
 
 [<SolidComponent>]
+let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let target () =
+    match (model ()).Overlay with
+    | Some(Shell.DeleteDialog commentId) -> Queue.tryFind commentId (model ()).Queue
+    | Some Shell.MoreSheet
+    | Some Shell.SignOutDialog
+    | None -> None
+
+  let close () =
+    match (model ()).Overlay with
+    | Some(Shell.DeleteDialog _ as overlay) -> dispatch (Shell.Closed overlay)
+    | Some Shell.MoreSheet
+    | Some Shell.SignOutDialog
+    | None -> ()
+
+  let confirm () =
+    target ()
+    |> Option.iter (fun row -> dispatch (Shell.Queue(Queue.Chosen(row.Comment.Comment.Id, Queue.Delete))))
+
+  Parts.modalDialog
+    "delete-comment"
+    (fun () -> (target ()).IsSome)
+    close
+    "Delete the comment?"
+    (p () {
+      "The comment and its history go away permanently. To hide the comment from readers and keep it, reject it."
+    })
+    (Fragment() {
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
+      Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
+    })
+
+[<SolidComponent>]
 let view (signIn: SignIn) =
   let model, dispatch =
     Mvu.run (Shell.init window.location.pathname) Shell.update (perform signIn)
@@ -305,7 +427,7 @@ let view (signIn: SignIn) =
 
   let current () = (model ()).Router.Route
   let showsNavigation () = Router.showsNavigation (current ())
-  let queue () = Dashboard.newComments (model ()).Dashboard
+  let queueCount () = Queue.count (model ()).Queue
 
   let name () =
     match (model ()).Session.Status with
@@ -322,7 +444,7 @@ let view (signIn: SignIn) =
         brand route
 
         nav (class' = "side-nav", ariaLabel = "Admin") {
-          For(each = Array.ofList Router.navigation) { yield fun item _ -> sideLink route current queue item }
+          For(each = Array.ofList Router.navigation) { yield fun item _ -> sideLink route current queueCount item }
         }
 
         div (class' = "side-foot") {
@@ -399,7 +521,7 @@ let view (signIn: SignIn) =
     Show(when' = showsNavigation ()) {
       nav (class' = "tab-bar", ariaLabel = "Tabs") {
         For(each = Array.ofList Router.tabs) {
-          yield fun tab _ -> tabLink route current queue (opened Shell.MoreSheet) tab
+          yield fun tab _ -> tabLink route current queueCount (opened Shell.MoreSheet) tab
         }
       }
     }
@@ -445,4 +567,6 @@ let view (signIn: SignIn) =
           .Button(kind = Parts.Danger, onClick = fun _ -> dispatch (Shell.Session Session.SignOutClicked))
           .Has(Fragment() { "Sign out" })
       })
+
+    deleteDialog dispatch model
   }

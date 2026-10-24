@@ -178,6 +178,27 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.GetCommentsOnAllPosts (approvals : CommentApproval list) = cancellableTaskResult {
+    let! dbPosts, dbComments =
+      CancellableTaskResult.parallelZip
+        (postDb.GetAllPosts())
+        (postDb.GetCommentsOnAllPosts (approvals |> List.map _.ToString()))
+
+    return!
+      dbComments
+      |> List.traverseValidationA (fun (comment: DbComment, commenter, status) -> validation {
+        let! (post: DbPost) =
+          dbPosts
+          |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
+          |> Validation.requireSome $"No post with slug '{comment.PostId}' found for comment with Id '{comment.Id}'"
+        let! slug = Slug.create post.Slug
+        let! title = post.Title |> NonEmptyString.create (Some "title")
+        let! comment = comment.ToComment(status, commenter)
+        return { QueuedComment.Post = slug; PostTitle = title; Comment = comment }
+      })
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetCommentById commentId = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())
 

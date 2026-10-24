@@ -383,7 +383,9 @@ module UpdateCommentApproval =
 
   // Output
 
-  type Error = CommentNotFound of CommentId
+  type Error =
+    | CommentNotFound of CommentId
+    | ChangeNotAllowed of current: CommentApproval * requested: CommentApproval
   type Success = Updated of comment: Comment * approval: CommentApproval
   type Decision = Decision<Success, Error>
   type Event = Updated of Comment
@@ -397,9 +399,23 @@ module UpdateCommentApproval =
 
   [<RequireQualifiedAccess>]
   module Logic =
+    let isAllowed (current : CommentApproval) (requested : CommentApproval) =
+      match current, requested with
+      | CommentApproval.New, CommentApproval.Approved
+      | CommentApproval.New, CommentApproval.Rejected
+      | CommentApproval.Approved, CommentApproval.Rejected
+      | CommentApproval.Rejected, CommentApproval.Approved -> true
+      | _, CommentApproval.New
+      | CommentApproval.Approved, CommentApproval.Approved
+      | CommentApproval.Rejected, CommentApproval.Rejected -> false
+
     let decide : Logic =
       fun existingComment approvalUpdate -> result {
         let! comment = existingComment |> Result.requireSome (Error.CommentNotFound approvalUpdate.CommentId)
+        let current = comment.Status.Approval
+        do!
+          isAllowed current approvalUpdate.Approval
+          |> Result.requireTrue (ChangeNotAllowed (current, approvalUpdate.Approval))
         return Success.Updated (comment, approvalUpdate.Approval)
       }
 
@@ -414,10 +430,6 @@ module UpdateCommentApproval =
     abstract member GetCommentById:
       commentId: CommentId
         -> DependencyResult<Comment option>
-    abstract member UpdateCommenterStatus:
-      commenter: Commenter
-        -> status: CommenterStatus
-        -> DependencyResult<Commenter>
     abstract member UpdateCommentApproval:
       comment: Comment
         -> approval: CommentApproval
@@ -426,25 +438,7 @@ module UpdateCommentApproval =
   let withDependencies (dependencies : Dependencies) : Action =
 
     let handleCommentApprovalUpdated (Success.Updated (comment, approval)) : DependencyResult<Comment> =
-      cancellableTaskResult {
-        do! cancellableTaskResult {
-          match approval with
-          | Approved ->
-            return!
-              CommenterStatus.Trusted
-              |> dependencies.UpdateCommenterStatus comment.Commenter
-              |> CancellableTaskResult.ignore
-          | _ -> return ()
-        }
-
-        return!
-          dependencies.UpdateCommentApproval comment approval
-          |> CancellableTaskResult.map (fun comment ->
-            match approval with
-            | Approved -> { comment with Comment.Commenter.Status = CommenterStatus.Trusted }
-            | _ -> comment
-          )
-      }
+      dependencies.UpdateCommentApproval comment approval
 
     fun approvalUpdate -> cancellableTaskResult {
       let! (approvalUpdate : CommentApprovalUpdate) =

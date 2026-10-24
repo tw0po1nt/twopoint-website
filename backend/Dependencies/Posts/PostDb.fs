@@ -250,6 +250,9 @@ type internal IPostDb =
     approvals: string list
       -> post: DbPost
       -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+  abstract member GetCommentsOnAllPosts:
+    approvals: string list
+      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
     comment: DbComment
@@ -303,6 +306,38 @@ module internal PostDb =
     let commentsTable = "comments"
     let commentStatusesTable = "commentStatuses"
     let commentersTable = "commenters"
+
+    let withLatestStatus
+      approvals
+      (dbComments : DbComment array)
+      (commenters : DbCommenter list)
+      (statuses : DbCommentStatus list)
+      =
+      let commenters = commenters |> List.toArray
+      let statuses =
+        statuses
+        |> List.toArray
+        |> Array.sortByDescending (fun (status: DbCommentStatus) -> status.CreatedDate)
+
+      (Validation.ok [||], dbComments) ||> Array.fold (fun comments comment -> validation {
+        let! comments = comments
+        let! commenter =
+          commenters
+          |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId)
+          |> Validation.requireSome $"No commenter with Id '{comment.CommenterId}' found for comment with Id '{comment.Id}'"
+        let! latestStat =
+          statuses
+          |> Array.filter (fun st -> st.CommentId = comment.Id)
+          |> Array.tryHead
+          |> Result.requireSome $"No status found for comment with Id '{comment.Id}'"
+
+        if approvals |> List.contains latestStat.Approval
+        then return [|(comment, commenter, latestStat)|] |> Array.append comments
+        else return comments
+      })
+      |> DependencyError.ofValidation Dependency.Database
+      |> Result.map (fun comments -> comments |> Array.sortBy (fun (comment, _, _) -> comment.CreatedDate))
+      |> Result.map Array.toList
     
     { new IPostDb with
       
@@ -351,32 +386,17 @@ module internal PostDb =
         
         let! commenters, statuses = CancellableTaskResult.parallelZip getCommenters getCommentStatuses
         
-        let commenters = commenters |> List.toArray
-        let statuses =
-          statuses
-          |> List.toArray
-          |> Array.sortByDescending (fun (status: DbCommentStatus) -> status.CreatedDate)
-        
-        return!
-          (Validation.ok [||], dbComments) ||> Array.fold (fun comments comment -> validation {
-            let! comments = comments
-            let! commenter =
-              commenters
-              |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId)
-              |> Validation.requireSome $"No commenter with Id '{comment.CommenterId}' found for comment with Id '{comment.Id}'"
-            let! latestStat =
-              statuses
-              |> Array.filter (fun st -> st.CommentId = comment.Id)
-              |> Array.tryHead
-              |> Result.requireSome $"No status found for comment with Id '{comment.Id}'"
-              
-            if approvals |> List.contains latestStat.Approval
-            then return [|(comment, commenter, latestStat)|] |> Array.append comments
-            else return comments 
-          })
-          |> DependencyError.ofValidation Dependency.Database
-          |> Result.map (fun comments -> comments |> Array.sortBy (fun (comment, _, _) -> comment.CreatedDate))
-          |> Result.map Array.toList
+        return! withLatestStatus approvals dbComments commenters statuses
+      }
+
+      member _.GetCommentsOnAllPosts approvals = cancellableTaskResult {
+        let! dbComments = toList commentsTable DbComment.FromEntity
+        let! commenters, statuses =
+          CancellableTaskResult.parallelZip
+            (toList commentersTable DbCommenter.FromEntity)
+            (toList commentStatusesTable DbCommentStatus.FromEntity)
+
+        return! withLatestStatus approvals (dbComments |> List.toArray) commenters statuses
       }
       
       member this.GetCommentById commentId = cancellableTaskResult {

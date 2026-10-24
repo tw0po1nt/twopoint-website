@@ -16,12 +16,6 @@ let summary (posts: Api.Post list) =
   { Posts = List.length posts
     NewComments = posts |> List.sumBy _.CommentStats.New }
 
-let newComments (model: Model) =
-  match model with
-  | Loaded summary -> Some summary.NewComments
-  | Waiting
-  | NotLoaded _ -> None
-
 let update (msg: Msg) (_: Model) : Model =
   match msg with
   | Answered(Ok posts) -> Loaded(summary posts)

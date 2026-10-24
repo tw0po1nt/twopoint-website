@@ -16,7 +16,7 @@ let tests =
     test "Rebuild site sends the rebuild call" {
       let model, _ = Shell.init "/"
       let model, effect = clicked model
-      Expect.equal effect (Some(Shell.Send Shell.RebuildSite)) "The rebuild call"
+      Expect.equal effect (Some(Shell.Send [ Shell.RebuildSite ])) "The rebuild call"
       Expect.equal model.Rebuild Rebuild.Sending "The rebuild starts"
       Expect.isTrue (Rebuild.isSending model.Rebuild) "The button is off"
     }
@@ -64,7 +64,7 @@ let tests =
       let model, _ = answered (Error(Api.Failed reason)) model
       Expect.equal model.Rebuild (Rebuild.NotStarted reason) "The reason"
       let _, effect = clicked model
-      Expect.equal effect (Some(Shell.Send Shell.RebuildSite)) "The rebuild call again"
+      Expect.equal effect (Some(Shell.Send [ Shell.RebuildSite ])) "The rebuild call again"
     }
 
     test "a refused token offers another account" {

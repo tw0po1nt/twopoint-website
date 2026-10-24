@@ -97,3 +97,23 @@ module GetCommentsForPost =
         |> Option.traverseCancellableTaskResult (dependencies.GetCommentsForPost approvals)
         |> CancellableTaskResult.mapError QueryError.Dependency
     }
+
+// ====================================================================================================================
+// Get moderation queue
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetModerationQueue =
+
+  type Query = unit -> CancellableTask<QueryResult<QueuedComment list>>
+
+  type Dependencies =
+    abstract member GetCommentsOnAllPosts:
+      approvals: CommentApproval list
+        -> DependencyResult<QueuedComment list>
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun () ->
+      dependencies.GetCommentsOnAllPosts [ CommentApproval.New ]
+      |> CancellableTaskResult.mapError QueryError.Dependency
+      |> CancellableTaskResult.map (List.sortBy _.Comment.CreatedDate)

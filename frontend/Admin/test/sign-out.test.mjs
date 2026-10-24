@@ -20,7 +20,7 @@ test('Esc closes the dialog, and the author stays signed in', async () => {
   pressEscape(dialog);
   await settle();
   assert.equal(dialog.open, false);
-  assert.deepEqual(events, ['start', 'token']);
+  assert.deepEqual(events, ['start', 'token', 'token']);
 });
 
 test('after Esc, Sign out opens the dialog again', async () => {
@@ -34,7 +34,7 @@ test('Cancel closes the dialog', async () => {
   press('Cancel', dialog);
   await settle();
   assert.equal(dialog.open, false);
-  assert.deepEqual(events, ['start', 'token']);
+  assert.deepEqual(events, ['start', 'token', 'token']);
 });
 
 test('Sign out in the dialog closes the dialog and sends the page to the Entra sign-out', async () => {
@@ -43,5 +43,5 @@ test('Sign out in the dialog closes the dialog and sends the page to the Entra s
   press('Sign out', dialog);
   await settle();
   assert.equal(dialog.open, false);
-  assert.deepEqual(events, ['start', 'token', 'signOut']);
+  assert.deepEqual(events, ['start', 'token', 'token', 'signOut']);
 });

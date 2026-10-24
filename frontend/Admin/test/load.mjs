@@ -8,9 +8,32 @@ export const posts = [
   { slug: 'second', title: 'Second', createdDate: '2026-02-03T00:00:00Z', commentStats: { new: 1, approved: 0, rejected: 1 } },
 ];
 
+const queued = (id, postSlug, postTitle, name, status, content) => ({
+  postSlug,
+  postTitle,
+  comment: {
+    id,
+    createdDate: '2026-02-04T00:00:00Z',
+    commenter: { email: `${name.toLowerCase()}@example.com`, name, status },
+    status: 'new',
+    content,
+  },
+});
+
+export const queue = [
+  queued('c-1', 'first', 'First', 'Ada', 'new', 'The first comment.'),
+  queued('c-2', 'first', 'First', 'Grace', 'trusted', 'The second comment.'),
+  queued('c-3', 'second', 'Second', 'Alan', 'new', 'The third comment.'),
+];
+
 export const answer = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 export const postsAnswer = () => answer(200, { success: true, message: null, data: posts });
+
+export const queueAnswer = () => answer(200, { success: true, message: null, data: queue });
+
+// The default API answers the two calls of the start: the posts and the moderation queue.
+export const apiAnswer = (url) => (url.endsWith('/api/internal/comments') ? queueAnswer() : postsAnswer());
 
 // The stub sign-in has a session and gives a token at once. A test replaces a member to change that.
 export const stubSignIn = (members = {}) => {
@@ -59,7 +82,7 @@ export const settle = async () => {
 };
 
 // The admin entry starts MSAL, so each test starts the app entry with a stub sign-in instead.
-export const load = async (url, { signIn = stubSignIn(), respond = postsAnswer } = {}) => {
+export const load = async (url, { signIn = stubSignIn(), respond = apiAnswer } = {}) => {
   const manifest = JSON.parse(await readFile('build/manifest.json', 'utf8'));
   const config = JSON.parse(await readFile('config.json', 'utf8'))[manifest.mode];
 
