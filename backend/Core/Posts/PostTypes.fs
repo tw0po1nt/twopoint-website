@@ -200,6 +200,22 @@ module PostInfo =
     return { Slug = slug; Title = title;  CreatedDate = createdDate; CommentStats = commentStats }
   }
 
+type PostState =
+  | Draft
+  | Published
+  | Upcoming
+
+/// The text of one blob in the post store.
+type StoredPost = { Slug : Slug; Text : string }
+
+type PostListing =
+  { Slug : Slug
+    Title : string
+    State : PostState
+    HasPendingEdit : bool
+    PublishDate : DateTime option
+    CommentStats : PostCommentStats }
+
 type PostedComment =
   { Post : Slug
     PostTitle : NonEmptyString

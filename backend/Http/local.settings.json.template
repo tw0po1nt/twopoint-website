@@ -19,6 +19,7 @@
     "EntraTenantId": "<entra_tenant_id>",
     "ManagedIdentityClientId": "<managed_identity_client_id>",
     "TableStorageUri": "https://<storage_account_name>.table.core.windows.net/",
+    "PostStoreUri": "http://127.0.0.1:10000/devstoreaccount1",
     "ServiceBusUri": "https://<service_bus_namespace>.servicebus.windows.net/"
   },
   "Firebase": {
