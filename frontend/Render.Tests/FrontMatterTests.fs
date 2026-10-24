@@ -212,3 +212,35 @@ let seriesTests =
         "The file name is the slug"
     }
   ]
+
+[<Tests>]
+let draftTests =
+  testList "Front matter of a draft" [
+    test "the text of a draft with no publish date and no category parses with no error" {
+      let yaml = "title: A draft\nexcerpt: Soon.\nauthor: Matthew Watt"
+
+      match FrontMatter.parse PostState.Draft [] 1 yaml with
+      | Ok(frontMatter, problems) ->
+        Expect.isNone frontMatter "No publish date and no category give no front matter"
+        Expect.isEmpty problems "No problem"
+      | Error problems -> failtestf "Expected no error, got %A" problems
+    }
+
+    test "a draft with a publish date and a category gives its front matter" {
+      let yaml = "publishDate: 2026-02-04T13:00:00Z\ntitle: A draft\nexcerpt: Soon.\nauthor: Matthew Watt\ncategory: Talks"
+
+      match FrontMatter.parse PostState.Draft [] 1 yaml with
+      | Ok(Some frontMatter, _) -> Expect.equal frontMatter.Category.Slug "talks" "The category"
+      | other -> failtestf "Expected front matter, got %A" other
+    }
+
+    test "a published post with no publish date or no category is an error" {
+      let yaml = "title: A post\nexcerpt: Soon.\nauthor: Matthew Watt"
+      Expect.isError (FrontMatter.parse PostState.Published [] 1 yaml) "A published post needs both"
+      Expect.isError (FrontMatter.parsePublished [] 1 yaml) "Also through parsePublished"
+    }
+
+    test "a draft still needs a title, an excerpt, and an author" {
+      Expect.isError (FrontMatter.parse PostState.Draft [] 1 "title: A draft") "An excerpt and an author are missing"
+    }
+  ]
