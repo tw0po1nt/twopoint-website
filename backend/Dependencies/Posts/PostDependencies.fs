@@ -186,16 +186,9 @@ type PostDependencies(
 
     return!
       dbComments
-      |> List.traverseValidationA (fun (comment: DbComment, commenter, status) -> validation {
-        let! (post: DbPost) =
-          dbPosts
-          |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
-          |> Validation.requireSome $"No post with slug '{comment.PostId}' found for comment with Id '{comment.Id}'"
-        let! slug = Slug.create post.Slug
-        let! title = post.Title |> NonEmptyString.create (Some "title")
-        let! comment = comment.ToComment(status, commenter)
-        return { QueuedComment.Post = slug; PostTitle = title; Comment = comment }
-      })
+      |> List.traverseValidationA (fun (comment: DbComment, commenter, status) ->
+        let post = dbPosts |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
+        comment.ToQueuedComment(post, status, commenter))
       |> DependencyError.ofValidation source
   }
 

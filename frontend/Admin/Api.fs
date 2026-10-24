@@ -17,10 +17,15 @@ type Post =
     Title: string
     CommentStats: CommentStats }
 
+type CommenterStatus =
+  | New
+  | Trusted
+  | Banned
+
 type Commenter =
   { Email: string
     Name: string
-    Status: string }
+    Status: CommenterStatus }
 
 type Comment =
   { Id: string
@@ -61,6 +66,25 @@ let reason (failure: Failure) =
   | Invalid -> "The API sent an answer that the admin cannot read."
   | Failed reason -> reason
 
+let private commenterStatusName (status: CommenterStatus) =
+  match status with
+  | New -> "new"
+  | Trusted -> "trusted"
+  | Banned -> "banned"
+
+let private commenterStatus: Decoder<CommenterStatus> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "new" -> Decode.succeed New
+    | "trusted" -> Decode.succeed Trusted
+    | "banned" -> Decode.succeed Banned
+    | _ -> Decode.fail $"The commenter status '{name}' is not known.")
+
+let private coders =
+  Extra.empty
+  |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
+
 let inline private request<'T>
   (method: HttpMethod)
   (api: string)
@@ -85,7 +109,7 @@ let inline private request<'T>
     else
       response.text ()
       |> Promise.map (fun text ->
-        match Decode.Auto.fromString<ApiResponse<'T>> (text, caseStrategy = CamelCase) with
+        match Decode.Auto.fromString<ApiResponse<'T>> (text, caseStrategy = CamelCase, extra = coders) with
         | Ok { Success = false; Message = Some reason } -> Error(Failed reason)
         | Ok answer -> Ok answer
         | Error _ -> Error Invalid))
@@ -100,7 +124,6 @@ let inline private send<'T> (method: HttpMethod) (api: string) (token: string) (
       | _ -> Error Invalid)
   )
 
-/// For a call whose answer has no data.
 let private act (method: HttpMethod) (api: string) (token: string) (path: string) (body: string option) =
   request<unit> method api token path body
   |> Promise.map (

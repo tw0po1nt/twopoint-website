@@ -233,16 +233,16 @@ let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) =
     Show(when' = Rebuild.failed model) { Parts.Alert(tone = Parts.Bad).Has(p () { Rebuild.reason model }) }
   }
 
-let private statusTone (status: Queue.CommenterStatus) =
+let private statusTone (status: Api.CommenterStatus) =
   match status with
-  | Queue.New -> Parts.Plain
-  | Queue.Trusted -> Parts.Good
-  | Queue.Banned -> Parts.Bad
+  | Api.New -> Parts.Plain
+  | Api.Trusted -> Parts.Good
+  | Api.Banned -> Parts.Bad
 
 [<SolidComponent>]
 let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
   let comment = row.Comment.Comment
-  let status = Queue.commenterStatus row
+  let status = comment.Commenter.Status
   let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
 
   article (id = comment.Id, class' = "card card-body queue-row") {

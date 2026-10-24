@@ -15,11 +15,6 @@ type Row =
   { Comment: Api.QueuedComment
     State: RowState }
 
-type CommenterStatus =
-  | New
-  | Trusted
-  | Banned
-
 type Model =
   | Waiting
   | Loaded of Row list
@@ -57,7 +52,6 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     Loaded(change commentId (NotDone(action, Api.reason failure)) rows), None
   | (Waiting | NotLoaded _), (Chosen _ | Done _) -> model, None
 
-/// The count of new comments, for the navigation.
 let count (model: Model) =
   match model with
   | Loaded rows -> Some(List.length rows)
@@ -84,14 +78,8 @@ let reason (row: Row) =
   | Ready
   | Sending _ -> None
 
-let commenterStatus (row: Row) =
-  match row.Comment.Comment.Commenter.Status with
-  | "trusted" -> Trusted
-  | "banned" -> Banned
-  | _ -> New
-
-let statusText (status: CommenterStatus) =
+let statusText (status: Api.CommenterStatus) =
   match status with
-  | New -> "New"
-  | Trusted -> "Trusted"
-  | Banned -> "Banned"
+  | Api.New -> "New"
+  | Api.Trusted -> "Trusted"
+  | Api.Banned -> "Banned"

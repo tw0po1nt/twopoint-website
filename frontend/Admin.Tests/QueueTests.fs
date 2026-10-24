@@ -17,8 +17,8 @@ let private queued id status : Api.QueuedComment =
         Status = "new"
         Content = "A comment" } }
 
-let private first = queued "first" "new"
-let private second = queued "second" "trusted"
+let private first = queued "first" Api.New
+let private second = queued "second" Api.Trusted
 
 let private send msg model = Shell.update (Shell.Queue msg) model
 
@@ -103,13 +103,6 @@ let tests =
       Expect.isNone model.Overlay "The confirmation closes"
       Expect.isNone effect "No call"
       Expect.equal (Queue.count model.Queue) (Some 2) "The row stays"
-    }
-
-    test "the commenter status of a row" {
-      let model = loaded ()
-      let status id = Queue.tryFind id model.Queue |> Option.map Queue.commenterStatus
-      Expect.equal (status "first") (Some Queue.New) "A new commenter"
-      Expect.equal (status "second") (Some Queue.Trusted) "A trusted commenter"
     }
 
     test "a queue that did not load shows the reason" {

@@ -231,7 +231,20 @@ type internal DbComment =
          Status = commenter.Status
          ValidationId = commenter.ValidationId |}
       this.Content
-      
+
+  /// A comment whose post is not in the post table gets the slug as its title, so that the author can
+  /// still moderate it.
+  member this.ToQueuedComment(post: DbPost option, status: DbCommentStatus, commenter: DbCommenter) = validation {
+    let! slug = Slug.create this.PostId
+    let! title =
+      post
+      |> Option.map _.Title
+      |> Option.defaultValue this.PostId
+      |> NonEmptyString.create (Some "title")
+    let! comment = this.ToComment(status, commenter)
+    return { QueuedComment.Post = slug; PostTitle = title; Comment = comment }
+  }
+
 
 type internal IPostDb =
   abstract member GetAllPosts: unit -> CancellableTaskResult<DbPost list, DependencyError>
