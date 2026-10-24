@@ -24,6 +24,11 @@
   "Firebase": {
     "ServiceAccountJsonPath": "./service-account-key.json"
   },
+  "WebPush": {
+    "Subject": "mailto:you@example.com",
+    "PublicKey": "BJfO8M7cCATrska2CFKeyAYsUaYU5kOMsHea2Evge-a5F1Vu9FGp3XxlGX9MjbssjX9QCV1DsaNj0B-ExteCxk4",
+    "PrivateKey": "Yr9MOjsHrjTrPkA0RHA6hjt7OVGnPFr1zGgVC2SepmI"
+  },
   "ValidRedirectUris": [
     {
       "Uri": "http://localhost:4321"
