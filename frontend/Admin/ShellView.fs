@@ -13,6 +13,7 @@ let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
+  | Shell.TrustCommenter comment -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
   | Shell.LoadPostComments slug -> Shell.PostComments(PostComments.Answered(slug, Error Api.Unanswered))
   | Shell.ModeratePostComment(_, comment, action) ->
@@ -21,7 +22,9 @@ let private fail (call: Shell.Call) =
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
-  | Queue.Approve -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Approved
+  // The trust of Approve and trust is a separate call.
+  | Queue.Approve
+  | Queue.ApproveAndTrust -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Approved
   | Queue.Reject -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Rejected
   | Queue.Delete -> Api.deleteComment (Config.api ()) token slug comment
 
@@ -31,6 +34,9 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   | Shell.LoadQueue ->
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
+  | Shell.TrustCommenter comment ->
+    Api.trustCommenter (Config.api ()) token comment.Comment.Commenter
+    |> Promise.map (fun result -> Shell.Queue(Queue.Trusted(comment.Comment.Id, result)))
   | Shell.Moderate(comment, action) ->
     moderate token comment.PostSlug comment.Comment action
     |> Promise.map (fun result -> Shell.Queue(Queue.Done(comment.Comment.Id, action, result)))
@@ -281,6 +287,12 @@ let private actionButton
         .Button(kind = Parts.Accent, size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.Approve)
         .Has(Fragment() { "Approve" })
     }
+  | Queue.ApproveAndTrust ->
+    Fragment() {
+      Parts
+        .Button(size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.ApproveAndTrust)
+        .Has(Fragment() { "Approve and trust" })
+    }
   | Queue.Reject ->
     Fragment() {
       Parts.Button(size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.Reject).Has(Fragment() { "Reject" })
@@ -326,7 +338,7 @@ let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
     commenterHead comment.Commenter
     p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
     p (class' = "queue-text") { comment.Content }
-    rowEnd dispatch comment.Id choose row.State [ Queue.Approve; Queue.Reject; Queue.Delete ]
+    rowEnd dispatch comment.Id choose row.State (Queue.actions comment.Commenter.Status)
   }
 
 [<SolidComponent>]

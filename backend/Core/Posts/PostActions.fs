@@ -280,7 +280,7 @@ module PostComment =
   and Data =
     | Post of Slug
     | Commenter of CommenterValidationId
-  type Success = Posted of post: Post * comment: NewComment * commenter: Commenter
+  type Success = Posted of post: Post * comment: NewComment * commenter: Commenter * approval: CommentApproval
   type Decision = Decision<Success, Error>
   type Event = Posted of Post * Comment
 
@@ -298,9 +298,13 @@ module PostComment =
       fun existingPost existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
         let! commenter = existingCommenter |> Result.requireSome (newComment.ValidationId |> Data.Commenter |> Error.NotFound)
-        do! commenter.Status.IsBanned |> Result.requireFalse (Banned existingCommenter.Value)
+        let! approval =
+          match commenter.Status with
+          | CommenterStatus.New -> Ok CommentApproval.New
+          | CommenterStatus.Trusted -> Ok CommentApproval.Approved
+          | CommenterStatus.Banned -> Error (Banned commenter)
 
-        return Success.Posted (post, newComment, commenter)
+        return Success.Posted (post, newComment, commenter, approval)
       }
 
   // Action
@@ -316,12 +320,13 @@ module PostComment =
       post: Post
         -> commenter: Commenter
         -> newComment: NewComment
+        -> approval: CommentApproval
         -> DependencyResult<Comment>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentPosted (Success.Posted (post, comment, commenter)) : DependencyResult<Comment> =
-      dependencies.CreateComment post commenter comment
+    let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<Comment> =
+      dependencies.CreateComment post commenter comment approval
 
     fun newComment -> cancellableTaskResult {
       let! newComment =
@@ -575,7 +580,9 @@ module UpdateCommenterStatus =
 
   // Output
 
-  type Error = CommenterNotFound of CommenterValidationId
+  type Error =
+    | CommenterNotFound of CommenterValidationId
+    | ChangeNotAllowed of current: CommenterStatus * requested: CommenterStatus
   type Success = Updated of commenter: Commenter * status: CommenterStatus
   type Decision = Decision<Success, Error>
   type Event = Updated of Commenter
@@ -589,9 +596,19 @@ module UpdateCommenterStatus =
 
   [<RequireQualifiedAccess>]
   module Logic =
+    let isAllowed (current : CommenterStatus) (requested : CommenterStatus) =
+      match current, requested with
+      | CommenterStatus.New, (CommenterStatus.New | CommenterStatus.Trusted)
+      | CommenterStatus.Trusted, (CommenterStatus.New | CommenterStatus.Trusted) -> true
+      | CommenterStatus.Banned, _
+      | _, CommenterStatus.Banned -> false
+
     let decide : Logic =
       fun existingCommenter statusUpdate -> result {
         let! commenter = existingCommenter |> Result.requireSome (CommenterNotFound statusUpdate.ValidationId)
+        do!
+          isAllowed commenter.Status statusUpdate.Status
+          |> Result.requireTrue (ChangeNotAllowed (commenter.Status, statusUpdate.Status))
         return Success.Updated (commenter, statusUpdate.Status)
       }
 

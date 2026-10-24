@@ -18,7 +18,8 @@ open System.Net
 open System.Threading
 
 type AdminCommenterDto =
-  { Email : string
+  { Id : string
+    Email : string
     Name : string
     Status : string }
 
@@ -34,7 +35,8 @@ module CommentTypesExt =
 
   type Commenter with
     member this.ToDto() =
-      { AdminCommenterDto.Email = this.EmailAddress.ToString()
+      { AdminCommenterDto.Id = this.ValidationId.ToString()
+        Email = this.EmailAddress.ToString()
         Name = this.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
         Status = this.Status.ToString() }
 

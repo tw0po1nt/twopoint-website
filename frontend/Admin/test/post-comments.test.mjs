@@ -6,7 +6,7 @@ import { answer, apiAnswer, count, heading, load, press, queue, settle } from '.
 const comment = (id, name, status, content) => ({
   id,
   createdDate: '2026-02-04T00:00:00Z',
-  commenter: { email: `${name.toLowerCase()}@example.com`, name, status: 'new' },
+  commenter: { id: `${name.toLowerCase()}-id`, email: `${name.toLowerCase()}@example.com`, name, status: 'new' },
   status,
   content,
 });

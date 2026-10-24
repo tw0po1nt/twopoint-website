@@ -1,10 +1,11 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -13,12 +14,36 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
+open System
 open System.Net
 open System.Threading
 
 type NewCommentJson =
   { ValidationId : string option
     Comment : string option }
+
+type PostedCommentDto =
+  { Id : string
+    CreatedDate : DateTime
+    Commenter : string
+    Content : string
+    Approval : string }
+
+module PostedCommentDto =
+  let ofComment (comment : Comment) =
+    let dto = comment.ToDto()
+    { Id = dto.Id
+      CreatedDate = dto.CreatedDate
+      Commenter = dto.Commenter
+      Content = dto.Content
+      Approval = comment.Status.Approval.ToString() }
+
+/// An older Comments widget reads a `data` that is not null as an invalid answer, so the comment goes beside it.
+type PostCommentResponse =
+  { Success : bool
+    Message : string option
+    Data : unit option
+    Comment : PostedCommentDto option }
 
 type PostComment (
   config: Config,
@@ -54,7 +79,8 @@ type PostComment (
       
       member this.GetPostBySlug slug = postDependencies.GetPostBySlug slug
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-      member this.CreateComment post commenter newComment = postDependencies.CreateComment post commenter newComment
+      member this.CreateComment post commenter newComment approval =
+        postDependencies.CreateComment post commenter newComment approval
     }
 
     let newComment =
@@ -63,21 +89,25 @@ type PostComment (
         NewComment.Dto.Comment = json.Comment |> Option.map NewComment.Comment |> Option.defaultValue (NewComment.Comment "") }
 
     let! postCommentResult = ct |> postComment newComment
+    let answer success message comment =
+      { Success = success; Message = message; Data = None; Comment = comment }
     let apiResponse, statusCode =
       match postCommentResult with
-      | Ok _ | Error (Logic (PostComment.Error.Banned _)) ->
-        { Success = true; Message = None; Data = None }, HttpStatusCode.OK
+      | Ok (PostComment.Event.Posted (_, comment)) ->
+        answer true None (Some (PostedCommentDto.ofComment comment)), HttpStatusCode.OK
+      | Error (Logic (PostComment.Error.Banned _)) ->
+        answer true None None, HttpStatusCode.OK
       | Error (Logic postCommentError) ->
         let errorMessage =
           match postCommentError with
           | PostComment.Error.NotFound(PostComment.Data.Post slug) -> $"Post '{slug.ToString()}' not found"
           | PostComment.Error.NotFound(PostComment.Data.Commenter validationId) -> $"Commenter '{validationId.ToString()}' not found"
           | _ -> "Not found"
-        { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
+        answer false (Some errorMessage) None, HttpStatusCode.NotFound
       | Error actionError when actionError.IsValidation ->
-        { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
+        answer false (Some (actionError.ToString())) None, HttpStatusCode.BadRequest
       | Error actionError ->
-        { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+        answer false (Some (actionError.ToString())) None, HttpStatusCode.InternalServerError
 
     response.StatusCode <- statusCode
     do! response.WriteAsJsonAsync(apiResponse, ct)

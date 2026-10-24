@@ -26,6 +26,19 @@ let private comment id : Comment =
     Commenter = "Ada"
     Content = "First." }
 
+let private postAnswer success message (posted: PostedComment option) : PostCommentAnswer =
+  { Success = success
+    Message = message
+    Comment = posted }
+
+let private posted approval : PostedComment =
+  { Comment =
+      { Id = "3"
+        CreatedDate = "2026-10-18T10:00:00Z"
+        Commenter = "Reader"
+        Content = "Nice post & thanks" }
+    Approval = approval }
+
 let private filled email =
   [ Comments.NameChanged " Reader "
     Comments.EmailChanged $" {email} "
@@ -208,7 +221,7 @@ let tests =
           run (
             Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
             :: filled "known@example.com"
-            @ [ Comments.Submitted; Comments.PostAnswered(answer true None) ]
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None None) ]
           )
 
         Expect.isNone effect "No request"
@@ -217,19 +230,61 @@ let tests =
           model
           { start with
               List = Comments.Loaded [ comment "1" ]
-              Status = Comments.Posted }
+              Status = Comments.Posted AwaitsApproval }
           "The form is empty"
+      }
+
+      test "a new comment waits for the approval and does not go in the list" {
+        let model, _ =
+          run (
+            Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
+            :: filled "known@example.com"
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted AwaitsApproval))) ]
+          )
+
+        Expect.equal model.Status (Comments.Posted AwaitsApproval) "The status says that the comment shows after approval"
+        Expect.equal model.List (Comments.Loaded [ comment "1" ]) "The list stays"
+      }
+
+      test "the approved comment of a trusted commenter goes in the list at once" {
+        let model, effect =
+          run (
+            Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
+            :: filled "known@example.com"
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ]
+          )
+
+        Expect.isNone effect "No request"
+        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
+
+        Expect.equal
+          model.List
+          (Comments.Loaded
+            [ comment "1"
+              { Id = "3"
+                CreatedDate = "2026-10-18T10:00:00Z"
+                Commenter = "Reader"
+                Content = "Nice post & thanks" } ])
+          "The comment is last in the list"
+
+        Expect.equal model.Comment "" "The form is empty"
+      }
+
+      test "an approved comment while the list is not loaded keeps the list as it is" {
+        let model, _ = run (filled "known@example.com" @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ])
+        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
+        Expect.equal model.List Comments.Loading "The list is still loading"
       }
 
       test "a refused validation or post shows the message of the API, or a general message" {
         for email, answered in
-          [ "reader@example.com", Comments.ValidationAnswered
-            "known@example.com", Comments.PostAnswered ] do
-          let withMessage, _ = run (filled email @ [ Comments.Submitted; answered (answer false (Some "The commenter is banned")) ])
+          [ "reader@example.com", (fun message -> Comments.ValidationAnswered(answer false message))
+            "known@example.com", (fun message -> Comments.PostAnswered(postAnswer false message None)) ] do
+          let withMessage, _ = run (filled email @ [ Comments.Submitted; answered (Some "The commenter is banned") ])
           Expect.equal withMessage.Status (Comments.Failed "The commenter is banned") $"The message of the API for {email}"
           Expect.equal withMessage.Comment " Nice post & thanks " "The form keeps the comment"
 
-          let general, _ = run (filled email @ [ Comments.Submitted; answered (answer false None) ])
+          let general, _ = run (filled email @ [ Comments.Submitted; answered None ])
           Expect.equal general.Status (Comments.Failed "The comment did not go through. Try again later.") $"A general message for {email}"
       }
 
