@@ -9,6 +9,7 @@
     <Compile Include="Util\Db.fs" />
     <Compile Include="Notifications\NotificationDb.fs" />
     <Compile Include="Notifications\NotificationDependencies.fs" />
+    <Compile Include="Notifications\WebPush.fs" />
     <Compile Include="Comms\CommsDb.fs" />
     <Compile Include="Comms\Comms.fs" />
     <Compile Include="Posts\PostDb.fs" />
