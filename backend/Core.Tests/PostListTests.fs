@@ -52,6 +52,13 @@ let tests =
       Expect.equal listing.Title "Draft post" "The title of the working blob"
     }
 
+    test "a draft with a publish date in its front matter has no publish date" {
+      let datedDraft = stored "dated-draft" (text "Dated draft" (Some "2026-02-01T00:00:00Z"))
+      let listing = list [] [ datedDraft ] [] |> find "dated-draft"
+      Expect.equal listing.State PostState.Draft "Draft"
+      Expect.equal listing.PublishDate None "No publish date"
+    }
+
     test "a post with a published blob and a past publish date is published" {
       let listing = list [ published ] [] [] |> find "published-post"
       Expect.equal listing.State PostState.Published "Published"
