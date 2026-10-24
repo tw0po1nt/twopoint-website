@@ -5,6 +5,7 @@ module TwoPoint.Admin.Shell
 type Call =
   | LoadDashboard
   | LoadQueue
+  | TrustCommenter of comment: Api.QueuedComment
   | Moderate of comment: Api.QueuedComment * Queue.Action
   | LoadPostComments of slug: string
   | ModeratePostComment of slug: string * comment: Api.Comment * Queue.Action
@@ -141,8 +142,15 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     match msg with
     | Queue.Answered(Error Api.Refused)
+    | Queue.Trusted(_, Error Api.Refused)
     | Queue.Done(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
-    | _ -> next, effect |> Option.map (fun (Queue.Moderate(comment, action)) -> Send [ Moderate(comment, action) ])
+    | _ ->
+      next,
+      effect
+      |> Option.map (fun effect ->
+        match effect with
+        | Queue.Trust comment -> Send [ TrustCommenter comment ]
+        | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ])
   | PostComments(PostComments.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) ->
     model, None
   | PostComments msg ->
