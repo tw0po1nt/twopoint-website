@@ -19,6 +19,7 @@ type NavigationFallback =
 type StaticWebAppConfig =
   { GlobalHeaders: Map<string, string>
     Routes: RouteHeaders list
+    MimeTypes: Map<string, string>
     NavigationFallback: NavigationFallback }
 
 type Entry =
@@ -60,6 +61,11 @@ module StaticWebApp =
         let! globalHeaders = property root "globalHeaders" JsonValueKind.Object
         let! routes = property root "routes" JsonValueKind.Array
         let! routes = routes.EnumerateArray() |> List.ofSeq |> List.traverseResultM route
+        let mimeTypes =
+          match root.TryGetProperty "mimeTypes" with
+          | true, value when value.ValueKind = JsonValueKind.Object -> headers value
+          | _ -> Map.empty
+
         let! fallback = property root "navigationFallback" JsonValueKind.Object
         let! rewrite = property fallback "rewrite" JsonValueKind.String
         let! exclude = property fallback "exclude" JsonValueKind.Array
@@ -67,6 +73,7 @@ module StaticWebApp =
         return
           { GlobalHeaders = headers globalHeaders
             Routes = routes
+            MimeTypes = mimeTypes
             NavigationFallback =
               { Rewrite = rewrite.GetString()
                 Exclude = [ for item in exclude.EnumerateArray() -> item.GetString() ] } }
@@ -92,10 +99,17 @@ module StaticWebApp =
         ".html", "text/html; charset=utf-8"
         ".js", "text/javascript; charset=utf-8"
         ".json", "application/json"
-        ".map", "application/json" ]
+        ".map", "application/json"
+        ".png", "image/png" ]
 
-  let private contentType (file: string) =
-    contentTypes |> Map.tryFind (Path.GetExtension file) |> Option.defaultValue "application/octet-stream"
+  /// The `mimeTypes` of the config win, as they do in Azure Static Web Apps.
+  let private contentType (config: StaticWebAppConfig) (file: string) =
+    let extension = Path.GetExtension file
+
+    config.MimeTypes
+    |> Map.tryFind extension
+    |> Option.orElse (Map.tryFind extension contentTypes)
+    |> Option.defaultValue "application/octet-stream"
 
   /// `find` gives the entry of the build folder at a site path, such as `/redirect/index.html`.
   let reply (config: StaticWebAppConfig) (find: string -> Entry) (path: string) : Reply =
@@ -104,7 +118,7 @@ module StaticWebApp =
 
     let send (file: string) (bytes: byte array) =
       { Status = 200
-        Headers = headers |> Map.add "Content-Type" (contentType file)
+        Headers = headers |> Map.add "Content-Type" (contentType config file)
         Body = bytes }
 
     let text (status: int) (body: string) =

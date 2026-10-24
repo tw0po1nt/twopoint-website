@@ -17,6 +17,13 @@ type Call =
   | LoadSubscriptionDeliveries of subscriptionId: string
   | CancelSubscription of subscriptionId: string
   | DeleteSubscription of subscriptionId: string
+  | LoadDevices
+  /// Reads the subscription of the browser with no prompt, and sends it.
+  | SyncDevice
+  /// Like SyncDevice, and subscribes first when the browser has no subscription.
+  | ResyncDevice
+  | RegisterDevice of PushKeys
+  | RemoveDevice of deviceId: string
   | RebuildSite
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -38,6 +45,7 @@ type Model =
     Commenters: Commenters.Model
     Commenter: Commenter.Model option
     Subscriptions: Subscriptions.Model
+    Notifications: Notifications.Model
     Overlay: Overlay option }
 
 type Msg =
@@ -51,6 +59,7 @@ type Msg =
   | Commenters of Commenters.Msg
   | Commenter of Commenter.Msg
   | Subscriptions of Subscriptions.Msg
+  | Notifications of Notifications.Msg
   | Opened of Overlay
   /// The browser closed the overlay, for example after the Esc key.
   | Closed of Overlay
@@ -60,6 +69,9 @@ type Effect =
   | Navigate of Router.Effect * calls: Call list
   | SignIn of Session.Effect<Call>
   | Send of calls: Call list
+  /// Asks the browser for the permission and the subscription. A click starts it, so no token call comes first.
+  | Subscribe
+  | Unsubscribe
 
 let private enter (route: Route) (model: Model) =
   let left =
@@ -74,11 +86,11 @@ let private enter (route: Route) (model: Model) =
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
   | Route.Subscriptions ->
     { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
+  | Route.Settings -> { left with Notifications = Notifications.reload model.Notifications }, [ LoadDevices ]
   | Route.Dashboard
   | Route.Post _
   | Route.ModerationQueue
   | Route.Series
-  | Route.Settings
   | Route.NotFound _ -> left, []
 
 let init (path: string) : Model * Effect option =
@@ -95,6 +107,7 @@ let init (path: string) : Model * Effect option =
     Commenters = Commenters.init
     Commenter = None
     Subscriptions = Subscriptions.init
+    Notifications = Notifications.init
     Overlay = None }
   |> enter router.Route
   |> fst,
@@ -146,7 +159,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
             | _ -> model.Overlay }
 
     if model.Session.Status = Session.Starting && Session.isActive session then
-      next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (enter model.Router.Route model)))
+      let sync = if Notifications.canSync model.Notifications.Environment then [ SyncDevice ] else []
+      next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (enter model.Router.Route model) @ sync))
     else
       next, Option.map SignIn effect
   | Dashboard msg ->
@@ -283,6 +297,30 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         | Subscriptions.LoadDeliveries subscriptionId -> Send [ LoadSubscriptionDeliveries subscriptionId ]
         | Subscriptions.CancelSubscription subscriptionId -> Send [ CancelSubscription subscriptionId ]
         | Subscriptions.DeleteSubscription subscriptionId -> Send [ DeleteSubscription subscriptionId ])
+  | Notifications msg ->
+    let notifications, effect = Notifications.update msg model.Notifications
+    let next = { model with Notifications = notifications }
+
+    match msg with
+    | Notifications.DevicesAnswered(Error Api.Refused)
+    | Notifications.RegisterAnswered(Error Api.Refused)
+    | Notifications.Removed(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Notifications.RegisterAnswered(Ok(Some _)) when model.Router.Route = Route.Settings -> next, Some(Send [ LoadDevices ])
+    | _ ->
+      // Before the session is active, the start sends the sync.
+      let sync call =
+        if Session.isActive model.Session then Some(Send [ call ]) else None
+
+      next,
+      effect
+      |> Option.bind (fun effect ->
+        match effect with
+        | Notifications.Subscribe -> Some Subscribe
+        | Notifications.Unsubscribe -> Some Unsubscribe
+        | Notifications.Register keys -> Some(Send [ RegisterDevice keys ])
+        | Notifications.Sync -> sync SyncDevice
+        | Notifications.Resync -> sync ResyncDevice
+        | Notifications.Remove deviceId -> Some(Send [ RemoveDevice deviceId ]))
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None

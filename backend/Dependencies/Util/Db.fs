@@ -281,6 +281,43 @@ module Db =
     }
     
   /// <summary>
+  /// Add an entity to an Azure Table, or replace the entity with the same keys
+  /// </summary>
+  /// <param name="tableServiceClient">The service client to use to perform the operation</param>
+  /// <param name="logger">A logger for telemetry for the operation</param>
+  /// <param name="db">The name of the database - used for telemetry</param>
+  /// <param name="table">The table that contains the entity</param>
+  /// <param name="onError">A function called with an error message if an error occurs</param>
+  /// <param name="onEntity">A function called with the stored entity if no error occurs</param>
+  /// <param name="entity">The entity to store</param>
+  let upsert
+    tableServiceClient
+    (logger : ILogger)
+    db
+    table
+    (onError: string -> DependencyError)
+    (onEntity: TableEntity -> Validation<'a, 'e>)
+    (entity: TableEntity) =
+
+    let operation = $"{db}.{table}.upsert"
+    runQuery logger operation
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let! tableClient = getTable tableServiceClient table
+
+      do! tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace, ct) |> Task.ignore
+
+      let! stored = entity.RowKey |> trySingle tableServiceClient logger db table onEntity (Some entity.PartitionKey)
+
+      match stored with
+      | Some stored ->
+        return stored
+      | None ->
+        logger.LogError("{op} failed", operation)
+        return! onError "Unable to fetch upserted entity" |> Error
+    }
+
+  /// <summary>
   /// Delete entities in an Azure Table
   /// </summary>
   /// <param name="tableServiceClient">The service client to use to perform the operation</param>

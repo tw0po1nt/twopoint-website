@@ -21,3 +21,7 @@ let authority () : string = jsNative
 /// The scope of the API that each token request asks for.
 [<Emit "ADMIN_CONFIG.scope">]
 let scope () : string = jsNative
+
+/// The public VAPID key of the backend, in base64url. Empty when the build has no key.
+[<Emit "ADMIN_CONFIG.vapidPublicKey">]
+let vapidPublicKey () : string = jsNative

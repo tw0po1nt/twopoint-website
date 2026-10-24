@@ -8,10 +8,31 @@
       "headers": {
         "Cache-Control": "no-store"
       }
+    },
+    {
+      "route": "/sw.js",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/manifest.webmanifest",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
     }
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/redirect/*", "/bundle/*"]
+    "exclude": [
+      "/redirect/*",
+      "/bundle/*",
+      "/icons/*",
+      "/sw.js",
+      "/manifest.webmanifest"
+    ]
+  },
+  "mimeTypes": {
+    ".webmanifest": "application/manifest+json"
   }
 }

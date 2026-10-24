@@ -30,7 +30,36 @@ test('the bridge page loads the MSAL bridge script from an absolute path that ex
 
 test('the host config sends noindex, keeps the bridge page out of the cache, and sends no COOP header', () => {
   assert.deepEqual(config.globalHeaders, { 'X-Robots-Tag': 'noindex, nofollow' });
-  assert.deepEqual(config.routes, [{ route: '/redirect/*', headers: { 'Cache-Control': 'no-store' } }]);
+  assert.deepEqual(config.routes[0], { route: '/redirect/*', headers: { 'Cache-Control': 'no-store' } });
   assert.equal(JSON.stringify(config).toLowerCase().includes('cross-origin-opener-policy'), false);
-  assert.deepEqual(config.navigationFallback, { rewrite: '/index.html', exclude: ['/redirect/*', '/bundle/*'] });
+  assert.deepEqual(config.navigationFallback, {
+    rewrite: '/index.html',
+    exclude: ['/redirect/*', '/bundle/*', '/icons/*', '/sw.js', '/manifest.webmanifest'],
+  });
+});
+
+test('the push worker and the manifest are never stale, and the manifest has its content type', () => {
+  const headers = (route) => config.routes.find((item) => item.route === route)?.headers;
+  assert.deepEqual(headers('/sw.js'), { 'Cache-Control': 'no-cache' });
+  assert.deepEqual(headers('/manifest.webmanifest'), { 'Cache-Control': 'no-cache' });
+  assert.equal(config.mimeTypes['.webmanifest'], 'application/manifest+json');
+});
+
+test('index.html links the manifest and the Home Screen icon', () => {
+  assert.match(index, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+  assert.match(index, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
+});
+
+test('the manifest is a standalone web app at the root, with icons that exist', async () => {
+  const manifest = JSON.parse(await readFile('dist/manifest.webmanifest', 'utf8'));
+  assert.equal(manifest.display, 'standalone');
+  assert.equal(manifest.start_url, '/');
+  assert.equal(manifest.scope, '/');
+  assert.ok(manifest.id, 'An id');
+  assert.ok(manifest.icons.some((icon) => icon.sizes === '192x192'));
+  assert.ok(manifest.icons.some((icon) => icon.sizes === '512x512'));
+
+  for (const icon of manifest.icons) {
+    await access(path.join('dist', icon.src));
+  }
 });

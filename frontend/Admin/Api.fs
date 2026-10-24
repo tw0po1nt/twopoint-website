@@ -83,6 +83,12 @@ type Delivery =
     PostSlug: string
     PostTitle: string }
 
+type Device =
+  { Id: string
+    Label: string
+    CreatedDate: string
+    LastSeenDate: string }
+
 type Rebuild =
   { Dispatch: string
     ProductionRun: int option }
@@ -300,3 +306,25 @@ let getSubscriptionDeliveries
   (subscriptionId: string)
   : JS.Promise<Result<Delivery list, Failure>> =
   send HttpMethod.GET api token $"internal/subscriptions/{JS.encodeURIComponent subscriptionId}/deliveries"
+
+let getDevices (api: string) (token: string) : JS.Promise<Result<Device list, Failure>> =
+  send HttpMethod.GET api token "internal/notifications/devices"
+
+let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<Result<Device, Failure>> =
+  Encode.object [
+    "endpoint", Encode.string keys.endpoint
+    "p256dh", Encode.string keys.p256dh
+    "auth", Encode.string keys.auth
+  ]
+  |> Encode.toString 0
+  |> Some
+  |> request<Device> HttpMethod.POST api token "internal/notifications/devices"
+  |> Promise.map (
+    Result.bind (fun answer ->
+      match answer with
+      | { Success = true; Data = Some device } -> Ok device
+      | _ -> Error Invalid)
+  )
+
+let deleteDevice (api: string) (token: string) (deviceId: string) : JS.Promise<Result<unit, Failure>> =
+  act HttpMethod.DELETE api token $"internal/notifications/devices/{JS.encodeURIComponent deviceId}" None

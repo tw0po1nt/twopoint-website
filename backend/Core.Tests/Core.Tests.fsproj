@@ -19,6 +19,7 @@
     <Compile Include="RebuildSiteTests.fs" />
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PostListTests.fs" />
+    <Compile Include="DeviceTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

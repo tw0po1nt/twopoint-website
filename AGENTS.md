@@ -32,7 +32,11 @@ in the build. The command stops if the stage marker is not `production`.
 `frontend/Admin/` is the admin, a separate Fable app that references the Widgets project for shared
 code. The site bundle gets no admin code. In `frontend/Admin/`, `npm run build` builds the release
 mode and `npm run watch` builds the dev mode at each change. `config.json` contains the public
-settings of each mode. `npm test` tests the last build in happy-dom. The admin dev host in
+settings of each mode, with the public VAPID key. The build copies `public/` to `dist/`: the push
+worker `sw.js`, `manifest.webmanifest`, and the icons. A build with no VAPID key cannot turn on
+notifications. `scripts/setup-web-push.sh` makes the key pair for the deployed backend and writes
+the public key to `config.json`. `npm test` tests the last build in happy-dom, with a stub push that has a test key.
+The admin dev host in
 `frontend/Admin.Dev/` serves the build on `http://localhost:4322` with the rules of
 `staticwebapp.config.json`. A SageFs session over `frontend/Admin.Tests/` starts the host and the
 watch. In the `staging` repo, `.github/workflows/backend-staging.yml` deploys the admin to Azure

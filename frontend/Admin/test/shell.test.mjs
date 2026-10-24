@@ -118,6 +118,8 @@ test('a link in the More sheet closes the sheet, shows its page, and marks More'
 });
 
 test('a change of page calls the API only for a page with a list of its own', () => {
-  assert.equal(calls.length, 3);
-  assert.equal(calls[2].url, `${config.api}/api/internal/subscriptions`);
+  assert.deepEqual(
+    calls.slice(2).map((call) => call.url),
+    [`${config.api}/api/internal/subscriptions`, `${config.api}/api/internal/notifications/devices`],
+  );
 });
