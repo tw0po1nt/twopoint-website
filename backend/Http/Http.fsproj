@@ -32,6 +32,8 @@
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
     <Compile Include="Endpoints\Admin\StartNewPostDelivery.fs" />
     <Compile Include="Endpoints\Admin\RebuildSite.fs" />
+    <Compile Include="Endpoints\Admin\GetAllSubscriptions.fs" />
+    <Compile Include="Endpoints\Admin\GetSubscriptionDeliveries.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostDeliveryMessage.fs" />

@@ -1,5 +1,6 @@
 namespace TwoPoint.Dependencies.Subscriptions
 
+open TwoPoint.Dependencies.Posts
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
@@ -19,6 +20,7 @@ type SubscriptionDependencies(
  
  
   let subscriptionDb = SubscriptionDb.live tableServiceClient logger
+  let postDb = PostDb.live tableServiceClient logger
 
   let source = Dependency.Database
 
@@ -73,6 +75,17 @@ type SubscriptionDependencies(
     return!
       dbDeliveries
       |> List.traverseValidationA (fun (dbo: DbSubscriptionDelivery) -> dbo.ToSubscriptionDelivery())
+      |> DependencyError.ofValidation source
+  }
+
+  member _.GetPostsBySlugs (slugs : Slug list) = cancellableTaskResult {
+    let! (dbPosts: DbPost list) = postDb.GetAllPosts()
+    let wanted = slugs |> List.map Slug.value |> Set.ofList
+
+    return!
+      dbPosts
+      |> List.filter (fun dbPost -> wanted.Contains dbPost.Slug)
+      |> List.traverseValidationA (fun dbPost -> dbPost.ToPost PostCommentStats.Zero)
       |> DependencyError.ofValidation source
   }
 
