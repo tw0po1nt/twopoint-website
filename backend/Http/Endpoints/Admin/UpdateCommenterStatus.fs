@@ -60,7 +60,9 @@ type UpdateCommenterStatus(
           new UpdateCommenterStatus.Dependencies with
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
+          member _.GetCommentsOfCommenter validationId = postDependencies.GetCommentsOfCommenter validationId
           member _.UpdateCommenterStatus commenter status = postDependencies.UpdateCommenterStatus commenter status
+          member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
         }
 
         let statusUpdate =

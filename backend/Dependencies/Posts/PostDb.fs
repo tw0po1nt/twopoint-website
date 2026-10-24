@@ -266,6 +266,10 @@ type internal IPostDb =
   abstract member GetCommentsOnAllPosts:
     approvals: string list
       -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+  abstract member GetCommentsOfCommenter:
+    approvals: string list
+      -> commenterId: string
+      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
     comment: DbComment
@@ -411,7 +415,24 @@ module internal PostDb =
 
         return! withLatestStatus approvals (dbComments |> List.toArray) commenters statuses
       }
-      
+
+      member this.GetCommentsOfCommenter approvals commenterId = cancellableTaskResult {
+        let! dbComments = eq "CommenterId" commenterId |> where commentsTable DbComment.FromEntity
+        match dbComments with
+        | [] -> return []
+        | dbComments ->
+          let dbComments = dbComments |> List.toArray
+          let commentStatusesFilter = (Empty, dbComments |> Array.map _.Id) ||> Array.fold (fun filter commentId ->
+            filter * eq "PartitionKey" commentId
+          )
+          let! dbCommenter, statuses =
+            CancellableTaskResult.parallelZip
+              (this.GetCommenterByValidationId commenterId)
+              (commentStatusesFilter |> where commentStatusesTable DbCommentStatus.FromEntity)
+
+          return! withLatestStatus approvals dbComments (dbCommenter |> Option.toList) statuses
+      }
+
       member this.GetCommentById commentId = cancellableTaskResult {
         // Get comment
         let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None

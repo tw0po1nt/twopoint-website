@@ -192,6 +192,17 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.GetCommentsOfCommenter (validationId : CommenterValidationId) = cancellableTaskResult {
+    let! dbComments =
+      postDb.GetCommentsOfCommenter (CommentApproval.all |> List.map _.ToString()) (validationId.ToString())
+    return!
+      dbComments
+      |> List.traverseValidationA (
+        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
+      )
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetCommentById commentId = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())
 
