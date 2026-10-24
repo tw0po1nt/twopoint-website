@@ -11,7 +11,6 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
-open System
 open System.Net
 open System.Threading
 
@@ -20,24 +19,8 @@ type RegisterPushDeviceJson =
     P256dh : string
     Auth : string }
 
-type PushDeviceDto =
-  { Id : string
-    Label : string
-    CreatedDate : DateTime
-    LastSeenDate : DateTime }
-
-[<AutoOpen>]
-module PushDeviceExt =
-
-  type TwoPoint.Core.Notifications.RegisteredDevice with
-    member this.ToDto() =
-      { PushDeviceDto.Id = this.Id.ToString()
-        Label = this.Label.ToString()
-        CreatedDate = this.CreatedDate
-        LastSeenDate = this.LastSeenDate }
-
-type RegisterPushDeviceEndpoint(
-  logger: ILogger<RegisterPushDeviceEndpoint>,
+type RegisterPushDevice(
+  logger: ILogger<RegisterPushDevice>,
   tableServiceClient: TableServiceClient
 ) =
 

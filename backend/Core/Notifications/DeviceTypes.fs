@@ -63,7 +63,7 @@ module DeviceLabel =
     |> List.tryFind (fun (part, _) -> contains part userAgent)
     |> Option.map snd
 
-  // The iPhone and iPad user agents also contain "Mac OS X", so they come first.
+  // An Android user agent also contains "Linux", so Android comes first.
   let private operatingSystem userAgent =
     [ "iPhone", "iOS"
       "iPad", "iPadOS"

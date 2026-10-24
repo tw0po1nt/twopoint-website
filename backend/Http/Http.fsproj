@@ -29,6 +29,7 @@
     <Compile Include="Endpoints\Admin\GetCommenter.fs" />
     <Compile Include="Endpoints\Admin\DeleteCommenter.fs" />
     <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
+    <Compile Include="Endpoints\Admin\PushDeviceDto.fs" />
     <Compile Include="Endpoints\Admin\RegisterPushDevice.fs" />
     <Compile Include="Endpoints\Admin\GetPushDevices.fs" />
     <Compile Include="Endpoints\Admin\DeletePushDevice.fs" />
