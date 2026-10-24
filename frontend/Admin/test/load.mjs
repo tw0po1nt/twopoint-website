@@ -65,6 +65,31 @@ export const stubSignIn = (members = {}) => {
   };
 };
 
+// The stub push has no subscription and the permission "default". A test replaces a member to change that.
+export const stubPush = (members = {}) => {
+  const events = [];
+
+  return {
+    events,
+    port: {
+      support: () => 'supported',
+      permission: () => 'default',
+      subscription: async () => {
+        events.push('subscription');
+        return undefined;
+      },
+      subscribe: async () => {
+        events.push('subscribe');
+        return undefined;
+      },
+      onSubscriptionChange: () => {
+        events.push('onSubscriptionChange');
+      },
+      ...members,
+    },
+  };
+};
+
 export const deferred = () => {
   let resolve;
   let reject;
@@ -82,7 +107,7 @@ export const settle = async () => {
 };
 
 // The admin entry starts MSAL, so each test starts the app entry with a stub sign-in instead.
-export const load = async (url, { signIn = stubSignIn(), respond = apiAnswer } = {}) => {
+export const load = async (url, { signIn = stubSignIn(), push = stubPush(), respond = apiAnswer } = {}) => {
   const manifest = JSON.parse(await readFile('build/manifest.json', 'utf8'));
   const config = JSON.parse(await readFile('config.json', 'utf8'))[manifest.mode];
 
@@ -96,9 +121,9 @@ export const load = async (url, { signIn = stubSignIn(), respond = apiAnswer } =
   };
 
   const app = await import(pathToFileURL(path.resolve('dist', manifest.app.slice(1))).href);
-  app.start(signIn.port);
+  app.start(signIn.port, push.port);
   await settle();
-  return { calls, config, events: signIn.events };
+  return { calls, config, events: signIn.events, pushEvents: push.events };
 };
 
 export const heading = () => document.querySelector('main h1').textContent.trim();

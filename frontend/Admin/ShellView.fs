@@ -28,6 +28,10 @@ let private fail (call: Shell.Call) =
     Shell.Subscriptions(Subscriptions.DeliveriesAnswered(subscriptionId, Error Api.Unanswered))
   | Shell.CancelSubscription subscriptionId -> Shell.Subscriptions(Subscriptions.Canceled(subscriptionId, Error Api.Unanswered))
   | Shell.DeleteSubscription subscriptionId -> Shell.Subscriptions(Subscriptions.Deleted(subscriptionId, Error Api.Unanswered))
+  | Shell.LoadDevices -> Shell.Notifications(Notifications.DevicesAnswered(Error Api.Unanswered))
+  | Shell.SyncDevice
+  | Shell.RegisterDevice _ -> Shell.Notifications(Notifications.RegisterAnswered(Error Api.Unanswered))
+  | Shell.RemoveDevice deviceId -> Shell.Notifications(Notifications.Removed(deviceId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -43,7 +47,11 @@ let private changeCommenter (token: string) (commenterId: string) (action: Comme
   | Some status -> Api.changeCommenterStatus (Config.api ()) token commenterId status
   | None -> Api.deleteCommenter (Config.api ()) token commenterId
 
-let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
+let private register (token: string) (keys: PushKeys) =
+  Api.registerDevice (Config.api ()) token keys
+  |> Promise.map (Result.map Some >> Notifications.RegisterAnswered >> Shell.Notifications)
+
+let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
   | Shell.LoadPosts -> Api.getPosts (Config.api ()) token |> Promise.map (Posts.Answered >> Shell.Posts)
@@ -83,13 +91,26 @@ let private answer (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   | Shell.DeleteSubscription subscriptionId ->
     Api.deleteSubscription (Config.api ()) token subscriptionId
     |> Promise.map (fun result -> Shell.Subscriptions(Subscriptions.Deleted(subscriptionId, result)))
+  | Shell.LoadDevices ->
+    Api.getDevices (Config.api ()) token
+    |> Promise.map (Notifications.DevicesAnswered >> Shell.Notifications)
+  | Shell.SyncDevice ->
+    push.subscription ()
+    |> Promise.bind (fun keys ->
+      match keys with
+      | Some keys -> register token keys
+      | None -> Promise.lift (Shell.Notifications(Notifications.RegisterAnswered(Ok None))))
+  | Shell.RegisterDevice keys -> register token keys
+  | Shell.RemoveDevice deviceId ->
+    Api.deleteDevice (Config.api ()) token deviceId
+    |> Promise.map (fun result -> Shell.Notifications(Notifications.Removed(deviceId, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
 
-let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
+let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()
   |> Promise.bind (fun token ->
     match token with
-    | Some token -> answer call token
+    | Some token -> answer push call token
     | None -> Promise.lift (Shell.Session(Session.InteractionRequired call)))
   |> Promise.catch (fun error ->
     console.error ("admin: no token for the API call.", error)
@@ -97,7 +118,7 @@ let private send (signIn: SignIn) (dispatch: Shell.Msg -> unit) (call: Shell.Cal
   |> Promise.map dispatch
   |> Promise.start
 
-let private signInWith (signIn: SignIn) (effect: Session.Effect<Shell.Call>) (dispatch: Shell.Msg -> unit) =
+let private signInWith (signIn: SignIn) (push: Push) (effect: Session.Effect<Shell.Call>) (dispatch: Shell.Msg -> unit) =
   let session = Shell.Session >> dispatch
 
   let report (what: string) (msg: Session.Msg<Shell.Call>) (error: exn) =
@@ -119,19 +140,33 @@ let private signInWith (signIn: SignIn) (effect: Session.Effect<Shell.Call>) (di
     |> Promise.map (fun () -> session Session.Renewed)
     |> Promise.catch (report "the sign-in popup did not complete." Session.RenewFailed)
     |> Promise.start
-  | Session.Retry calls -> calls |> List.iter (send signIn dispatch)
+  | Session.Retry calls -> calls |> List.iter (send signIn push dispatch)
   | Session.SignOut ->
     signIn.signOut ()
     |> Promise.catch (report "the Entra sign-out did not open." Session.SignOutFailed)
     |> Promise.start
 
-let private perform (signIn: SignIn) (effect: Shell.Effect) (dispatch: Shell.Msg -> unit) =
+let private subscribe (push: Push) (dispatch: Shell.Msg -> unit) =
+  let answered permission result =
+    dispatch (Shell.Notifications(Notifications.Subscribed(permission, result)))
+
+  let permission () = Notifications.permissionOf (push.permission ())
+
+  push.subscribe ()
+  |> Promise.map (fun keys -> answered (permission ()) (Ok keys))
+  |> Promise.catch (fun error ->
+    console.error ("admin: the push subscription failed.", error)
+    answered (permission ()) (Error "The browser did not subscribe this device to notifications."))
+  |> Promise.start
+
+let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispatch: Shell.Msg -> unit) =
   match effect with
   | Shell.Navigate(Router.PushUrl path, calls) ->
     history.pushState (null, "", path)
-    calls |> List.iter (send signIn dispatch)
-  | Shell.SignIn effect -> signInWith signIn effect dispatch
-  | Shell.Send calls -> calls |> List.iter (send signIn dispatch)
+    calls |> List.iter (send signIn push dispatch)
+  | Shell.SignIn effect -> signInWith signIn push effect dispatch
+  | Shell.Send calls -> calls |> List.iter (send signIn push dispatch)
+  | Shell.Subscribe -> subscribe push dispatch
 
 let private site = "https://twopoint.dev"
 
@@ -816,6 +851,81 @@ let private subscriptionSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shel
     })
 
 [<SolidComponent>]
+let private deviceRow (dispatch: Shell.Msg -> unit) (removing: string list) (device: Api.Device) =
+  article (id = device.Id, class' = "card card-body queue-row device-row") {
+    div (class' = "row-top") {
+      div (class' = "grow") {
+        p (class' = "strong ellipsis") { device.Label }
+        p (class' = "muted small") { $"{Notifications.addedText device} · {Notifications.lastSeenText device}" }
+      }
+
+      Parts
+        .Button(
+          kind = Parts.Ghost,
+          size = Parts.Small,
+          disabled = List.contains device.Id removing,
+          onClick = fun _ -> dispatch (Shell.Notifications(Notifications.RemoveClicked device.Id))
+        )
+        .Has(Fragment() { "Remove" })
+    }
+  }
+
+[<SolidComponent>]
+let private deviceList (dispatch: Shell.Msg -> unit) (model: Notifications.Model) =
+  match model.Devices with
+  | Notifications.Waiting ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Notifications.Loaded [] -> Fragment() { p (class' = "muted") { Notifications.emptyText } }
+  | Notifications.Loaded devices ->
+    Fragment() {
+      div (class' = "queue") {
+        For(each = Array.ofList devices) { yield fun device _ -> deviceRow dispatch model.Removing device }
+      }
+    }
+  | Notifications.NotLoaded reason ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The devices did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private notificationsSection (dispatch: Shell.Msg -> unit) (model: Notifications.Model) =
+  let section = Notifications.section model
+
+  div (class' = "card card-body notifications") {
+    h2 () { "Notifications" }
+    p () { Notifications.sectionText section }
+
+    Show(when' = (section = Notifications.Off)) {
+      Parts
+        .Button(
+          kind = Parts.Primary,
+          disabled = Notifications.isBusy model,
+          onClick = fun _ -> dispatch (Shell.Notifications Notifications.TurnOnClicked)
+        )
+        .Has(Fragment() { "Turn on notifications on this device" })
+    }
+
+    Show(when' = (Notifications.registrationFailure model).IsSome) {
+      Parts
+        .Alert(tone = Parts.Bad, title = "This device did not register.")
+        .Has(p () { Notifications.registrationFailure model |> Option.defaultValue "" })
+    }
+
+    h3 () { "Registered devices" }
+
+    Show(when' = model.RemoveFailure.IsSome) {
+      Parts
+        .Alert(tone = Parts.Bad, title = "The device did not go away.")
+        .Has(p () { model.RemoveFailure |> Option.defaultValue "" })
+    }
+
+    deviceList dispatch model
+  }
+
+[<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   let route = Shell.Router >> dispatch
 
@@ -827,6 +937,8 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
     }
   | Settings ->
     Fragment() {
+      notificationsSection dispatch model.Notifications
+
       div (class' = "card card-body settings") {
         dl (class' = "fields") {
           dt () { "API" }
@@ -957,9 +1069,12 @@ let private deleteSubscriptionDialog (dispatch: Shell.Msg -> unit) (model: unit 
     })
 
 [<SolidComponent>]
-let view (signIn: SignIn) =
+let view (signIn: SignIn) (push: Push) =
   let model, dispatch =
-    Mvu.run (Shell.init window.location.pathname) Shell.update (perform signIn)
+    Mvu.run (Shell.init window.location.pathname) Shell.update (perform signIn push)
+
+  dispatch (Shell.Notifications(Notifications.Detected(Notifications.detect push (Config.vapidPublicKey () <> ""))))
+  push.onSubscriptionChange (fun () -> dispatch (Shell.Notifications Notifications.SubscriptionChanged))
 
   let route = Shell.Router >> dispatch
 

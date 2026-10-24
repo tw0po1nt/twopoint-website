@@ -9,6 +9,8 @@
     <Compile Include="Msal.fs" />
     <Compile Include="SignIn.fs" />
     <Compile Include="MsalSignIn.fs" />
+    <Compile Include="Push.fs" />
+    <Compile Include="BrowserPush.fs" />
     <Compile Include="Route.fs" />
     <Compile Include="Router.fs" />
     <Compile Include="Api.fs" />
@@ -21,6 +23,7 @@
     <Compile Include="Commenters.fs" />
     <Compile Include="Commenter.fs" />
     <Compile Include="Subscriptions.fs" />
+    <Compile Include="Notifications.fs" />
     <Compile Include="Shell.fs" />
     <Compile Include="Menu.fs" />
     <Compile Include="Icon.fs" />
