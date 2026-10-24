@@ -132,7 +132,9 @@ _Avoid_: Approved commenter, whitelisted commenter
 
 **Banned commenter**:
 A commenter whose new comments the blog does not keep. A banned commenter sees the same messages as
-a new commenter.
+a new commenter. A ban rejects each comment that the commenter has in the moderation queue. The
+approved comments of the commenter stay approved. After an unban, the commenter is new. The rejected
+comments stay rejected.
 _Avoid_: Blocked commenter, blacklisted commenter
 
 **Rejected comment**:

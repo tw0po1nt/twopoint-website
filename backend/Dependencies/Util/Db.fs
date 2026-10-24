@@ -165,7 +165,25 @@ module Db =
         |> List.traverseValidationA onEntity
         |> DependencyError.ofValidation Dependency.Database
     }
-  
+
+  // Azure Table Storage refuses a query URL with about 500 GUID keys.
+  let maxKeysPerFilter = 100
+
+  let filtersOfKeys (toFilter: string -> Filter) (keys: string seq) : Filter list =
+    keys
+    |> Seq.distinct
+    |> Seq.chunkBySize maxKeysPerFilter
+    |> Seq.map (Array.fold (fun filter key -> filter * toFilter key) Empty)
+    |> Seq.toList
+
+  let whereAnyKey tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) toFilter keys =
+    (cancellableTaskResult { return [] }, filtersOfKeys toFilter keys)
+    ||> List.fold (fun entities filter -> cancellableTaskResult {
+      let! entities = entities
+      let! more = where tableServiceClient logger db table onEntity filter
+      return entities @ more
+    })
+
   /// <summary>
   /// Add an entity to an Azure Table
   /// </summary>

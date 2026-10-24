@@ -583,7 +583,7 @@ module UpdateCommenterStatus =
   type Error =
     | CommenterNotFound of CommenterValidationId
     | ChangeNotAllowed of current: CommenterStatus * requested: CommenterStatus
-  type Success = Updated of commenter: Commenter * status: CommenterStatus
+  type Success = Updated of commenter: Commenter * status: CommenterStatus * rejections: Comment list
   type Decision = Decision<Success, Error>
   type Event = Updated of Commenter
 
@@ -591,6 +591,7 @@ module UpdateCommenterStatus =
 
   type Logic =
     Commenter option
+      -> Comment list
       -> CommenterStatusUpdate
       -> Decision
 
@@ -598,18 +599,23 @@ module UpdateCommenterStatus =
   module Logic =
     let isAllowed (current : CommenterStatus) (requested : CommenterStatus) =
       match current, requested with
-      | CommenterStatus.New, (CommenterStatus.New | CommenterStatus.Trusted)
-      | CommenterStatus.Trusted, (CommenterStatus.New | CommenterStatus.Trusted) -> true
-      | CommenterStatus.Banned, _
-      | _, CommenterStatus.Banned -> false
+      | CommenterStatus.Banned, CommenterStatus.Trusted -> false
+      | CommenterStatus.Banned, (CommenterStatus.New | CommenterStatus.Banned)
+      | (CommenterStatus.New | CommenterStatus.Trusted), (CommenterStatus.New | CommenterStatus.Trusted | CommenterStatus.Banned) -> true
+
+    let rejections (comments : Comment list) (requested : CommenterStatus) =
+      match requested with
+      | CommenterStatus.Banned -> comments |> List.filter (fun comment -> comment.Status.Approval = CommentApproval.New)
+      | CommenterStatus.New
+      | CommenterStatus.Trusted -> []
 
     let decide : Logic =
-      fun existingCommenter statusUpdate -> result {
+      fun existingCommenter comments statusUpdate -> result {
         let! commenter = existingCommenter |> Result.requireSome (CommenterNotFound statusUpdate.ValidationId)
         do!
           isAllowed commenter.Status statusUpdate.Status
           |> Result.requireTrue (ChangeNotAllowed (commenter.Status, statusUpdate.Status))
-        return Success.Updated (commenter, statusUpdate.Status)
+        return Success.Updated (commenter, statusUpdate.Status, rejections comments statusUpdate.Status)
       }
 
   // Action
@@ -620,17 +626,24 @@ module UpdateCommenterStatus =
 
   type Dependencies =
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
+    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<Comment list>
     abstract member UpdateCommenterStatus:
       commenter: Commenter
         -> status: CommenterStatus
         -> DependencyResult<Commenter>
+    abstract member UpdateCommentApproval:
+      comment: Comment
+        -> approval: CommentApproval
+        -> DependencyResult<Comment>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommenterStatusUpdated (Success.Updated (commenter, status)) : DependencyResult<Commenter> =
+    let handleCommenterStatusUpdated (Success.Updated (commenter, status, rejections)) : DependencyResult<Commenter> =
       cancellableTaskResult {
-        // todo: call code to reject all comments from commenter if banned
-        return! dependencies.UpdateCommenterStatus commenter status
+        let! commenter = dependencies.UpdateCommenterStatus commenter status
+        for comment in rejections do
+          do! dependencies.UpdateCommentApproval comment CommentApproval.Rejected |> CancellableTaskResult.ignore
+        return commenter
       }
 
     fun statusUpdate -> cancellableTaskResult {
@@ -643,7 +656,14 @@ module UpdateCommenterStatus =
          dependencies.GetCommenterByValidationId statusUpdate.ValidationId
          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-       let decision = Logic.decide existingCommenter statusUpdate
+       let! comments =
+         match existingCommenter with
+         | Some commenter ->
+           dependencies.GetCommentsOfCommenter commenter
+           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+         | None -> CancellableTaskResult.singleton []
+
+       let decision = Logic.decide existingCommenter comments statusUpdate
 
        return!
          decision

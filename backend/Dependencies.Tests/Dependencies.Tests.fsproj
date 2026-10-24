@@ -12,6 +12,7 @@
     <Compile Include="GitHubAppJwtTests.fs" />
     <Compile Include="GitHubDispatchTests.fs" />
     <Compile Include="QueuedCommentTests.fs" />
+    <Compile Include="DbTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
