@@ -14,7 +14,7 @@ const queued = (id, postSlug, postTitle, name, status, content) => ({
   comment: {
     id,
     createdDate: '2026-02-04T00:00:00Z',
-    commenter: { email: `${name.toLowerCase()}@example.com`, name, status },
+    commenter: { id: `${name.toLowerCase()}-id`, email: `${name.toLowerCase()}@example.com`, name, status },
     status: 'new',
     content,
   },

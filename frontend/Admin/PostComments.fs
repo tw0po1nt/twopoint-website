@@ -63,7 +63,8 @@ let private withApproval (approval: Api.CommentApproval) (row: Row) =
 
 let private moderated (commentId: string) (action: Queue.Action) (rows: Row list) =
   match action with
-  | Queue.Approve -> change commentId (withApproval Api.CommentApproval.Approved) rows
+  | Queue.Approve
+  | Queue.ApproveAndTrust -> change commentId (withApproval Api.CommentApproval.Approved) rows
   | Queue.Reject -> change commentId (withApproval Api.CommentApproval.Rejected) rows
   | Queue.Delete -> rows |> List.filter (fun row -> id row <> commentId)
 

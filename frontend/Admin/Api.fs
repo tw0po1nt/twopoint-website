@@ -23,7 +23,8 @@ type CommenterStatus =
   | Banned
 
 type Commenter =
-  { Email: string
+  { Id: string
+    Email: string
     Name: string
     Status: CommenterStatus }
 
@@ -200,3 +201,9 @@ let changeApproval
 
 let deleteComment (api: string) (token: string) (slug: string) (comment: Comment) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token (commentPath slug comment) None
+
+let trustCommenter (api: string) (token: string) (commenter: Commenter) : JS.Promise<Result<unit, Failure>> =
+  Encode.object [ "status", Encode.string (commenterStatusName Trusted) ]
+  |> Encode.toString 0
+  |> Some
+  |> act HttpMethod.PUT api token $"internal/commenters/{JS.encodeURIComponent commenter.Id}"

@@ -22,6 +22,13 @@ let private fail (call: Shell.Call) =
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
   | Queue.Approve -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Approved
+  | Queue.ApproveAndTrust ->
+    // The trust goes first: a second trust keeps the status, and a second approval is refused.
+    Api.trustCommenter (Config.api ()) token comment.Commenter
+    |> Promise.bind (fun trusted ->
+      match trusted with
+      | Ok() -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Approved
+      | Error failure -> Promise.lift (Error failure))
   | Queue.Reject -> Api.changeApproval (Config.api ()) token slug comment Api.Approval.Rejected
   | Queue.Delete -> Api.deleteComment (Config.api ()) token slug comment
 
@@ -281,6 +288,12 @@ let private actionButton
         .Button(kind = Parts.Accent, size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.Approve)
         .Has(Fragment() { "Approve" })
     }
+  | Queue.ApproveAndTrust ->
+    Fragment() {
+      Parts
+        .Button(size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.ApproveAndTrust)
+        .Has(Fragment() { "Approve and trust" })
+    }
   | Queue.Reject ->
     Fragment() {
       Parts.Button(size = Parts.Small, disabled = sending, onClick = fun _ -> choose Queue.Reject).Has(Fragment() { "Reject" })
@@ -326,7 +339,7 @@ let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
     commenterHead comment.Commenter
     p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
     p (class' = "queue-text") { comment.Content }
-    rowEnd dispatch comment.Id choose row.State [ Queue.Approve; Queue.Reject; Queue.Delete ]
+    rowEnd dispatch comment.Id choose row.State (Queue.actions comment.Commenter.Status)
   }
 
 [<SolidComponent>]
