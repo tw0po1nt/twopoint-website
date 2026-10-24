@@ -155,5 +155,138 @@ let private postCommentsTests =
     }
   ]
 
+let private commenterId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+
+let private commenter (status : CommenterStatus) =
+  Commenter.create commenterId "commenter@example.com" (Some "Commenter") "2026-01-01T00:00:00.0000000Z" (status.ToString())
+  |> ok
+
+type private FakePostCommentDependencies(existing : Commenter) =
+  let created = ResizeArray<CommentApproval>()
+
+  member _.Created = List.ofSeq created
+
+  interface PostComment.Dependencies with
+    member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
+    member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
+    member _.CreateComment _ commenter newComment approval =
+      created.Add approval
+      let posted = comment firstId "2026-02-01T00:00:00.0000000Z" approval
+      CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
+
+let private postComment (dependencies : FakePostCommentDependencies) =
+  let dto =
+    { NewComment.Dto.Post = NewComment.Post (olderPost.Id.ToString())
+      NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
+      NewComment.Dto.Comment = NewComment.Comment "A comment" }
+  (PostComment.withDependencies dependencies dto CancellationToken.None).Result
+
+let private postCommentTests =
+  testList "PostComment" [
+    test "a comment of a trusted commenter is approved at the time of the post" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.Trusted)
+
+      match postComment dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal posted.Status.Approval CommentApproval.Approved "Expected an approved comment"
+        Expect.equal dependencies.Created [ CommentApproval.Approved ] "Expected one approved comment in the store"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a comment of a new commenter is new" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+
+      match postComment dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal posted.Status.Approval CommentApproval.New "Expected a new comment"
+        Expect.equal dependencies.Created [ CommentApproval.New ] "Expected one new comment in the store"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a banned commenter posts nothing" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.Banned)
+
+      match postComment dependencies with
+      | Error (Logic (PostComment.Banned _)) -> Expect.isEmpty dependencies.Created "Expected no comment in the store"
+      | other -> failtestf "Expected Banned, got %A" other
+    }
+  ]
+
+type private FakeStatusDependencies(existing : Commenter option) =
+  let updates = ResizeArray<CommenterStatus>()
+
+  member _.Updates = List.ofSeq updates
+
+  interface UpdateCommenterStatus.Dependencies with
+    member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
+    member _.UpdateCommenterStatus commenter status =
+      updates.Add status
+      CancellableTaskResult.singleton { commenter with Status = status }
+
+let private updateStatus (dependencies : FakeStatusDependencies) (status : CommenterStatus) =
+  let dto =
+    { CommenterStatusUpdate.Dto.ValidationId = CommenterStatusUpdate.ValidationId commenterId
+      CommenterStatusUpdate.Dto.Status = CommenterStatusUpdate.Status (status.ToString()) }
+  (UpdateCommenterStatus.withDependencies dependencies dto CancellationToken.None).Result
+
+let private statusTests =
+  testList "UpdateCommenterStatus" [
+    test "trust makes a new commenter trusted" {
+      let dependencies = FakeStatusDependencies (Some (commenter CommenterStatus.New))
+
+      match updateStatus dependencies CommenterStatus.Trusted with
+      | Ok (UpdateCommenterStatus.Event.Updated updated) ->
+        Expect.equal updated.Status CommenterStatus.Trusted "Expected a trusted commenter"
+        Expect.equal dependencies.Updates [ CommenterStatus.Trusted ] "Expected one update"
+      | other -> failtestf "Expected Updated, got %A" other
+    }
+
+    test "untrust makes a trusted commenter new, and leaves each comment as it was" {
+      let dependencies = FakeStatusDependencies (Some (commenter CommenterStatus.Trusted))
+
+      match updateStatus dependencies CommenterStatus.New with
+      | Ok (UpdateCommenterStatus.Event.Updated updated) ->
+        Expect.equal updated.Status CommenterStatus.New "Expected a new commenter"
+        Expect.equal dependencies.Updates [ CommenterStatus.New ] "Expected the status as the only change"
+      | other -> failtestf "Expected Updated, got %A" other
+    }
+
+    test "a second trust or untrust keeps the status" {
+      for status in [ CommenterStatus.New; CommenterStatus.Trusted ] do
+        let dependencies = FakeStatusDependencies (Some (commenter status))
+
+        match updateStatus dependencies status with
+        | Ok (UpdateCommenterStatus.Event.Updated updated) ->
+          Expect.equal updated.Status status $"Expected a {status} commenter"
+        | other -> failtestf "Expected Updated, got %A" other
+    }
+
+    testList "changes that are not allowed" [
+      for current, requested in
+        [ CommenterStatus.New, CommenterStatus.Banned
+          CommenterStatus.Trusted, CommenterStatus.Banned
+          CommenterStatus.Banned, CommenterStatus.New
+          CommenterStatus.Banned, CommenterStatus.Trusted ] do
+        test $"{current} to {requested}" {
+          let dependencies = FakeStatusDependencies (Some (commenter current))
+
+          Expect.equal
+            (updateStatus dependencies requested)
+            (Error (Logic (UpdateCommenterStatus.ChangeNotAllowed (current, requested))))
+            "Expected ChangeNotAllowed"
+          Expect.isEmpty dependencies.Updates "Expected no update"
+        }
+    ]
+
+    test "a missing commenter gets no update" {
+      let dependencies = FakeStatusDependencies None
+
+      match updateStatus dependencies CommenterStatus.Trusted with
+      | Error (Logic (UpdateCommenterStatus.CommenterNotFound _)) ->
+        Expect.isEmpty dependencies.Updates "Expected no update"
+      | other -> failtestf "Expected CommenterNotFound, got %A" other
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Moderation" [ approvalTests; queueTests; postCommentsTests ]
+let tests = testList "Moderation" [ approvalTests; queueTests; postCommentsTests; postCommentTests; statusTests ]
