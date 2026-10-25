@@ -7,12 +7,11 @@
   <ItemGroup>
     <Compile Include="Util\Logging.fs" />
     <Compile Include="Util\Db.fs" />
-    <Compile Include="Notifications\NotificationDb.fs" />
-    <Compile Include="Notifications\NotificationDependencies.fs" />
     <Compile Include="Notifications\DeviceDb.fs" />
     <Compile Include="Notifications\DeviceDependencies.fs" />
     <Compile Include="Notifications\WebPush.fs" />
     <Compile Include="Comms\CommsDb.fs" />
+    <Compile Include="Notifications\NewCommentPushDependencies.fs" />
     <Compile Include="Comms\Comms.fs" />
     <Compile Include="Posts\PostDb.fs" />
     <Compile Include="Posts\PostStore.fs" />
@@ -30,7 +29,6 @@
     <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
     <PackageReference Include="Azure.Security.KeyVault.Keys" Version="4.8.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.30.1" />
-    <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
     <PackageReference Include="FsToolkit.ErrorHandling.IcedTasks" Version="5.2.0" />
     <PackageReference Include="IcedTasks" Version="0.11.9" />

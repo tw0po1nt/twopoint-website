@@ -11,7 +11,6 @@ open TwoPoint.Core.Util
 open Azure
 open Azure.Data.Tables
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
 open FsToolkit.ErrorHandling
 open IcedTasks
 open Microsoft.Extensions.Logging
@@ -23,7 +22,6 @@ open System.Web
 type DeliveryDependencies(
   emailClient : Azure.Communication.Email.EmailClient,
   emailSender : EmailAddress,
-  messaging : FirebaseMessaging,
   newsletters : BlobContainerClient,
   unsubscribeUri : Uri,
   tableServiceClient : TableServiceClient,
@@ -31,7 +29,7 @@ type DeliveryDependencies(
 ) =
 
   let postDb = PostDb.live tableServiceClient logger
-  let commsService = CommsService.live emailClient messaging tableServiceClient logger emailSender
+  let commsService = CommsService.live emailClient tableServiceClient logger emailSender
 
   let unsubscribeUrlFor (subscription : Subscription) =
     let builder = UriBuilder unsubscribeUri

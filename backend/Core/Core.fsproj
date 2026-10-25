@@ -18,7 +18,6 @@
     <Compile Include="Shared\SharedTypes.fs" />
     <Compile Include="Shared\Access.fs" />
     <Compile Include="Notifications\NotificationTypes.fs" />
-    <Compile Include="Notifications\NotificationActions.fs" />
     <Compile Include="Notifications\DeviceTypes.fs" />
     <Compile Include="Notifications\DeviceActions.fs" />
     <Compile Include="Notifications\DeviceQueries.fs" />

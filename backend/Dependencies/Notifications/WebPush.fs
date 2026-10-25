@@ -141,3 +141,8 @@ type WebPushSender(httpClient : HttpClient, vapid : VapidKeys, logger : ILogger)
         let! body = response.Content.ReadAsStringAsync ct
         return failwith $"The push service answered {int status} to POST {subscription.Endpoint}: {body}"
     }
+
+/// What the host registers. The local backend can run with no `WebPush` setting, and then it cannot send a push.
+type WebPushSetup =
+  | WebPushConfigured of WebPushSender
+  | WebPushNotConfigured

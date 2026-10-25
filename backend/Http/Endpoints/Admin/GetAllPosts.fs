@@ -9,7 +9,6 @@ open TwoPoint.Dependencies.Posts
 open Azure.Communication.Email
 open Azure.Data.Tables
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -62,7 +61,6 @@ module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
 type GetAllPosts (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<GetAllPosts>,
   tableServiceClient: TableServiceClient,
   postStoreClient: BlobServiceClient
@@ -91,7 +89,6 @@ type GetAllPosts (
           validRedirectUris,
           emailClient,
           config.Azure.EmailSender,
-          messaging,
           tableServiceClient,
           logger
         )

@@ -8,7 +8,6 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -36,7 +35,6 @@ module GetModerationQueueQuery = TwoPoint.Core.Posts.Queries.GetModerationQueue
 type GetModerationQueue (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<GetModerationQueue>,
   tableServiceClient: TableServiceClient
 ) =
@@ -64,7 +62,6 @@ type GetModerationQueue (
           validRedirectUris,
           emailClient,
           config.Azure.EmailSender,
-          messaging,
           tableServiceClient,
           logger
         )

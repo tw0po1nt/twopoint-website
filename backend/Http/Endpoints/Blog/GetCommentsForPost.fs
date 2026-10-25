@@ -8,7 +8,6 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
@@ -37,7 +36,6 @@ module PostTypesExt =
 type GetCommentsForPost (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<GetCommentsForPost>,
   tableServiceClient: TableServiceClient
 ) =
@@ -58,7 +56,6 @@ type GetCommentsForPost (
       validRedirectUris,
       emailClient,
       config.Azure.EmailSender,
-      messaging,
       tableServiceClient,
       logger
     )

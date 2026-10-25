@@ -10,6 +10,14 @@ module WelcomeQueue =
   [<Literal>]
   let Name = "subscription_welcome"
 
+type NewCommentMessage =
+  { CommentId : string }
+
+/// The Service Bus queue that contains a message for each new comment. A handler then notifies the author.
+module NewCommentQueue =
+  [<Literal>]
+  let Name = "new_comment"
+
 type NewPostDeliveryJson =
   { SubscriptionId : string
     Post : string

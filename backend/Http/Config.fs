@@ -15,10 +15,6 @@ type AzureConfig =
     ServiceBusUri : Uri
     KeyVaultUri : Uri option }
 
-type FirebaseConfig =
-  { ServiceAccountJsonPath : string option
-    ServiceAccountJsonFromKeyVault : string option }
-
 type ValidRedirectUri =
   { Uri : Uri }
 
@@ -46,7 +42,6 @@ type WebPushConfig =
 
 type Config =
   { Azure : AzureConfig
-    Firebase : FirebaseConfig
     WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
     Welcome : WelcomeConfig option
@@ -78,14 +73,6 @@ module Config =
             PostStoreUri = postStoreUri
             ServiceBusUri = serviceBusUri
             KeyVaultUri = keyVaultUri }
-      }
-
-      let! firebase = Bind.section "Firebase" <| bind {
-        let! serviceAccountJsonPath = Bind.optValueAt "ServiceAccountJsonPath" Bind.string
-        let! serviceAccountJsonFromKeyVault = Bind.optValueAt "ServiceAccountJsonFromKeyVault" Bind.string
-        return
-          { ServiceAccountJsonPath = serviceAccountJsonPath
-            ServiceAccountJsonFromKeyVault = serviceAccountJsonFromKeyVault }
       }
 
       let! webPush = Bind.optSection "WebPush" <| bind {
@@ -133,7 +120,6 @@ module Config =
 
       return
         { Azure = azure
-          Firebase = firebase
           WebPush = webPush
           ValidRedirectUris = validRedirectUris
           Welcome = welcome

@@ -7,7 +7,6 @@ open TwoPoint.Dependencies.Posts
 open Azure.Communication.Email
 open Azure.Data.Tables
 open Azure.Messaging.ServiceBus
-open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Extensions.Logging
 
@@ -22,7 +21,6 @@ type NewPostJson =
 type ProcessNewPostMessage(
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<ProcessNewPostMessage>,
   tableServiceClient: TableServiceClient
 ) =
@@ -51,7 +49,6 @@ type ProcessNewPostMessage(
         validRedirectUris,
         emailClient,
         config.Azure.EmailSender,
-        messaging,
         tableServiceClient,
         logger
       )

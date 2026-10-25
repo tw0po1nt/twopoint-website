@@ -7,7 +7,6 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -33,7 +32,6 @@ module GetCommenterQuery = TwoPoint.Core.Posts.Queries.GetCommenter
 type GetCommenter (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<GetCommenter>,
   tableServiceClient: TableServiceClient
 ) =
@@ -62,7 +60,6 @@ type GetCommenter (
           validRedirectUris,
           emailClient,
           config.Azure.EmailSender,
-          messaging,
           tableServiceClient,
           logger
         )

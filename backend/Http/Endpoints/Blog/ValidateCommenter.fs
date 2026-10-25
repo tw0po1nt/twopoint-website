@@ -8,7 +8,6 @@ open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
@@ -24,7 +23,6 @@ type CommenterValidationJson =
 type ValidateCommenter (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger: ILogger<PostComment>,
   tableServiceClient: TableServiceClient
 ) =
@@ -45,7 +43,6 @@ type ValidateCommenter (
       validRedirectUris,
       emailClient,
       config.Azure.EmailSender,
-      messaging,
       tableServiceClient,
       logger
     )
