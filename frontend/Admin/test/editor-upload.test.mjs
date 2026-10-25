@@ -12,6 +12,7 @@ const post = {
   title: 'My post',
   excerpt: 'About it.',
   body: 'Some text.\n',
+  details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true },
   text: '',
   publishedText: null,
 };
