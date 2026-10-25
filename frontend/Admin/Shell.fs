@@ -30,6 +30,7 @@ type Call =
   | SavePost of Editor.SaveRequest
   | LoadDetailsOptions
   | ChangeSlug of Editor.SlugRequest
+  | PreviewPost of Editor.PreviewRequest
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -160,7 +161,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.Save request -> [ SavePost request ]
           | Editor.Autosave _
           | Editor.LoadDetailsOptions
-          | Editor.ChangeSlug _ -> [])
+          | Editor.ChangeSlug _
+          | Editor.FetchPreview _ -> [])
 
       match routerMsg, calls with
       | Router.UrlChanged _, calls -> next, Some(Navigate(Router.PushUrl(Route.path model.Router.Route), calls))
@@ -243,7 +245,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.Answered(_, Error Api.Refused), _
       | Editor.SaveAnswered(_, _, Error Api.Refused), _
       | Editor.SlugChangeAnswered(_, Error Api.Refused), _
-      | Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Refused)), _ -> update (Session Session.AccountRefused) next
+      | Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Refused)), _
+      | Editor.PreviewAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -254,7 +257,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.Autosave version -> Autosave version
           | Editor.Save request -> Send [ SavePost request ]
           | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
-          | Editor.ChangeSlug request -> Send [ ChangeSlug request ])
+          | Editor.ChangeSlug request -> Send [ ChangeSlug request ]
+          | Editor.FetchPreview request -> Send [ PreviewPost request ])
   | Queue(Queue.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) -> model, None
   | Queue msg ->
     let queue, effect = Queue.update msg model.Queue

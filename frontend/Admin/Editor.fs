@@ -36,7 +36,8 @@ type Document =
     LeaveTo: string option
     /// The top bar fades until the pointer moves.
     Typing: bool
-    Details: Details.Model }
+    Details: Details.Model
+    Preview: Preview.State }
 
 type Model =
   | Loading of slug: string
@@ -54,6 +55,8 @@ type SlugRequest =
   { Slug: string
     ETag: string
     NewSlug: string }
+/// The fields on the screen, also when the API does not have them yet.
+type PreviewRequest = { Slug: string; Fields: Fields }
 
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
@@ -68,6 +71,11 @@ type Msg =
   | DetailsMsg of Details.Msg
   | SlugChangeRequested
   | SlugChangeAnswered of slug: string * Result<Api.ChangedSlug, Api.Failure>
+  /// The Preview button opens the preview, and it closes the preview when the preview is open.
+  | PreviewToggled
+  /// The Esc key.
+  | PreviewClosed
+  | PreviewAnswered of slug: string * Result<Api.PostPreview, Api.Failure>
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -75,6 +83,7 @@ type Effect =
   | Save of SaveRequest
   | LoadDetailsOptions
   | ChangeSlug of SlugRequest
+  | FetchPreview of PreviewRequest
 
 let autosaveDelay = 2000
 
@@ -97,7 +106,8 @@ let private loaded (post: Api.PostDocument) =
       SaveAgain = false
       LeaveTo = None
       Typing = false
-      Details = Details.init post.Slug post.Details }
+      Details = Details.init post.Slug post.Details
+      Preview = Preview.Closed }
 
 let private requestOf (document: Document) : SaveRequest =
   { Slug = document.Slug
@@ -229,6 +239,18 @@ let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document
   | Error Api.Stale ->
     Loaded { withSlugState Details.Idle document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
   | Error failure -> Loaded(withSlugState (Details.ChangeFailed(Api.reason failure)) document), None
+let private togglePreview (document: Document) =
+  match document.Preview with
+  | Preview.Closed ->
+    Loaded { document with Preview = Preview.Loading },
+    Some(FetchPreview { Slug = document.Slug; Fields = document.Fields })
+  | _ -> Loaded { document with Preview = Preview.Closed }, None
+
+let private previewAnswered (result: Result<Api.PostPreview, Api.Failure>) (document: Document) =
+  match document.Preview, result with
+  | Preview.Loading, Ok preview -> Loaded { document with Preview = Preview.Shown preview }, None
+  | Preview.Loading, Error failure -> Loaded { document with Preview = Preview.Failed(Api.reason failure) }, None
+  | _ -> Loaded document, None
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
@@ -245,6 +267,9 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, SlugChangeRequested -> requestSlugChange document
   | Loaded document, SlugChangeAnswered(slug, result) when slug = document.Slug -> slugChanged result document
   | Loaded document, LeaveRequested path when needsSave document -> saveNow { document with LeaveTo = Some path }
+  | Loaded document, PreviewToggled -> togglePreview document
+  | Loaded document, PreviewClosed -> Loaded { document with Preview = Preview.Closed }, None
+  | Loaded document, PreviewAnswered(slug, result) when slug = document.Slug -> previewAnswered result document
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.

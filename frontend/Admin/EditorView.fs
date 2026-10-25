@@ -36,6 +36,32 @@ let private fields (model: Shell.Model) =
   | Some document -> document.Fields
   | None -> { Title = ""; Excerpt = ""; Body = "" }
 
+let private previewState (model: Shell.Model) =
+  match document model with
+  | Some document -> document.Preview
+  | None -> Preview.Closed
+
+let private isPreviewing (model: Shell.Model) = Preview.isOpen (previewState model)
+
+let private isPreviewLoading (model: Shell.Model) = previewState model = Preview.Loading
+
+let private previewFailure (model: Shell.Model) =
+  match previewState model with
+  | Preview.Failed reason -> reason
+  | _ -> ""
+
+let private previewProblems (model: Shell.Model) =
+  match previewState model with
+  | Preview.Shown preview -> Array.ofList preview.Problems
+  | _ -> [||]
+
+let private previewFrame (model: Shell.Model) =
+  match previewState model with
+  | Preview.Shown { Article = Some article } -> Preview.frame article
+  | _ -> ""
+
+let private hasPreviewFrame (model: Shell.Model) = previewFrame model <> ""
+
 let private fit (element: obj) =
   element?style?height <- "auto"
 
@@ -67,8 +93,16 @@ let private topBar (dispatch: Shell.Msg -> unit) (back: MouseEvent -> unit) (mod
     p (class' = "editor-status", role = "status", ariaLive = "polite") { statusText (model ()) }
 
     div (class' = "editor-actions") {
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/258): Preview
-      button (type' = "button", class' = "text", disabled = true) { "Preview" }
+      button (
+        type' = "button",
+        class' = "text",
+        disabled = not (isLoaded (model ())),
+        ariaPressed = (if isPreviewing (model ()) then "true" else "false"),
+        onClick = fun _ -> dispatch (Shell.Editor Editor.PreviewToggled)
+      ) {
+        "Preview"
+      }
+
       button (type' = "button", class' = "text", disabled = not (isLoaded (model ())), onClick = fun _ -> DetailsView.open' dispatch) {
         "Details"
       }
@@ -86,7 +120,7 @@ let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send (toMsg: string -> Editor.Msg) = toMsg >> Shell.Editor >> dispatch
   let excerpt: HTMLTextAreaElement option ref = ref None
 
-  article (class' = "editor-column") {
+  article (class' = (if isPreviewing (model ()) then "editor-column is-hidden" else "editor-column")) {
     textarea(
       class' = "editor-title",
       rows = 1,
@@ -127,6 +161,42 @@ let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   }
 
 [<SolidComponent>]
+let private preview (model: unit -> Shell.Model) =
+  section (class' = "editor-preview", ariaLabel = "Preview") {
+    Show(when' = isPreviewLoading (model ())) {
+      div (class' = "editor-column", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+
+    Show(when' = (previewFailure (model ()) <> "")) {
+      Parts.Alert(tone = Parts.Bad, title = "The preview did not load.").Has(p () { previewFailure (model ()) })
+    }
+
+    Show(when' = ((previewProblems (model ())).Length > 0)) {
+      ul (class' = "preview-problems") {
+        For(each = previewProblems (model ())) {
+          yield fun problem _ ->
+            li (class' = (if problem.Severity = "error" then "preview-problem bad" else "preview-problem warn")) {
+              span (class' = "preview-severity") { $"{Preview.severityText problem} " }
+              Preview.problemText problem
+            }
+        }
+      }
+    }
+
+    Show(when' = hasPreviewFrame (model ())) {
+      iframe(
+        class' = "preview-frame",
+        title = "The post as readers see it",
+        sandbox = "allow-same-origin",
+        srcdoc = previewFrame (model ())
+      )
+    }
+  }
+
+[<SolidComponent>]
 let private loading (model: unit -> Shell.Model) =
   match (model ()).Editor with
   | Some(Editor.NotLoaded reason) ->
@@ -150,7 +220,9 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
 
     if (key.metaKey || key.ctrlKey) && key.key.ToLowerInvariant() = "s" then
       key.preventDefault ()
-      dispatch (Shell.Editor Editor.SaveRequested))
+      dispatch (Shell.Editor Editor.SaveRequested)
+    elif key.key = "Escape" && isPreviewing (model ()) then
+      dispatch (Shell.Editor Editor.PreviewClosed))
 
   let fade (_: Event) =
     if isTyping (model ()) then
@@ -172,6 +244,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
       h1 (class' = "sr-only") { heading () }
 
       Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch model }
+      Show(when' = isPreviewing (model ())) { preview model }
     }
 
     DetailsView.sheet dispatch model

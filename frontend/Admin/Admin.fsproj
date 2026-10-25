@@ -20,6 +20,7 @@
     <Compile Include="Queue.fs" />
     <Compile Include="Posts.fs" />
     <Compile Include="Details.fs" />
+    <Compile Include="Preview.fs" />
     <Compile Include="Editor.fs" />
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />

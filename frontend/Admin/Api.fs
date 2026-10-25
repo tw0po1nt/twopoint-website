@@ -443,3 +443,29 @@ let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing li
 let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
   sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some json) [ IfMatch eTag ]
+
+/// `Severity` is `error` or `warning`. `Place` is `Field <name>`, `Body line <n>`, or `Post`.
+type PreviewProblem =
+  { Severity: string
+    Place: string
+    Message: string }
+
+/// `Article` is the HTML of the article. It is `None` when the text has an error in its parse.
+type PostPreview =
+  { Article: string option
+    Problems: PreviewProblem list }
+
+/// The API composes the three fields with the other front matter fields of the stored post.
+let previewPost
+  (api: string)
+  (token: string)
+  (slug: string)
+  (title: string)
+  (excerpt: string)
+  (body: string)
+  : JS.Promise<Result<PostPreview, Failure>> =
+  let json =
+    Encode.object [ "title", Encode.string title; "excerpt", Encode.string excerpt; "body", Encode.string body ]
+    |> Encode.toString 0
+
+  sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some json) []
