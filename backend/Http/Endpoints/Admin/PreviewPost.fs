@@ -113,19 +113,13 @@ type PreviewPost (
               Details = json.Details |> Option.ofNullable |> Option.map PostDetailsDto.toDetails }
 
         let apiResponse, statusCode =
-          match result with
-          | Ok checkedPost -> { Success = true; Message = None; Data = Some(PreviewPostMapping.preview checkedPost) }, HttpStatusCode.OK
-          | Error(Logic(PreviewPost.Error.PostNotFound slug)) ->
-            { Success = false; Message = Some $"Post '{slug}' not found"; Data = None }, HttpStatusCode.NotFound
-          | Error(Logic(PreviewPost.Error.FrontMatterUnreadable reason)) ->
-            { Success = false
-              Message = Some $"The front matter of the stored post is not readable: {reason}"
-              Data = None },
-            HttpStatusCode.UnprocessableEntity
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          result
+          |> ActionResult.toApiResponse
+            (fun checkedPost -> Some(PreviewPostMapping.preview checkedPost))
+            (function
+              | PreviewPost.Error.PostNotFound slug -> $"Post '{slug}' not found", HttpStatusCode.NotFound
+              | PreviewPost.Error.FrontMatterUnreadable reason ->
+                $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

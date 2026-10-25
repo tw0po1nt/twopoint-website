@@ -70,19 +70,13 @@ type UploadAsset (
         let! result = uploadAsset { Bytes = bytes }
 
         let apiResponse, statusCode =
-          match result with
-          | Ok(UploadAsset.Event.Uploaded(name, url)) ->
-            { Success = true; Message = None; Data = Some { Name = name; Url = url.AbsoluteUri } }, HttpStatusCode.OK
-          | Error(Logic UploadAsset.Error.UnsupportedType) ->
-            { Success = false; Message = Some "Upload a JPEG, PNG, WebP, GIF, or PDF file"; Data = None },
-            HttpStatusCode.UnsupportedMediaType
-          | Error(Logic UploadAsset.Error.TooLarge) ->
-            { Success = false; Message = Some "The file is larger than 25 MB"; Data = None },
-            HttpStatusCode.RequestEntityTooLarge
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          result
+          |> ActionResult.toApiResponse
+            (fun (UploadAsset.Event.Uploaded(name, url)) -> Some { Name = name; Url = url.AbsoluteUri })
+            (function
+              | UploadAsset.Error.UnsupportedType ->
+                "Upload a JPEG, PNG, WebP, GIF, or PDF file", HttpStatusCode.UnsupportedMediaType
+              | UploadAsset.Error.TooLarge -> "The file is larger than 25 MB", HttpStatusCode.RequestEntityTooLarge)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

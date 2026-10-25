@@ -57,15 +57,11 @@ type DeleteSubscription (
 
         let! deletionResult = ct |> deleteSubscription deletion
         let apiResponse, statusCode =
-          match deletionResult with
-          | Ok _ ->
-            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic (DeleteSubscriptionAction.Error.SubscriptionNotFound _)) ->
-            { Success = false; Message = Some $"Subscription '{subscriptionId}' not found"; Data = None }, HttpStatusCode.NotFound
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          deletionResult
+          |> ActionResult.toApiResponse
+            (fun _ -> None)
+            (fun (DeleteSubscriptionAction.Error.SubscriptionNotFound _) ->
+              $"Subscription '{subscriptionId}' not found", HttpStatusCode.NotFound)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)
