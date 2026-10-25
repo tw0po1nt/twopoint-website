@@ -57,7 +57,6 @@ type PostComment (
   tableServiceClient: TableServiceClient
 ) =
 
-  /// The action ignores an error of the queue, because the comment is stored. The wrapper logs the error.
   let queueNewCommentNotice (commentId : CommentId) =
     runDependencyWithLogging Dependency.ServiceBus logger $"{nameof PostComment}.QueueNewCommentNotice"
     <| cancellableTaskResult {

@@ -86,14 +86,10 @@ let main args =
     match config.WebPush with
     | None -> WebPushNotConfigured
     | Some webPush ->
-      // The deployed backend reads the private key from Key Vault when a function first needs the sender.
       let privateKey =
-        match webPush.PrivateKey, webPush.PrivateKeyFromKeyVault, config.Azure.KeyVaultUri with
-        | Some privateKey, _, _ -> privateKey
-        | None, Some secretName, Some keyVaultUri ->
-          SecretClient(keyVaultUri, credential).GetSecret(secretName).Value.Value
-        | None, _, _ ->
-          failwith "The 'WebPush' setting needs 'PrivateKey', or 'PrivateKeyFromKeyVault' and 'Azure:KeyVaultUri'"
+        match webPush.PrivateKey with
+        | Inline privateKey -> privateKey
+        | KeyVault(secretName, vaultUri) -> SecretClient(vaultUri, credential).GetSecret(secretName).Value.Value
 
       let keys =
         { VapidKeys.Subject = webPush.Subject

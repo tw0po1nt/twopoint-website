@@ -47,7 +47,6 @@ type ProcessNewCommentMessage(
         commentJson.CommentId
       )
 
-      // Dependencies
       let postDependencies = PostDependencies(
         [],
         emailClient,
@@ -58,19 +57,10 @@ type ProcessNewCommentMessage(
       let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
       let pushDependencies = NewCommentPushDependencies(pushSetup, tableServiceClient, logger)
 
-      // The author is the only user of the admin.
-      let author = UserExternalId.create Access.authorObjectId
-
-      // Action
       let notifyNewComment = NotifyNewComment.withDependencies { new NotifyNewComment.Dependencies with
         member _.GetPostedComment commentId = postDependencies.GetPostedCommentById commentId
         member _.CountNewComments () = postDependencies.CountNewComments()
-        member _.GetDevicesOfAuthor () =
-          match author with
-          | Ok author -> deviceDependencies.GetDevicesOfUser author
-          | Error errors ->
-            CancellableTaskResult.error
-              { Dependency = Dependency.Database; Type = DependencyErrorType.Validation (String.concat ", " errors) }
+        member _.GetDevicesOfAuthor () = deviceDependencies.GetDevicesOfUser Access.authorUserId
         member _.SendPush device payload = pushDependencies.SendPush device payload
         member _.RecordPush device commentId = pushDependencies.RecordPush device commentId
         member _.DeleteDevice device = deviceDependencies.DeleteDevice device
@@ -84,7 +74,6 @@ type ProcessNewCommentMessage(
           notified.Sent.Length,
           notified.Removed.Length
         )
-        // A failure on one device is not a reason to send the other pushes again.
         for device, error in notified.Failed do
           logger.LogError("Unable to push to device '{deviceId}': {error}", device.Id, error.DebugMessage)
       | Ok (NotifyNewComment.Event.Skipped commentId) ->
@@ -93,7 +82,7 @@ type ProcessNewCommentMessage(
         logger.LogError("Invalid '{queue}' message: {errors}", NewCommentQueue.Name, errors)
       | Error (ActionError.Logic ()) -> ()
       | Error (ActionError.Dependency error) ->
-        // Throw so that Service Bus delivers the message again. The tag of the notification is the comment ID.
+        // Throw so that Service Bus delivers the message again.
         logger.LogError("Unable to notify the author of a new comment: {error}", error.DebugMessage)
         failwith $"The new-comment notice failed in a dependency: {error.Message}"
   }

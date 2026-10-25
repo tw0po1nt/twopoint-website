@@ -21,3 +21,6 @@ module UserExternalId =
       UserExternalId
       
   let createMaybe = Option.traverseResult create
+
+  module Unsafe =
+    let create = Types.unsafeCreate create

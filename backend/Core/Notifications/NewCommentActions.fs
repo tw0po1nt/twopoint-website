@@ -13,11 +13,8 @@ open System.Text
 open System.Text.Encodings.Web
 open System.Text.Json
 
-/// What the push worker of the admin gets for a new comment. The worker builds the notification.
 type NewCommentCase =
-  /// The comment waits for moderation.
   | AwaitsModeration
-  /// A trusted commenter wrote the comment, and it is approved.
   | Approved
 
 type PushOutcome =
@@ -40,10 +37,10 @@ module NewCommentPayload =
   /// A push service takes 4096 octets. The sender takes 3993 octets of plaintext at most.
   let maxOctets = 3993
 
-  // The limits keep the payload below `maxOctets`. JSON escapes a character outside the BMP as 12 octets, and 280 of them fit.
+  // JSON escapes a character outside the BMP as 12 octets, so these three limits keep the payload below `maxOctets`.
   let maxTitleLength = 100
   let maxCommenterLength = 60
-  /// The notification shows the first 120 characters of the text.
+  /// The worker shows the first 120 characters of the text.
   let maxTextLength = 120
 
   let private truncate (length : int) (text : string) =
@@ -54,7 +51,6 @@ module NewCommentPayload =
     | AwaitsModeration -> "awaits-moderation"
     | Approved -> "approved"
 
-  /// None when nobody needs a notification: the author rejected the comment.
   let ofComment (newCount : int) (posted : PostedComment) : NewCommentPayload option =
     let comment = posted.Comment
     let commenter =
@@ -92,37 +88,26 @@ module NewCommentPayload =
       options
     )
 
-// ====================================================================================================================
-// Notify the author of a new comment
-// ====================================================================================================================
-
 [<RequireQualifiedAccess>]
 module NotifyNewComment =
 
   type Dto = { CommentId : string }
-
-  // Output
 
   type Error = unit
 
   type Notified =
     { Sent : RegisteredDevice list
       Removed : RegisteredDevice list
-      /// A push that failed for another reason than `404` and `410`. The caller logs each one.
       Failed : (RegisteredDevice * DependencyError) list }
 
   type Event =
     | Notified of Notified
-    /// The comment is gone or rejected, so nobody needs a notification.
     | Skipped of CommentId
-
-  // Action
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
     abstract member GetPostedComment: CommentId -> DependencyResult<PostedComment option>
-    /// The count of comments in the moderation queue
     abstract member CountNewComments: unit -> DependencyResult<int>
     abstract member GetDevicesOfAuthor: unit -> DependencyResult<RegisteredDevice list>
     abstract member SendPush: RegisteredDevice -> payload: byte array -> DependencyResult<PushOutcome>
@@ -136,7 +121,6 @@ module NotifyNewComment =
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    // A failure on one device never stops the push to the next device.
     let pushTo (payload : byte array) (commentId : CommentId) (device : RegisteredDevice) : CancellableTask<PushStep> =
       cancellableTask {
         let! sent = dependencies.SendPush device payload

@@ -250,7 +250,6 @@ type PostDependencies(
         |> DependencyError.ofValidation source
   }
 
-  /// The count of comments in the moderation queue
   member this.CountNewComments () =
     this.GetCommentsOnAllPosts [ CommentApproval.New ] |> CancellableTaskResult.map List.length
 

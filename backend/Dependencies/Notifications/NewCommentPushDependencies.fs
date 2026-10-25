@@ -42,12 +42,11 @@ type NewCommentPushDependencies(
         | Sent -> Delivered
         | EndpointGone -> DeviceGone)
 
-  /// One row in the `pushes` table for each send
   member _.RecordPush (device : RegisteredDevice) (commentId : CommentId) : DependencyResult<unit> = cancellableTaskResult {
     let push =
-      { DbPush.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { DbPush.Id = Guid.NewGuid().ToString()
         OperationId = commentId.ToString()
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
+        CreatedDate = DateTime.UtcNow
         Recipient = device.Id.ToString() }
 
     let! (_ : DbPush) = commsDb.CreatePush push

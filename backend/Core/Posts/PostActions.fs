@@ -454,7 +454,6 @@ module PostComment =
         -> newComment: NewComment
         -> approval: CommentApproval
         -> DependencyResult<Comment>
-    /// Puts the comment on the `new_comment` queue. A handler then notifies the author.
     abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
@@ -463,7 +462,6 @@ module PostComment =
       cancellableTaskResult {
         let! (created : Comment) = dependencies.CreateComment post commenter comment approval
 
-        // The comment is stored. A failed notice never fails the post, because the commenter did nothing wrong.
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
         return created
       }
