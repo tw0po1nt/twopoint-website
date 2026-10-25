@@ -76,7 +76,7 @@ type PreviewPost (
         let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
         let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Nullable() }
 
-        let postStore = PostStore(postStoreClient, logger, Some texts)
+        let postStore = PostStore(postStoreClient, logger, texts)
         let previewPost = PreviewPost.withDependencies {
           new PreviewPost.Dependencies with
 

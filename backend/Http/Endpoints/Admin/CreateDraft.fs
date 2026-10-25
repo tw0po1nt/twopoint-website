@@ -23,7 +23,8 @@ type CreatedDraftDto = { Slug : string; ETag : string }
 
 type CreateDraft (
   logger : ILogger<CreateDraft>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Posts-CreateDraft")>]
@@ -45,7 +46,7 @@ type CreateDraft (
         let! json = req.ReadFromJsonAsync<CreateDraftJson> ct
         let title = json |> Option.ofObj |> Option.bind (fun json -> Option.ofObj json.Title) |> Option.defaultValue ""
 
-        let postStore = PostStore(postStoreClient, logger)
+        let postStore = PostStore(postStoreClient, logger, texts)
         let createDraft = CreateDraft.withDependencies {
           new CreateDraft.Dependencies with
 

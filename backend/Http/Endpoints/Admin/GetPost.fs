@@ -80,7 +80,8 @@ module GetPostDocumentQuery = TwoPoint.Core.Posts.Queries.GetPostDocument
 
 type GetPost (
   logger : ILogger<GetPost>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Posts-Get")>]
@@ -100,7 +101,7 @@ type GetPost (
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request with slug '{slug}'", op, slug)
         let response = req.CreateResponse HttpStatusCode.OK
-        let postStore = PostStore(postStoreClient, logger)
+        let postStore = PostStore(postStoreClient, logger, texts)
         let getPost = GetPostDocumentQuery.withDependencies {
           new GetPostDocumentQuery.Dependencies with
 

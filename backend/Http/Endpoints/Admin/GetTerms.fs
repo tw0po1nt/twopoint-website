@@ -23,7 +23,8 @@ module GetTermsQuery = TwoPoint.Core.Posts.Queries.GetTerms
 
 type GetTerms (
   logger : ILogger<GetTerms>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Terms-GetAll")>]
@@ -42,7 +43,7 @@ type GetTerms (
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request", op)
         let response = req.CreateResponse HttpStatusCode.OK
-        let postStore = PostStore(postStoreClient, logger)
+        let postStore = PostStore(postStoreClient, logger, texts)
 
         let getTerms = GetTermsQuery.withDependencies {
           new GetTermsQuery.Dependencies with

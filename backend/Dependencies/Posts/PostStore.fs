@@ -19,7 +19,7 @@ open System.Threading.Tasks
 /// <summary>
 /// The post store keeps each version of a post as the blob <c>&lt;slug&gt;.md</c> in one of four containers.
 /// </summary>
-type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCache option) =
+type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCache) =
 
   let extension = ".md"
 
@@ -27,12 +27,12 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
     task {
       let listed = blob.Properties.ETag |> Option.ofNullable |> Option.map string
 
-      match listed |> Option.bind (fun eTag -> texts |> Option.bind (fun cache -> cache.TryFind container blob.Name eTag)) with
+      match listed |> Option.bind (texts.TryFind container blob.Name) with
       | Some text -> return text
       | None ->
         let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
         let text = content.Value.Content.ToString()
-        texts |> Option.iter (fun cache -> cache.Add container blob.Name (string content.Value.Details.ETag) text)
+        texts.Add container blob.Name (string content.Value.Details.ETag) text
         return text
     }
 
@@ -42,9 +42,10 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
       let! blobs = client.GetBlobsAsync(cancellationToken = ct) |> TaskSeq.toListAsync
       let wanted = blobs |> List.filter isBlob
 
-      texts
-      |> Option.iter (fun cache ->
-        cache.Retain container (wanted |> List.choose (fun blob -> blob.Properties.ETag |> Option.ofNullable |> Option.map (fun eTag -> blob.Name, string eTag)) |> Set.ofList))
+      wanted
+      |> List.choose (fun blob -> blob.Properties.ETag |> Option.ofNullable |> Option.map (fun eTag -> blob.Name, string eTag))
+      |> Set.ofList
+      |> texts.Retain container
 
       let! downloaded = wanted |> List.map (downloadText container client ct) |> Task.WhenAll
       return List.zip wanted (List.ofArray downloaded)
@@ -105,8 +106,6 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
       with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
         return []
     }
-
-  new (service : BlobServiceClient, logger : ILogger) = PostStore(service, logger, None)
 
   /// A series record is the blob `<slug>.yml` in the `series` container.
   member _.GetSeriesRecords () : DependencyResult<StoredSeries list> =

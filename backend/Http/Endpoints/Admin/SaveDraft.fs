@@ -90,7 +90,7 @@ type SaveDraft (
           let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
           let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Nullable() }
 
-          let postStore = PostStore(postStoreClient, logger, Some texts)
+          let postStore = PostStore(postStoreClient, logger, texts)
           let saveDraft = SaveDraft.withDependencies {
             new SaveDraft.Dependencies with
 
