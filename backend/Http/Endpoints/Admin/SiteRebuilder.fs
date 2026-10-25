@@ -80,6 +80,7 @@ type SiteRebuilder(
       logger.LogError("Unable to dispatch the site. {message}", SiteConfigProblem.text problem)
       CancellableTask.singleton (Error (dependencyError problem))
     | Ok (deploy, dispatch) -> cancellableTask {
+      let dispatchedDate = DateTime.UtcNow
       let! production = dispatch deploy.ProductionRepo
       let! staging = dispatch deploy.StagingRepo
 
@@ -87,6 +88,10 @@ type SiteRebuilder(
         match result with
         | Error error -> logger.LogError("The dispatch of site.yml to {repo} failed: {error}", repo, error.DebugMessage)
         | Ok _ -> ()
+
+      match! RebuildDb(tableServiceClient, logger).SaveRebuild(RebuildSite.Logic.rebuild dispatchedDate production) with
+      | Error error -> logger.LogError("The rebuild row was not saved: {error}", error.DebugMessage)
+      | Ok () -> ()
 
       return Ok({ Production = production; Staging = staging } : SiteDispatch)
     }
