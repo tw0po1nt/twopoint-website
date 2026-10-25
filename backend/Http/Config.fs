@@ -47,7 +47,8 @@ type Config =
     WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
     Welcome : WelcomeConfig option
-    Deploy : DeployConfig option }
+    Deploy : DeployConfig option
+    Stage : TwoPoint.Site.Render.Stage }
 
 module Config =
 
@@ -129,6 +130,10 @@ module Config =
           WebPush = webPush
           ValidRedirectUris = validRedirectUris
           Welcome = welcome
-          Deploy = deploy }
+          Deploy = deploy
+          Stage =
+            if TwoPoint.Site.Render.Azurite.isUrl azure.PostStoreUri
+            then TwoPoint.Site.Render.Stage.Local
+            else TwoPoint.Site.Render.Stage.Staging }
     }
     |> Binder.eval config

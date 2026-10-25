@@ -2,10 +2,14 @@
 module TwoPoint.Site.Render.Check
 
 open Oxpecker.ViewEngine
+open System
 
-/// `Article` is the meta block, the title, the excerpt, the body, and the outline. A post with an error in its parse has no article.
+/// `Content` is the meta block, the title, the excerpt, and the body. `Outline` goes next to it.
+type RenderedArticle = { Content: string; Outline: string }
+
+/// A post with an error in its parse has no article.
 type CheckedPost =
-  { Article: string option
+  { Article: RenderedArticle option
     Problems: Problem list }
 
 let private noImageSize =
@@ -57,16 +61,13 @@ let private brokenElsewhere (published: Post list) (post: Post) (before: Map<str
               (Place.Post 1)
               $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
 
-/// Only the parse of the post uses `images`, so a caller can parse each post of `published` with `Check.published`.
-let post
+let private check
+  (parse: Result<Post * FileProblems, FileProblems>)
   (stage: Stage)
-  (images: IImageSize)
-  (series: Series list)
   (published: Post list)
   (slug: string)
-  (text: string)
   : CheckedPost =
-  match Post.parse images stage series (file slug) text with
+  match parse with
   | Error problems -> { Article = None; Problems = problems.Problems }
   | Ok(post, warnings) ->
     let posts = post :: (published |> List.filter (fun other -> other.Slug <> slug))
@@ -80,14 +81,35 @@ let post
     let withNewestTitles = Blog.withNewestTermTitles posts |> List.find (fun other -> other.Slug = slug)
 
     let article =
-      Fragment() {
-        Article.content withNewestTitles (Blog.seriesPosition posts withNewestTitles)
-        Article.outline withNewestTitles
-      }
+      { Content = Render.toString (Article.content withNewestTitles (Blog.seriesPosition posts withNewestTitles))
+        Outline = Render.toString (Article.outline withNewestTitles) }
 
-    { Article = Some(Render.toString article)
+    { Article = Some article
       Problems =
         warnings.Problems
         @ Rules.termTitles published post
         @ own
         @ brokenElsewhere published post (linkProblems stage published) after }
+
+/// Only the parse of the post uses `images`, so a caller can parse each post of `published` with `Check.published`.
+let post
+  (stage: Stage)
+  (images: IImageSize)
+  (series: Series list)
+  (published: Post list)
+  (slug: string)
+  (text: string)
+  : CheckedPost =
+  check (Post.parse images stage series (file slug) text) stage published slug
+
+/// `previewTime` is the publish date of a draft that has none.
+let draft
+  (stage: Stage)
+  (images: IImageSize)
+  (series: Series list)
+  (previewTime: DateTimeOffset)
+  (published: Post list)
+  (slug: string)
+  (text: string)
+  : CheckedPost =
+  check (Post.parseDraft images stage series previewTime (file slug) text) stage published slug

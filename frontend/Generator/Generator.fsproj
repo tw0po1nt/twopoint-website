@@ -31,6 +31,7 @@
     <Compile Include="PostFolder.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Disk.fs" />
+    <Compile Include="PreviewStyles.fs" />
     <Compile Include="AzureRequest.fs" />
     <Compile Include="Upload.fs" />
     <Compile Include="Pull.fs" />

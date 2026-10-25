@@ -37,6 +37,10 @@ let private upload (root: string) (container: Uri) =
     |> String.concat Environment.NewLine)
   |> Result.mapError List.singleton
 
+let private previewStyles (root: string) (out: string) =
+  PreviewStyles.write root (Path.GetFullPath(out, Directory.GetCurrentDirectory()))
+  |> Result.map (fun count -> $"Wrote {count} files for the preview to {out}")
+
 [<EntryPoint>]
 let main argv =
   let result =
@@ -48,6 +52,7 @@ let main argv =
       | Cli.Build stage -> return! build root stage
       | Cli.Pull account -> return! pull root account
       | Cli.Upload container -> return! upload root container
+      | Cli.PreviewStyles out -> return! previewStyles root out
     }
 
   match result with

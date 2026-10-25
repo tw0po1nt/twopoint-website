@@ -34,7 +34,7 @@ test('the host config sends noindex, keeps the bridge page out of the cache, and
   assert.equal(JSON.stringify(config).toLowerCase().includes('cross-origin-opener-policy'), false);
   assert.deepEqual(config.navigationFallback, {
     rewrite: '/index.html',
-    exclude: ['/redirect/*', '/bundle/*', '/icons/*', '/sw.js', '/manifest.webmanifest'],
+    exclude: ['/redirect/*', '/bundle/*', '/icons/*', '/preview-styles/*', '/sw.js','/manifest.webmanifest'],
   });
 });
 

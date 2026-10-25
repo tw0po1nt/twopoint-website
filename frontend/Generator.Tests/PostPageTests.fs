@@ -164,7 +164,7 @@ let tests =
         let checkedPost = Check.post Stage.Production anyImages series realPosts.Value slug (PostFolder.text file)
 
         Expect.equal
-          checkedPost.Article
+          (checkedPost.Article |> Option.map (fun article -> article.Content + article.Outline))
           (Some(articlePart (siteText map $"posts/{slug}/index.html")))
           $"The article of {slug} is the same as in the build"
     }

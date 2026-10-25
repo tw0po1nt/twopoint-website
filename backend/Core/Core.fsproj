@@ -25,6 +25,7 @@
     <Compile Include="Posts\Newsletter.fs" />
     <Compile Include="Posts\PostActions.fs" />
     <Compile Include="Posts\PostQueries.fs" />
+    <Compile Include="Posts\PostPreview.fs" />
     <Compile Include="Notifications\NewCommentActions.fs" />
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
     <Compile Include="Subscriptions\SubscriptionActions.fs" />

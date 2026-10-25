@@ -135,6 +135,24 @@ type Rebuilt =
   | QueuedWithoutRunNumber
   | Logged
 
+[<RequireQualifiedAccess>]
+type Severity =
+  | Error
+  | Warning
+
+/// `Place` is `None` for a problem about the whole post.
+type PreviewProblem =
+  { Severity: Severity
+    Place: string option
+    Message: string }
+
+type PreviewArticle = { Content: string; Outline: string }
+
+/// `Article` is `None` when the text has an error in its parse.
+type PostPreview =
+  { Article: PreviewArticle option
+    Problems: PreviewProblem list }
+
 type Failure =
   /// The API answered 401 or 403.
   | Refused
@@ -204,12 +222,26 @@ let private deliveryType: Decoder<DeliveryType> =
     | "newpost" -> Decode.succeed DeliveryType.NewPost
     | _ -> Decode.fail $"The delivery type '{name}' is not known.")
 
+let private severityName (severity: Severity) =
+  match severity with
+  | Severity.Error -> "error"
+  | Severity.Warning -> "warning"
+
+let private severity: Decoder<Severity> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "error" -> Decode.succeed Severity.Error
+    | "warning" -> Decode.succeed Severity.Warning
+    | _ -> Decode.fail $"The problem severity '{name}' is not known.")
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
+  |> Extra.withCustom (severityName >> Encode.string) severity
 
 let inline private request<'T>
   (method: HttpMethod)
@@ -443,3 +475,23 @@ let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing li
 let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
   sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some json) [ IfMatch eTag ]
+
+let previewPost
+  (api: string)
+  (token: string)
+  (slug: string)
+  (title: string)
+  (excerpt: string)
+  (body: string)
+  (details: PostDetails)
+  : JS.Promise<Result<PostPreview, Failure>> =
+  let json =
+    Encode.object [
+      "title", Encode.string title
+      "excerpt", Encode.string excerpt
+      "body", Encode.string body
+      "details", encodeDetails details
+    ]
+    |> Encode.toString 0
+
+  sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some json) []

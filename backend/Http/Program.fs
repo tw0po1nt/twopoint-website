@@ -81,6 +81,14 @@ let main args =
   builder.Services.AddScoped<EmailClient>(fun _ -> emailClient) |> ignore
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore
   builder.Services.AddSingleton<BlobServiceClient>(fun _ -> postStoreClient) |> ignore
+  let previewImages =
+    new System.Net.Http.HttpClient(Timeout = TimeSpan.FromSeconds 10.0)
+    |> TwoPoint.Site.Render.ImageFetch.http
+    |> TwoPoint.Site.Render.ImageFetch.memoize
+    |> TwoPoint.Site.Render.Images.ofFetch
+    :> TwoPoint.Site.Render.IImageSize
+
+  builder.Services.AddSingleton<TwoPoint.Site.Render.IImageSize>(fun _ -> previewImages) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore
   builder.Services.AddSingleton<WebPushSetup>(fun services ->
     match config.WebPush with

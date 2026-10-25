@@ -23,6 +23,7 @@
     <Compile Include="NewCommentTests.fs" />
     <Compile Include="PostDraftTests.fs" />
     <Compile Include="PostTermsTests.fs" />
+    <Compile Include="PostPreviewTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

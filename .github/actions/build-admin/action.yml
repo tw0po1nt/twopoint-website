@@ -1,7 +1,7 @@
 name: Build the admin
 description: >-
-  Builds the admin in the release mode and tests the bundle in happy-dom. The admin goes to
-  frontend/Admin/dist/.
+  Writes the site CSS and its fonts for the preview, builds the admin in the release mode, and
+  tests the bundle in happy-dom. The admin goes to frontend/Admin/dist/.
 
 runs:
   using: composite
@@ -19,6 +19,10 @@ runs:
     - name: Restore the .NET tools
       shell: bash
       run: dotnet tool restore
+
+    - name: Write the site CSS and its fonts for the preview
+      shell: bash
+      run: dotnet run --project frontend/Generator -- preview-styles --out frontend/Admin/dist/preview-styles
 
     - name: Install the admin packages
       shell: bash
