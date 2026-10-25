@@ -55,7 +55,7 @@ type SlugRequest =
   { Slug: string
     ETag: string
     NewSlug: string }
-/// The fields on the screen, also when the API does not have them yet.
+
 type PreviewRequest = { Slug: string; Fields: Fields }
 
 type Msg =
@@ -71,9 +71,7 @@ type Msg =
   | DetailsMsg of Details.Msg
   | SlugChangeRequested
   | SlugChangeAnswered of slug: string * Result<Api.ChangedSlug, Api.Failure>
-  /// The Preview button opens the preview, and it closes the preview when the preview is open.
   | PreviewToggled
-  /// The Esc key.
   | PreviewClosed
   | PreviewAnswered of slug: string * Result<Api.PostPreview, Api.Failure>
 

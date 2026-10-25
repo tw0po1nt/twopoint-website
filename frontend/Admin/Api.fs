@@ -135,6 +135,24 @@ type Rebuilt =
   | QueuedWithoutRunNumber
   | Logged
 
+[<RequireQualifiedAccess>]
+type Severity =
+  | Error
+  | Warning
+
+/// `Place` is `None` for a problem about the whole post.
+type PreviewProblem =
+  { Severity: Severity
+    Place: string option
+    Message: string }
+
+type PreviewArticle = { Content: string; Outline: string }
+
+/// `Article` is `None` when the text has an error in its parse.
+type PostPreview =
+  { Article: PreviewArticle option
+    Problems: PreviewProblem list }
+
 type Failure =
   /// The API answered 401 or 403.
   | Refused
@@ -204,12 +222,26 @@ let private deliveryType: Decoder<DeliveryType> =
     | "newpost" -> Decode.succeed DeliveryType.NewPost
     | _ -> Decode.fail $"The delivery type '{name}' is not known.")
 
+let private severityName (severity: Severity) =
+  match severity with
+  | Severity.Error -> "error"
+  | Severity.Warning -> "warning"
+
+let private severity: Decoder<Severity> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "error" -> Decode.succeed Severity.Error
+    | "warning" -> Decode.succeed Severity.Warning
+    | _ -> Decode.fail $"The problem severity '{name}' is not known.")
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
+  |> Extra.withCustom (severityName >> Encode.string) severity
 
 let inline private request<'T>
   (method: HttpMethod)
@@ -444,18 +476,6 @@ let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newS
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
   sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some json) [ IfMatch eTag ]
 
-/// `Severity` is `error` or `warning`. `Place` is `Field <name>`, `Body line <n>`, or `Post`.
-type PreviewProblem =
-  { Severity: string
-    Place: string
-    Message: string }
-
-/// `Article` is the HTML of the article. It is `None` when the text has an error in its parse.
-type PostPreview =
-  { Article: string option
-    Problems: PreviewProblem list }
-
-/// The API composes the three fields with the other front matter fields of the stored post.
 let previewPost
   (api: string)
   (token: string)

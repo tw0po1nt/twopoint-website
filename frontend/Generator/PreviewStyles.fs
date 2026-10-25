@@ -9,7 +9,6 @@ let styleFile = "site.css"
 
 let private siteUrl = Regex("""url\("/(_/[^"]+)"\)""")
 
-/// Each file by its name in the output folder. The CSS refers to its files with `./` URLs, so it works at any URL.
 let files (assets: Assets) : Map<string, byte array> =
   let css = Encoding.UTF8.GetString assets.Files[assets.Stylesheet.TrimStart '/']
   let referred = [ for found in siteUrl.Matches css -> found.Groups[1].Value ] |> List.distinct
@@ -21,7 +20,6 @@ let files (assets: Assets) : Map<string, byte array> =
       for path in referred do
         Path.GetFileName path, assets.Files[path] ]
 
-/// Gives the number of files that it wrote. It keeps the other files of the folder.
 let write (root: string) (folder: string) : Result<int, string list> =
   Site.loadAssets root
   |> Result.map (fun assets ->

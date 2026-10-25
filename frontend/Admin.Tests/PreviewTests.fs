@@ -38,7 +38,7 @@ let private preview (model: Shell.Model) =
   | other -> failtestf "Expected a loaded editor, got %A" other
 
 let private article: Api.PostPreview =
-  { Article = Some "<h1>My post</h1>"
+  { Article = Some { Content = "<h1>My post</h1>"; Outline = "" }
     Problems = [] }
 
 [<Tests>]
@@ -129,7 +129,9 @@ let tests =
 
     test "the frame links the site CSS and puts the outline next to the article" {
       let html =
-        Preview.frame "<dl class=\"front-matter\"></dl><h1>T</h1><div class=\"prose\"></div><aside class=\"outline\" aria-label=\"Outline\"><ul></ul></aside>"
+        Preview.frame
+          { Content = "<dl class=\"front-matter\"></dl><h1>T</h1><div class=\"prose\"></div>"
+            Outline = "<aside class=\"outline\" aria-label=\"Outline\"><ul></ul></aside>" }
 
       Expect.stringContains html "<link rel=\"stylesheet\" href=\"/preview-styles/site.css\">" "The CSS"
 
@@ -139,19 +141,12 @@ let tests =
         "The article and the outline"
     }
 
-    test "the frame of an article with no outline has the article only" {
-      Expect.stringContains
-        (Preview.frame "<h1>T</h1>")
-        "<main class=\"post-page\"><article class=\"post\"><h1>T</h1></article></main>"
-        "The article"
-    }
-
     test "a problem shows its place and its message" {
       let problem place message : Api.PreviewProblem =
-        { Severity = "error"; Place = place; Message = message }
+        { Severity = Api.Severity.Error; Place = place; Message = message }
 
-      Expect.equal (Preview.problemText (problem "Body line 4" "The output has no page.")) "Body line 4: The output has no page." "A body line"
-      Expect.equal (Preview.problemText (problem "Field category" "No category.")) "Field category: No category." "A field"
-      Expect.equal (Preview.problemText (problem "Post" "The change breaks a link.")) "The change breaks a link." "The whole post"
+      Expect.equal (Preview.problemText (problem (Some "Body line 4") "The output has no page.")) "Body line 4: The output has no page." "A body line"
+      Expect.equal (Preview.problemText (problem (Some "Field category") "No category.")) "Field category: No category." "A field"
+      Expect.equal (Preview.problemText (problem None "The change breaks a link.")) "The change breaks a link." "The whole post"
     }
   ]

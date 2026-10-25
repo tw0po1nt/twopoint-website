@@ -17,7 +17,10 @@ const post = {
   publishedText: null,
 };
 
-const article = '<dl class="front-matter"></dl><h1>My post</h1><div class="prose"><p>Some text.</p></div><aside class="outline" aria-label="Outline"></aside>';
+const article = {
+  content: '<dl class="front-matter"></dl><h1>My post</h1><div class="prose"><p>Some text.</p></div>',
+  outline: '<aside class="outline" aria-label="Outline"></aside>',
+};
 const previews = [];
 let previewAnswer = { article, problems: [] };
 
@@ -79,6 +82,7 @@ test('the problems of the text show with their place, and a text with an error s
     problems: [
       { severity: 'error', place: 'Body line 4', message: 'The output has no page at /posts/missing/.' },
       { severity: 'warning', place: 'Field tags', message: 'A tag has no posts.' },
+      { severity: 'error', place: null, message: 'The change breaks a link.' },
     ],
   };
 
@@ -88,7 +92,7 @@ test('the problems of the text show with their place, and a text with an error s
   assert.equal(previews.length, 2);
   assert.equal(frame(), null, 'No article');
   const problems = [...document.querySelectorAll('.preview-problem')].map((item) => item.textContent.trim());
-  assert.deepEqual(problems, ['Error Body line 4: The output has no page at /posts/missing/.', 'Warning Field tags: A tag has no posts.']);
+  assert.deepEqual(problems, ['Error Body line 4: The output has no page at /posts/missing/.', 'Warning Field tags: A tag has no posts.', 'Error The change breaks a link.']);
 
   button().click();
   await settle();

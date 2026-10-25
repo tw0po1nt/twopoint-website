@@ -306,7 +306,6 @@
   }
 }
 
-/* The preview shows in the place of the text. The text stays in the page, so the cursor and the undo history stay. */
 .editor-column.is-hidden {
   display: none;
 }

@@ -178,7 +178,7 @@ let private preview (model: unit -> Shell.Model) =
       ul (class' = "preview-problems") {
         For(each = previewProblems (model ())) {
           yield fun problem _ ->
-            li (class' = (if problem.Severity = "error" then "preview-problem bad" else "preview-problem warn")) {
+            li (class' = $"preview-problem {Preview.severityClass problem}") {
               span (class' = "preview-severity") { $"{Preview.severityText problem} " }
               Preview.problemText problem
             }
