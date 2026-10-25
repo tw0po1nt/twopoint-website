@@ -28,6 +28,7 @@ type private FakeStore(published : (string * string) list, working : (string * s
   interface PreviewPost.Dependencies with
     member _.Stage = Stage.Staging
     member _.Images = images
+    member _.GetUtcNow () = System.DateTime(2026, 3, 5, 9, 30, 0, System.DateTimeKind.Utc)
 
     member _.GetWorkingBlob slug =
       working
@@ -84,12 +85,24 @@ let tests =
         "The problem"
     }
 
-    test "the preview of a draft with missing fields gives the problems and no article" {
+    test "the preview of a draft with a title, an excerpt, and an author, and with no publish date and no category, gives an article" {
+      let draft = "---\ntitle: Old\nexcerpt: An excerpt\nauthor: Matthew Watt\n---\n"
+      let store = FakeStore([ "live", published ], [ "draft", draft ], [])
+      let result = preview store "draft" "New title" "Body.\n" |> articleOf
+
+      Expect.isEmpty result.Problems "A draft can have no publish date and no category"
+      let html = result.Article |> Option.defaultValue ""
+      Expect.stringContains html "<h1>New title</h1>" "The title"
+      Expect.stringContains html "<time datetime=\"2026-03-05T09:30:00Z\">" "The time of the preview is the publish date"
+    }
+
+    test "the preview of a draft with no author gives the error and no article" {
       let store = FakeStore([], [ "draft", "---\ntitle: Old\n---\n" ], [])
       let result = preview store "draft" "T" "Body.\n" |> articleOf
 
       Expect.isNone result.Article "No article"
-      Expect.isTrue (result.Problems |> List.exists (fun problem -> problem.Place = Place.Field("publishDate", 1))) "No publish date"
+      Expect.isTrue (result.Problems |> List.exists (fun problem -> problem.Place = Place.Field("author", 1))) "No author"
+      Expect.isFalse (result.Problems |> List.exists (fun problem -> problem.Place = Place.Field("publishDate", 1))) "No problem about the publish date"
     }
 
     test "the preview finds the series record of the post" {

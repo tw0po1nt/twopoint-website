@@ -25,6 +25,7 @@ module PreviewPost =
   type Dependencies =
     abstract member Stage: TwoPoint.Site.Render.Stage
     abstract member Images: TwoPoint.Site.Render.IImageSize
+    abstract member GetUtcNow: unit -> System.DateTime
     abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member GetPublishedPosts: unit -> DependencyResult<StoredPost list>
     abstract member GetSeriesRecords: unit -> DependencyResult<StoredSeries list>
@@ -65,5 +66,19 @@ module PreviewPost =
       let series = StoredSeries.parse records
       let posts = Logic.publishedPosts dependencies.Stage series published
 
-      return TwoPoint.Site.Render.Check.post dependencies.Stage dependencies.Images series posts dto.Slug text
+      let isPublished = published |> List.exists (fun post -> post.Slug = slug)
+
+      // A post with no published blob is a draft. The check shows the time of the preview as its publish date.
+      return
+        if isPublished then
+          TwoPoint.Site.Render.Check.post dependencies.Stage dependencies.Images series posts dto.Slug text
+        else
+          TwoPoint.Site.Render.Check.draft
+            dependencies.Stage
+            dependencies.Images
+            series
+            (System.DateTimeOffset(dependencies.GetUtcNow()))
+            posts
+            dto.Slug
+            text
     }

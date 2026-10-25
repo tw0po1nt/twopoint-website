@@ -2,6 +2,7 @@
 module TwoPoint.Site.Render.Check
 
 open Oxpecker.ViewEngine
+open System
 
 /// `Article` is the meta block, the title, the excerpt, the body, and the outline. A post with an error in its parse has no article.
 type CheckedPost =
@@ -57,16 +58,13 @@ let private brokenElsewhere (published: Post list) (post: Post) (before: Map<str
               (Place.Post 1)
               $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
 
-/// Only the parse of the post uses `images`, so a caller can parse each post of `published` with `Check.published`.
-let post
+let private check
+  (parse: Result<Post * FileProblems, FileProblems>)
   (stage: Stage)
-  (images: IImageSize)
-  (series: Series list)
   (published: Post list)
   (slug: string)
-  (text: string)
   : CheckedPost =
-  match Post.parse images stage series (file slug) text with
+  match parse with
   | Error problems -> { Article = None; Problems = problems.Problems }
   | Ok(post, warnings) ->
     let posts = post :: (published |> List.filter (fun other -> other.Slug <> slug))
@@ -91,3 +89,27 @@ let post
         @ Rules.termTitles published post
         @ own
         @ brokenElsewhere published post (linkProblems stage published) after }
+
+/// Only the parse of the post uses `images`, so a caller can parse each post of `published` with `Check.published`.
+let post
+  (stage: Stage)
+  (images: IImageSize)
+  (series: Series list)
+  (published: Post list)
+  (slug: string)
+  (text: string)
+  : CheckedPost =
+  check (Post.parse images stage series (file slug) text) stage published slug
+
+/// The check of a draft. The article shows `previewTime` as the publish date of a draft that has none.
+/// A draft with no category is not a problem, and the article shows no category.
+let draft
+  (stage: Stage)
+  (images: IImageSize)
+  (series: Series list)
+  (previewTime: DateTimeOffset)
+  (published: Post list)
+  (slug: string)
+  (text: string)
+  : CheckedPost =
+  check (Post.parseDraft images stage series previewTime (file slug) text) stage published slug

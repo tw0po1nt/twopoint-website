@@ -91,6 +91,7 @@ type PreviewPost (
 
           member _.Stage = PreviewPostMapping.stage config.Azure.PostStoreUri
           member _.Images = images
+          member _.GetUtcNow () = System.DateTime.UtcNow
           member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug
           member _.GetPublishedPosts () = postStore.GetPublishedPosts()
           member _.GetSeriesRecords () = postStore.GetSeriesRecords()

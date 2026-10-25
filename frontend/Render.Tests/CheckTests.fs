@@ -15,6 +15,14 @@ let private check (published: Post list) slug body =
 
 let private target = publishedPost "a-post" "## First step\n\nText."
 
+let private previewTime = System.DateTimeOffset(2026, 3, 5, 9, 30, 0, System.TimeSpan.Zero)
+
+/// Lines 2 to 4 of a draft that has no publish date and no category.
+let private draftFrontMatter = "author: Matthew Watt\ntitle: A draft\nexcerpt: An excerpt"
+
+let private draft (published: Post list) slug body =
+  Check.draft Stage.Production anyImages [] previewTime published slug (text draftFrontMatter body)
+
 [<Tests>]
 let tests =
   testList "Check" [
@@ -101,5 +109,61 @@ let tests =
       Expect.stringContains article """<h1>A post</h1>""" "The title"
       Expect.stringContains article """<h2 id="first-step">First step</h2>""" "The body"
       Expect.stringEnds article """<a href="#first-step">First step</a></li></ul></aside>""" "The outline is last"
+    }
+
+    test "a draft with a title, an excerpt, and an author, and with no publish date and no category, has an article and no problem" {
+      let checkedPost = draft [ target ] "b-post" "## A step\n\nText."
+      Expect.isEmpty checkedPost.Problems "A draft can have no publish date and no category"
+      Expect.isSome checkedPost.Article "The article"
+    }
+
+    test "the article of a draft shows the time of the preview as the publish date and shows no category" {
+      let article = (draft [ target ] "b-post" "Text.").Article |> Option.defaultValue ""
+      Expect.stringContains article """<time datetime="2026-03-05T09:30:00Z">2026-03-05</time>""" "The time of the preview"
+      Expect.isFalse (article.Contains "One-offs") "No category"
+      Expect.stringContains article "Matthew Watt" "The author"
+    }
+
+    test "a draft with a publish date keeps it, and a draft with a category is not changed" {
+      let withBoth = $"{draftFrontMatter}\npublishDate: 2025-01-02T03:04:05Z\ncategory: One-offs"
+      let article = (Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text withBoth "Text.")).Article |> Option.defaultValue ""
+      Expect.stringContains article """<time datetime="2025-01-02T03:04:05Z">""" "The publish date of the draft"
+    }
+
+    test "a draft with no title, no excerpt, or no author is an error and has no article" {
+      for field in [ "title"; "excerpt"; "author" ] do
+        let lines = draftFrontMatter.Split '\n' |> Array.filter (fun line -> not (line.StartsWith $"{field}:"))
+        let checkedPost = Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text (String.concat "\n" lines) "Text.")
+        Expect.isNone checkedPost.Article $"No article without {field}"
+
+        Expect.isTrue
+          (checkedPost.Problems |> List.exists (fun problem -> Problem.isError problem && problem.Place = Place.Field(field, 1)))
+          $"The error names {field}"
+    }
+
+    test "a draft in a series with a category other than Series is an error" {
+      let record = seriesRecord "tour"
+      let checkedPost = Check.draft Stage.Production anyImages [ record ] previewTime [] "b-post" (text $"{draftFrontMatter}\nseries: tour" "Text.")
+
+      Expect.equal
+        (checkedPost.Problems |> List.map _.Message)
+        [ "The post is in a series, so give it the category 'Series'." ]
+        "A series needs the category Series, also in a draft"
+    }
+
+    test "a draft with tags and no publish date gets no year warning" {
+      let checkedPost = Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text $"{draftFrontMatter}\ntags:\n  - Fable" "Text.")
+      Expect.isEmpty checkedPost.Problems "The year rule is for a post with a publish date"
+    }
+
+    test "a broken link in a draft is an error at its body line" {
+      Expect.equal
+        (draft [ target ] "b-post" "Text.\n\nRead [c](/posts/c-post/).").Problems
+        [ Problem.error (Place.Body 4) "The output has no page at /posts/c-post/." ]
+        "The error is at the line of the link"
+    }
+
+    test "a draft can link to a published post" {
+      Expect.isEmpty (draft [ target ] "b-post" "See [the step](/posts/a-post/).").Problems "The link resolves"
     }
   ]

@@ -135,7 +135,12 @@ let private fieldNames =
     "image"
     "showOnHomepage" ]
 
-let private ofRoot (state: PostState) (records: Series list) context (root: YamlNode) =
+/// The category of a draft that has none. No post has a term with an empty slug.
+let noCategory: Term = { Slug = ""; Title = "" }
+
+/// `previewTime` stands for the publish date of a draft that has none, and `noCategory` for its missing category.
+/// With `previewTime`, a draft always gives a front matter.
+let private ofRoot (state: PostState) (previewTime: DateTimeOffset option) (records: Series list) context (root: YamlNode) =
   result {
     let! fields = mapping context "" root fieldNames
     let required name parse = required context 0L fields "" name parse
@@ -166,6 +171,9 @@ let private ofRoot (state: PostState) (records: Series list) context (root: Yaml
         let categoryLine = category |> Option.map _.Line |> Option.defaultValue (keyLine "category")
 
         let frontMatterOf (category: Term option) =
+          let publishDate = publishDate |> Option.orElse previewTime
+          let category = category |> Option.orElse (previewTime |> Option.map (fun _ -> noCategory))
+
           match publishDate, category with
           | Some publishDate, Some category ->
             Some
@@ -221,7 +229,20 @@ let parse
   (startLine: int)
   (yaml: string)
   : Result<FrontMatter option * Problem list, Problem list> =
-  load "front matter" startLine yaml (ofRoot state records)
+  load "front matter" startLine yaml (ofRoot state None records)
+
+/// A draft with no `publishDate` gets `previewTime`, and a draft with no `category` gets `noCategory`.
+let parseDraft
+  (previewTime: DateTimeOffset)
+  (records: Series list)
+  (startLine: int)
+  (yaml: string)
+  : Result<FrontMatter * Problem list, Problem list> =
+  load "front matter" startLine yaml (ofRoot PostState.Draft (Some previewTime) records)
+  |> Result.bind (fun (frontMatter, problems) ->
+    match frontMatter with
+    | Some frontMatter -> Ok(frontMatter, problems)
+    | None -> Error [ Problem.error (Place.Post startLine) "The front matter has no publish date or no category." ])
 
 /// A published post has a `publishDate` and a `category`.
 let parsePublished (records: Series list) (startLine: int) (yaml: string) : Result<FrontMatter * Problem list, Problem list> =
