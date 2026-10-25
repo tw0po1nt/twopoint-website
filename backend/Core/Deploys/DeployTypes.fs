@@ -1,5 +1,7 @@
 namespace TwoPoint.Core.Deploys
 
+open TwoPoint.Core.Util
+
 open System
 
 /// A GitHub repo that builds the site with `site.yml`.
@@ -66,3 +68,7 @@ module ProductionDispatch =
 type Rebuild =
   { DispatchedDate : DateTime
     Production : ProductionDispatch }
+
+type SiteDispatch =
+  { Production : Result<Dispatch, DependencyError>
+    Staging : Result<Dispatch, DependencyError> }

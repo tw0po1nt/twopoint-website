@@ -58,6 +58,45 @@ let private isTyping (model: Shell.Model) =
   | Some document -> document.Typing
   | None -> false
 
+let private primaryIsAvailable (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.primaryAvailability document = Editor.Available
+  | None -> false
+
+let private menuItems (model: Shell.Model) =
+  match document model with
+  | Some document -> Array.ofList (Editor.menu document)
+  | None -> [||]
+
+let private publishModel (model: Shell.Model) =
+  match document model with
+  | Some document -> document.Publish
+  | None -> Publish.init
+
+let private publishChoice (model: Shell.Model) =
+  Publish.choice (publishModel model) |> Option.defaultValue Publish.Now
+
+let private isOnDate (model: Shell.Model) =
+  match publishChoice model with
+  | Publish.OnDate _ -> true
+  | Publish.Now -> false
+
+let private typedDate (model: Shell.Model) =
+  match publishChoice model with
+  | Publish.OnDate typed -> typed
+  | Publish.Now -> ""
+
+let private publishIsBusy (model: Shell.Model) =
+  match (publishModel model).State with
+  | Publish.Saving
+  | Publish.Checking _
+  | Publish.Sending _ -> true
+  | Publish.Closed
+  | Publish.Choosing _
+  | Publish.Checked _
+  | Publish.CheckFailed _
+  | Publish.Failed _ -> false
+
 let private primaryText (model: Shell.Model) =
   match document model with
   | Some document -> Editor.primaryAction document
@@ -168,6 +207,18 @@ let private typed (send: string -> unit) (event: InputEvent) =
   send element.value
 
 [<SolidComponent>]
+let private menuEntry (dispatch: Shell.Msg -> unit) (item: Editor.MenuItem) =
+  match item.Availability with
+  | Editor.Available ->
+    Parts.menuItem
+      "editor-menu"
+      Parts.Plain
+      (fun () -> Editor.menuMsg item.Action |> Option.iter (Shell.Editor >> dispatch))
+      (Fragment() { item.Label })
+    :> HtmlElement
+  | Editor.Unavailable reason -> Parts.menuUnavailable reason (Fragment() { item.Label }) :> HtmlElement
+
+[<SolidComponent>]
 let private topBar
   (dispatch: Shell.Msg -> unit)
   (bodyView: CodeMirror.EditorView option ref)
@@ -197,14 +248,16 @@ let private topBar
         "Details"
         problemDot model
       }
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/259): Publish
-      button (type' = "button", class' = "editor-primary", disabled = true) {
+      button (
+        type' = "button",
+        class' = "editor-primary",
+        disabled = not (primaryIsAvailable (model ())),
+        onClick = fun _ -> dispatch (Shell.Editor Editor.PublishClicked)
+      ) {
         primaryText (model ())
         problemDot model
       }
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): more items in the actions menu
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): more items in the actions menu
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): more items in the actions menu
+
       button (
         type' = "button",
         class' = "text",
@@ -218,7 +271,11 @@ let private topBar
       Parts.menu
         "editor-menu"
         { Side = Menu.Below; Edge = Menu.End }
-        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch bodyView) (Fragment() { "Add image" }) })
+        (Fragment() {
+          For(each = menuItems (model ())) { yield fun item _ -> menuEntry dispatch item }
+          Parts.menuSeparator ()
+          Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch bodyView) (Fragment() { "Add image" })
+        })
     }
   }
 
@@ -352,6 +409,113 @@ let private loading (model: unit -> Shell.Model) =
     }
 
 [<SolidComponent>]
+let private publishProblems (model: unit -> Shell.Model) =
+  Show(when' = not (List.isEmpty (Publish.problems (publishModel (model ()))))) {
+    ul (class' = "preview-problems", ariaLabel = "Problems") {
+      For(each = Array.ofList (Publish.problems (publishModel (model ())))) {
+        yield fun problem _ ->
+          li (class' = $"preview-problem {Preview.severityClass problem}") {
+            span (class' = "preview-severity") { $"{Preview.severityText problem} " }
+            Preview.problemText problem
+          }
+      }
+    }
+  }
+
+[<SolidComponent>]
+let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+  let choose (choice: Publish.When) = send (Editor.PublishChoiceChanged choice)
+
+  dialog(id = "publish-dialog", class' = "dialog publish-dialog", ariaLabelledBy = "publish-dialog-title")
+    .ref(Parts.followOpen (fun () -> Publish.isOpen (publishModel (model ()))))
+    .on("cancel", fun event ->
+      if Publish.isSending (publishModel (model ())) then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.PublishClosed) {
+    h2 (id = "publish-dialog-title") { "Publish the post" }
+
+    div (class' = "dialog-body") {
+      p (class' = "muted small", role = "status") { Publish.statusText (publishModel (model ())) }
+
+      div (class' = "publish-choices", role = "radiogroup", ariaLabel = "When to publish") {
+        label (class' = "publish-choice") {
+          input (
+            type' = "radio",
+            name = "publish-when",
+            checked' = not (isOnDate (model ())),
+            disabled = publishIsBusy (model ()),
+            onChange = fun _ -> choose Publish.Now
+          )
+
+          "Now"
+        }
+
+        label (class' = "publish-choice") {
+          input (
+            type' = "radio",
+            name = "publish-when",
+            checked' = isOnDate (model ()),
+            disabled = publishIsBusy (model ()),
+            onChange = fun _ -> choose (Publish.OnDate(typedDate (model ())))
+          )
+
+          "On a date"
+        }
+      }
+
+      Show(when' = isOnDate (model ())) {
+        Parts
+          .Field(id = "publish-date", label = "Date and time in UTC", hint = "Until then, the site shows the post with the Upcoming badge.")
+          .Has(
+            Parts
+              .Input(
+                id = "publish-date",
+                kind = "datetime-local",
+                value = (fun () -> typedDate (model ())),
+                disabledWhen = (fun () -> publishIsBusy (model ())),
+                onInput = fun event -> choose (Publish.OnDate((event.target :?> HTMLInputElement).value))
+              )
+              .View()
+          )
+      }
+
+      publishProblems model
+
+      Show(when' = (Publish.reason (publishModel (model ()))).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The post is not published.").Has(
+          p () { Publish.reason (publishModel (model ())) |> Option.defaultValue "" }
+        )
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = Publish.isSending (publishModel (model ())), onClick = fun _ -> send Editor.PublishClosed).Has(Fragment() { "Cancel" })
+
+      Parts.Button(
+        kind = Parts.Primary,
+        disabled = not (Publish.canConfirm (publishModel (model ()))),
+        onClick = fun _ -> send Editor.PublishConfirmed
+      )
+        .Has(Fragment() { "Publish" })
+    }
+  }
+
+[<SolidComponent>]
+let private publishNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  Show(when' = not (List.isEmpty (publishModel (model ())).Warnings)) {
+    Parts.Alert(tone = Parts.Warn, title = "The post is published, and a step after the publish failed.").Has(
+      Fragment() {
+        For(each = Array.ofList (publishModel (model ())).Warnings) { yield fun warning _ -> p () { Publish.warningText warning } }
+
+        div (class' = "editor-notice-actions") {
+          Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.PublishNoticeDismissed)).Has(Fragment() { "Dismiss" })
+        }
+      }
+    )
+  }
+
+[<SolidComponent>]
 let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: MouseEvent -> unit) (heading: unit -> string) =
   let listen (name: string) (handler: Event -> unit) =
     window.addEventListener (name, handler)
@@ -385,6 +549,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
 
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
+      publishNotice dispatch model
       h1 (class' = "sr-only") { heading () }
 
       Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }
@@ -392,4 +557,5 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     }
 
     DetailsView.sheet dispatch model
+    publishDialog dispatch model
   }

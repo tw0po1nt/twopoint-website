@@ -104,6 +104,24 @@ let post
   : CheckedPost =
   check (fun _ -> []) (Post.parse images stage series (file slug) text) stage published slug
 
+let private cardImageProblems (images: IImageSize) (post: Post) =
+  match Post.ogImageSource post with
+  | Some url ->
+    match images.Size url with
+    | Ok _ -> []
+    | Error reason -> [ Post.ogImageProblem url reason ]
+  | None -> []
+
+let forPublish
+  (stage: Stage)
+  (images: IImageSize)
+  (series: Series list)
+  (published: Post list)
+  (slug: string)
+  (text: string)
+  : CheckedPost =
+  check (cardImageProblems images) (Post.parse images stage series (file slug) text) stage published slug
+
 let private missingCategory (post: Post) =
   if FrontMatter.missesCategory post.FrontMatter then
     [ Problem.error (Place.Field("category", post.FrontMatter.CategoryLine)) "The post has no category." ]

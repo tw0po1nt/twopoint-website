@@ -35,6 +35,7 @@
     <Compile Include="Subscriptions\SubscriptionQueries.fs" />
     <Compile Include="Deploys\DeployTypes.fs" />
     <Compile Include="Deploys\DeployActions.fs" />
+    <Compile Include="Posts\PostPublish.fs" />
   </ItemGroup>
 
   <ItemGroup>

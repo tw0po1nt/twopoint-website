@@ -107,6 +107,41 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
         return []
     }
 
+  let revisionName (slug : Slug) (time : DateTime) =
+    $"{Slug.value slug}/{TwoPoint.Site.Render.Time.isoTime (DateTimeOffset time)}{extension}"
+
+  let conditionsOf (condition : WriteCondition) =
+    let conditions = BlobRequestConditions()
+
+    match condition with
+    | MatchesETag eTag -> conditions.IfMatch <- ETag eTag
+    | MustNotExist -> conditions.IfNoneMatch <- ETag.All
+
+    conditions
+
+  let writeBlob (container : string) (name : string) (text : string) (conditions : BlobRequestConditions) : DependencyResult<WriteOutcome> =
+    cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let containerClient = service.GetBlobContainerClient container
+      let options = BlobUploadOptions(Conditions = conditions)
+
+      let write () =
+        cancellableTaskResult {
+          let! response = containerClient.GetBlobClient(name).UploadAsync(BinaryData.FromString text, options, ct)
+          return Written(response.Value.ETag.ToString())
+        }
+
+      try
+        try
+          return! write ()
+        with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
+          // Azurite starts with no container.
+          do! containerClient.CreateIfNotExistsAsync(cancellationToken = ct) |> Task.ignore
+          return! write ()
+      with :? RequestFailedException as error when error.Status = 412 || error.ErrorCode = "BlobAlreadyExists" ->
+        return ConditionFailed
+    }
+
   /// A series record is the blob `<slug>.yml` in the `series` container.
   member _.GetSeriesRecords () : DependencyResult<StoredSeries list> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.GetSeriesRecords"
@@ -159,30 +194,24 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
   /// A failed condition gives <c>ConditionFailed</c> and leaves the blob as it was.
   member _.WriteWorkingBlob (slug : Slug) (text : string) (condition : WriteCondition) : DependencyResult<WriteOutcome> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.WriteWorkingBlob({slug})"
+    <| writeBlob "working" (blobName slug) text (conditionsOf condition)
+
+  /// A failed condition gives <c>ConditionFailed</c> and leaves the blob as it was.
+  member _.WritePublishedBlob (slug : Slug) (text : string) (condition : WriteCondition) : DependencyResult<WriteOutcome> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.WritePublishedBlob({slug})"
+    <| writeBlob "published" (blobName slug) text (conditionsOf condition)
+
+  member _.WriteRevisionBlob (slug : Slug) (time : DateTime) (text : string) : DependencyResult<WriteOutcome> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.WriteRevisionBlob({slug})"
+    <| writeBlob "revisions" (revisionName slug time) text (conditionsOf MustNotExist)
+
+  /// A revision that is already gone is not an error.
+  member _.DeleteRevisionBlob (slug : Slug) (time : DateTime) : DependencyResult<unit> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteRevisionBlob({slug})"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
-      let container = service.GetBlobContainerClient "working"
-      let conditions = BlobRequestConditions()
 
-      match condition with
-      | MatchesETag eTag -> conditions.IfMatch <- ETag eTag
-      | MustNotExist -> conditions.IfNoneMatch <- ETag.All
-
-      let options = BlobUploadOptions(Conditions = conditions)
-
-      let write () =
-        cancellableTaskResult {
-          let! response = container.GetBlobClient(blobName slug).UploadAsync(BinaryData.FromString text, options, ct)
-          return Written(response.Value.ETag.ToString())
-        }
-
-      try
-        try
-          return! write ()
-        with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
-          // Azurite starts with no container.
-          do! container.CreateIfNotExistsAsync(cancellationToken = ct) |> Task.ignore
-          return! write ()
-      with :? RequestFailedException as error when error.Status = 412 || error.ErrorCode = "BlobAlreadyExists" ->
-        return ConditionFailed
+      do!
+        service.GetBlobContainerClient("revisions").GetBlobClient(revisionName slug time).DeleteIfExistsAsync(cancellationToken = ct)
+        |> Task.ignore
     }

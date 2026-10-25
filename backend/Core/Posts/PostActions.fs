@@ -9,96 +9,10 @@ open IcedTasks
 
 open System
 
-// ====================================================================================================================
-// Create post
-// ====================================================================================================================
-
-// Input
-
-type NewPost =
+type PostRow =
   { Title : NonEmptyString
     Slug : Slug
     CreatedDate : DateTime }
-
-module NewPost =
-  
-  type Title = Title of string
-  type Slug = Slug of string
-  type CreatedDate = CreatedDate of string
-
-  type Dto =
-    { Title : Title
-      Slug : Slug
-      CreatedDate : CreatedDate }
-    
-  let create (dto : Dto) = validation {
-    let (Title title) = dto.Title
-    let (Slug slug) = dto.Slug
-    let (CreatedDate createdDate) = dto.CreatedDate
-    let! title = title |> NonEmptyString.create (Some (nameof title))
-    and! slug = Slug.create slug
-    and! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
-    
-    return
-      { NewPost.Title = title
-        Slug = slug
-        CreatedDate = createdDate }
-  }
-    
-[<RequireQualifiedAccess>]
-module CreatePost =
-  
-  // Output
-
-  type Error = PostAlreadyExists of Post
-  type Success = Created of NewPost
-  type Decision = Decision<Success, Error>
-  type Event = Created of Post
-  
-  // Logic
-  
-  type Logic =
-    Post option
-      -> NewPost
-      -> Decision
-
-  [<RequireQualifiedAccess>]
-  module Logic =
-    let decide : Logic =
-      fun existingPost newPost -> result {
-        do! existingPost |> Result.requireNoneWith PostAlreadyExists
-        return Success.Created newPost
-      }
-
-  // Action
-  
-  type Action = NewPost.Dto -> CancellableTask<ActionResult<Event, Error>>
-  
-  type Dependencies =
-    abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
-    abstract member CreatePost: newPost: NewPost -> DependencyResult<Post>
-    
-  let withDependencies (dependencies : Dependencies) : Action =
-    fun newPost -> cancellableTaskResult {
-      let! newPost =
-        newPost
-        |> NewPost.create
-        |> Result.mapError ActionError<Error>.Validation
-                    
-      let! existingPost =
-        dependencies.GetPostBySlug newPost.Slug
-        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-        
-      let decision = Logic.decide existingPost newPost
-        
-      return!
-        decision
-        |> Result.map (fun (Success.Created newPost) -> newPost)
-        |> Result.traverseCancellableTask dependencies.CreatePost
-        |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult Event.Created)
-          (Logic >> ActionResult.failure) 
-    }
 
 // ====================================================================================================================
 // Create draft
@@ -535,6 +449,7 @@ module PostComment =
 
   type Error =
     | NotFound of Data
+    | PostUpcoming of Post
     | Banned of Commenter
   and Data =
     | Post of Slug
@@ -546,7 +461,8 @@ module PostComment =
   // Logic
 
   type Logic =
-    Post option
+    DateTime
+      -> Post option
       -> Commenter option
       -> NewComment
       -> Decision
@@ -554,8 +470,9 @@ module PostComment =
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun existingPost existingCommenter newComment -> result {
+      fun utcNow existingPost existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
+        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
         let! commenter = existingCommenter |> Result.requireSome (newComment.ValidationId |> Data.Commenter |> Error.NotFound)
         let! approval =
           match commenter.Status with
@@ -574,6 +491,7 @@ module PostComment =
 
   type Dependencies =
     abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
+    abstract member GetUtcNow: unit -> DateTime
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
     abstract member CreateComment:
       post: Post
@@ -607,7 +525,7 @@ module PostComment =
         dependencies.GetCommenterByValidationId newComment.ValidationId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide existingPost existingCommenter newComment
+      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost existingCommenter newComment
 
       let commentPostedEvent existingPost comment = Event.Posted (existingPost, comment)
 

@@ -38,7 +38,8 @@ type Document =
     /// The top bar fades until the pointer moves.
     Typing: bool
     Details: Details.Model
-    Preview: Preview.State }
+    Preview: Preview.State
+    Publish: Publish.Model }
 
 type Model =
   | Loading of slug: string
@@ -62,6 +63,11 @@ type PreviewRequest =
     Fields: Fields
     Details: Api.PostDetails }
 
+type PublishRequest =
+  { Slug: string
+    ETag: string
+    Target: Api.PublishTarget }
+
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
   | TitleChanged of string
@@ -79,6 +85,13 @@ type Msg =
   | PreviewClosed
   | PreviewAnswered of slug: string * Result<Api.PostPreview, Api.Failure>
   | ProblemChosen of Problem.Target
+  | PublishClicked
+  | PublishChoiceChanged of Publish.When
+  | PublishCheckAnswered of slug: string * Publish.When * Result<Api.PublishCheck, Api.Failure>
+  | PublishConfirmed
+  | PublishAnswered of slug: string * Result<Api.PublishedPost, Api.Failure>
+  | PublishClosed
+  | PublishNoticeDismissed
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -87,6 +100,8 @@ type Effect =
   | LoadDetailsOptions
   | ChangeSlug of SlugRequest
   | FetchPreview of PreviewRequest
+  | CheckPublish of PublishRequest * choice: Publish.When
+  | PublishPost of PublishRequest
   | Focus of elementId: string
   | MoveToBodyLine of line: int
 
@@ -113,7 +128,8 @@ let private loaded (post: Api.PostDocument) =
       LeaveTo = None
       Typing = false
       Details = Details.init post.Slug post.Details
-      Preview = Preview.Closed }
+      Preview = Preview.Closed
+      Publish = Publish.init }
 
 let private requestOf (document: Document) : SaveRequest =
   { Slug = document.Slug
@@ -274,6 +290,122 @@ let private chooseProblem (target: Problem.Target) (document: Document) =
   | Problem.Control(id, Problem.WritingColumn) -> Loaded closed, Some(Focus id)
   | Problem.BodyLine line -> Loaded closed, Some(MoveToBodyLine line)
 
+let private withPublish (state: Publish.State) (document: Document) =
+  { document with Publish = Publish.withState state document.Publish }
+
+let private startCheck (choice: Publish.When) (document: Document) =
+  match document.ETag, Publish.target choice with
+  | Some eTag, Some target ->
+    Loaded(withPublish (Publish.Checking choice) document),
+    Some(
+      CheckPublish(
+        { Slug = document.Slug
+          ETag = eTag
+          Target = target },
+        choice
+      )
+    )
+  | _, None -> Loaded(withPublish (Publish.Choosing choice) document), None
+  | None, Some _ -> Loaded(withPublish (Publish.CheckFailed(choice, "The post has no saved text.")) document), None
+
+let canPublish (document: Document) =
+  match document.State, document.Save with
+  | Api.Draft, (Saved | Unsaved | Saving _ | SaveFailed _) -> not (Details.isChangingSlug document.Details)
+  | Api.Draft, Stale
+  | (Api.Published | Api.Upcoming), _ -> false
+
+let private publishClicked (document: Document) =
+  match document.State, document.Save with
+  | Api.Draft, _ when Details.isChangingSlug document.Details -> Loaded document, None
+  | Api.Draft, Saved -> startCheck Publish.Now document
+  | Api.Draft, Saving _ -> Loaded(withPublish Publish.Saving document), None
+  | Api.Draft, (Unsaved | SaveFailed _) -> startSave (withPublish Publish.Saving document)
+  | Api.Draft, Stale
+  | (Api.Published | Api.Upcoming), _ -> Loaded document, None
+
+let private resumePublish (model: Model, effect: Effect option) =
+  match model with
+  | Loaded document ->
+    match document.Publish.State, document.Save with
+    | Publish.Saving, Saved -> startCheck Publish.Now document
+    | Publish.Saving, SaveFailed reason ->
+      Loaded(withPublish (Publish.CheckFailed(Publish.Now, $"The post did not save. {reason}")) document), None
+    | Publish.Saving, Stale ->
+      Loaded(withPublish (Publish.CheckFailed(Publish.Now, "Another tab saved newer text. Reload the page.")) document),
+      None
+    | Publish.Saving, (Unsaved | Saving _)
+    | (Publish.Closed | Publish.Choosing _ | Publish.Checking _ | Publish.Checked _ | Publish.CheckFailed _ | Publish.Sending _ | Publish.Failed _), _ ->
+      model, effect
+  | Loading _
+  | NotLoaded _ -> model, effect
+
+let private publishChoiceChanged (choice: Publish.When) (document: Document) =
+  match document.Publish.State with
+  | Publish.Closed
+  | Publish.Saving
+  | Publish.Sending _ -> Loaded document, None
+  | Publish.Choosing _
+  | Publish.Checking _
+  | Publish.Checked _
+  | Publish.CheckFailed _
+  | Publish.Failed _ -> startCheck choice document
+
+let private publishCheckAnswered
+  (choice: Publish.When)
+  (result: Result<Api.PublishCheck, Api.Failure>)
+  (document: Document)
+  =
+  match document.Publish.State, result with
+  | Publish.Checking current, Ok check when current = choice ->
+    Loaded(withPublish (Publish.Checked(choice, check.Problems)) document), None
+  | Publish.Checking current, Error failure when current = choice ->
+    Loaded(withPublish (Publish.CheckFailed(choice, Api.reason failure)) document), None
+  | _ -> Loaded document, None
+
+let private publishConfirmed (document: Document) =
+  match document.Publish.State, document.ETag with
+  | Publish.Checked(choice, _), Some eTag when Publish.canConfirm document.Publish ->
+    match Publish.target choice with
+    | Some target ->
+      Loaded(withPublish (Publish.Sending choice) document),
+      Some(
+        PublishPost
+          { Slug = document.Slug
+            ETag = eTag
+            Target = target }
+      )
+    | None -> Loaded document, None
+  | _ -> Loaded document, None
+
+let private publishAnswered (result: Result<Api.PublishedPost, Api.Failure>) (document: Document) =
+  match document.Publish.State, result with
+  | Publish.Sending _, Ok published ->
+    let pendingEdit, eTag =
+      if List.contains Api.NewerTextKept published.Warnings then
+        true, None
+      elif List.contains Api.PendingEditKept published.Warnings then
+        true, document.ETag
+      else
+        false, None
+
+    Loaded
+      { document with
+          State = published.State
+          PublishDate = Some published.PublishDate
+          ETag = eTag
+          PendingEdit = pendingEdit
+          Check = None
+          Publish = Publish.closedWith published.Warnings },
+    None
+  | Publish.Sending choice, Error failure ->
+    Loaded(withPublish (Publish.Failed(choice, Api.reason failure)) document), None
+  | _ -> Loaded document, None
+
+let private publishClosed (document: Document) =
+  match document.Publish.State with
+  | Publish.Sending _ -> Loaded document, None
+  | _ -> Loaded(withPublish Publish.Closed document), None
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
   | Loading slug, Answered(answered, Ok post) when answered = slug -> loaded post, None
@@ -283,7 +415,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, BodyChanged body -> edit (fun fields -> { fields with Body = body }) document
   | Loaded document, AutosaveElapsed version when version = document.Version -> saveNow document
   | Loaded document, SaveRequested -> saveNow document
-  | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug -> answered version result document
+  | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug ->
+    answered version result document |> resumePublish
   | Loaded document, PointerMoved -> Loaded { document with Typing = false }, None
   | Loaded document, DetailsMsg msg -> detailsChanged msg document
   | Loaded document, SlugChangeRequested -> requestSlugChange document
@@ -293,6 +426,15 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, PreviewClosed -> Loaded { document with Preview = Preview.Closed }, None
   | Loaded document, PreviewAnswered(slug, result) when slug = document.Slug -> previewAnswered result document
   | Loaded document, ProblemChosen target -> chooseProblem target document
+  | Loaded document, PublishClicked -> publishClicked document
+  | Loaded document, PublishChoiceChanged choice -> publishChoiceChanged choice document
+  | Loaded document, PublishCheckAnswered(slug, choice, result) when slug = document.Slug ->
+    publishCheckAnswered choice result document
+  | Loaded document, PublishConfirmed -> publishConfirmed document
+  | Loaded document, PublishAnswered(slug, result) when slug = document.Slug -> publishAnswered result document
+  | Loaded document, PublishClosed -> publishClosed document
+  | Loaded document, PublishNoticeDismissed ->
+    Loaded { document with Publish = Publish.dismissed document.Publish }, None
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -366,3 +508,86 @@ let primaryAction (document: Document) =
   | Api.Draft -> "Publish"
   | Api.Published
   | Api.Upcoming -> "Publish changes"
+
+type Availability =
+  | Available
+  | Unavailable of reason: string
+
+let private laterVersion = Unavailable "A later version adds this action."
+
+let primaryAvailability (document: Document) =
+  match document.State, document.Save with
+  | _ when canPublish document -> Available
+  | Api.Draft, Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | Api.Draft, _ -> Unavailable "Wait until the slug change ends."
+  | (Api.Published | Api.Upcoming), _ ->
+    // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/260): publish the changes of a published post
+    laterVersion
+
+type MenuAction =
+  | SaveNow
+  | ChangesFromLive
+  | DiscardChanges
+  | ChangeDate
+  | Unpublish
+  | Revisions
+  | SendToSubscribers
+  | Delete
+
+type MenuItem =
+  { Action: MenuAction
+    Label: string
+    Availability: Availability }
+
+let private saveAvailability (document: Document) =
+  match document.Save with
+  | Unsaved
+  | SaveFailed _ -> Available
+  | Saved -> Unavailable "The post is saved."
+  | Saving _ -> Unavailable "The save runs."
+  | Stale -> Unavailable "Another tab saved newer text. Reload the page."
+
+let private availability (document: Document) (action: MenuAction) =
+  match action, document.State with
+  | SaveNow, _ -> saveAvailability document
+  | ChangesFromLive, Api.Draft -> Unavailable "A draft has no published text."
+  | DiscardChanges, Api.Draft -> Unavailable "A draft has no pending edit."
+  | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can change its date."
+  | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
+  | Revisions, Api.Draft -> Unavailable "A draft has no revisions. The first publish makes one."
+  | SendToSubscribers, Api.Draft -> Unavailable "Publish the post first."
+  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/260): changes from live and discard changes
+  | (ChangesFromLive | DiscardChanges), (Api.Published | Api.Upcoming)
+  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): change the date and unpublish an upcoming post
+  | (ChangeDate | Unpublish), Api.Upcoming
+  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): list and restore the revisions
+  | Revisions, (Api.Published | Api.Upcoming)
+  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/270): send a post to the subscribers
+  | SendToSubscribers, (Api.Published | Api.Upcoming)
+  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): delete a post
+  | Delete, _ -> laterVersion
+
+let menu (document: Document) : MenuItem list =
+  [ SaveNow, "Save"
+    ChangesFromLive, "Changes from live"
+    DiscardChanges, "Discard changes"
+    ChangeDate, "Change the date"
+    Unpublish, "Unpublish"
+    Revisions, "Revisions"
+    SendToSubscribers, "Send to subscribers"
+    Delete, "Delete" ]
+  |> List.map (fun (action, label) ->
+    { Action = action
+      Label = label
+      Availability = availability document action })
+
+let menuMsg (action: MenuAction) =
+  match action with
+  | SaveNow -> Some SaveRequested
+  | ChangesFromLive
+  | DiscardChanges
+  | ChangeDate
+  | Unpublish
+  | Revisions
+  | SendToSubscribers
+  | Delete -> None

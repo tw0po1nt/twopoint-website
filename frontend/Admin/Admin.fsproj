@@ -25,6 +25,7 @@
     <Compile Include="Posts.fs" />
     <Compile Include="Details.fs" />
     <Compile Include="Preview.fs" />
+    <Compile Include="Publish.fs" />
     <Compile Include="Editor.fs" />
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />

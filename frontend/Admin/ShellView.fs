@@ -40,6 +40,9 @@ let private fail (call: Shell.Call) =
   | Shell.LoadDetailsOptions -> Shell.Editor(Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Unanswered)))
   | Shell.ChangeSlug request -> Shell.Editor(Editor.SlugChangeAnswered(request.Slug, Error Api.Unanswered))
   | Shell.PreviewPost request -> Shell.Editor(Editor.PreviewAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.CheckPublish(request, choice) ->
+    Shell.Editor(Editor.PublishCheckAnswered(request.Slug, choice, Error Api.Unanswered))
+  | Shell.PublishPost request -> Shell.Editor(Editor.PublishAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -160,6 +163,12 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
       request.Fields.Body
       request.Details
     |> Promise.map (fun result -> Shell.Editor(Editor.PreviewAnswered(request.Slug, result)))
+  | Shell.CheckPublish(request, choice) ->
+    Api.checkPublish (Config.api ()) token request.Slug request.ETag request.Target
+    |> Promise.map (fun result -> Shell.Editor(Editor.PublishCheckAnswered(request.Slug, choice, result)))
+  | Shell.PublishPost request ->
+    Api.publishPost (Config.api ()) token request.Slug request.ETag request.Target
+    |> Promise.map (fun result -> Shell.Editor(Editor.PublishAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))

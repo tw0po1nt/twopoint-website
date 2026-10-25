@@ -25,6 +25,8 @@
     <Compile Include="Endpoints\Admin\ProblemDto.fs" />
     <Compile Include="Endpoints\Admin\SaveDraft.fs" />
     <Compile Include="Endpoints\Admin\ChangeSlug.fs" />
+    <Compile Include="Endpoints\Admin\SiteRebuilder.fs" />
+    <Compile Include="Endpoints\Admin\PublishPost.fs" />
     <Compile Include="Endpoints\Admin\GetTerms.fs" />
     <Compile Include="Endpoints\Admin\GetSeries.fs" />
     <Compile Include="Endpoints\Admin\PreviewPost.fs" />
@@ -47,7 +49,6 @@
     <Compile Include="Endpoints\Admin\GetSubscriptionDeliveries.fs" />
     <Compile Include="Endpoints\Admin\CancelSubscription.fs" />
     <Compile Include="Endpoints\Admin\DeleteSubscription.fs" />
-    <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewCommentMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostDeliveryMessage.fs" />

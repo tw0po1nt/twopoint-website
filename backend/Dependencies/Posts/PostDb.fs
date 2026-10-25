@@ -256,7 +256,7 @@ type internal DbComment =
 type internal IPostDb =
   abstract member GetAllPosts: unit -> CancellableTaskResult<DbPost list, DependencyError>
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
-  abstract member CreatePost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
+  abstract member UpsertPost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
   
   abstract member GetAllCommenters: unit -> CancellableTaskResult<DbCommenter list, DependencyError>
   abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
@@ -363,6 +363,9 @@ module internal PostDb =
     let add table onError onEntity entity =
       Db.add tableServiceClient logger db table onError onEntity entity
       
+    let upsert table onError onEntity entity =
+      Db.upsert tableServiceClient logger db table onError onEntity entity
+
     let update table onError onEntity entity updateEntity =
       Db.update tableServiceClient logger db table onError onEntity entity updateEntity
       
@@ -385,8 +388,8 @@ module internal PostDb =
       member _.GetPostBySlug slug =
         slug |> trySingle postsTable DbPost.FromEntity (Some slug)
 
-      member _.CreatePost post =
-        post.ToEntity() |> add postsTable PostDbError.validation DbPost.FromEntity
+      member _.UpsertPost post =
+        post.ToEntity() |> upsert postsTable PostDbError.validation DbPost.FromEntity
 
       member _.GetAllCommenters () =
         toList commentersTable DbCommenter.FromEntity
