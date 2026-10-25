@@ -63,6 +63,11 @@ The backend reads the post store for the post list. The setting `Azure:PostStore
 account. On the local stage it is the Azurite URL. `scripts/setup-post-store-access.sh` gives the
 backend identity read and write on the four containers and sets the setting on the Function App.
 
+The backend writes each uploaded image and PDF to the `assets` container of the account `twopointwebsite`.
+The setting `Azure:AssetsUri` names the account. On the local stage it is the Azurite URL.
+`scripts/setup-assets-access.sh` gives the backend identity write access to `assets` only and sets
+the setting on the Function App.
+
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build
 identity through OIDC and runs `pull` before `build`. The repo name sets the stage: the `prod`

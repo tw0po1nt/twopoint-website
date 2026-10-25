@@ -1,4 +1,5 @@
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Posts
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints.Auth
 
@@ -69,6 +70,12 @@ let main args =
     then BlobServiceClient "UseDevelopmentStorage=true"
     else BlobServiceClient(config.Azure.PostStoreUri, credential)
 
+  // Azure Blob Storage: the assets account
+  let assetsClient =
+    if TwoPoint.Site.Render.Azurite.isUrl config.Azure.AssetsUri
+    then BlobServiceClient "UseDevelopmentStorage=true"
+    else BlobServiceClient(config.Azure.AssetsUri, credential)
+
   // Email client
   let resourceEndpoint = config.Azure.CommsResourceEndpoint
   let emailClient = EmailClient(resourceEndpoint,  credential)
@@ -89,6 +96,7 @@ let main args =
     :> TwoPoint.Site.Render.IImageSize
 
   builder.Services.AddSingleton<TwoPoint.Site.Render.IImageSize>(fun _ -> previewImages) |> ignore
+  builder.Services.AddSingleton<AssetsClient>(fun _ -> { Service = assetsClient }) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore
   builder.Services.AddSingleton<WebPushSetup>(fun services ->
     match config.WebPush with
