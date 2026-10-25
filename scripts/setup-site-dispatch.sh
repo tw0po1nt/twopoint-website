@@ -200,7 +200,7 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=7
+TOTAL_STAGES=8
 
 FUNCTION_APP="func-twopoint-website-api"
 OWNER="tw0po1nt"
@@ -241,8 +241,8 @@ pause
 
 # ── 2 ─────────────────────────────────────────────────────────────────────
 stage "Make the webhook secret"
-say "A later version of the backend receives the workflow_run webhook of the app."
-say "The backend checks each webhook with this secret, so the secret goes to Key Vault now."
+say "The backend receives the workflow_run webhook of the app."
+say "The backend checks each webhook with this secret, so the secret goes to Key Vault."
 if az keyvault secret show --vault-name "$VAULT_NAME" --name "$WEBHOOK_SECRET_NAME" >/dev/null 2>&1; then
   note "The secret $WEBHOOK_SECRET_NAME is already in $VAULT_NAME. The wizard uses it."
 elif confirm "Make a random secret and write it to $VAULT_NAME as $WEBHOOK_SECRET_NAME?"; then
@@ -260,9 +260,7 @@ say "The app has only one permission: Actions, read and write, on the two site r
 open_url "https://github.com/settings/apps/new"
 step "GitHub App name: $APP_NAME"
 step "Homepage URL: https://twopoint.dev"
-step "Webhook: clear \"Active\". A later version of the backend sets the URL."
-step "If the form shows \"Webhook secret\", paste the secret from the next line."
-note "az keyvault secret show --vault-name $VAULT_NAME --name $WEBHOOK_SECRET_NAME --query value -o tsv"
+step "Webhook: clear \"Active\". The webhook stage below sets it."
 step "Permissions > Repository permissions > Actions: Read and write. Change no other permission."
 step "Where can this GitHub App be installed: Only on this account."
 step "Click \"Create GitHub App\"."
@@ -292,6 +290,22 @@ else
   SKIPPED+=("az keyvault key import --vault-name $VAULT_NAME --name $KEY_NAME --pem-file <the .pem file> --ops sign")
 fi
 KEY_URI="${VAULT_URI%/}/keys/$KEY_NAME"
+say "The backend identity also needs permission to read the webhook secret."
+if [[ "$(az keyvault show --name "$VAULT_NAME" --query properties.enableRbacAuthorization -o tsv)" == "true" ]]; then
+  SECRET_SCOPE="$(az keyvault show --name "$VAULT_NAME" --query id -o tsv)/secrets/$WEBHOOK_SECRET_NAME"
+  if confirm "Give the backend identity the role \"Key Vault Secrets User\" on $WEBHOOK_SECRET_NAME?"; then
+    az role assignment create --assignee-object-id "$IDENTITY_PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
+      --role "Key Vault Secrets User" --scope "$SECRET_SCOPE" >/dev/null
+    printf '  %s✓ assigned%s Key Vault Secrets User on %s\n' "$GREEN" "$RESET" "$WEBHOOK_SECRET_NAME"
+  else
+    SKIPPED+=("Assign Key Vault Secrets User on $SECRET_SCOPE to $IDENTITY_PRINCIPAL_ID")
+  fi
+elif confirm "Give the backend identity the secret permission get in the access policy of $VAULT_NAME?"; then
+  az keyvault set-policy --name "$VAULT_NAME" --object-id "$IDENTITY_PRINCIPAL_ID" --secret-permissions get >/dev/null
+  printf '  %s✓ set%s the secret permission get\n' "$GREEN" "$RESET"
+else
+  SKIPPED+=("Give $IDENTITY_PRINCIPAL_ID the secret permission get on $VAULT_NAME")
+fi
 say "The backend identity needs permission to sign with the key."
 if [[ "$(az keyvault show --name "$VAULT_NAME" --query properties.enableRbacAuthorization -o tsv)" == "true" ]]; then
   KEY_SCOPE="$(az keyvault show --name "$VAULT_NAME" --query id -o tsv)/keys/$KEY_NAME"
@@ -326,19 +340,38 @@ note "Deploy__ProductionRepo=$PRODUCTION_REPO"
 note "Deploy__StagingRepo=$STAGING_REPO"
 note "Deploy__GitHubApp__ClientId=$GITHUB_APP_CLIENT_ID"
 note "Deploy__GitHubApp__SigningKeyUri=$KEY_URI"
-if confirm "Write the four settings to $FUNCTION_APP? The Function App restarts."; then
+note "Deploy__GitHubApp__WebhookSecretName=$WEBHOOK_SECRET_NAME"
+if confirm "Write the five settings to $FUNCTION_APP? The Function App restarts."; then
   az functionapp config appsettings set -n "$FUNCTION_APP" -g "$APP_RG" --settings \
     "Deploy__ProductionRepo=$PRODUCTION_REPO" \
     "Deploy__StagingRepo=$STAGING_REPO" \
     "Deploy__GitHubApp__ClientId=$GITHUB_APP_CLIENT_ID" \
-    "Deploy__GitHubApp__SigningKeyUri=$KEY_URI" >/dev/null
+    "Deploy__GitHubApp__SigningKeyUri=$KEY_URI" \
+    "Deploy__GitHubApp__WebhookSecretName=$WEBHOOK_SECRET_NAME" >/dev/null
   printf '  %s✓ wrote%s the settings to %s\n' "$GREEN" "$RESET" "$FUNCTION_APP"
 else
-  SKIPPED+=("Write the four Deploy__ settings to $FUNCTION_APP")
+  SKIPPED+=("Write the five Deploy__ settings to $FUNCTION_APP")
 fi
 pause
 
 # ── 7 ─────────────────────────────────────────────────────────────────────
+stage "Send the workflow_run webhook to the backend"
+say "The backend shows the deploy state of each post from the runs of site.yml."
+say "GitHub sends each run to the webhook of the app, and the backend checks the signature."
+APP_HOST=$(az functionapp show -n "$FUNCTION_APP" -g "$APP_RG" --query defaultHostName -o tsv)
+WEBHOOK_URL="https://$APP_HOST/api/webhooks/github"
+note "Webhook URL: $WEBHOOK_URL"
+note "Webhook secret: az keyvault secret show --vault-name $VAULT_NAME --name $WEBHOOK_SECRET_NAME --query value -o tsv"
+open_url "https://github.com/settings/apps"
+step "Open the app \"$APP_NAME\" and click \"Edit\" (General)."
+step "Webhook: select \"Active\". Paste the Webhook URL from above."
+step "Webhook secret: paste the value of the command above, and click \"Save changes\"."
+step "Open \"Permissions & events\", and then \"Subscribe to events\"."
+step "Select \"Workflow run\", and click \"Save changes\"."
+step "Open \"Advanced\" and check that \"Recent Deliveries\" shows a delivery with the status 200 after a run of site.yml."
+pause
+
+# ── 8 ─────────────────────────────────────────────────────────────────────
 stage "Check a rebuild"
 say "Do this check after the backend with \"Rebuild site\" is deployed."
 open_url "https://admin.twopoint.dev/"
@@ -347,6 +380,7 @@ step "The card shows the number of the production run."
 open_url "https://github.com/$PRODUCTION_REPO/actions/workflows/site.yml"
 open_url "https://github.com/$STAGING_REPO/actions/workflows/site.yml"
 step "Each repo shows a new workflow_dispatch run of site.yml."
+step "When the production run ends, the editor of a published post shows \"deployed\"."
 pause
 
 finish

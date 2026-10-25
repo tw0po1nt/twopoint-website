@@ -54,6 +54,15 @@ through a GitHub App. Key Vault keeps the private key of the app and signs each 
 `scripts/setup-site-dispatch.sh` sets up the app. The local backend logs each dispatch and sends
 nothing.
 
+The app subscribes to `workflow_run`. The public function `Github-Webhook-Receive`
+(`POST /api/webhooks/github`) checks `X-Hub-Signature-256` with the webhook secret and writes each
+run of `site.yml` to the table `siteRuns`. The secret is the Key Vault secret that the setting
+`Deploy:GitHubApp:WebhookSecretName` names. A bad or missing signature gets `401` and writes
+nothing. Each action that dispatches the site stores its change in the table `postChanges` with
+`PostChange.ofDispatch` and `PostChanges.RecordChange`. `GET internal/posts` and
+`GET internal/posts/{slug}/deploy` give the deploy state of a post. The rule is the pure function
+`DeployRule.state`. The local backend logs each dispatch, so each change there is deployed.
+
 `Admin-Posts-Publish` publishes a draft now or on a future date. It sets the publish date in the
 working text and runs the check of the build, with the card image, so an error refuses the publish.
 It then writes the `revisions` blob, the `published` blob, and the post-table row, deletes the
