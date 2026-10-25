@@ -6,6 +6,7 @@ open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Comms
+open TwoPoint.Dependencies.Util
 
 open Azure.Data.Tables
 open FsToolkit.ErrorHandling
