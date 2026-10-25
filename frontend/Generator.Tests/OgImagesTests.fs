@@ -117,7 +117,7 @@ let tests =
     }
 
     test "the real posts give one crop for each distinct source" {
-      let sources = realPosts.Value |> List.choose OgImages.source |> List.distinctBy _.AbsoluteUri
+      let sources = realPosts.Value |> List.choose Post.ogImageSource |> List.distinctBy _.AbsoluteUri
       let map = RenderMap.create Stage.Production buildTime widgets realContent.Value
       Expect.isNonEmpty sources "The posts have images"
       Expect.equal (ogFiles map).Count sources.Length "One crop for each source"

@@ -174,4 +174,28 @@ let tests =
     test "a draft can link to a published post" {
       Expect.isEmpty (categorizedDraft [ target ] "b-post" "See [the step](/posts/a-post/).").Problems "The link resolves"
     }
+
+    test "forPublish gives the error of the build for a card image that the build cannot fetch" {
+      let image = "https://example.com/card.jpg"
+      let images = Images.ofFetch (fetchWith (fun _ -> Error "HTTP 404"))
+
+      Expect.equal
+        (Check.forPublish Stage.Production images [] [ target ] "b-post" (text $"{frontMatter}\nimage: {image}" "Text.")).Problems
+        [ Problem.error
+            (Place.Post 1)
+            $"The front matter gives the Open Graph image {image}, and the build cannot make its crop: HTTP 404." ]
+        "The error is the one of the build"
+    }
+
+    test "forPublish gives no problem for a card image that has a size" {
+      let fields = $"{frontMatter}\nimage: https://example.com/card.jpg"
+      Expect.isEmpty (Check.forPublish Stage.Production anyImages [] [ target ] "b-post" (text fields "Text.")).Problems "A card image"
+    }
+
+    test "post does not size the card image" {
+      let fetch, calls = recording anyImage
+      let fields = $"{frontMatter}\nimage: https://example.com/card.jpg"
+      Check.post Stage.Production (Images.ofFetch fetch) [] [ target ] "b-post" (text fields "Text.") |> ignore
+      Expect.isEmpty calls "The save check downloads no card image"
+    }
   ]

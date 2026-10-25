@@ -21,6 +21,7 @@
     <Compile Include="Images.fs" />
     <Compile Include="Body.fs" />
     <Compile Include="Post.fs" />
+    <Compile Include="Time.fs" />
     <Compile Include="PostText.fs" />
     <Compile Include="MarkdownPage.fs" />
     <Compile Include="Privacy.fs" />
@@ -28,7 +29,6 @@
     <Compile Include="SitePage.fs" />
     <Compile Include="SitePath.fs" />
     <Compile Include="Links.fs" />
-    <Compile Include="Time.fs" />
     <Compile Include="Article.fs" />
     <Compile Include="Check.fs" />
   </ItemGroup>

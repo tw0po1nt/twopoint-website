@@ -58,3 +58,12 @@ let summary (text: string) : PostSummary =
   | None -> { Title = None; PublishDate = None }
 
 let urlPath (post: Post) = $"/posts/{post.Slug}/"
+
+/// The image of the series wins over the image of the post.
+let ogImageSource (post: Post) : System.Uri option =
+  post.FrontMatter.Series
+  |> Option.bind _.Image
+  |> Option.orElse post.FrontMatter.Image
+
+let ogImageProblem (url: System.Uri) (reason: string) : Problem =
+  Problem.error (Place.Post 1) $"The front matter gives the Open Graph image {url}, and the build cannot make its crop: {reason}."

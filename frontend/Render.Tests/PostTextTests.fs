@@ -140,4 +140,24 @@ let detailsTests =
       | Error reason -> Expect.isNotEmpty reason "A reason"
       | Ok composed -> failtestf "Expected a refusal, got %s" composed
     }
+
+    test "withPublishDate sets the publish date and keeps the other fields and the body" {
+      let date = System.DateTimeOffset(2026, 11, 2, 13, 0, 0, System.TimeSpan.Zero)
+
+      match PostText.withPublishDate text date with
+      | Ok dated ->
+        Expect.equal (Post.summary dated).PublishDate (Some date) "The publish date"
+        Expect.equal (PostText.split dated) (PostText.split text) "The fields and the body"
+        Expect.stringContains dated "FSharp" "The tags stay"
+      | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
+    }
+
+    test "withPublishDate replaces a publish date that the text has" {
+      let dated = "---\npublishDate: 2020-01-01T00:00:00Z\ntitle: T\n---\n\nBody.\n"
+      let date = System.DateTimeOffset(2026, 11, 2, 13, 0, 0, System.TimeSpan.Zero)
+
+      match PostText.withPublishDate dated date with
+      | Ok replaced -> Expect.equal (Post.summary replaced).PublishDate (Some date) "The new date"
+      | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
+    }
   ]
