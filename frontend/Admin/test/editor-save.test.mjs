@@ -12,6 +12,7 @@ const post = {
   title: 'My post',
   excerpt: 'About it.',
   body: 'Some text.\n',
+  details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true },
   text: '',
   publishedText: null,
 };
@@ -77,7 +78,12 @@ test('a save happens 2 seconds after the last input and not before', async () =>
   await wait(700);
   assert.equal(saves.length, 1);
   assert.equal(saves[0].ifMatch, '"v1"');
-  assert.deepEqual(saves[0].body, { title: 'My post', excerpt: 'About it.', body: 'Some text.\nOne. Two. ' });
+  assert.deepEqual(saves[0].body, {
+    title: 'My post',
+    excerpt: 'About it.',
+    body: 'Some text.\nOne. Two. ',
+    details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true },
+  });
   assert.equal(status(), 'Draft · saved');
 });
 

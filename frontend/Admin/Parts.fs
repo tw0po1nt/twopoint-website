@@ -82,19 +82,28 @@ type Input() =
   member val value: unit -> string = (fun () -> "") with get, set
   member val placeholder: string = null with get, set
   member val disabled = false with get, set
+  /// Read again at each change, so the input is disabled while this gives true.
+  member val disabledWhen: unit -> bool = (fun () -> false) with get, set
   member val onInput: InputEvent -> unit = ignore with get, set
+  member val onEnter: unit -> unit = ignore with get, set
 
   [<SolidComponent>]
   member this.View() =
-    input (
+    input(
       id = this.id,
       type' = this.kind,
       class' = "input",
       value = this.value (),
       placeholder = this.placeholder,
-      disabled = this.disabled,
+      disabled = (this.disabled || this.disabledWhen ()),
       onInput = this.onInput
     )
+      .on ("keydown", fun event ->
+        let key = event :?> KeyboardEvent
+
+        if key.key = "Enter" then
+          key.preventDefault ()
+          this.onEnter ())
 
 type Select() =
   member val id: string = null with get, set

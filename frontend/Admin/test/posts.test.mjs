@@ -16,7 +16,7 @@ const reads = [];
 
 const creates = [];
 
-const draft = { slug: 'untitled', state: 'draft', pendingEdit: false, publishDate: null, eTag: '"v1"', title: '', excerpt: '', body: '', text: '', publishedText: null };
+const draft = { slug: 'untitled', state: 'draft', pendingEdit: false, publishDate: null, eTag: '"v1"', title: '', excerpt: '', body: '', details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true }, text: '', publishedText: null };
 
 const respond = (url, init = {}) => {
   if (url.endsWith('/api/internal/posts') && init.method === 'POST') {

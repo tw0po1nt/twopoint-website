@@ -57,7 +57,7 @@ let private typed (send: string -> unit) (event: InputEvent) =
   send element.value
 
 [<SolidComponent>]
-let private topBar (back: MouseEvent -> unit) (model: unit -> Shell.Model) =
+let private topBar (dispatch: Shell.Msg -> unit) (back: MouseEvent -> unit) (model: unit -> Shell.Model) =
   header (class' = (if isTyping (model ()) then "editor-bar is-typing" else "editor-bar")) {
     a (class' = "back", href = Route.path Posts, onClick = back) {
       Icon.view Icon.Back
@@ -69,8 +69,9 @@ let private topBar (back: MouseEvent -> unit) (model: unit -> Shell.Model) =
     div (class' = "editor-actions") {
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/258): Preview
       button (type' = "button", class' = "text", disabled = true) { "Preview" }
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/256): Details
-      button (type' = "button", class' = "text", disabled = true) { "Details" }
+      button (type' = "button", class' = "text", disabled = not (isLoaded (model ())), onClick = fun _ -> DetailsView.open' dispatch) {
+        "Details"
+      }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/259): Publish
       button (type' = "button", class' = "editor-primary", disabled = true) { primaryText (model ()) }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): the actions menu
@@ -164,7 +165,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     | _ -> ())
 
   Fragment() {
-    topBar back model
+    topBar dispatch back model
 
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
@@ -172,4 +173,6 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
 
       Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch model }
     }
+
+    DetailsView.sheet dispatch model
   }

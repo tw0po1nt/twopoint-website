@@ -16,6 +16,34 @@ open System
 open System.Net
 open System.Threading
 
+/// A missing author, category, series, or image is null.
+[<Struct>]
+type PostDetailsDto =
+  { Author : string
+    Category : string
+    Tags : string[]
+    Series : string
+    Image : string
+    ShowOnHomepage : bool }
+
+module PostDetailsDto =
+
+  let ofDetails (details : TwoPoint.Site.Render.PostText.Details) =
+    { Author = Option.toObj details.Author
+      Category = Option.toObj details.Category
+      Tags = Array.ofList details.Tags
+      Series = Option.toObj details.Series
+      Image = Option.toObj details.Image
+      ShowOnHomepage = details.ShowOnHomepage }
+
+  let toDetails (dto : PostDetailsDto) : TwoPoint.Site.Render.PostText.Details =
+    { Author = Option.ofObj dto.Author
+      Category = Option.ofObj dto.Category
+      Tags = dto.Tags |> Option.ofObj |> Option.defaultValue [||] |> List.ofArray
+      Series = Option.ofObj dto.Series
+      Image = Option.ofObj dto.Image
+      ShowOnHomepage = dto.ShowOnHomepage }
+
 type PostDocumentDto =
   { Slug : string
     State : string
@@ -25,6 +53,7 @@ type PostDocumentDto =
     Title : string
     Excerpt : string
     Body : string
+    Details : PostDetailsDto
     Text : string
     PublishedText : string }
 
@@ -43,6 +72,7 @@ module PostDocumentExt =
         Title = fields.Title
         Excerpt = fields.Excerpt
         Body = fields.Body
+        Details = PostDetailsDto.ofDetails (TwoPoint.Site.Render.PostText.details this.Text)
         Text = this.Text
         PublishedText = Option.toObj this.PublishedText }
 

@@ -25,6 +25,25 @@ type Post =
     PublishDate: string option
     CommentStats: CommentStats }
 
+/// `Category` and `Tags` give the text of the front matter. `Series` gives the slug.
+type PostDetails =
+  { Author: string option
+    Category: string option
+    Tags: string list
+    Series: string option
+    Image: string option
+    ShowOnHomepage: bool }
+
+/// A category or a tag on the published posts, with its number of posts.
+/// `Value` is the text that the front matter keeps. `Title` is the title that the site shows.
+type Term = { Slug: string; Title: string; Value: string; Posts: int }
+
+type Terms = { Categories: Term list; Tags: Term list }
+
+type SeriesListing = { Slug: string; Title: string }
+
+type ChangedSlug = { Slug: string; ETag: string }
+
 /// `ETag` is the ETag of the working blob. A published post with no pending edit has none.
 type PostDocument =
   { Slug: string
@@ -35,6 +54,7 @@ type PostDocument =
     Title: string
     Excerpt: string
     Body: string
+    Details: PostDetails
     Text: string
     PublishedText: string option }
 
@@ -371,6 +391,21 @@ let getPost (api: string) (token: string) (slug: string) : JS.Promise<Result<Pos
 let createDraft (api: string) (token: string) : JS.Promise<Result<CreatedDraft, Failure>> =
   sendWith HttpMethod.POST api token "internal/posts" (Some "{}") []
 
+let private encodeDetails (details: PostDetails) =
+  let optional (value: string option) =
+    match value with
+    | Some value -> Encode.string value
+    | None -> Encode.nil
+
+  Encode.object [
+    "author", optional details.Author
+    "category", optional details.Category
+    "tags", details.Tags |> List.map Encode.string |> Encode.list
+    "series", optional details.Series
+    "image", optional details.Image
+    "showOnHomepage", Encode.bool details.ShowOnHomepage
+  ]
+
 /// `eTag` is the ETag that the page read. `None` means that the post had no working blob.
 let savePost
   (api: string)
@@ -380,6 +415,7 @@ let savePost
   (title: string)
   (excerpt: string)
   (body: string)
+  (details: PostDetails)
   : JS.Promise<Result<string, Failure>> =
   let precondition =
     match eTag with
@@ -387,8 +423,23 @@ let savePost
     | None -> IfNoneMatch "*"
 
   let json =
-    Encode.object [ "title", Encode.string title; "excerpt", Encode.string excerpt; "body", Encode.string body ]
+    Encode.object [
+      "title", Encode.string title
+      "excerpt", Encode.string excerpt
+      "body", Encode.string body
+      "details", encodeDetails details
+    ]
     |> Encode.toString 0
 
   sendWith<SavedPost> HttpMethod.PUT api token (postPath slug) (Some json) [ precondition ]
   |> Promise.map (Result.map (fun saved -> saved.ETag))
+
+let getTerms (api: string) (token: string) : JS.Promise<Result<Terms, Failure>> =
+  send HttpMethod.GET api token "internal/terms"
+
+let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing list, Failure>> =
+  send HttpMethod.GET api token "internal/series"
+
+let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
+  let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
+  sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some json) [ IfMatch eTag ]

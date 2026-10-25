@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { answer, apiAnswer, follow, heading, links, load } from './load.mjs';
 
-const post = { slug: 'hello world', state: 'draft', pendingEdit: false, publishDate: null, eTag: '"v1"', title: 'Hello', excerpt: '', body: '', text: '', publishedText: null };
+const post = { slug: 'hello world', state: 'draft', pendingEdit: false, publishDate: null, eTag: '"v1"', title: 'Hello', excerpt: '', body: '', details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true }, text: '', publishedText: null };
 
 const respond = (url) =>
   url.endsWith('/api/internal/posts/hello%20world') ? answer(200, { success: true, message: null, data: post }) : apiAnswer(url);
