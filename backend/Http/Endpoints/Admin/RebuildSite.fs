@@ -55,7 +55,7 @@ type RebuildSite(
 
         let! apiResponse, statusCode = cancellableTask {
           match! rebuilder.Rebuild () with
-          | NotConfigured reason -> return failure reason HttpStatusCode.InternalServerError
+          | NotConfigured problem -> return failure (SiteConfigProblem.text problem) HttpStatusCode.InternalServerError
           | Attempted (Ok (RebuildSite.Rebuilt production)) ->
             let data = { Dispatch = Dispatch.name production; ProductionRun = Dispatch.runNumber production |> Option.map _.Value }
             return { Success = true; Message = None; Data = Some data }, HttpStatusCode.OK

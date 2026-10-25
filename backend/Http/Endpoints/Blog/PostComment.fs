@@ -90,6 +90,7 @@ type PostComment (
       new PostComment.Dependencies with
       
       member this.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+      member this.GetUtcNow () = DateTime.UtcNow
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
       member this.CreateComment post commenter newComment approval =
         postDependencies.CreateComment post commenter newComment approval
@@ -114,6 +115,7 @@ type PostComment (
         let errorMessage =
           match postCommentError with
           | PostComment.Error.NotFound(PostComment.Data.Post slug) -> $"Post '{slug.ToString()}' not found"
+          | PostComment.Error.PostUpcoming post -> $"Post '{post.Id.ToString()}' not found"
           | PostComment.Error.NotFound(PostComment.Data.Commenter validationId) -> $"Commenter '{validationId.ToString()}' not found"
           | _ -> "Not found"
         answer false (Some errorMessage) None, HttpStatusCode.NotFound

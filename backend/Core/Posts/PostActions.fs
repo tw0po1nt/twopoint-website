@@ -9,8 +9,7 @@ open IcedTasks
 
 open System
 
-/// The row of a published post in the post table. The comment path finds the post by it.
-type NewPost =
+type PostRow =
   { Title : NonEmptyString
     Slug : Slug
     CreatedDate : DateTime }
@@ -450,6 +449,7 @@ module PostComment =
 
   type Error =
     | NotFound of Data
+    | PostUpcoming of Post
     | Banned of Commenter
   and Data =
     | Post of Slug
@@ -461,7 +461,8 @@ module PostComment =
   // Logic
 
   type Logic =
-    Post option
+    DateTime
+      -> Post option
       -> Commenter option
       -> NewComment
       -> Decision
@@ -469,8 +470,9 @@ module PostComment =
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun existingPost existingCommenter newComment -> result {
+      fun utcNow existingPost existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
+        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
         let! commenter = existingCommenter |> Result.requireSome (newComment.ValidationId |> Data.Commenter |> Error.NotFound)
         let! approval =
           match commenter.Status with
@@ -489,6 +491,7 @@ module PostComment =
 
   type Dependencies =
     abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
+    abstract member GetUtcNow: unit -> DateTime
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
     abstract member CreateComment:
       post: Post
@@ -522,7 +525,7 @@ module PostComment =
         dependencies.GetCommenterByValidationId newComment.ValidationId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide existingPost existingCommenter newComment
+      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost existingCommenter newComment
 
       let commentPostedEvent existingPost comment = Event.Posted (existingPost, comment)
 

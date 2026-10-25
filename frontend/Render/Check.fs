@@ -112,7 +112,6 @@ let private cardImageProblems (images: IImageSize) (post: Post) =
     | Error reason -> [ Post.ogImageProblem url reason ]
   | None -> []
 
-/// Like `post`, and also sizes the image that the build crops for `og:image`.
 let forPublish
   (stage: Stage)
   (images: IImageSize)

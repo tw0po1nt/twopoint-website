@@ -100,7 +100,7 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.UpsertPost (newPost : NewPost) = cancellableTaskResult {
+  member _.UpsertPost (newPost : PostRow) = cancellableTaskResult {
     let newPost =
       { DbPost.Title = newPost.Title |> NonEmptyString.value
         Slug = newPost.Slug |> Slug.value

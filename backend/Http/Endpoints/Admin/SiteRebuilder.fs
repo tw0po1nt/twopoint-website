@@ -16,11 +16,21 @@ open Microsoft.Extensions.Logging
 open System
 open System.Net.Http
 
+type SiteConfigProblem =
+  | DeploySectionMissing
+  | GitHubAppSectionMissing
+
+module SiteConfigProblem =
+
+  let text (problem : SiteConfigProblem) =
+    match problem with
+    | DeploySectionMissing -> "The 'Deploy' configuration section is missing"
+    | GitHubAppSectionMissing -> "The 'Deploy:GitHubApp' configuration section is missing"
+
 type SiteRebuildOutcome =
-  | NotConfigured of reason: string
+  | NotConfigured of SiteConfigProblem
   | Attempted of ActionResult<RebuildSite.Event, RebuildSite.Error>
 
-/// Dispatches `site.yml` in the two site repos. The local backend logs each dispatch and sends nothing.
 type SiteRebuilder(
   config : Config,
   credential : TokenCredential,
@@ -30,54 +40,53 @@ type SiteRebuilder(
   tableServiceClient : TableServiceClient
 ) =
 
-  let dispatchWith (deploy : DeployConfig) : Result<Repo -> DependencyResult<Dispatch>, string> =
-    if environment.IsDevelopment() then
-      Ok (LoggedDispatch(logger).Dispatch)
-    else
+  let configured () : Result<DeployConfig * (Repo -> DependencyResult<Dispatch>), SiteConfigProblem> =
+    match config.Deploy with
+    | None -> Error DeploySectionMissing
+    | Some deploy when environment.IsDevelopment() -> Ok (deploy, LoggedDispatch(logger).Dispatch)
+    | Some deploy ->
       match deploy.GitHubApp with
-      | None -> Error "The 'Deploy:GitHubApp' configuration section is missing"
+      | None -> Error GitHubAppSectionMissing
       | Some app ->
         let signer = CryptographyClient(app.SigningKeyUri, credential)
         let app = { GitHubApp.ClientId = app.ClientId; SigningKey = app.SigningKeyUri }
-        Ok (GitHubDispatch(httpClientFactory.CreateClient(), signer, app, logger).Dispatch)
+        Ok (deploy, GitHubDispatch(httpClientFactory.CreateClient(), signer, app, logger).Dispatch)
 
-  let rebuild (deploy : DeployConfig) (dispatch : Repo -> DependencyResult<Dispatch>) = cancellableTask {
-    let rebuildDb = RebuildDb(tableServiceClient, logger)
-
-    let rebuildSite = RebuildSite.withDependencies { new RebuildSite.Dependencies with
-      member _.GetSiteRepos () = { Production = deploy.ProductionRepo; Staging = deploy.StagingRepo }
-      member _.GetUtcNow () = DateTime.UtcNow
-      member _.Dispatch repo = dispatch repo
-      member _.SaveRebuild rebuild = rebuildDb.SaveRebuild rebuild
-    }
-
-    return! rebuildSite ()
-  }
+  let dependencyError (problem : SiteConfigProblem) : DependencyError =
+    { Dependency = Dependency.GitHub; Type = Unknown (exn (SiteConfigProblem.text problem)) }
 
   member _.Rebuild () : CancellableTask<SiteRebuildOutcome> =
-    match config.Deploy with
-    | None ->
-      logger.LogError("Unable to rebuild the site. The 'Deploy' configuration section is missing")
-      CancellableTask.singleton (NotConfigured "The 'Deploy' configuration section is missing")
-    | Some deploy ->
-      match dispatchWith deploy with
-      | Error message ->
-        logger.LogError("Unable to rebuild the site. {message}", message)
-        CancellableTask.singleton (NotConfigured message)
-      | Ok dispatch -> rebuild deploy dispatch |> CancellableTask.map Attempted
+    match configured () with
+    | Error problem ->
+      logger.LogError("Unable to rebuild the site. {message}", SiteConfigProblem.text problem)
+      CancellableTask.singleton (NotConfigured problem)
+    | Ok (deploy, dispatch) -> cancellableTask {
+      let rebuildDb = RebuildDb(tableServiceClient, logger)
 
-  member this.RebuildAsDependency () : DependencyResult<unit> = cancellableTask {
-    let failure (message : string) : Result<unit, DependencyError> =
-      Error { Dependency = Dependency.GitHub; Type = Unknown (exn message) }
+      let rebuildSite = RebuildSite.withDependencies { new RebuildSite.Dependencies with
+        member _.GetSiteRepos () = { Production = deploy.ProductionRepo; Staging = deploy.StagingRepo }
+        member _.GetUtcNow () = DateTime.UtcNow
+        member _.Dispatch repo = dispatch repo
+        member _.SaveRebuild rebuild = rebuildDb.SaveRebuild rebuild
+      }
 
-    match! this.Rebuild () with
-    | NotConfigured reason -> return failure reason
-    | Attempted (Ok _) -> return Ok ()
-    | Attempted (Error (ActionError.Logic (RebuildSite.DispatchFailed failed))) ->
-      let repos = failed |> List.map (fst >> string) |> String.concat " and "
-      for repo, error in failed do
-        logger.LogError("The dispatch of site.yml to {repo} failed: {error}", repo, error.DebugMessage)
-      return failure $"The dispatch to {repos} failed."
-    | Attempted (Error (ActionError.Dependency error)) -> return Error error
-    | Attempted (Error (ActionError.Validation messages)) -> return failure (String.concat ", " messages)
-  }
+      let! result = rebuildSite ()
+      return Attempted result
+    }
+
+  member _.Dispatch () : DependencyResult<SiteDispatch> =
+    match configured () with
+    | Error problem ->
+      logger.LogError("Unable to dispatch the site. {message}", SiteConfigProblem.text problem)
+      CancellableTask.singleton (Error (dependencyError problem))
+    | Ok (deploy, dispatch) -> cancellableTask {
+      let! production = dispatch deploy.ProductionRepo
+      let! staging = dispatch deploy.StagingRepo
+
+      for repo, result in [ deploy.ProductionRepo, production; deploy.StagingRepo, staging ] do
+        match result with
+        | Error error -> logger.LogError("The dispatch of site.yml to {repo} failed: {error}", repo, error.DebugMessage)
+        | Ok _ -> ()
+
+      return Ok({ Production = production; Staging = staging } : SiteDispatch)
+    }

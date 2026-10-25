@@ -172,6 +172,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
 
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
+    member _.GetUtcNow () = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
     member _.CreateComment _ commenter newComment approval =
       created.Add approval

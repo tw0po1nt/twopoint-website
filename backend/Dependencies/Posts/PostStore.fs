@@ -107,6 +107,9 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
         return []
     }
 
+  let revisionName (slug : Slug) (time : DateTime) =
+    $"{Slug.value slug}/{TwoPoint.Site.Render.Time.isoTime (DateTimeOffset time)}{extension}"
+
   let conditionsOf (condition : WriteCondition) =
     let conditions = BlobRequestConditions()
 
@@ -198,10 +201,17 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.WritePublishedBlob({slug})"
     <| writeBlob "published" (blobName slug) text (conditionsOf condition)
 
-  /// A revision with the same slug and time is replaced.
-  member _.WriteRevisionBlob (slug : Slug) (time : string) (text : string) : DependencyResult<unit> =
+  member _.WriteRevisionBlob (slug : Slug) (time : DateTime) (text : string) : DependencyResult<WriteOutcome> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.WriteRevisionBlob({slug})"
+    <| writeBlob "revisions" (revisionName slug time) text (conditionsOf MustNotExist)
+
+  /// A revision that is already gone is not an error.
+  member _.DeleteRevisionBlob (slug : Slug) (time : DateTime) : DependencyResult<unit> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteRevisionBlob({slug})"
     <| cancellableTaskResult {
-      let! _ = writeBlob "revisions" $"{Slug.value slug}/{time}{extension}" text (BlobRequestConditions())
-      return ()
+      let! ct = CancellableTask.getCancellationToken()
+
+      do!
+        service.GetBlobContainerClient("revisions").GetBlobClient(revisionName slug time).DeleteIfExistsAsync(cancellationToken = ct)
+        |> Task.ignore
     }

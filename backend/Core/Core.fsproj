@@ -29,13 +29,13 @@
     <Compile Include="Posts\AssetActions.fs" />
     <Compile Include="Posts\PostQueries.fs" />
     <Compile Include="Posts\PostPreview.fs" />
-    <Compile Include="Posts\PostPublish.fs" />
     <Compile Include="Notifications\NewCommentActions.fs" />
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
     <Compile Include="Subscriptions\SubscriptionActions.fs" />
     <Compile Include="Subscriptions\SubscriptionQueries.fs" />
     <Compile Include="Deploys\DeployTypes.fs" />
     <Compile Include="Deploys\DeployActions.fs" />
+    <Compile Include="Posts\PostPublish.fs" />
   </ItemGroup>
 
   <ItemGroup>

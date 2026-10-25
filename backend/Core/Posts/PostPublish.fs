@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Posts.Actions
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
@@ -10,10 +11,28 @@ open IcedTasks
 open System
 open System.Globalization
 
+type PublishChoice =
+  | ChooseNow
+  /// An ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
+  | ChooseDate of text: string
+
 type PublishTime =
   | Now
-  /// An ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
-  | On of date: string
+  | On of date: DateTime
+
+[<RequireQualifiedAccess>]
+module PublishTime =
+
+  let whole (time: DateTime) =
+    DateTime(time.Ticks - time.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc)
+
+  let parse (choice: PublishChoice) : Result<PublishTime, string list> =
+    match choice with
+    | ChooseNow -> Ok Now
+    | ChooseDate text ->
+      match DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal) with
+      | true, date when text.EndsWith 'Z' -> Ok(On(whole date.UtcDateTime))
+      | _ -> Error [ "'publishDate' must be an ISO 8601 UTC time, for example 2026-11-02T13:00:00Z" ]
 
 [<RequireQualifiedAccess>]
 module PublishGate =
@@ -21,8 +40,7 @@ module PublishGate =
   type Refusal =
     | PostNotFound of Slug
     | AlreadyPublished of Slug
-    /// The working blob changed after the editor read it.
-    | Stale
+    | WorkingBlobChanged
     | DateInPast
     | FrontMatterUnreadable of reason: string
 
@@ -36,31 +54,21 @@ module PublishGate =
     abstract member GetSeriesRecords: unit -> DependencyResult<StoredSeries list>
     abstract member ParsePublished: PostCheck.ParsePublished
 
-  /// `Text` is the working text with the publish date set.
   type Gated =
     { PublishDate: DateTime
-      Text: string
+      PublishedAt: DateTime
+      DatedText: string
       Working: StoredBlob
       Problems: TwoPoint.Site.Render.Problem list }
 
   [<RequireQualifiedAccess>]
   module Logic =
 
-    let private whole (time: DateTime) = DateTime(time.Ticks - time.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc)
-
-    let private parseUtc (text: string) =
-      match DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal) with
-      | true, date when text.EndsWith 'Z' -> Some date.UtcDateTime
-      | _ -> None
-
-    let publishDate (now: DateTime) (time: PublishTime) : ActionResult<DateTime, Refusal> =
+    let publishDate (now: DateTime) (time: PublishTime) : Decision<DateTime, Refusal> =
       match time with
-      | Now -> Ok(whole now)
-      | On text ->
-        match parseUtc text with
-        | None -> Error(ActionError.Validation [ "'publishDate' must be an ISO 8601 UTC time, for example 2026-11-02T13:00:00Z" ])
-        | Some date when date <= now -> Error(ActionError.Logic DateInPast)
-        | Some date -> Ok date
+      | Now -> Decision.success (PublishTime.whole now)
+      | On date when date <= now -> Decision.failure DateInPast
+      | On date -> Decision.success date
 
     let working
       (slug: Slug)
@@ -71,7 +79,7 @@ module PublishGate =
       match published, working with
       | Some _, _ -> Decision.failure (AlreadyPublished slug)
       | None, None -> Decision.failure (PostNotFound slug)
-      | None, Some blob when ifMatch <> Some blob.ETag -> Decision.failure Stale
+      | None, Some blob when ifMatch <> Some blob.ETag -> Decision.failure WorkingBlobChanged
       | None, Some blob -> Decision.success blob
 
   let evaluate
@@ -81,6 +89,9 @@ module PublishGate =
     (time: PublishTime)
     : CancellableTask<ActionResult<Gated, Refusal>> =
     cancellableTaskResult {
+      let now = dependencies.GetUtcNow()
+      let! publishDate = Logic.publishDate now time |> Result.mapError ActionError<Refusal>.Logic
+
       let! published, (working, (posts, records)) =
         CancellableTaskResult.parallelZip
           (dependencies.GetPublishedBlob slug)
@@ -89,21 +100,21 @@ module PublishGate =
             (CancellableTaskResult.parallelZip (dependencies.GetPublishedPosts()) (dependencies.GetSeriesRecords())))
         |> CancellableTaskResult.mapError ActionError<Refusal>.Dependency
 
-      let! publishDate = Logic.publishDate (dependencies.GetUtcNow()) time
       let! (blob: StoredBlob) = Logic.working slug published working ifMatch |> Result.mapError ActionError<Refusal>.Logic
 
-      let! text =
+      let! datedText =
         TwoPoint.Site.Render.PostText.withPublishDate blob.Text (DateTimeOffset publishDate)
         |> Result.mapError (FrontMatterUnreadable >> ActionError<Refusal>.Logic)
 
       let series, parsed = dependencies.ParsePublished posts records
 
       let checkedPost =
-        TwoPoint.Site.Render.Check.forPublish dependencies.Stage dependencies.Images series parsed (Slug.value slug) text
+        TwoPoint.Site.Render.Check.forPublish dependencies.Stage dependencies.Images series parsed (Slug.value slug) datedText
 
       return
         ({ PublishDate = publishDate
-           Text = text
+           PublishedAt = PublishTime.whole now
+           DatedText = datedText
            Working = blob
            Problems = checkedPost.Problems }
         : Gated)
@@ -126,7 +137,7 @@ module CheckPublish =
   type Dto =
     { Slug: string
       IfMatch: string option
-      PublishTime: PublishTime }
+      PublishTime: PublishChoice }
 
   type Error = Refused of PublishGate.Refusal
 
@@ -137,9 +148,10 @@ module CheckPublish =
   let withDependencies (dependencies: PublishGate.Dependencies) : Action =
     fun dto -> cancellableTaskResult {
       let! slug = dto.Slug |> Slug.create |> Result.mapError ActionError<Error>.Validation
+      let! time = PublishTime.parse dto.PublishTime |> Result.mapError ActionError<Error>.Validation
 
       let! (gated: PublishGate.Gated) =
-        PublishGate.evaluate dependencies slug dto.IfMatch dto.PublishTime
+        PublishGate.evaluate dependencies slug dto.IfMatch time
         |> CancellableTask.map (Result.mapError (PublishGate.lift Refused))
 
       return Checked gated.Problems
@@ -156,43 +168,56 @@ module PublishPost =
   type Dto =
     { Slug: string
       IfMatch: string option
-      PublishTime: PublishTime }
+      PublishTime: PublishChoice }
 
   type Error =
     | Refused of PublishGate.Refusal
     | HasErrors of TwoPoint.Site.Render.Problem list
+    | RevisionExists of Slug
 
-  /// A warning is a step after the write of the `published` blob that failed. The post stays published.
   type Warning =
     | CommentRowNotWritten of DependencyError
     | PendingEditKept of DependencyError
+    | NewerTextKept
+    | ProductionRebuildFailed of DependencyError
+    | StagingRebuildFailed of DependencyError
     | SiteNotRebuilt of DependencyError
 
   type Outcome =
     { PublishDate: DateTime
       State: PostState
+      Production: ProductionDispatch
       Warnings: Warning list }
 
   type Event = Published of Outcome
 
   type Dependencies =
     inherit PublishGate.Dependencies
-    abstract member WriteRevisionBlob: slug: Slug -> time: string -> text: string -> DependencyResult<unit>
+    abstract member WriteRevisionBlob: slug: Slug -> time: DateTime -> text: string -> DependencyResult<WriteOutcome>
+    abstract member DeleteRevisionBlob: slug: Slug -> time: DateTime -> DependencyResult<unit>
     abstract member WritePublishedBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
-    abstract member UpsertPostRow: post: NewPost -> DependencyResult<unit>
+    abstract member UpsertPostRow: post: PostRow -> DependencyResult<unit>
     abstract member DeleteWorkingBlob: slug: Slug -> eTag: string -> DependencyResult<DeleteOutcome>
-    abstract member RebuildSite: unit -> DependencyResult<unit>
+    abstract member DispatchSite: unit -> DependencyResult<SiteDispatch>
 
   [<RequireQualifiedAccess>]
   module Logic =
 
-    let state (now: DateTime) (publishDate: DateTime) =
-      if publishDate > now then PostState.Upcoming else PostState.Published
+    let state (publishedAt: DateTime) (publishDate: DateTime) =
+      if publishDate > publishedAt then PostState.Upcoming else PostState.Published
+
+    let production (dispatched: Result<SiteDispatch, DependencyError>) =
+      match dispatched with
+      | Ok site ->
+        match site.Production with
+        | Ok dispatch -> ProductionDispatch.Dispatched dispatch
+        | Error _ -> ProductionDispatch.Failed
+      | Error _ -> ProductionDispatch.Failed
 
     let warnings
       (row: Result<unit, DependencyError>)
       (deleted: Result<DeleteOutcome, DependencyError>)
-      (rebuilt: Result<unit, DependencyError>)
+      (dispatched: Result<SiteDispatch, DependencyError>)
       : Warning list =
       [ match row with
         | Error error -> CommentRowNotWritten error
@@ -200,21 +225,29 @@ module PublishPost =
 
         match deleted with
         | Error error -> PendingEditKept error
-        | Ok Deleted
-        | Ok DeleteConditionFailed -> ()
+        | Ok DeleteConditionFailed -> NewerTextKept
+        | Ok Deleted -> ()
 
-        match rebuilt with
+        match dispatched with
         | Error error -> SiteNotRebuilt error
-        | Ok() -> () ]
+        | Ok site ->
+          match site.Production with
+          | Error error -> ProductionRebuildFailed error
+          | Ok _ -> ()
+
+          match site.Staging with
+          | Error error -> StagingRebuildFailed error
+          | Ok _ -> () ]
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
   let withDependencies (dependencies: Dependencies) : Action =
     fun dto -> cancellableTaskResult {
       let! slug = dto.Slug |> Slug.create |> Result.mapError ActionError<Error>.Validation
+      let! time = PublishTime.parse dto.PublishTime |> Result.mapError ActionError<Error>.Validation
 
       let! (gated: PublishGate.Gated) =
-        PublishGate.evaluate dependencies slug dto.IfMatch dto.PublishTime
+        PublishGate.evaluate dependencies slug dto.IfMatch time
         |> CancellableTask.map (Result.mapError (PublishGate.lift Refused))
 
       let errors = gated.Problems |> List.filter TwoPoint.Site.Render.Problem.isError
@@ -224,40 +257,59 @@ module PublishPost =
         | [] -> Ok()
         | _ -> Result.Error(ActionError.Logic(HasErrors errors))
 
+      let fields = TwoPoint.Site.Render.PostText.split gated.DatedText
+
       let! title =
-        NonEmptyString.create (Some "title") (TwoPoint.Site.Render.PostText.split gated.Text).Title
+        NonEmptyString.create (Some(nameof fields.Title)) fields.Title
         |> Result.mapError ActionError<Error>.Validation
 
-      do!
-        dependencies.WriteRevisionBlob slug (TwoPoint.Site.Render.Time.isoTime (DateTimeOffset gated.PublishDate)) gated.Text
+      let! revision =
+        dependencies.WriteRevisionBlob slug gated.PublishedAt gated.DatedText
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let! written =
-        dependencies.WritePublishedBlob slug gated.Text MustNotExist
-        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-
-      match written with
-      | ConditionFailed -> return! Result.Error(ActionError.Logic(Refused(PublishGate.AlreadyPublished slug)))
+      match revision with
+      | ConditionFailed -> return! Result.Error(ActionError.Logic(RevisionExists slug))
       | Written _ ->
-        let finish =
+        do!
           cancellableTask {
-            let! row =
+            let removeRevision () =
+              dependencies.DeleteRevisionBlob slug gated.PublishedAt |> CancellableTask.map ignore
+
+            match! dependencies.WritePublishedBlob slug gated.DatedText MustNotExist with
+            | Ok(Written _) -> return Ok()
+            | Ok ConditionFailed ->
+              do! removeRevision ()
+              return Result.Error(ActionError.Logic(Refused(PublishGate.AlreadyPublished slug)))
+            | Error error ->
+              do! removeRevision ()
+              return Result.Error(ActionError<Error>.Dependency error)
+          }
+
+        return!
+          cancellableTask {
+            let upsert () =
               dependencies.UpsertPostRow
                 { Title = title
                   Slug = slug
                   CreatedDate = gated.PublishDate }
 
+            let! firstRow = upsert ()
+
+            let! row =
+              match firstRow with
+              | Ok() -> CancellableTask.singleton firstRow
+              | Error _ -> upsert ()
+
             let! deleted = dependencies.DeleteWorkingBlob slug gated.Working.ETag
-            let! rebuilt = dependencies.RebuildSite()
+            let! dispatched = dependencies.DispatchSite()
 
             return
               Ok(
                 Published
                   { PublishDate = gated.PublishDate
-                    State = Logic.state (dependencies.GetUtcNow()) gated.PublishDate
-                    Warnings = Logic.warnings row deleted rebuilt }
+                    State = Logic.state gated.PublishedAt gated.PublishDate
+                    Production = Logic.production dispatched
+                    Warnings = Logic.warnings row deleted dispatched }
               )
           }
-
-        return! finish
     }

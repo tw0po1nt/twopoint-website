@@ -59,7 +59,6 @@ let summary (text: string) : PostSummary =
 
 let urlPath (post: Post) = $"/posts/{post.Slug}/"
 
-/// The image of the series wins over the image of the post.
 let ogImageSource (post: Post) : System.Uri option =
   post.FrontMatter.Series
   |> Option.bind _.Image
