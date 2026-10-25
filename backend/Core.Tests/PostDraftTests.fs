@@ -20,10 +20,13 @@ let private slug value = Slug.Unsafe.create value
 type private FakeStore(published : Map<string, string>, working : Map<string, string * int>) =
   let mutable working = working
   let mutable beforeWrite = ignore
+  let mutable beforeDelete = ignore
 
   member _.Working = working |> Map.map (fun _ (text, _) -> text)
 
   member _.BeforeWrite with set action = beforeWrite <- action
+
+  member _.BeforeDelete with set action = beforeDelete <- action
 
   member _.Overwrite (name : string) (text : string) =
     let version = working |> Map.tryFind name |> Option.map snd |> Option.defaultValue 0
@@ -60,6 +63,27 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       else
         CancellableTaskResult.singleton ConditionFailed
 
+  interface ChangeSlug.Dependencies with
+    member this.GetPostSlugs () = (this :> CreateDraft.Dependencies).GetPostSlugs ()
+    member this.GetPublishedBlob slug = (this :> GetPostDocument.Dependencies).GetPublishedBlob slug
+    member this.GetWorkingBlob slug = (this :> GetPostDocument.Dependencies).GetWorkingBlob slug
+    member this.WriteWorkingBlob slug text condition = (this :> SaveDraft.Dependencies).WriteWorkingBlob slug text condition
+    member _.DeleteWorkingBlob slug condition =
+      beforeDelete ()
+      let name = Slug.value slug
+      let current = working |> Map.tryFind name
+
+      let allowed =
+        match condition, current with
+        | MatchesETag etag, Some(_, version) -> etag = $"v{version}"
+        | _ -> false
+
+      if allowed then
+        working <- working |> Map.remove name
+        CancellableTaskResult.singleton Deleted
+      else
+        CancellableTaskResult.singleton DeleteConditionFailed
+
   interface CreateDraft.Dependencies with
     member _.GetPostSlugs () =
       Set.union (published |> Map.keys |> Set.ofSeq) (working |> Map.keys |> Set.ofSeq)
@@ -86,7 +110,7 @@ let private save (store : FakeStore) name ifMatch title body =
   run (
     SaveDraft.withDependencies
       store
-      { Slug = name; IfMatch = ifMatch; Title = title; Excerpt = ""; Body = body }
+      { Slug = name; IfMatch = ifMatch; Title = title; Excerpt = ""; Body = body; Details = None }
   )
 
 let private published = "---\ntitle: Live post\npublishDate: 2026-01-01T00:00:00Z\ntags:\n  - FSharp\n---\n\nLive body.\n"
@@ -252,5 +276,128 @@ let documentTests =
 
     test "a post that does not exist gives nothing" {
       Expect.isNone (document (store [] []) "missing") "Nothing"
+    }
+  ]
+
+let private saveWithDetails (store : FakeStore) name ifMatch details =
+  run (
+    SaveDraft.withDependencies
+      store
+      { Slug = name; IfMatch = ifMatch; Title = "T"; Excerpt = ""; Body = "Body.\n"; Details = Some details }
+  )
+
+let private changeSlug (store : FakeStore) name ifMatch newSlug =
+  run (ChangeSlug.withDependencies store { Slug = name; IfMatch = ifMatch; NewSlug = newSlug })
+
+let private keys (fake : FakeStore) = fake.Working |> Map.keys |> List.ofSeq
+
+[<Tests>]
+let detailsTests =
+  testList "Post details" [
+    test "a save with details writes them into the front matter and keeps the other fields" {
+      let fake = store [] [ "draft", "---\ntitle: Old\ncustom: Keep\n---\n\nBody.\n" ]
+
+      let details =
+        { TwoPoint.Site.Render.PostText.details "" with
+            Category = Some "Series"
+            Series = Some "my-series"
+            Tags = [ "FSharp" ] }
+
+      Expect.isOk (saveWithDetails fake "draft" (Some "v1") details) "Saved"
+      Expect.equal (TwoPoint.Site.Render.PostText.details fake.Working["draft"]) details "The details"
+      Expect.stringContains fake.Working["draft"] "custom: Keep" "The other field stays"
+    }
+
+    test "a save with no details keeps the details of the stored text" {
+      let fake = store [] [ "draft", "---\ntitle: Old\ncategory: Dev\n---\n\nBody.\n" ]
+      Expect.isOk (save fake "draft" (Some "v1") "New" "Body.\n") "Saved"
+      Expect.equal (TwoPoint.Site.Render.PostText.details fake.Working["draft"]).Category (Some "Dev") "The category stays"
+    }
+  ]
+
+[<Tests>]
+let slugTests =
+  testList "Change the slug" [
+    test "a draft moves to the new slug, and the old working blob goes" {
+      let fake = store [] [ "old-slug", "---\ntitle: A\n---\n\nBody.\n" ]
+
+      match changeSlug fake "old-slug" (Some "v1") "new-slug" with
+      | Ok(ChangeSlug.Event.Changed(changed, etag)) ->
+        Expect.equal (Slug.value changed) "new-slug" "The new slug"
+        Expect.equal etag "v1" "The ETag of the new blob"
+      | Error error -> failtestf "Expected a change, got %A" error
+
+      Expect.equal (keys fake) [ "new-slug" ] "The old blob is gone"
+      Expect.stringContains fake.Working["new-slug"] "title: A" "The text moved"
+    }
+
+    test "a published post keeps its slug, and the store stays as it was" {
+      let fake = store [ "live", published ] [ "live", "---\ntitle: Edit\n---\n" ]
+
+      match changeSlug fake "live" (Some "v1") "other" with
+      | Error(ActionError.Logic(ChangeSlug.Error.PostPublished refused)) -> Expect.equal (Slug.value refused) "live" "The slug"
+      | other -> failtestf "Expected PostPublished, got %A" other
+
+      Expect.equal (keys fake) [ "live" ] "No blob moved"
+    }
+
+    test "a published post with no pending edit keeps its slug" {
+      match changeSlug (store [ "live", published ] []) "live" None "other" with
+      | Error(ActionError.Logic(ChangeSlug.Error.PostPublished _)) -> ()
+      | other -> failtestf "Expected PostPublished, got %A" other
+    }
+
+    test "a slug that a draft or a published post has is refused" {
+      let fake = store [ "live", published ] [ "a", "---\n{}\n---\n"; "b", "---\n{}\n---\n" ]
+
+      for taken in [ "b"; "live" ] do
+        match changeSlug fake "a" (Some "v1") taken with
+        | Error(ActionError.Logic(ChangeSlug.Error.SlugTaken refused)) -> Expect.equal (Slug.value refused) taken "The slug"
+        | other -> failtestf "Expected SlugTaken, got %A" other
+
+      Expect.equal (keys fake) [ "a"; "b" ] "No blob moved"
+    }
+
+    test "a draft with an old ETag is stale" {
+      let fake = store [] [ "a", "---\n{}\n---\n" ]
+      fake.Overwrite "a" "---\ntitle: Newer\n---\n"
+
+      match changeSlug fake "a" (Some "v1") "b" with
+      | Error(ActionError.Logic ChangeSlug.Error.Stale) -> ()
+      | other -> failtestf "Expected Stale, got %A" other
+    }
+
+    test "a change that loses a race with a save keeps the newer text under the old slug" {
+      let fake = store [] [ "a", "---\ntitle: Old\n---\n" ]
+      fake.BeforeDelete <- fun () -> fake.Overwrite "a" "---\ntitle: Newer\n---\n"
+
+      match changeSlug fake "a" (Some "v1") "b" with
+      | Error(ActionError.Logic ChangeSlug.Error.Stale) -> ()
+      | other -> failtestf "Expected Stale, got %A" other
+
+      Expect.equal (keys fake) [ "a" ] "Only the old slug stays"
+      Expect.stringContains fake.Working["a"] "Newer" "The newer text"
+    }
+
+    test "the same slug changes nothing" {
+      let fake = store [] [ "a", "---\n{}\n---\n" ]
+
+      match changeSlug fake "a" (Some "v1") "a" with
+      | Ok(ChangeSlug.Event.Changed(changed, etag)) ->
+        Expect.equal (Slug.value changed) "a" "The slug"
+        Expect.equal etag "v1" "The ETag"
+      | Error error -> failtestf "Expected no change, got %A" error
+    }
+
+    test "a draft that does not exist is not found" {
+      match changeSlug (store [] []) "missing" None "b" with
+      | Error(ActionError.Logic(ChangeSlug.Error.PostNotFound _)) -> ()
+      | other -> failtestf "Expected PostNotFound, got %A" other
+    }
+
+    test "a bad new slug is a validation error" {
+      match changeSlug (store [] [ "a", "---\n{}\n---\n" ]) "a" (Some "v1") "Not A Slug" with
+      | Error(ActionError.Validation _) -> ()
+      | other -> failtestf "Expected a validation error, got %A" other
     }
   ]

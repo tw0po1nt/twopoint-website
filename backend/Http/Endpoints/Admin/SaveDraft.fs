@@ -19,7 +19,9 @@ open System.Threading
 type SaveDraftJson =
   { Title : string
     Excerpt : string
-    Body : string }
+    Body : string
+    /// Null leaves the details of the stored text as they are.
+    Details : PostDetailsDto }
 
 type SavedDraftDto = { ETag : string }
 
@@ -76,7 +78,7 @@ type SaveDraft (
         | precondition ->
           let! json = req.ReadFromJsonAsync<SaveDraftJson> ct
           let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
-          let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = "" }
+          let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Unchecked.defaultof<PostDetailsDto> }
 
           let postStore = PostStore(postStoreClient, logger)
           let saveDraft = SaveDraft.withDependencies {
@@ -93,7 +95,8 @@ type SaveDraft (
                 IfMatch = (match precondition with IfMatch eTag -> Some eTag | _ -> None)
                 Title = text json.Title
                 Excerpt = text json.Excerpt
-                Body = text json.Body }
+                Body = text json.Body
+                Details = json.Details |> Option.ofObj |> Option.map PostDetailsDto.toDetails }
 
           let apiResponse, statusCode =
             match result with

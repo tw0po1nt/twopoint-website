@@ -172,7 +172,9 @@ module SaveDraft =
       IfMatch : string option
       Title : string
       Excerpt : string
-      Body : string }
+      Body : string
+      /// `None` leaves the details of the stored text as they are.
+      Details : TwoPoint.Site.Render.PostText.Details option }
 
   type Error =
     | PostNotFound of Slug
@@ -219,9 +221,14 @@ module SaveDraft =
         Logic.decide slug published working dto.IfMatch
         |> Result.mapError ActionError<Error>.Logic
 
-      let! text =
-        TwoPoint.Site.Render.PostText.compose baseText { Title = dto.Title; Excerpt = dto.Excerpt; Body = dto.Body }
-        |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
+      let fields : TwoPoint.Site.Render.PostText.Fields = { Title = dto.Title; Excerpt = dto.Excerpt; Body = dto.Body }
+
+      let composed =
+        match dto.Details with
+        | Some details -> TwoPoint.Site.Render.PostText.composeWithDetails baseText fields details
+        | None -> TwoPoint.Site.Render.PostText.compose baseText fields
+
+      let! text = composed |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
 
       let! outcome =
         dependencies.WriteWorkingBlob slug text condition
@@ -230,6 +237,98 @@ module SaveDraft =
       match outcome with
       | Written eTag -> return Event.Saved eTag
       | ConditionFailed -> return! Result.Error(ActionError.Logic Stale)
+    }
+
+// ====================================================================================================================
+// Change the slug of a draft
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module ChangeSlug =
+
+  /// `IfMatch` is the ETag of the working blob that the editor read.
+  type Dto =
+    { Slug : string
+      IfMatch : string option
+      NewSlug : string }
+
+  type Error =
+    | PostNotFound of Slug
+    /// The slug of a published post is fixed, because a public URL uses it.
+    | PostPublished of Slug
+    | SlugTaken of Slug
+    /// The working blob changed after the editor read it.
+    | Stale
+
+  type Event = Changed of Slug * eTag: string
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    /// The working blob to move.
+    let decide
+      (slug : Slug)
+      (newSlug : Slug)
+      (taken : Slug list)
+      (published : StoredBlob option)
+      (working : StoredBlob option)
+      (ifMatch : string option)
+      : Decision<StoredBlob, Error> =
+      match published, working with
+      | Some _, _ -> Decision.failure (PostPublished slug)
+      | None, None -> Decision.failure (PostNotFound slug)
+      | None, Some blob when ifMatch <> Some blob.ETag -> Decision.failure Stale
+      | None, Some _ when newSlug <> slug && List.contains newSlug taken -> Decision.failure (SlugTaken newSlug)
+      | None, Some blob -> Decision.success blob
+
+  type Dependencies =
+    abstract member GetPostSlugs: unit -> DependencyResult<Slug list>
+    abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member WriteWorkingBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
+    abstract member DeleteWorkingBlob: slug: Slug -> condition: WriteCondition -> DependencyResult<DeleteOutcome>
+
+  type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  /// The new blob is written first, so a failure in the middle leaves the draft under at least one slug.
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun dto -> cancellableTaskResult {
+      let! slug = dto.Slug |> Slug.create |> Result.mapError ActionError<Error>.Validation
+      let! newSlug = dto.NewSlug |> Slug.create |> Result.mapError ActionError<Error>.Validation
+
+      let! taken, (published, working) =
+        CancellableTaskResult.parallelZip
+          (dependencies.GetPostSlugs())
+          (CancellableTaskResult.parallelZip (dependencies.GetPublishedBlob slug) (dependencies.GetWorkingBlob slug))
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! (blob : StoredBlob) =
+        Logic.decide slug newSlug taken published working dto.IfMatch
+        |> Result.mapError ActionError<Error>.Logic
+
+      if newSlug = slug then
+        return Event.Changed(slug, blob.ETag)
+      else
+        let! written =
+          dependencies.WriteWorkingBlob newSlug blob.Text MustNotExist
+          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+        match written with
+        | ConditionFailed -> return! Result.Error(ActionError.Logic(SlugTaken newSlug))
+        | Written newETag ->
+          let! deleted =
+            dependencies.DeleteWorkingBlob slug (MatchesETag blob.ETag)
+            |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+          match deleted with
+          | Deleted -> return Event.Changed(newSlug, newETag)
+          | DeleteConditionFailed ->
+            // The draft changed after the read, so the copy is out of date.
+            let! _ =
+              dependencies.DeleteWorkingBlob newSlug (MatchesETag newETag)
+              |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+            return! Result.Error(ActionError.Logic Stale)
     }
 
 // ====================================================================================================================

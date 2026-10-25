@@ -80,6 +80,46 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
         return []
     }
 
+  /// A series record is the blob `<slug>.yml` in the `series` container.
+  member _.GetSeriesRecords () : DependencyResult<StoredSeries list> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.GetSeriesRecords"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let client = service.GetBlobContainerClient "series"
+
+      try
+        let! blobs = client.GetBlobsAsync(cancellationToken = ct) |> TaskSeq.toListAsync
+        let records = ResizeArray()
+
+        for blob in blobs |> List.filter (fun blob -> blob.Name.EndsWith ".yml" && not (blob.Name.Contains '/')) do
+          let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
+          records.Add { File = blob.Name; Text = content.Value.Content.ToString() }
+
+        return List.ofSeq records
+      with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
+        return []
+    }
+
+  /// A blob that is gone or has another ETag gives <c>DeleteConditionFailed</c>.
+  member _.DeleteWorkingBlob (slug : Slug) (condition : WriteCondition) : DependencyResult<DeleteOutcome> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteWorkingBlob({slug})"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let conditions = BlobRequestConditions()
+
+      match condition with
+      | MatchesETag eTag -> conditions.IfMatch <- ETag eTag
+      | MustNotExist -> conditions.IfNoneMatch <- ETag.All
+
+      try
+        let! _ =
+          service.GetBlobContainerClient("working").GetBlobClient(blobName slug).DeleteAsync(DeleteSnapshotsOption.None, conditions, ct)
+
+        return Deleted
+      with :? RequestFailedException as error when error.Status = 412 || notFound error ->
+        return DeleteConditionFailed
+    }
+
   member _.GetPublishedPosts () = read "published"
 
   member _.GetWorkingPosts () = read "working"

@@ -220,6 +220,21 @@ type WriteOutcome =
   | Written of eTag: string
   | ConditionFailed
 
+type DeleteOutcome =
+  | Deleted
+  /// The blob changed since the caller read it, or it is gone.
+  | DeleteConditionFailed
+
+/// The text of one series record, with the name of its file in the `series` container.
+type StoredSeries = { File : string; Text : string }
+
+/// A category or a tag on the published posts. `Title` is the title of the newest published post with the slug.
+type TermCount = { Slug : string; Title : string; Posts : int }
+
+type TermSuggestions = { Categories : TermCount list; Tags : TermCount list }
+
+type SeriesListing = { Slug : string; Title : string }
+
 /// `Text` is the pending edit when the post has one, and else the published text. `ETag` is the ETag of the working blob.
 type PostDocument =
   { Slug : Slug

@@ -136,6 +136,99 @@ module GetPostDocument =
     }
 
 // ====================================================================================================================
+// Get the terms of the published posts
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetTerms =
+
+  type Query = unit -> CancellableTask<QueryResult<TermSuggestions>>
+
+  type Dependencies =
+    abstract member GetPublishedPosts: unit -> DependencyResult<StoredPost list>
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    /// The category `Series` is set by the series picker, so the category picker does not suggest it.
+    let private seriesCategory = "series"
+
+    let private counts (titles : string list list) : TermCount list =
+      titles
+      |> List.collect (List.distinctBy TwoPoint.Site.Render.Slug.term)
+      |> List.groupBy TwoPoint.Site.Render.Slug.term
+      |> List.filter (fun (slug, _) -> slug <> "")
+      |> List.map (fun (slug, group) ->
+        // The input is in newest-first order, so the first title is the title of the newest post.
+        { Slug = slug
+          Title = TwoPoint.Site.Render.Slug.termTitle group.Head
+          Posts = group.Length })
+      |> List.sortBy (fun term -> -term.Posts, term.Title)
+
+    let suggestions (published : StoredPost list) : TermSuggestions =
+      let newestFirst =
+        published
+        |> List.map (fun post ->
+          TwoPoint.Site.Render.Post.summary post.Text |> _.PublishDate, TwoPoint.Site.Render.PostText.details post.Text)
+        |> List.sortByDescending fst
+        |> List.map snd
+
+      let categories =
+        newestFirst
+        |> List.map (fun details -> Option.toList details.Category)
+        |> counts
+        |> List.filter (fun term -> term.Slug <> seriesCategory)
+
+      let tags =
+        newestFirst
+        |> List.map _.Tags
+        |> counts
+
+      { Categories = categories; Tags = tags }
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun () -> cancellableTaskResult {
+      let! published =
+        dependencies.GetPublishedPosts()
+        |> CancellableTaskResult.mapError QueryError.Dependency
+
+      return Logic.suggestions published
+    }
+
+// ====================================================================================================================
+// Get the series
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetSeries =
+
+  type Query = unit -> CancellableTask<QueryResult<SeriesListing list>>
+
+  type Dependencies =
+    abstract member GetSeriesRecords: unit -> DependencyResult<StoredSeries list>
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    /// A record that the parser cannot read is not in the list.
+    let listing (records : StoredSeries list) : SeriesListing list =
+      records
+      |> List.choose (fun record ->
+        TwoPoint.Site.Render.FrontMatter.parseSeries record.File record.Text
+        |> Result.toOption
+        |> Option.map (fun series -> { Slug = series.Slug; Title = series.Title }))
+      |> List.sortBy (fun series -> series.Title.ToLowerInvariant(), series.Slug)
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun () -> cancellableTaskResult {
+      let! records =
+        dependencies.GetSeriesRecords()
+        |> CancellableTaskResult.mapError QueryError.Dependency
+
+      return Logic.listing records
+    }
+
+// ====================================================================================================================
 // Get post by slug
 // ====================================================================================================================
 
