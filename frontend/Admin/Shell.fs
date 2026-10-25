@@ -31,6 +31,7 @@ type Call =
   | LoadDetailsOptions
   | ChangeSlug of Editor.SlugRequest
   | PreviewPost of Editor.PreviewRequest
+  | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -47,6 +48,7 @@ type Model =
     Rebuild: Rebuild.Model
     Posts: Posts.Model
     Editor: Editor.Model option
+    Uploads: Upload.Model
     Queue: Queue.Model
     PostComments: PostComments.Model option
     Commenters: Commenters.Model
@@ -62,6 +64,7 @@ type Msg =
   | Rebuild of Rebuild.Msg
   | Posts of Posts.Msg
   | Editor of Editor.Msg
+  | Upload of Upload.Msg
   | Queue of Queue.Msg
   | PostComments of PostComments.Msg
   | Commenters of Commenters.Msg
@@ -90,6 +93,7 @@ let private enter (route: Route) (model: Model) =
   let left =
     { model with
         Editor = None
+        Uploads = Upload.init
         PostComments = None
         Commenter = None }
 
@@ -117,6 +121,7 @@ let init (path: string) : Model * Effect option =
     Rebuild = Rebuild.init
     Posts = Posts.init
     Editor = None
+    Uploads = Upload.init
     Queue = Queue.init
     PostComments = None
     Commenters = Commenters.init
@@ -267,6 +272,13 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
           | Editor.ChangeSlug request -> Send [ ChangeSlug request ]
           | Editor.FetchPreview request -> Send [ PreviewPost request ])
+  | Upload msg ->
+    let uploads, effect = Upload.update msg model.Uploads
+    let next = { model with Uploads = uploads }
+
+    match msg with
+    | Upload.Answered(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | _ -> next, effect |> Option.map (fun (Upload.Send(id, file)) -> Send [ UploadAsset(id, file) ])
   | Queue(Queue.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) -> model, None
   | Queue msg ->
     let queue, effect = Queue.update msg model.Queue

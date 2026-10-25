@@ -7,6 +7,8 @@ open Fable.Core.JsInterop
 open Oxpecker.Solid
 open Oxpecker.Solid.Aria
 
+open System
+
 let private document (model: Shell.Model) =
   match model.Editor with
   | Some(Editor.Loaded document) -> Some document
@@ -62,6 +64,61 @@ let private previewFrame (model: Shell.Model) =
 
 let private hasPreviewFrame (model: Shell.Model) = previewFrame model <> ""
 
+let private bodyView: CodeMirror.EditorView option ref = ref None
+
+let private dropFiles (dispatch: Shell.Msg -> unit) (files: File array) (at: int) =
+  for file in files do
+    dispatch (
+      Shell.Upload(
+        Upload.Dropped
+          { Name = file.name
+            ContentType = file.``type``
+            Size = file.size
+            File = file
+            At = at }
+      )
+    )
+
+let private pickFiles (onPicked: File array -> unit) =
+  let input = Browser.Dom.document.createElement "input" :?> HTMLInputElement
+  input.``type`` <- "file"
+  input.accept <- "image/jpeg,image/png,image/webp,image/gif,application/pdf"
+  input.multiple <- true
+
+  input.addEventListener (
+    "change",
+    fun _ -> onPicked [| for index in 0 .. int input.files.length - 1 -> input.files[index] |]
+  )
+
+  input.click ()
+
+let private addImage (dispatch: Shell.Msg -> unit) () =
+  pickFiles (fun files ->
+    let at = bodyView.Value |> Option.map CodeMirror.cursor |> Option.defaultValue 0
+    dropFiles dispatch files at)
+
+let private reconcile (dispatch: Shell.Msg -> unit) (view: CodeMirror.EditorView) (items: Upload.Item list) =
+  for item in items do
+    match item.State with
+    | Upload.Uploading ->
+      if not (CodeMirror.hasPlaceholder view item.Id) then
+        CodeMirror.addPlaceholder view item.Id item.At item.Name
+    | Upload.Ready url ->
+      CodeMirror.replacePlaceholder
+        view
+        item.Id
+        (Func<_, _, _>(fun before after ->
+          let text, cursor = Upload.insertion item.Kind url before after
+          createObj [ "text" ==> text; "cursor" ==> cursor ]))
+
+      dispatch (Shell.Upload(Upload.Inserted item.Id))
+    | Upload.Failed _ ->
+      let at = CodeMirror.placeholderPosition view item.Id
+
+      if at >= 0 then
+        CodeMirror.removePlaceholder view item.Id
+        dispatch (Shell.Upload(Upload.Placed(item.Id, at)))
+
 let private fit (element: obj) =
   element?style?height <- "auto"
 
@@ -108,11 +165,46 @@ let private topBar (dispatch: Shell.Msg -> unit) (back: MouseEvent -> unit) (mod
       }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/259): Publish
       button (type' = "button", class' = "editor-primary", disabled = true) { primaryText (model ()) }
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): the actions menu
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): the actions menu
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): the actions menu
-      button (type' = "button", class' = "text", disabled = true, ariaLabel = "More actions") { "•••" }
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): more items in the actions menu
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): more items in the actions menu
+      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): more items in the actions menu
+      button (
+        type' = "button",
+        class' = "text",
+        ariaLabel = "More actions",
+        ariaHasPopup = "menu",
+        popovertarget = "editor-menu"
+      ) {
+        "•••"
+      }
+
+      Parts.menu
+        "editor-menu"
+        { Side = Menu.Below; Edge = Menu.End }
+        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch) (Fragment() { "Add image" }) })
     }
+  }
+
+[<SolidComponent>]
+let private uploadNotice (dispatch: Shell.Msg -> unit) (notice: Upload.Notice) =
+  Parts.Alert(tone = Parts.Bad, title = notice.Title).Has(
+    Fragment() {
+      p () { notice.Reason }
+
+      div (class' = "editor-notice-actions") {
+        Show(when' = notice.CanRetry) {
+          Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Upload(Upload.Retried notice.Id))).Has(Fragment() { "Retry" })
+        }
+
+        Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Upload(Upload.Dismissed notice.Id))).Has(Fragment() { "Dismiss" })
+      }
+    }
+  )
+
+[<SolidComponent>]
+let private uploadNotices (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  div (class' = "editor-notices") {
+    For(each = Array.ofList (Upload.notices (model ()).Uploads)) { yield fun notice _ -> uploadNotice dispatch notice }
   }
 
 [<SolidComponent>]
@@ -155,9 +247,20 @@ let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
             (fields (model ())).Body
             "Body"
             "Write the post in Markdown."
-            (send Editor.BodyChanged))
+            (send Editor.BodyChanged)
+            (Action<File array, int>(dropFiles dispatch)))
 
-      onCleanup (fun () -> view.destroy ()))
+      bodyView.Value <- Some view
+
+      createEffect (fun () ->
+        let items = (model ()).Uploads.Items
+        untrack (fun () -> reconcile dispatch view items))
+
+      onCleanup (fun () ->
+        bodyView.Value <- None
+        view.destroy ()))
+
+    uploadNotices dispatch model
   }
 
 [<SolidComponent>]

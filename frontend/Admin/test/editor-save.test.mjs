@@ -60,7 +60,7 @@ test('the editor shows the title, the excerpt, the body, and the status text', (
 
 test('the editor has no line numbers, no gutter, and the slots of the top bar', () => {
   assert.equal(document.querySelector('.cm-gutters'), null);
-  const slots = [...document.querySelectorAll('.editor-bar button')].map((item) => item.textContent.trim());
+  const slots = [...document.querySelectorAll('.editor-actions > button')].map((item) => item.textContent.trim());
   assert.deepEqual(slots, ['Preview', 'Details', 'Publish', '•••']);
   assert.equal(document.querySelector('.editor-bar a').textContent.trim(), 'Posts');
 });

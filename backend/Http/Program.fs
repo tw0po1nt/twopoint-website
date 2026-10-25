@@ -1,4 +1,5 @@
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Posts
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints.Auth
 
@@ -7,6 +8,7 @@ open Azure.Data.Tables
 open Azure.Identity
 open Azure.Messaging.ServiceBus
 open Azure.Storage.Blobs
+open Azure.Storage.Blobs.Models
 open Azure.Security.KeyVault.Secrets
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Builder
@@ -63,11 +65,18 @@ let main args =
   // Azure Table Storage
   let tableServiceClient = TableServiceClient(config.Azure.TableStorageUri, credential)
 
-  // Azure Blob Storage: the post store. Azurite takes no token, so the local stage signs with its development account.
-  let postStoreClient =
-    if TwoPoint.Site.Render.Azurite.isUrl config.Azure.PostStoreUri
+  // Azure Blob Storage: the post store and the assets. Azurite takes no token, so the local stage signs with its development account.
+  let blobClientFor (uri : Uri) =
+    if TwoPoint.Site.Render.Azurite.isUrl uri
     then BlobServiceClient "UseDevelopmentStorage=true"
-    else BlobServiceClient(config.Azure.PostStoreUri, credential)
+    else BlobServiceClient(uri, credential)
+
+  let postStoreClient = blobClientFor config.Azure.PostStoreUri
+  let assetsClient = blobClientFor config.Azure.AssetsUri
+
+  // Azurite starts with no container. The deployed container exists and is public.
+  if TwoPoint.Site.Render.Azurite.isUrl config.Azure.AssetsUri then
+    assetsClient.GetBlobContainerClient("assets").CreateIfNotExists(PublicAccessType.Blob) |> ignore
 
   // Email client
   let resourceEndpoint = config.Azure.CommsResourceEndpoint
@@ -89,6 +98,7 @@ let main args =
     :> TwoPoint.Site.Render.IImageSize
 
   builder.Services.AddSingleton<TwoPoint.Site.Render.IImageSize>(fun _ -> previewImages) |> ignore
+  builder.Services.AddSingleton<AssetsClient>(fun _ -> { Service = assetsClient }) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore
   builder.Services.AddSingleton<WebPushSetup>(fun services ->
     match config.WebPush with

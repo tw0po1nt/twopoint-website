@@ -12,6 +12,7 @@ type AzureConfig =
     ManagedIdentityClientId : Guid
     TableStorageUri : Uri
     PostStoreUri : Uri
+    AssetsUri : Uri
     ServiceBusUri : Uri
     KeyVaultUri : Uri option }
 
@@ -65,6 +66,7 @@ module Config =
         let! managedIdentityClientId = Bind.valueAt "ManagedIdentityClientId" Bind.guid
         let! tableStorageUri = Bind.valueAt "TableStorageUri" (Bind.uri UriKind.Absolute)
         let! postStoreUri = Bind.valueAt "PostStoreUri" (Bind.uri UriKind.Absolute)
+        let! assetsUri = Bind.valueAt "AssetsUri" (Bind.uri UriKind.Absolute)
         let! serviceBusUri = Bind.valueAt "ServiceBusUri" (Bind.uri UriKind.Absolute)
         let! keyVaultUri = Bind.optValueAt "KeyVaultUri" (Bind.uri UriKind.Absolute)
         return
@@ -74,6 +76,7 @@ module Config =
             ManagedIdentityClientId = managedIdentityClientId
             TableStorageUri = tableStorageUri
             PostStoreUri = postStoreUri
+            AssetsUri = assetsUri
             ServiceBusUri = serviceBusUri
             KeyVaultUri = keyVaultUri }
       }
