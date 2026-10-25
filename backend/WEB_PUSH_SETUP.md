@@ -41,8 +41,9 @@ comment. The function `Queues-ProcessNewCommentMessage` reads the queue and send
 deploys the function, so create the queue first:
 
 ```bash
-az servicebus queue create -g <resource-group> --namespace-name <namespace> -n new_comment
+scripts/setup-new-comment-queue.sh
 ```
 
-The backend identity needs no new role. It already sends to the namespace and reads the other
-queues. The Function App setting `TwoPointWebsiteServiceBus` already names the namespace.
+The script finds the namespace from the Function App setting `Azure__ServiceBusUri` and creates the
+queue. A second run changes nothing. The script also checks that the backend identity can send to
+the queue and receive from it, and prints the command for a missing role. The Function App setting `TwoPointWebsiteServiceBus` already names the namespace.
