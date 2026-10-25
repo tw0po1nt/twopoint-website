@@ -48,10 +48,10 @@ let private problem severity message : Api.Problem =
     Place = None
     Message = message }
 
-let private checkRequest publishDate : Editor.PublishRequest =
+let private checkRequest target : Editor.PublishRequest =
   { Slug = "my-post"
     ETag = "\"v1\""
-    PublishDate = publishDate }
+    Target = target }
 
 let private checkedWith problems = Ok({ Problems = problems }: Api.PublishCheck)
 
@@ -78,7 +78,7 @@ let tests =
     test "Publish on a saved draft opens the dialog and asks for a check of now" {
       let model, effect = send Editor.PublishClicked (opened draft)
       Expect.equal (publishState model) (Publish.Checking Publish.Now) "The dialog checks"
-      Expect.equal effect (Some(Shell.Send [ Shell.CheckPublish(checkRequest None, Publish.Now) ])) "The check call"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckPublish(checkRequest Api.PublishNow, Publish.Now) ])) "The check call"
     }
 
     test "the check after the load asks the API again, because the load has no problems" {
@@ -101,7 +101,7 @@ let tests =
 
         Expect.equal
           effect
-          (Some(Shell.Send [ Shell.CheckPublish({ checkRequest None with ETag = "\"v2\"" }, Publish.Now) ]))
+          (Some(Shell.Send [ Shell.CheckPublish({ checkRequest Api.PublishNow with ETag = "\"v2\"" }, Publish.Now) ]))
           "The check has the new ETag"
       | other -> failtestf "Expected a save, got %A" other
     }
@@ -114,7 +114,7 @@ let tests =
       | Some(Shell.Send [ Shell.SavePost request ]) ->
         let model, effect = send (Editor.SaveAnswered("my-post", request.Version, Error(Api.Failed "No."))) model
         Expect.isNone effect "No check"
-        Expect.stringContains (Publish.reason (document' model).Publish) "The post did not save." "The reason"
+        Expect.stringContains (Publish.reason (document' model).Publish |> Option.get) "The post did not save." "The reason"
       | other -> failtestf "Expected a save, got %A" other
     }
 
@@ -150,7 +150,7 @@ let tests =
       let model, _ = send Editor.PublishClicked (opened draft)
       let model, _ = send (Editor.PublishCheckAnswered("my-post", Publish.Now, Error(Api.Failed "The publish date is in the past"))) model
       Expect.isFalse (Publish.canConfirm (document' model).Publish) "Disabled"
-      Expect.equal (Publish.reason (document' model).Publish) "The publish date is in the past" "The reason"
+      Expect.equal (Publish.reason (document' model).Publish) (Some "The publish date is in the past") "The reason"
     }
 
     test "a date choice asks for a check of that date, and an incomplete date asks for none" {
@@ -163,7 +163,7 @@ let tests =
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.CheckPublish(checkRequest (Some "2099-12-31T13:00:00Z"), Publish.OnDate "2099-12-31T13:00") ]))
+        (Some(Shell.Send [ Shell.CheckPublish(checkRequest (Api.PublishOn "2099-12-31T13:00:00Z"), Publish.OnDate "2099-12-31T13:00") ]))
         "The date goes to the API as a UTC time"
 
       Expect.equal (publishState model) (Publish.Checking(Publish.OnDate "2099-12-31T13:00")) "Checking"
@@ -178,7 +178,7 @@ let tests =
     test "Publish after a check sends the publish call with the ETag and the date" {
       let model, effect = send Editor.PublishConfirmed ready
       Expect.equal (publishState model) (Publish.Sending Publish.Now) "Sending"
-      Expect.equal effect (Some(Shell.Send [ Shell.PublishPost(checkRequest None) ])) "The publish call"
+      Expect.equal effect (Some(Shell.Send [ Shell.PublishPost(checkRequest Api.PublishNow) ])) "The publish call"
     }
 
     test "a published draft shows its state and closes the dialog" {
@@ -188,7 +188,7 @@ let tests =
       Expect.equal (publishState model) Publish.Closed "The dialog closes"
       Expect.equal (Editor.statusText (document' model)) "Published Mar 1, 2026" "The status"
       Expect.isNone (document' model).ETag "No working blob"
-      Expect.isEmpty (document' model).Publish.Notice "No warning"
+      Expect.isEmpty (document' model).Publish.Warnings "No warning"
     }
 
     test "a draft published on a future date is upcoming" {
@@ -199,18 +199,43 @@ let tests =
 
     test "a publish with a failed step after the write shows the warning and keeps the post published" {
       let model, _ = send Editor.PublishConfirmed ready
-      let model, _ = send (Editor.PublishAnswered("my-post", Ok(published Api.Published [ Api.SiteRebuild ]))) model
+      let model, _ = send (Editor.PublishAnswered("my-post", Ok(published Api.Published [ Api.SiteNotRebuilt ]))) model
       Expect.equal (document' model).State Api.Published "Published"
-      Expect.equal (document' model).Publish.Notice [ Api.SiteRebuild ] "The warning"
+      Expect.equal (document' model).Publish.Warnings [ Api.SiteNotRebuilt ] "The warning"
       let model, _ = send Editor.PublishNoticeDismissed model
-      Expect.isEmpty (document' model).Publish.Notice "Dismissed"
+      Expect.isEmpty (document' model).Publish.Warnings "Dismissed"
+    }
+
+    test "a publish that could not delete the working blob keeps the ETag and the pending edit" {
+      let model, _ = send Editor.PublishConfirmed ready
+      let model, _ = send (Editor.PublishAnswered("my-post", Ok(published Api.Published [ Api.PendingEditKept ]))) model
+      Expect.equal (document' model).ETag (Some "\"v1\"") "The working blob still has the ETag"
+      Expect.isTrue (document' model).PendingEdit "A pending edit"
+      Expect.equal (Editor.statusText (document' model)) "Published Mar 1, 2026 · changes not live · saved" "The status"
+    }
+
+    test "a publish that found newer text keeps a pending edit with no ETag, so the next save is refused" {
+      let model, _ = send Editor.PublishConfirmed ready
+      let model, _ = send (Editor.PublishAnswered("my-post", Ok(published Api.Published [ Api.NewerTextKept ]))) model
+      Expect.isNone (document' model).ETag "No ETag"
+      Expect.isTrue (document' model).PendingEdit "A pending edit"
+
+      let model, _ = send (Editor.BodyChanged "More.\n") model
+      let model, effect = send (Editor.AutosaveElapsed 1) model
+
+      match effect with
+      | Some(Shell.Send [ Shell.SavePost request ]) ->
+        Expect.isNone request.ETag "The save sends If-None-Match"
+        let model, _ = send (Editor.SaveAnswered("my-post", request.Version, Error Api.Stale)) model
+        Expect.equal (document' model).Save Editor.Stale "The save is refused as a change in another tab"
+      | other -> failtestf "Expected a save, got %A" other
     }
 
     test "a refused publish shows the reason in the dialog and lets the author close it" {
       let model, _ = send Editor.PublishConfirmed ready
       let model, _ = send (Editor.PublishAnswered("my-post", Error(Api.Failed "The post has errors and is not published."))) model
       Expect.equal (document' model).State Api.Draft "Still a draft"
-      Expect.equal (Publish.reason (document' model).Publish) "The post has errors and is not published." "The reason"
+      Expect.equal (Publish.reason (document' model).Publish) (Some "The post has errors and is not published.") "The reason"
       let model, _ = send Editor.PublishClosed model
       Expect.equal (publishState model) Publish.Closed "Closed"
     }
@@ -255,7 +280,7 @@ let menuTests =
   testList "Editor menu" [
     test "the primary action of a draft is available, and the primary action of a published post waits for a later version" {
       Expect.equal (Editor.primaryAvailability (document' (opened draft))) Editor.Available "Draft"
-      Expect.equal (Editor.primaryAvailability (document' (opened live))) (Editor.Unavailable "Comes in a later version.") "Published"
+      Expect.equal (Editor.primaryAvailability (document' (opened live))) (Editor.Unavailable "A later version adds this action.") "Published"
     }
 
     test "the menu of a draft lists each action of the state, with the reason of each one that is not available" {
@@ -270,10 +295,10 @@ let menuTests =
       Expect.equal (reasonOf Editor.ChangesFromLive model) "A draft has no published text." "Changes from live"
       Expect.equal (reasonOf Editor.DiscardChanges model) "A draft has no pending edit." "Discard changes"
       Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Change the date"
-      Expect.equal (reasonOf Editor.Unpublish model) "Only an upcoming post can be unpublished." "Unpublish"
+      Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
       Expect.equal (reasonOf Editor.Revisions model) "A draft has no revisions. The first publish makes one." "Revisions"
       Expect.equal (reasonOf Editor.SendToSubscribers model) "Publish the post first." "Send to subscribers"
-      Expect.equal (reasonOf Editor.Delete model) "Comes in a later version." "Delete"
+      Expect.equal (reasonOf Editor.Delete model) "A later version adds this action." "Delete"
     }
 
     test "Save is available when the post has unsaved changes, and it sends the save message" {
@@ -285,12 +310,12 @@ let menuTests =
     test "the menu of a published post says that only an upcoming post can change its date" {
       let model = opened live
       Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Change the date"
-      Expect.equal (reasonOf Editor.Unpublish model) "Only an upcoming post can be unpublished." "Unpublish"
+      Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
     }
 
     test "the menu of an upcoming post has a reason for each action that a later version brings" {
       let model = opened upcoming
-      Expect.equal (reasonOf Editor.ChangeDate model) "Comes in a later version." "Change the date"
-      Expect.equal (reasonOf Editor.Delete model) "Comes in a later version." "Delete"
+      Expect.equal (reasonOf Editor.ChangeDate model) "A later version adds this action." "Change the date"
+      Expect.equal (reasonOf Editor.Delete model) "A later version adds this action." "Delete"
     }
   ]

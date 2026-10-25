@@ -163,16 +163,20 @@ type Check =
 
 type SavedPost = { ETag: string; Check: Check }
 
-/// The problems of the working text with the chosen publish date. A publish with an error is refused.
 type PublishCheck = { Problems: Problem list }
 
-/// A step after the write of the published blob that failed. The post stays published.
+type PublishTarget =
+  | PublishNow
+  /// An ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
+  | PublishOn of iso: string
+
 type PublishWarning =
-  /// The post table has no row for the post, so comments on the post fail.
-  | CommentRow
-  /// The working blob stays, because it changed during the publish or the delete failed.
-  | PendingEdit
-  | SiteRebuild
+  | CommentRowMissing
+  | PendingEditKept
+  | NewerTextKept
+  | ProductionRebuildFailed
+  | StagingRebuildFailed
+  | SiteNotRebuilt
 
 /// `PublishDate` is an ISO 8601 UTC time. `State` is `Published` or `Upcoming`.
 type PublishedPost =
@@ -288,9 +292,12 @@ let private publishWarning: Decoder<PublishWarning> =
   Decode.string
   |> Decode.andThen (fun name ->
     match name with
-    | "comment-row" -> Decode.succeed CommentRow
-    | "pending-edit" -> Decode.succeed PendingEdit
-    | "site-rebuild" -> Decode.succeed SiteRebuild
+    | "comment-row" -> Decode.succeed CommentRowMissing
+    | "pending-edit" -> Decode.succeed PendingEditKept
+    | "newer-text" -> Decode.succeed NewerTextKept
+    | "production-rebuild" -> Decode.succeed ProductionRebuildFailed
+    | "staging-rebuild" -> Decode.succeed StagingRebuildFailed
+    | "site-rebuild" -> Decode.succeed SiteNotRebuilt
     | _ -> Decode.fail $"The publish warning '{name}' is not known.")
 
 let private coders =
@@ -562,28 +569,27 @@ let previewPost
     |> Encode.toString 0
 
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "preview" ]) (Some(Json json)) []
-let private publishBody (publishDate: string option) =
+let private publishBody (target: PublishTarget) =
   let date =
-    match publishDate with
-    | Some date -> Encode.string date
-    | None -> Encode.nil
+    match target with
+    | PublishOn iso -> Encode.string iso
+    | PublishNow -> Encode.nil
 
   Encode.object [ "publishDate", date ] |> Encode.toString 0
 
-/// `publishDate` is an ISO 8601 UTC time, or `None` for the publish time.
 let checkPublish
   (api: string)
   (token: string)
   (slug: string)
   (eTag: string)
-  (publishDate: string option)
+  (target: PublishTarget)
   : JS.Promise<Result<PublishCheck, Failure>> =
   sendWith
     HttpMethod.POST
     api
     token
     (internalPath [ "posts"; slug; "publish"; "check" ])
-    (Some(Json(publishBody publishDate)))
+    (Some(Json(publishBody target)))
     [ IfMatch eTag ]
 
 let publishPost
@@ -591,14 +597,14 @@ let publishPost
   (token: string)
   (slug: string)
   (eTag: string)
-  (publishDate: string option)
+  (target: PublishTarget)
   : JS.Promise<Result<PublishedPost, Failure>> =
   sendWith
     HttpMethod.POST
     api
     token
     (internalPath [ "posts"; slug; "publish" ])
-    (Some(Json(publishBody publishDate)))
+    (Some(Json(publishBody target)))
     [ IfMatch eTag ]
 
 type private UploadedAsset = { Url: string }

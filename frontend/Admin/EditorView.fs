@@ -466,7 +466,7 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
 
       Show(when' = isOnDate (model ())) {
         Parts
-          .Field(id = "publish-date", label = "Date and time in UTC", hint = "The post is on the site with its badge until then.")
+          .Field(id = "publish-date", label = "Date and time in UTC", hint = "Until then, the site shows the post with the Upcoming badge.")
           .Has(
             Parts
               .Input(
@@ -482,8 +482,10 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
 
       publishProblems model
 
-      Show(when' = (Publish.reason (publishModel (model ())) <> "")) {
-        Parts.Alert(tone = Parts.Bad, title = "The post is not published.").Has(p () { Publish.reason (publishModel (model ())) })
+      Show(when' = (Publish.reason (publishModel (model ()))).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The post is not published.").Has(
+          p () { Publish.reason (publishModel (model ())) |> Option.defaultValue "" }
+        )
       }
     }
 
@@ -501,10 +503,10 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
 
 [<SolidComponent>]
 let private publishNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
-  Show(when' = not (List.isEmpty (publishModel (model ())).Notice)) {
+  Show(when' = not (List.isEmpty (publishModel (model ())).Warnings)) {
     Parts.Alert(tone = Parts.Warn, title = "The post is published, and a step after the publish failed.").Has(
       Fragment() {
-        For(each = Array.ofList (publishModel (model ())).Notice) { yield fun warning _ -> p () { Publish.warningText warning } }
+        For(each = Array.ofList (publishModel (model ())).Warnings) { yield fun warning _ -> p () { Publish.warningText warning } }
 
         div (class' = "editor-notice-actions") {
           Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.PublishNoticeDismissed)).Has(Fragment() { "Dismiss" })

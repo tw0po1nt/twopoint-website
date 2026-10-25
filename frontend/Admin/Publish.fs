@@ -5,14 +5,11 @@ open System.Text.RegularExpressions
 
 type When =
   | Now
-  /// The text of a datetime-local input, in UTC, for example `2026-11-02T13:00`.
   | OnDate of typed: string
 
 type State =
   | Closed
-  /// The dialog waits until the API has the text.
   | Saving
-  /// The author chose a date, and the text is not a complete date yet.
   | Choosing of When
   | Checking of When
   | Checked of When * Api.Problem list
@@ -22,16 +19,15 @@ type State =
 
 type Model =
   { State: State
-    /// The steps after the write of the published blob that failed.
-    Notice: Api.PublishWarning list }
+    Warnings: Api.PublishWarning list }
 
-let init: Model = { State = Closed; Notice = [] }
+let init: Model = { State = Closed; Warnings = [] }
 
 let withState (state: State) (model: Model) = { model with State = state }
 
-let closedWith (warnings: Api.PublishWarning list) : Model = { State = Closed; Notice = warnings }
+let closedWith (warnings: Api.PublishWarning list) : Model = { State = Closed; Warnings = warnings }
 
-let dismissed (model: Model) = { model with Notice = [] }
+let dismissed (model: Model) = { model with Warnings = [] }
 
 let isOpen (model: Model) =
   match model.State with
@@ -46,18 +42,16 @@ let isOpen (model: Model) =
 
 let private complete = Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 
-/// The time that the API takes, or `None` for a text that is not a complete date and time.
 let isoOf (typed: string) =
   if complete.IsMatch typed then
     Some(if typed.Length = 16 then $"{typed}:00Z" else $"{typed}Z")
   else
     None
 
-/// `None` is a choice that has no complete date. `Some None` is the publish time.
-let publishDate (choice: When) =
+let target (choice: When) : Api.PublishTarget option =
   match choice with
-  | Now -> Some None
-  | OnDate typed -> isoOf typed |> Option.map Some
+  | Now -> Some Api.PublishNow
+  | OnDate typed -> isoOf typed |> Option.map Api.PublishOn
 
 let hasErrors (problems: Api.Problem list) =
   problems |> List.exists (fun problem -> problem.Severity = Api.Severity.Error)
@@ -78,7 +72,6 @@ let isSending (model: Model) =
   | Sending _ -> true
   | _ -> false
 
-/// An error disables the publish. A warning does not.
 let canConfirm (model: Model) =
   match model.State with
   | Checked(_, problems) -> not (hasErrors problems)
@@ -92,8 +85,8 @@ let problems (model: Model) =
 let reason (model: Model) =
   match model.State with
   | CheckFailed(_, reason)
-  | Failed(_, reason) -> reason
-  | _ -> ""
+  | Failed(_, reason) -> Some reason
+  | _ -> None
 
 let statusText (model: Model) =
   match model.State with
@@ -110,7 +103,9 @@ let statusText (model: Model) =
 
 let warningText (warning: Api.PublishWarning) =
   match warning with
-  | Api.CommentRow ->
-    "The row for comments did not save. Comments on the post fail until you publish a change to the post."
-  | Api.PendingEdit -> "The draft text stays in the post store. The published post is correct."
-  | Api.SiteRebuild -> "The site rebuild did not start. Select Rebuild site on the dashboard."
+  | Api.CommentRowMissing -> "Readers cannot comment on this post yet. The post table has no row for it."
+  | Api.PendingEditKept -> "The post has a pending edit. The published text is correct."
+  | Api.NewerTextKept -> "Another tab saved newer text while the post published. That text is now a pending edit."
+  | Api.ProductionRebuildFailed -> "The production rebuild did not start. Select Rebuild site on the dashboard."
+  | Api.StagingRebuildFailed -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
+  | Api.SiteNotRebuilt -> "The site rebuild did not start. Select Rebuild site on the dashboard."

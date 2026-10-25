@@ -164,10 +164,10 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
       request.Details
     |> Promise.map (fun result -> Shell.Editor(Editor.PreviewAnswered(request.Slug, result)))
   | Shell.CheckPublish(request, choice) ->
-    Api.checkPublish (Config.api ()) token request.Slug request.ETag request.PublishDate
+    Api.checkPublish (Config.api ()) token request.Slug request.ETag request.Target
     |> Promise.map (fun result -> Shell.Editor(Editor.PublishCheckAnswered(request.Slug, choice, result)))
   | Shell.PublishPost request ->
-    Api.publishPost (Config.api ()) token request.Slug request.ETag request.PublishDate
+    Api.publishPost (Config.api ()) token request.Slug request.ETag request.Target
     |> Promise.map (fun result -> Shell.Editor(Editor.PublishAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file

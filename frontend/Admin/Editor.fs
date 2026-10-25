@@ -66,8 +66,7 @@ type PreviewRequest =
 type PublishRequest =
   { Slug: string
     ETag: string
-    /// `None` publishes at the time of the publish.
-    PublishDate: string option }
+    Target: Api.PublishTarget }
 
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
@@ -295,19 +294,19 @@ let private withPublish (state: Publish.State) (document: Document) =
   { document with Publish = Publish.withState state document.Publish }
 
 let private startCheck (choice: Publish.When) (document: Document) =
-  match document.ETag, Publish.publishDate choice, choice with
-  | Some eTag, Some publishDate, _ ->
+  match document.ETag, Publish.target choice with
+  | Some eTag, Some target ->
     Loaded(withPublish (Publish.Checking choice) document),
     Some(
       CheckPublish(
         { Slug = document.Slug
           ETag = eTag
-          PublishDate = publishDate },
+          Target = target },
         choice
       )
     )
-  | _, None, _ -> Loaded(withPublish (Publish.Choosing choice) document), None
-  | None, Some _, _ -> Loaded(withPublish (Publish.CheckFailed(choice, "The post has no saved text.")) document), None
+  | _, None -> Loaded(withPublish (Publish.Choosing choice) document), None
+  | None, Some _ -> Loaded(withPublish (Publish.CheckFailed(choice, "The post has no saved text.")) document), None
 
 let canPublish (document: Document) =
   match document.State, document.Save with
@@ -316,13 +315,13 @@ let canPublish (document: Document) =
   | (Api.Published | Api.Upcoming), _ -> false
 
 let private publishClicked (document: Document) =
-  match document.Save with
-  | _ when not (canPublish document) -> Loaded document, None
-  | Saved -> startCheck Publish.Now document
-  | Saving _ -> Loaded(withPublish Publish.Saving document), None
-  | Unsaved
-  | SaveFailed _ -> startSave (withPublish Publish.Saving document)
-  | Stale -> Loaded document, None
+  match document.State, document.Save with
+  | Api.Draft, _ when Details.isChangingSlug document.Details -> Loaded document, None
+  | Api.Draft, Saved -> startCheck Publish.Now document
+  | Api.Draft, Saving _ -> Loaded(withPublish Publish.Saving document), None
+  | Api.Draft, (Unsaved | SaveFailed _) -> startSave (withPublish Publish.Saving document)
+  | Api.Draft, Stale
+  | (Api.Published | Api.Upcoming), _ -> Loaded document, None
 
 let private resumePublish (model: Model, effect: Effect option) =
   match model with
@@ -366,14 +365,14 @@ let private publishCheckAnswered
 let private publishConfirmed (document: Document) =
   match document.Publish.State, document.ETag with
   | Publish.Checked(choice, _), Some eTag when Publish.canConfirm document.Publish ->
-    match Publish.publishDate choice with
-    | Some publishDate ->
+    match Publish.target choice with
+    | Some target ->
       Loaded(withPublish (Publish.Sending choice) document),
       Some(
         PublishPost
           { Slug = document.Slug
             ETag = eTag
-            PublishDate = publishDate }
+            Target = target }
       )
     | None -> Loaded document, None
   | _ -> Loaded document, None
@@ -381,12 +380,20 @@ let private publishConfirmed (document: Document) =
 let private publishAnswered (result: Result<Api.PublishedPost, Api.Failure>) (document: Document) =
   match document.Publish.State, result with
   | Publish.Sending _, Ok published ->
+    let pendingEdit, eTag =
+      if List.contains Api.NewerTextKept published.Warnings then
+        true, None
+      elif List.contains Api.PendingEditKept published.Warnings then
+        true, document.ETag
+      else
+        false, None
+
     Loaded
       { document with
           State = published.State
           PublishDate = Some published.PublishDate
-          ETag = None
-          PendingEdit = false
+          ETag = eTag
+          PendingEdit = pendingEdit
           Check = None
           Publish = Publish.closedWith published.Warnings },
     None
@@ -506,6 +513,8 @@ type Availability =
   | Available
   | Unavailable of reason: string
 
+let private laterVersion = Unavailable "A later version adds this action."
+
 let primaryAvailability (document: Document) =
   match document.State, document.Save with
   | _ when canPublish document -> Available
@@ -513,7 +522,7 @@ let primaryAvailability (document: Document) =
   | Api.Draft, _ -> Unavailable "Wait until the slug change ends."
   | (Api.Published | Api.Upcoming), _ ->
     // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/260): publish the changes of a published post
-    Unavailable "Comes in a later version."
+    laterVersion
 
 type MenuAction =
   | SaveNow
@@ -530,14 +539,12 @@ type MenuItem =
     Label: string
     Availability: Availability }
 
-let private laterVersion = Unavailable "Comes in a later version."
-
 let private saveAvailability (document: Document) =
   match document.Save with
   | Unsaved
   | SaveFailed _ -> Available
   | Saved -> Unavailable "The post is saved."
-  | Saving _ -> Unavailable "The post is saving."
+  | Saving _ -> Unavailable "The save runs."
   | Stale -> Unavailable "Another tab saved newer text. Reload the page."
 
 let private availability (document: Document) (action: MenuAction) =
@@ -546,7 +553,7 @@ let private availability (document: Document) (action: MenuAction) =
   | ChangesFromLive, Api.Draft -> Unavailable "A draft has no published text."
   | DiscardChanges, Api.Draft -> Unavailable "A draft has no pending edit."
   | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can change its date."
-  | Unpublish, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can be unpublished."
+  | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
   | Revisions, Api.Draft -> Unavailable "A draft has no revisions. The first publish makes one."
   | SendToSubscribers, Api.Draft -> Unavailable "Publish the post first."
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/260): changes from live and discard changes
@@ -555,6 +562,7 @@ let private availability (document: Document) (action: MenuAction) =
   | (ChangeDate | Unpublish), Api.Upcoming
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): list and restore the revisions
   | Revisions, (Api.Published | Api.Upcoming)
+  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/270): send a post to the subscribers
   | SendToSubscribers, (Api.Published | Api.Upcoming)
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): delete a post
   | Delete, _ -> laterVersion
