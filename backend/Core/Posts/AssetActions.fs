@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Posts.Actions
 
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
@@ -29,6 +30,7 @@ module UploadAsset =
   type Error =
     | UnsupportedType
     | TooLarge
+    | MalformedImage of MalformedPhoto
 
   type Event = Uploaded of name: string * url: Uri
 
@@ -63,6 +65,15 @@ module UploadAsset =
       let hash = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
       $"{hash.Substring(0, 16)}.{(format kind).Extension}"
 
+    let strip (kind : Kind) (bytes : byte[]) : Decision<byte[], Error> =
+      let photo format = PhotoMetadata.strip format bytes |> Result.mapError MalformedImage
+
+      match kind with
+      | Jpeg -> photo PhotoFormat.Jpeg
+      | Png -> photo PhotoFormat.Png
+      | WebP -> photo PhotoFormat.WebP
+      | Gif | Pdf -> Decision.success bytes
+
     let decide (bytes : byte[]) : Decision<Kind, Error> =
       match kind bytes with
       | None -> Decision.failure UnsupportedType
@@ -78,10 +89,11 @@ module UploadAsset =
   let withDependencies (dependencies : Dependencies) : Action =
     fun dto -> cancellableTaskResult {
       let! kind = Logic.decide dto.Bytes |> Result.mapError ActionError<Error>.Logic
-      let name = Logic.blobName kind dto.Bytes
+      let! bytes = Logic.strip kind dto.Bytes |> Result.mapError ActionError<Error>.Logic
+      let name = Logic.blobName kind bytes
 
       let! url =
-        dependencies.WriteAsset name (Logic.format kind).ContentType dto.Bytes
+        dependencies.WriteAsset name (Logic.format kind).ContentType bytes
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       return Event.Uploaded(name, url)

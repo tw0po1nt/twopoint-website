@@ -24,6 +24,7 @@
     <Compile Include="PostDraftTests.fs" />
     <Compile Include="PostTermsTests.fs" />
     <Compile Include="PostPreviewTests.fs" />
+    <Compile Include="PhotoMetadataTests.fs" />
     <Compile Include="UploadAssetTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
