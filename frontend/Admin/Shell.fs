@@ -141,6 +141,13 @@ let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
   | PostComments.Chosen _
   | PostComments.Done(_, _, Error _) -> queue
 
+/// The browser sends the Esc key to the page and to the open dialog. Only the top layer must act on it.
+let private layerOpenOverEditor (model: Model) =
+  model.Overlay.IsSome
+  || (match model.Editor with
+      | Some(Editor.Loaded document) -> document.Details.Open
+      | _ -> false)
+
 /// The author goes to another page, and the editor has text that the API does not have.
 let private leavesUnsavedText (model: Model) (path: string) =
   match model.Editor with
@@ -234,6 +241,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Posts.DraftCreated _
     | Posts.Filtered _
     | Posts.NewDraftClicked -> next, effect |> Option.map (fun Posts.CreateDraft -> Send [ CreateDraft ])
+  | Editor Editor.PreviewClosed when layerOpenOverEditor model -> model, None
   | Editor msg ->
     match model.Editor with
     | None -> model, None

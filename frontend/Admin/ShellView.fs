@@ -157,6 +157,7 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
       request.Fields.Title
       request.Fields.Excerpt
       request.Fields.Body
+      request.Details
     |> Promise.map (fun result -> Shell.Editor(Editor.PreviewAnswered(request.Slug, result)))
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =

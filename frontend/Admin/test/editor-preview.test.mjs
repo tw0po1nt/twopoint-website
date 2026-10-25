@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { answer, apiAnswer, load, press, settle, stubSignIn } from './load.mjs';
+import { answer, apiAnswer, load, press, pressEscape, settle, stubSignIn } from './load.mjs';
 
 const post = {
   slug: 'my-post',
@@ -54,7 +54,12 @@ test('Preview sends the text of the editor, also before a save, and shows the ar
   assert.equal(previews.length, 1);
   assert.equal(previews[0].method, 'POST');
   assert.equal(previews[0].authorization, 'Bearer token-1');
-  assert.deepEqual(previews[0].body, { title: 'My post', excerpt: 'About it.', body: 'Some text.\nUnsaved text.\n' });
+  assert.deepEqual(previews[0].body, {
+    title: 'My post',
+    excerpt: 'About it.',
+    body: 'Some text.\nUnsaved text.\n',
+    details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true },
+  });
 
   assert.ok(column().classList.contains('is-hidden'), 'The text is out of sight');
   assert.equal(button().getAttribute('aria-pressed'), 'true');
@@ -105,4 +110,26 @@ test('Esc with no preview open does nothing', async () => {
   await settle();
   assert.ok(!column().classList.contains('is-hidden'));
   assert.equal(view().state.doc.toString(), 'Some text.\nUnsaved text.\n');
+});
+
+test('Esc closes the Details sheet first and the preview next', async () => {
+  previewAnswer = { article, problems: [] };
+  press('Preview');
+  await settle();
+  assert.ok(frame(), 'The preview is open');
+
+  press('Details');
+  await settle();
+  const sheet = document.querySelector('#details-sheet');
+  assert.ok(sheet.open, 'The sheet is open');
+
+  escape();
+  pressEscape(sheet);
+  await settle();
+  assert.ok(!sheet.open, 'The sheet is closed');
+  assert.ok(frame(), 'The preview stays');
+
+  escape();
+  await settle();
+  assert.equal(frame(), null, 'The next Esc closes the preview');
 });

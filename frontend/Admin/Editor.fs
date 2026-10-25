@@ -56,7 +56,10 @@ type SlugRequest =
     ETag: string
     NewSlug: string }
 
-type PreviewRequest = { Slug: string; Fields: Fields }
+type PreviewRequest =
+  { Slug: string
+    Fields: Fields
+    Details: Api.PostDetails }
 
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
@@ -241,7 +244,12 @@ let private togglePreview (document: Document) =
   match document.Preview with
   | Preview.Closed ->
     Loaded { document with Preview = Preview.Loading },
-    Some(FetchPreview { Slug = document.Slug; Fields = document.Fields })
+    Some(
+      FetchPreview
+        { Slug = document.Slug
+          Fields = document.Fields
+          Details = document.Details.Values }
+    )
   | _ -> Loaded { document with Preview = Preview.Closed }, None
 
 let private previewAnswered (result: Result<Api.PostPreview, Api.Failure>) (document: Document) =

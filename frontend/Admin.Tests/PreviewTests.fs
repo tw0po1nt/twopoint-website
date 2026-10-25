@@ -54,11 +54,47 @@ let tests =
           Shell.Send
             [ Shell.PreviewPost
                 { Slug = "my-post"
-                  Fields = { Title = "My post"; Excerpt = "About it."; Body = "Unsaved text.\n" } } ]
+                  Fields = { Title = "My post"; Excerpt = "About it."; Body = "Unsaved text.\n" }
+                  Details = noDetails } ]
         ))
         "The call has the unsaved text"
 
       Expect.equal (preview model) Preview.Loading "The preview waits for the API"
+    }
+
+    test "Preview sends the details of the Details sheet, also before a save" {
+      let model, _ = send (Editor.DetailsMsg(Details.ShowOnHomepageChanged false)) opened
+      let _, effect = send Editor.PreviewToggled model
+
+      match effect with
+      | Some(Shell.Send [ Shell.PreviewPost request ]) ->
+        Expect.equal request.Details { noDetails with ShowOnHomepage = false } "The details on the screen"
+      | other -> failtestf "Expected a preview call, got %A" other
+    }
+
+    test "Esc with the Details sheet open leaves the preview open" {
+      let model, _ = send Editor.PreviewToggled opened
+      let model, _ = send (Editor.PreviewAnswered("my-post", Ok article)) model
+      let model, _ = send (Editor.DetailsMsg Details.Opened) model
+      let model, effect = send Editor.PreviewClosed model
+      Expect.isNone effect "No call"
+      Expect.equal (preview model) (Preview.Shown article) "The preview stays"
+
+      let model, _ = send (Editor.DetailsMsg Details.Closed) model
+      let model, _ = send Editor.PreviewClosed model
+      Expect.equal (preview model) Preview.Closed "The next Esc closes the preview"
+    }
+
+    test "Esc with a dialog or a sheet of the shell open leaves the preview open" {
+      let model, _ = send Editor.PreviewToggled opened
+      let model, _ = send (Editor.PreviewAnswered("my-post", Ok article)) model
+      let model, _ = Shell.update (Shell.Opened Shell.MoreSheet) model
+      let model, _ = send Editor.PreviewClosed model
+      Expect.equal (preview model) (Preview.Shown article) "The preview stays"
+
+      let model, _ = Shell.update (Shell.Closed Shell.MoreSheet) model
+      let model, _ = send Editor.PreviewClosed model
+      Expect.equal (preview model) Preview.Closed "The next Esc closes the preview"
     }
 
     test "the answer of the API shows the article in the place of the text" {

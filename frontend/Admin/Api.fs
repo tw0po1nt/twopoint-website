@@ -483,9 +483,15 @@ let previewPost
   (title: string)
   (excerpt: string)
   (body: string)
+  (details: PostDetails)
   : JS.Promise<Result<PostPreview, Failure>> =
   let json =
-    Encode.object [ "title", Encode.string title; "excerpt", Encode.string excerpt; "body", Encode.string body ]
+    Encode.object [
+      "title", Encode.string title
+      "excerpt", Encode.string excerpt
+      "body", Encode.string body
+      "details", encodeDetails details
+    ]
     |> Encode.toString 0
 
   sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some json) []
