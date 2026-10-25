@@ -91,7 +91,7 @@ let private listTests =
     }
 
     test "the first date is the day of the date" {
-      Expect.equal (Commenters.dateText ada.CreatedDate) "2026-01-02" "The day"
+      Expect.equal (Dates.dateText ada.CreatedDate) "2026-01-02" "The day"
     }
 
     test "commenters that did not load show the reason" {

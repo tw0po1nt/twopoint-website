@@ -205,9 +205,6 @@ let isBusy (model: Model) = model.Registration = Registering
 
 let emptyText = "No device is registered."
 
-/// The API sends each date in ISO 8601.
-let private day (date: string) = date.Split 'T' |> Array.head
+let addedText (device: Api.Device) = $"Added {Dates.dateText device.CreatedDate}"
 
-let addedText (device: Api.Device) = $"Added {day device.CreatedDate}"
-
-let lastSeenText (device: Api.Device) = $"Last used {day device.LastSeenDate}"
+let lastSeenText (device: Api.Device) = $"Last used {Dates.dateText device.LastSeenDate}"

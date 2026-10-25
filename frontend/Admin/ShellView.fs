@@ -557,7 +557,7 @@ let private postComments (dispatch: Shell.Msg -> unit) (model: PostComments.Mode
 let private commenterRow (dispatch: Shell.Msg -> unit) (commenter: Api.Commenter) =
   article (id = commenter.Id, class' = "card card-body queue-row") {
     commenterHead dispatch commenter
-    p (class' = "muted small") { $"First date: {Commenters.dateText commenter.CreatedDate}" }
+    p (class' = "muted small") { $"First date: {Dates.dateText commenter.CreatedDate}" }
   }
 
 [<SolidComponent>]
@@ -626,7 +626,7 @@ let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedC
       p (class' = "small") {
         "On "
         routeLink route (PostComments comment.PostSlug) comment.PostTitle
-        span (class' = "muted") { $" on {Commenters.dateText comment.Comment.CreatedDate}" }
+        span (class' = "muted") { $" on {Dates.dateText comment.Comment.CreatedDate}" }
       }
 
       Parts.badge (approvalTone comment.Comment.Status) (PostComments.approvalText comment.Comment.Status)
@@ -662,7 +662,7 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
             dt () { "Status" }
             dd () { Parts.badge (statusTone commenter.Status) (Queue.statusText commenter.Status) }
             dt () { "First date" }
-            dd () { Commenters.dateText commenter.CreatedDate }
+            dd () { Dates.dateText commenter.CreatedDate }
           }
 
           Show(when' = (Commenter.failure state).IsSome) {
@@ -695,7 +695,7 @@ let private stateTone (state: Api.PostState) =
 let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   let route = Shell.Router >> dispatch
   let stats = post.CommentStats
-  let date = post.PublishDate |> Option.map Posts.dateText |> Option.defaultValue "No publish date"
+  let date = post.PublishDate |> Option.map Dates.dateText |> Option.defaultValue "No publish date"
 
   article (id = post.Slug, class' = "card card-body queue-row") {
     div (class' = "row-top") {
@@ -814,7 +814,7 @@ let private subscriptionRow (dispatch: Shell.Msg -> unit) (subscription: Api.Sub
         .Has(Fragment() { "Details" })
     }
 
-    p (class' = "muted small") { $"Subscribed: {Commenters.dateText subscription.CreatedDate}" }
+    p (class' = "muted small") { $"Subscribed: {Dates.dateText subscription.CreatedDate}" }
   }
 
 [<SolidComponent>]
@@ -849,7 +849,7 @@ let private deliveryRow (delivery: Api.Delivery) =
     Parts.badge Parts.Plain (Subscriptions.deliveryText delivery.Type)
     " "
     a (href = $"{site}/posts/{delivery.PostSlug}/", target = "_blank", rel = "noopener") { delivery.PostTitle }
-    span (class' = "muted small") { $" on {Commenters.dateText delivery.CreatedDate}" }
+    span (class' = "muted small") { $" on {Dates.dateText delivery.CreatedDate}" }
   }
 
 [<SolidComponent>]
@@ -897,11 +897,11 @@ let private subscriptionDetails (dispatch: Shell.Msg -> unit) (model: Subscripti
         dt () { "Status" }
         dd () { Parts.badge (subscriptionTone subscription) (Subscriptions.statusText subscription) }
         dt () { "Subscribed" }
-        dd () { Commenters.dateText subscription.CreatedDate }
+        dd () { Dates.dateText subscription.CreatedDate }
 
         Show(when' = subscription.CanceledDate.IsSome) {
           dt () { "Canceled" }
-          dd () { subscription.CanceledDate |> Option.map Commenters.dateText |> Option.defaultValue "" }
+          dd () { subscription.CanceledDate |> Option.map Dates.dateText |> Option.defaultValue "" }
         }
       }
 

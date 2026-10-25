@@ -48,5 +48,3 @@ let emptyText (filter: Filter) =
   | Only Api.Trusted -> "The blog has no trusted commenters."
   | Only Api.Banned -> "The blog has no banned commenters."
 
-/// The API sends each date in ISO 8601.
-let dateText (date: string) = date.Split 'T' |> Array.head
