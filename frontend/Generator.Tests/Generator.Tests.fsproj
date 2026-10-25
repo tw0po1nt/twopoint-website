@@ -38,6 +38,7 @@
     <Compile Include="ClassCheckTests.fs" />
     <Compile Include="UploadTests.fs" />
     <Compile Include="PullTests.fs" />
+    <Compile Include="PreviewStylesTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
