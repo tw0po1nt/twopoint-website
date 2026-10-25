@@ -76,7 +76,8 @@ type UploadAsset (
             (function
               | UploadAsset.Error.UnsupportedType ->
                 "Upload a JPEG, PNG, WebP, GIF, or PDF file", HttpStatusCode.UnsupportedMediaType
-              | UploadAsset.Error.TooLarge -> "The file is larger than 25 MB", HttpStatusCode.RequestEntityTooLarge)
+              | UploadAsset.Error.TooLarge -> "The file is larger than 25 MB", HttpStatusCode.RequestEntityTooLarge
+              | UploadAsset.Error.MalformedImage -> "The image file is damaged", HttpStatusCode.BadRequest)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)
