@@ -6,6 +6,8 @@ open Browser.Types
 open Fable.Core
 open Fable.Core.JsInterop
 
+open System
+
 type Extension = interface end
 
 type Facet<'T> =
@@ -67,6 +69,30 @@ let directiveLines: obj = jsNative
 [<ImportMember("./directive-lines.js")>]
 let directiveTag: obj = jsNative
 
+/// The placeholder widgets of the uploads. They are outside the Markdown text.
+[<ImportMember("./upload-placeholders.js")>]
+let placeholders: Extension = jsNative
+
+/// `onFiles` runs with the files of a paste without text, or of a drop, and the offset where the author pasted or dropped.
+[<ImportMember("./upload-placeholders.js")>]
+let fileHandlers (onFiles: Action<File array, int>) : Extension = jsNative
+
+[<ImportMember("./upload-placeholders.js")>]
+let hasPlaceholder (view: EditorView) (id: int) : bool = jsNative
+
+[<ImportMember("./upload-placeholders.js")>]
+let addPlaceholder (view: EditorView) (id: int) (pos: int) (label: string) : unit = jsNative
+
+[<ImportMember("./upload-placeholders.js")>]
+let removePlaceholder (view: EditorView) (id: int) : unit = jsNative
+
+[<ImportMember("./upload-placeholders.js")>]
+let cursor (view: EditorView) : int = jsNative
+
+/// `insertion` gets the body text before and after the placeholder. It gives `{ text, cursor }`.
+[<ImportMember("./upload-placeholders.js")>]
+let replacePlaceholder (view: EditorView) (id: int) (insertion: Func<string, string, obj>) : unit = jsNative
+
 let private quietStyle () =
   let style (tag: obj) (cls: string) = createObj [ "tag" ==> tag; "class" ==> cls ]
 
@@ -82,7 +108,14 @@ let private quietStyle () =
        style directiveTag "cm-directive" |]
 
 /// `onChange` runs with the whole text after each change. The text has no line numbers and no gutter.
-let create (parent: HTMLElement) (doc: string) (label: string) (hint: string) (onChange: string -> unit) : EditorView =
+let create
+  (parent: HTMLElement)
+  (doc: string)
+  (label: string)
+  (hint: string)
+  (onChange: string -> unit)
+  (onFiles: Action<File array, int>)
+  : EditorView =
   let onUpdate (update: ViewUpdate) =
     if update.docChanged then
       onChange (update.state.doc.toString ())
@@ -94,6 +127,8 @@ let create (parent: HTMLElement) (doc: string) (label: string) (hint: string) (o
        syntaxHighlighting (quietStyle ())
        EditorView.lineWrapping
        placeholder hint
+       placeholders
+       fileHandlers onFiles
        EditorView.contentAttributes.``of`` (createObj [ "aria-label" ==> label ])
        EditorView.updateListener.``of`` onUpdate |]
 
