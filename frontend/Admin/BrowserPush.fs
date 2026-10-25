@@ -38,6 +38,15 @@ let private endSubscription (subscription: obj) : JS.Promise<bool> = jsNative
 [<Emit "navigator.serviceWorker.addEventListener('message', (event) => { if (event.data && event.data.type === 'pushsubscriptionchange') $0() })">]
 let private onWorkerMessage (listener: unit -> unit) : unit = jsNative
 
+[<Emit "navigator.serviceWorker.addEventListener('message', (event) => { if (event.data && event.data.type === $0) $1(event.data) })">]
+let private onWorkerMessageOf (kind: string) (listener: obj -> unit) : unit = jsNative
+
+[<Emit "$0.target">]
+let private targetOf (data: obj) : string = jsNative
+
+[<Emit "'clearAppBadge' in navigator ? navigator.clearAppBadge().catch(() => {}) : undefined">]
+let private clearAppBadge () : unit = jsNative
+
 let private keysOf (subscription: obj) : PushKeys =
   let json = toJson subscription
 
@@ -90,4 +99,14 @@ let create (publicKey: string) : Push =
 
       member _.onSubscriptionChange listener =
         if hasPushManager () then
-          onWorkerMessage listener }
+          onWorkerMessage listener
+
+      member _.onNewComment listener =
+        if hasPushManager () then
+          onWorkerMessageOf "new-comment" (fun _ -> listener ())
+
+      member _.onOpenRequest listener =
+        if hasPushManager () then
+          onWorkerMessageOf "open" (targetOf >> listener)
+
+      member _.clearBadge() = clearAppBadge () }

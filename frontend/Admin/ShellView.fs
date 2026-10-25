@@ -195,6 +195,7 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
   | Shell.SignIn effect -> signInWith signIn push effect dispatch
   | Shell.Send calls -> calls |> List.iter (send signIn push dispatch)
   | Shell.Subscribe -> subscribe push dispatch
+  | Shell.ClearBadge -> push.clearBadge ()
   | Shell.Unsubscribe ->
     push.unsubscribe ()
     |> Promise.catch (fun error -> console.error ("admin: the push unsubscribe failed.", error))
@@ -1096,6 +1097,8 @@ let view (signIn: SignIn) (push: Push) =
 
   dispatch (Shell.Notifications(Notifications.Detected(Notifications.detect push)))
   push.onSubscriptionChange (fun () -> dispatch (Shell.Notifications Notifications.SubscriptionChanged))
+  push.onNewComment (fun () -> dispatch Shell.NewCommentAnnounced)
+  push.onOpenRequest (Shell.OpenRequested >> dispatch)
 
   let route = Shell.Router >> dispatch
 
