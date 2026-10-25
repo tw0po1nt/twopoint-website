@@ -10,7 +10,6 @@ open IcedTasks
 [<RequireQualifiedAccess>]
 module PreviewPost =
 
-  /// The fields are the text in the editor, saved or not.
   type Dto =
     { Slug : string
       Title : string
@@ -19,7 +18,6 @@ module PreviewPost =
 
   type Error =
     | PostNotFound of Slug
-    /// The YAML parser cannot read the front matter of the stored text.
     | FrontMatterUnreadable of reason: string
 
   type Dependencies =
@@ -35,14 +33,12 @@ module PreviewPost =
   [<RequireQualifiedAccess>]
   module Logic =
 
-    /// The working blob wins over the published blob, as in the editor.
     let baseText (slug : Slug) (working : StoredBlob option) (published : StoredPost list) : Decision<string, Error> =
       match working, published |> List.tryFind (fun post -> post.Slug = slug) with
       | Some blob, _ -> Decision.success blob.Text
       | None, Some post -> Decision.success post.Text
       | None, None -> Decision.failure (PostNotFound slug)
 
-    /// A post that does not parse is left out. The next build reports it.
     let publishedPosts (stage : TwoPoint.Site.Render.Stage) (series : TwoPoint.Site.Render.Series list) (posts : StoredPost list) : TwoPoint.Site.Render.Post list =
       posts
       |> List.choose (fun post -> TwoPoint.Site.Render.Check.published stage series (Slug.value post.Slug) post.Text |> Result.toOption)
@@ -68,7 +64,6 @@ module PreviewPost =
 
       let isPublished = published |> List.exists (fun post -> post.Slug = slug)
 
-      // A post with no published blob is a draft. The check shows the time of the preview as its publish date.
       return
         if isPublished then
           TwoPoint.Site.Render.Check.post dependencies.Stage dependencies.Images series posts dto.Slug text

@@ -3,7 +3,6 @@ module TwoPoint.Core.Tests.PostPreviewTests
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
-
 open TwoPoint.Site.Render
 
 open Expecto
@@ -22,7 +21,6 @@ let private images =
   { new IImageSize with
       member _.Size _ = Result.Ok { Width = 1600; Height = 900 } }
 
-/// A post store in memory. A name maps to its text.
 type private FakeStore(published : (string * string) list, working : (string * string) list, series : (string * string) list) =
 
   interface PreviewPost.Dependencies with
@@ -48,6 +46,9 @@ let private preview (store : FakeStore) slug title body =
   let task = PreviewPost.withDependencies store { Slug = slug; Title = title; Excerpt = "New excerpt"; Body = body }
   (task CancellationToken.None).Result
 
+let private contentOf (checkedPost : Check.CheckedPost) =
+  checkedPost.Article |> Option.map _.Content |> Option.defaultValue ""
+
 let private articleOf result =
   match result with
   | Ok(checkedPost : Check.CheckedPost) -> checkedPost
@@ -61,17 +62,17 @@ let tests =
       let result = preview store "live" "Edited title" "Unsaved text.\n\n## A step\n" |> articleOf
 
       Expect.isEmpty result.Problems "No problem"
-      let html = result.Article |> Option.defaultValue ""
+      let html = contentOf result
       Expect.stringContains html "<h1>Edited title</h1>" "The title of the editor"
       Expect.stringContains html "Unsaved text." "The body of the editor"
-      Expect.stringContains html "href=\"#a-step\"" "The outline"
+      Expect.stringContains result.Article.Value.Outline "href=\"#a-step\"" "The outline"
       Expect.stringContains html "class=\"front-matter\"" "The meta block"
     }
 
     test "the preview keeps the front matter of the working blob" {
       let working = published.Replace("author: Matthew Watt", "author: A guest")
       let store = FakeStore([ "live", published ], [ "live", working ], [])
-      let html = (preview store "live" "T" "Body.\n" |> articleOf).Article |> Option.defaultValue ""
+      let html = contentOf (preview store "live" "T" "Body.\n" |> articleOf)
       Expect.stringContains html "A guest" "The author of the pending edit"
     }
 
@@ -91,7 +92,7 @@ let tests =
       let result = preview store "draft" "New title" "Body.\n" |> articleOf
 
       Expect.isEmpty result.Problems "A draft can have no publish date and no category"
-      let html = result.Article |> Option.defaultValue ""
+      let html = contentOf result
       Expect.stringContains html "<h1>New title</h1>" "The title"
       Expect.stringContains html "<time datetime=\"2026-03-05T09:30:00Z\">" "The time of the preview is the publish date"
     }

@@ -41,7 +41,7 @@ let private parseWith
 let parse (images: IImageSize) (stage: Stage) (series: Series list) (file: string) (text: string) : Result<Post * FileProblems, FileProblems> =
   parseWith (FrontMatter.parsePublished series) images stage file text
 
-/// The text of a draft. A draft with no `publishDate` gets `previewTime`, and a draft with no `category` gets `FrontMatter.noCategory`.
+/// `previewTime` is the publish date of a draft that has none.
 let parseDraft
   (images: IImageSize)
   (stage: Stage)

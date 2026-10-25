@@ -4,9 +4,12 @@ module TwoPoint.Site.Render.Check
 open Oxpecker.ViewEngine
 open System
 
-/// `Article` is the meta block, the title, the excerpt, the body, and the outline. A post with an error in its parse has no article.
+/// `Content` is the meta block, the title, the excerpt, and the body. `Outline` goes next to it.
+type RenderedArticle = { Content: string; Outline: string }
+
+/// A post with an error in its parse has no article.
 type CheckedPost =
-  { Article: string option
+  { Article: RenderedArticle option
     Problems: Problem list }
 
 let private noImageSize =
@@ -78,12 +81,10 @@ let private check
     let withNewestTitles = Blog.withNewestTermTitles posts |> List.find (fun other -> other.Slug = slug)
 
     let article =
-      Fragment() {
-        Article.content withNewestTitles (Blog.seriesPosition posts withNewestTitles)
-        Article.outline withNewestTitles
-      }
+      { Content = Render.toString (Article.content withNewestTitles (Blog.seriesPosition posts withNewestTitles))
+        Outline = Render.toString (Article.outline withNewestTitles) }
 
-    { Article = Some(Render.toString article)
+    { Article = Some article
       Problems =
         warnings.Problems
         @ Rules.termTitles published post
@@ -101,8 +102,7 @@ let post
   : CheckedPost =
   check (Post.parse images stage series (file slug) text) stage published slug
 
-/// The check of a draft. The article shows `previewTime` as the publish date of a draft that has none.
-/// A draft with no category is not a problem, and the article shows no category.
+/// `previewTime` is the publish date of a draft that has none.
 let draft
   (stage: Stage)
   (images: IImageSize)

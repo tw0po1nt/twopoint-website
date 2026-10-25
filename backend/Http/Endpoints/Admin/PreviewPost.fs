@@ -21,15 +21,20 @@ type PreviewPostJson =
     Excerpt : string
     Body : string }
 
-/// `Place` is `Field <name>`, `Body line <n>`, or `Post`.
+/// `Place` is null for a problem about the whole post.
 type PreviewProblemDto =
   { Severity : string
     Place : string
     Message : string }
 
+[<AllowNullLiteral>]
+type PreviewArticleDto(content : string, outline : string) =
+  member _.Content = content
+  member _.Outline = outline
+
 /// `Article` is null when the text has an error in its parse.
 type PreviewDto =
-  { Article : string
+  { Article : PreviewArticleDto
     Problems : PreviewProblemDto list }
 
 module PreviewPostMapping =
@@ -45,16 +50,15 @@ module PreviewPostMapping =
         match problem.Place with
         | Place.Field(name, _) -> $"Field {name}"
         | Place.Body line -> $"Body line {line}"
-        | Place.Post _ -> "Post"
+        | Place.Post _ -> null
       Message = problem.Message }
 
   let preview (checkedPost : Check.CheckedPost) : PreviewDto =
-    { Article = Option.toObj checkedPost.Article
+    { Article =
+        checkedPost.Article
+        |> Option.map (fun article -> PreviewArticleDto(article.Content, article.Outline))
+        |> Option.toObj
       Problems = checkedPost.Problems |> List.map problem }
-
-  /// The deployed backend runs the staging code. Only the local stage accepts an Azurite URL.
-  let stage (postStoreUri : System.Uri) =
-    if Azurite.isUrl postStoreUri then Stage.Local else Stage.Staging
 
 type PreviewPost (
   config : Config,
@@ -89,7 +93,7 @@ type PreviewPost (
         let previewPost = PreviewPost.withDependencies {
           new PreviewPost.Dependencies with
 
-          member _.Stage = PreviewPostMapping.stage config.Azure.PostStoreUri
+          member _.Stage = config.Stage
           member _.Images = images
           member _.GetUtcNow () = System.DateTime.UtcNow
           member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug

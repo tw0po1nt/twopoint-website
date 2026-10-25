@@ -17,7 +17,6 @@ let private target = publishedPost "a-post" "## First step\n\nText."
 
 let private previewTime = System.DateTimeOffset(2026, 3, 5, 9, 30, 0, System.TimeSpan.Zero)
 
-/// Lines 2 to 4 of a draft that has no publish date and no category.
 let private draftFrontMatter = "author: Matthew Watt\ntitle: A draft\nexcerpt: An excerpt"
 
 let private draft (published: Post list) slug body =
@@ -103,12 +102,14 @@ let tests =
       Expect.isTrue (List.exists Problem.isError checkedPost.Problems) "The error is in the problems"
     }
 
-    test "the article has the meta block, the title, the body, and the outline" {
-      let article = (check [ target ] "a-post" "## First step\n\nText.").Article |> Option.defaultValue ""
-      Expect.stringStarts article """<dl class="front-matter">""" "The meta block is first"
-      Expect.stringContains article """<h1>A post</h1>""" "The title"
-      Expect.stringContains article """<h2 id="first-step">First step</h2>""" "The body"
-      Expect.stringEnds article """<a href="#first-step">First step</a></li></ul></aside>""" "The outline is last"
+    test "the article has the meta block, the title, and the body, and the outline apart" {
+      let article = (check [ target ] "a-post" "## First step\n\nText.").Article.Value
+      Expect.stringStarts article.Content """<dl class="front-matter">""" "The meta block is first"
+      Expect.stringContains article.Content """<h1>A post</h1>""" "The title"
+      Expect.stringContains article.Content """<h2 id="first-step">First step</h2>""" "The body"
+      Expect.isFalse (article.Content.Contains "outline") "The content has no outline"
+      Expect.stringStarts article.Outline """<aside class="outline" aria-label="Outline">""" "The outline"
+      Expect.stringEnds article.Outline """<a href="#first-step">First step</a></li></ul></aside>""" "The link"
     }
 
     test "a draft with a title, an excerpt, and an author, and with no publish date and no category, has an article and no problem" {
@@ -118,7 +119,7 @@ let tests =
     }
 
     test "the article of a draft shows the time of the preview as the publish date and shows no category" {
-      let article = (draft [ target ] "b-post" "Text.").Article |> Option.defaultValue ""
+      let article = (draft [ target ] "b-post" "Text.").Article.Value.Content
       Expect.stringContains article """<time datetime="2026-03-05T09:30:00Z">2026-03-05</time>""" "The time of the preview"
       Expect.isFalse (article.Contains "One-offs") "No category"
       Expect.stringContains article "Matthew Watt" "The author"
@@ -126,7 +127,7 @@ let tests =
 
     test "a draft with a publish date keeps it, and a draft with a category is not changed" {
       let withBoth = $"{draftFrontMatter}\npublishDate: 2025-01-02T03:04:05Z\ncategory: One-offs"
-      let article = (Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text withBoth "Text.")).Article |> Option.defaultValue ""
+      let article = (Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text withBoth "Text.")).Article.Value.Content
       Expect.stringContains article """<time datetime="2025-01-02T03:04:05Z">""" "The publish date of the draft"
     }
 
