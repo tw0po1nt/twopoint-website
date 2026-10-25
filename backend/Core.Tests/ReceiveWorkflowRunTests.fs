@@ -33,14 +33,14 @@ type private FakeStore(stored : SiteRun list) =
       else
         CancellableTaskResult.singleton secret
 
-    member _.GetRun repo number =
-      stored
-      |> List.tryFind (fun run -> run.Repo = repo && run.Number = number)
-      |> CancellableTaskResult.singleton
-
     member _.SaveRun run =
-      saved.Add run
-      CancellableTaskResult.singleton ()
+      let current = stored |> List.tryFind (fun item -> item.Repo = run.Repo && item.Number = run.Number)
+
+      match ReceiveWorkflowRun.Logic.next current run with
+      | ReceiveWorkflowRun.Newer run ->
+        saved.Add run
+        CancellableTaskResult.singleton (ReceiveWorkflowRun.Newer run)
+      | ReceiveWorkflowRun.Next.OlderThanStored -> CancellableTaskResult.singleton ReceiveWorkflowRun.Next.OlderThanStored
 
 let private payload repo number event status (conclusion : string) path =
   let conclusion = if conclusion = "" then "null" else $"\"{conclusion}\""
@@ -172,7 +172,7 @@ let tests =
       let body = Encoding.UTF8.GetBytes "not json"
 
       match receiveSigned store body with
-      | Error(ActionError.Logic(ReceiveWorkflowRun.MalformedPayload _)) -> ()
+      | Error(ActionError.Logic(ReceiveWorkflowRun.MalformedPayload(ReceiveWorkflowRun.BadJson _))) -> ()
       | other -> failtestf "Expected a malformed payload, got %A" other
 
       Expect.isEmpty store.Saved "No run is written"
@@ -191,7 +191,7 @@ let tests =
 
       Expect.equal
         (receiveSigned store (siteRun "tw0po1nt/twopoint-website" 5 "in_progress" ""))
-        (Ok(ReceiveWorkflowRun.Skipped ReceiveWorkflowRun.OlderThanStored))
+        (Ok ReceiveWorkflowRun.Event.OlderThanStored)
         "Ignored"
 
       Expect.isEmpty store.Saved "The stored run stays"
@@ -207,6 +207,40 @@ let tests =
       | other -> failtestf "Expected a dependency error, got %A" other
 
       Expect.isEmpty store.Saved "No run is written"
+    }
+
+    test "a payload with no workflow_run, no path, or no repository name is malformed with the named case" {
+      let store = FakeStore []
+      let sign' body = receiveSigned store (Encoding.UTF8.GetBytes(body: string))
+
+      Expect.equal (sign' "{}") (Error(ActionError.Logic(ReceiveWorkflowRun.MalformedPayload ReceiveWorkflowRun.NoWorkflowRun))) "No run"
+
+      Expect.equal
+        (sign' "{ \"workflow_run\": { \"run_number\": 1, \"event\": \"push\", \"status\": \"queued\" }, \"repository\": { \"full_name\": \"a/b\" } }")
+        (Error(ActionError.Logic(ReceiveWorkflowRun.MalformedPayload(ReceiveWorkflowRun.MissingField "path"))))
+        "No path"
+
+      Expect.equal
+        (sign' "{ \"workflow_run\": { \"run_number\": 1, \"event\": \"push\", \"status\": \"queued\", \"path\": \".github/workflows/site.yml\" }, \"repository\": { \"full_name\": \"nothing\" } }")
+        (Error(ActionError.Logic(ReceiveWorkflowRun.MalformedPayload ReceiveWorkflowRun.NoRepoName)))
+        "No repo name"
+    }
+
+    test "a run with a lower state or an older update never replaces the stored run" {
+      let at minutes = DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc).AddMinutes(float minutes)
+
+      let run state updated =
+        { Repo = production
+          Number = RunNumber 5L
+          Event = Push
+          State = state
+          CreatedDate = at 0
+          UpdatedDate = at updated }
+
+      Expect.equal (ReceiveWorkflowRun.Logic.next None (run RunState.Waiting 0)) (ReceiveWorkflowRun.Newer(run RunState.Waiting 0)) "No stored run"
+      Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Running 1)) (run RunState.Succeeded 2)) (ReceiveWorkflowRun.Newer(run RunState.Succeeded 2)) "A later state"
+      Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Succeeded 2)) (run RunState.Running 3)) ReceiveWorkflowRun.Next.OlderThanStored "An earlier state"
+      Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Failed 5)) (run RunState.Failed 4)) ReceiveWorkflowRun.Next.OlderThanStored "An older update"
     }
 
     test "a conclusion maps to the state of the run" {

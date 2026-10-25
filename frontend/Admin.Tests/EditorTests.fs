@@ -68,7 +68,7 @@ let tests =
   testList "Editor" [
     test "a start on a post loads the post with the first API calls" {
       let model, effect = Shell.init "/posts/my-post"
-      Expect.equal model.Editor (Some(Editor.Loading "my-post")) "The editor waits"
+      Expect.equal model.Editor (Some(Editor.Loading("my-post", 1))) "The editor waits"
       let _, effect' = Shell.update (Shell.Session(Session.Started true)) model
       Expect.equal effect (Some(Shell.SignIn Session.Start)) "No call before the sign-in"
 
@@ -481,7 +481,7 @@ let draftTests =
       let model, effect = Shell.update (Shell.Posts(Posts.DraftCreated(Ok created))) model
 
       Expect.equal model.Router.Route (Route.Post "untitled") "The editor"
-      Expect.equal model.Editor (Some(Editor.Loading "untitled")) "The editor loads"
+      Expect.equal model.Editor (Some(Editor.Loading("untitled", 1))) "The editor loads"
       Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts/untitled", [ Shell.LoadPost "untitled" ]))) "The call"
     }
 

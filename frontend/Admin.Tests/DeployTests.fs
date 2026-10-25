@@ -32,6 +32,8 @@ let private started (path: string) =
 let private open' (post: Api.PostDocument) =
   Shell.update (Shell.Editor(Editor.Answered("my-post", Ok post))) (started "/posts/my-post")
 
+let private chain1: Deploy.Chain = { Page = 1; Number = 0 }
+
 let private deployMsg msg = Shell.Editor(Editor.DeployMsg("my-post", msg))
 
 let private read state = deployMsg (Deploy.StatusRead(Ok state))
@@ -76,14 +78,14 @@ let tests =
     test "the poll starts while a change deploys" {
       let model, _ = open' (document Api.Published)
       let model, effect = Shell.update (read Api.DeployState.Deploying) model
-      Expect.equal effect (Some(Shell.WaitToPollDeploy "my-post")) "A timer"
+      Expect.equal effect (Some(Shell.WaitToPollDeploy("my-post", chain1))) "A timer"
       Expect.equal (status model) "Published Feb 4, 2026 · deploying…" "The status"
     }
 
     test "the poll reads again when the timer ends while the change deploys" {
       let model, _ = open' (document Api.Published)
       let model, _ = Shell.update (read Api.DeployState.Deploying) model
-      let _, effect = Shell.update (deployMsg Deploy.PollElapsed) model
+      let _, effect = Shell.update (deployMsg (Deploy.PollElapsed chain1)) model
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The read"
     }
 
@@ -94,7 +96,7 @@ let tests =
       Expect.equal effect None "No timer"
       Expect.equal (status model) "Published Feb 4, 2026 · deployed" "The status"
 
-      let _, effect = Shell.update (deployMsg Deploy.PollElapsed) model
+      let _, effect = Shell.update (deployMsg (Deploy.PollElapsed chain1)) model
       Expect.equal effect None "A late timer reads nothing"
     }
 
@@ -115,14 +117,14 @@ let tests =
     test "a read that the API does not answer keeps the poll" {
       let model, _ = open' (document Api.Published)
       let model, effect = Shell.update (deployMsg (Deploy.StatusRead(Error Api.Unanswered))) model
-      Expect.equal effect (Some(Shell.WaitToPollDeploy "my-post")) "A timer"
+      Expect.equal effect (Some(Shell.WaitToPollDeploy("my-post", chain1))) "A timer"
       Expect.equal (status model) "Published Feb 4, 2026 · deploy state unknown" "The status"
     }
 
     test "a read that the API refuses ends the poll and the session" {
       let model, _ = open' (document Api.Published)
       let _, effect = Shell.update (deployMsg (Deploy.StatusRead(Error Api.Refused))) model
-      Expect.isFalse (effect = Some(Shell.WaitToPollDeploy "my-post")) "No timer"
+      Expect.isFalse (effect = Some(Shell.WaitToPollDeploy("my-post", chain1))) "No timer"
     }
 
     test "a read of another post changes nothing" {
@@ -152,7 +154,7 @@ let tests =
       let model, _ = Shell.update (deployMsg Deploy.RetryClicked) model
       let model, effect = Shell.update (deployMsg (Deploy.Retried(Error(Api.Failed "The dispatch failed.")))) model
       Expect.equal effect None "No read"
-      Expect.equal (Editor.retryFailureText (editor model)) "The dispatch failed." "The reason"
+      Expect.equal (Editor.retryFailureText (editor model)) (Some "The dispatch failed.") "The reason"
       Expect.isTrue (Editor.canRetryDeploy (editor model)) "Retry"
     }
 
@@ -169,34 +171,21 @@ let tests =
 
       let model, effect = Shell.update (Shell.Editor(Editor.PublishAnswered("my-post", Ok published))) model
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The read"
-      Expect.equal (editor model).Deploy Deploy.init "The deploy state is unread"
+      Expect.equal (editor model).Deploy (Deploy.restart (Deploy.init 1)) "The deploy state is unread"
     }
 
     test "the post list polls while a post deploys, and stops when none deploys" {
       let model, effect = listed [ post "a" Api.DeployState.Deployed; post "b" Api.DeployState.Deploying ]
-      Expect.equal effect (Some Shell.WaitToPollPosts) "A timer"
+      Expect.equal effect (Some(Shell.WaitToPollPosts 1)) "A timer"
 
-      let _, effect = Shell.update (Shell.Posts Posts.PollElapsed) model
-      Expect.equal effect (Some(Shell.Send [ Shell.PollPosts ])) "The read"
+      let _, effect = Shell.update (Shell.Posts(Posts.PollElapsed 1)) model
+      Expect.equal effect (Some(Shell.Send [ Shell.PollPosts 1 ])) "The read"
 
-      let model, effect = Shell.update (Shell.Posts(Posts.Polled(Ok [ post "a" Api.DeployState.Deployed; post "b" Api.DeployState.Deployed ]))) model
+      let model, effect = Shell.update (Shell.Posts(Posts.Polled(1, Ok [ post "a" Api.DeployState.Deployed; post "b" Api.DeployState.Deployed ]))) model
       Expect.equal effect None "No timer"
 
-      let _, effect = Shell.update (Shell.Posts Posts.PollElapsed) model
+      let _, effect = Shell.update (Shell.Posts(Posts.PollElapsed 1)) model
       Expect.equal effect None "A late timer reads nothing"
-    }
-
-    test "a failed post in the list offers a retry that rebuilds and reads the list again" {
-      let model, _ = listed [ post "a" Api.DeployState.DeployFailed ]
-      Expect.isTrue (Posts.canRetry (post "a" Api.DeployState.DeployFailed)) "Retry"
-
-      let model, effect = Shell.update (Shell.Posts Posts.RetryClicked) model
-      Expect.equal effect (Some(Shell.Send [ Shell.RetryPostsDeploy ])) "The rebuild"
-      Expect.isTrue model.Posts.Retrying "The call is in flight"
-
-      let model, effect = Shell.update (Shell.Posts(Posts.Retried(Ok Api.QueuedWithoutRunNumber))) model
-      Expect.equal effect (Some(Shell.Send [ Shell.PollPosts ])) "The read"
-      Expect.isFalse model.Posts.Retrying "The call ended"
     }
 
     test "a draft in the list shows no deploy state" {
@@ -207,7 +196,43 @@ let tests =
     test "a late timer of the list after the author left the page reads nothing" {
       let model, _ = listed [ post "b" Api.DeployState.Deploying ]
       let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/")) model
-      let _, effect = Shell.update (Shell.Posts Posts.PollElapsed) model
+      let _, effect = Shell.update (Shell.Posts(Posts.PollElapsed 1)) model
       Expect.equal effect None "No read"
+    }
+
+    test "a reload of the same post starts a new chain, and the timer of the old chain reads nothing" {
+      let model, _ = open' (document Api.Published)
+      let model, _ = Shell.update (read Api.DeployState.Deploying) model
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts/my-post")) model
+      let model, _ = Shell.update (Shell.Editor(Editor.Answered("my-post", Ok(document Api.Published)))) model
+      let model, _ = Shell.update (read Api.DeployState.Deploying) model
+
+      let _, effect = Shell.update (deployMsg (Deploy.PollElapsed chain1)) model
+      Expect.equal effect None "The old timer reads nothing"
+
+      let _, effect = Shell.update (deployMsg (Deploy.PollElapsed (editor model).Deploy.Chain)) model
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The timer of the new chain reads"
+    }
+
+    test "a restart of the reads makes a new chain, and the old timer reads nothing" {
+      let model = Deploy.init 1
+      let restarted = Deploy.restart model
+      Expect.notEqual restarted.Chain model.Chain "A new chain"
+      Expect.equal (Deploy.update (Deploy.PollElapsed model.Chain) restarted) (restarted, None) "The old timer reads nothing"
+    }
+
+    test "a reload of the post list starts a new chain, and the old timer reads nothing" {
+      let model, _ = listed [ post "b" Api.DeployState.Deploying ]
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/")) model
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      let model, effect = Shell.update (Shell.Posts(Posts.Answered(Ok [ post "b" Api.DeployState.Deploying ]))) model
+      Expect.equal effect (Some(Shell.WaitToPollPosts 2)) "A timer of the new chain"
+
+      let _, effect = Shell.update (Shell.Posts(Posts.PollElapsed 1)) model
+      Expect.equal effect None "The old timer reads nothing"
+
+      let _, effect = Shell.update (Shell.Posts(Posts.Polled(1, Ok [ post "b" Api.DeployState.Deploying ]))) model
+      Expect.equal effect None "The old answer starts no timer"
     }
   ]

@@ -24,20 +24,30 @@ module ReceiveWorkflowRun =
       Signature : string option
       Body : byte array }
 
+  type Malformed =
+    | NoWorkflowRun
+    | MissingField of name : string
+    | NoRepoName
+    | BadJson of exn
+
   type Error =
     | BadSignature
-    | MalformedPayload of reason : string
+    | MalformedPayload of Malformed
 
   type Skipped =
     | NotWorkflowRunEvent
     | NotSiteWorkflow
     | UnknownRepo
     | UnknownRunEvent
-    | OlderThanStored
 
   type Event =
     | Recorded of SiteRun
     | Skipped of Skipped
+    | OlderThanStored
+
+  type Next =
+    | Newer of SiteRun
+    | OlderThanStored
 
   type Parsed =
     | Run of SiteRun
@@ -106,19 +116,18 @@ module ReceiveWorkflowRun =
     let private siteWorkflowPath = ".github/workflows/site.yml"
 
     let private run (repo : Repo) (json : WorkflowRunJson) =
-      match json.Event with
-      | "push"
-      | "workflow_dispatch" ->
+      match RunEvent.tryParse json.Event with
+      | Some event ->
         Run
           { Repo = repo
             Number = RunNumber json.RunNumber
-            Event = if json.Event = "push" then Push else WorkflowDispatch
+            Event = event
             State = state json.Status (json.Conclusion |> Option.ofObj |> Option.defaultValue "")
             CreatedDate = json.CreatedAt.UtcDateTime
             UpdatedDate = json.UpdatedAt.UtcDateTime }
-      | _ -> Skip UnknownRunEvent
+      | None -> Skip UnknownRunEvent
 
-    let parse (repos : SiteRepos) (event : string) (body : byte array) : Result<Parsed, string> =
+    let parse (repos : SiteRepos) (event : string) (body : byte array) : Result<Parsed, Malformed> =
       if event <> "workflow_run" then
         Ok (Skip NotWorkflowRunEvent)
       else
@@ -126,21 +135,25 @@ module ReceiveWorkflowRun =
           let payload = JsonSerializer.Deserialize<PayloadJson>(body, options)
 
           if isNull (box payload) || isNull (box payload.WorkflowRun) || isNull (box payload.Repository) then
-            Error "The payload has no workflow_run or no repository"
+            Error NoWorkflowRun
           else
             let json = payload.WorkflowRun
 
-            if isNull json.Path || isNull json.Event || isNull json.Status then
-              Error "The workflow_run has no path, event, or status"
+            if isNull json.Path then
+              Error (MissingField "path")
+            elif isNull json.Event then
+              Error (MissingField "event")
+            elif isNull json.Status then
+              Error (MissingField "status")
             elif json.Path.Split('@')[0] <> siteWorkflowPath then
               Ok (Skip NotSiteWorkflow)
             else
               match Repo.tryParse payload.Repository.FullName with
-              | false, _ -> Error "The repository has no full name"
+              | false, _ -> Error NoRepoName
               | true, repo when repo = repos.Production || repo = repos.Staging -> Ok (run repo json)
               | true, _ -> Ok (Skip UnknownRepo)
         with :? JsonException as ex ->
-          Error ex.Message
+          Error (BadJson ex)
 
     let private rank (state : RunState) =
       match state with
@@ -151,19 +164,19 @@ module ReceiveWorkflowRun =
       | RunState.Canceled -> 2
 
     /// GitHub sends the webhooks of a run in no fixed order, so a stored run never goes back to an earlier state.
-    let next (stored : SiteRun option) (incoming : SiteRun) : SiteRun option =
+    let next (stored : SiteRun option) (incoming : SiteRun) : Next =
       match stored with
-      | Some stored when rank stored.State > rank incoming.State -> None
-      | Some stored when rank stored.State = rank incoming.State && stored.UpdatedDate > incoming.UpdatedDate -> None
-      | _ -> Some incoming
+      | Some stored when rank stored.State > rank incoming.State -> Next.OlderThanStored
+      | Some stored when rank stored.State = rank incoming.State && stored.UpdatedDate > incoming.UpdatedDate ->
+        Next.OlderThanStored
+      | _ -> Newer incoming
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
     abstract member GetSiteRepos: unit -> SiteRepos
     abstract member GetWebhookSecret: unit -> DependencyResult<byte array>
-    abstract member GetRun: repo: Repo -> number: RunNumber -> DependencyResult<SiteRun option>
-    abstract member SaveRun: run: SiteRun -> DependencyResult<unit>
+    abstract member SaveRun: run: SiteRun -> DependencyResult<Next>
 
   let withDependencies (dependencies : Dependencies) : Action =
     fun dto -> cancellableTaskResult {
@@ -173,15 +186,10 @@ module ReceiveWorkflowRun =
       | SignatureInvalid -> return! Result.Error (ActionError.Logic BadSignature)
       | SignatureValid ->
         match Logic.parse (dependencies.GetSiteRepos()) dto.Event dto.Body with
-        | Error reason -> return! Result.Error (ActionError.Logic (MalformedPayload reason))
+        | Error malformed -> return! Result.Error (ActionError.Logic (MalformedPayload malformed))
         | Ok (Skip skipped) -> return Skipped skipped
         | Ok (Run run) ->
-          let! stored =
-            dependencies.GetRun run.Repo run.Number |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-
-          match Logic.next stored run with
-          | None -> return Skipped OlderThanStored
-          | Some next ->
-            do! dependencies.SaveRun next |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-            return Recorded next
+          match! dependencies.SaveRun run |> CancellableTaskResult.mapError ActionError<Error>.Dependency with
+          | Newer saved -> return Recorded saved
+          | Next.OlderThanStored -> return Event.OlderThanStored
     }

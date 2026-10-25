@@ -59,14 +59,7 @@ let private canRetryDeploy (model: Shell.Model) =
   | None -> false
 
 let private retryFailure (model: Shell.Model) =
-  match document model with
-  | Some document -> Editor.retryFailureText document
-  | None -> ""
-
-let private slug (model: Shell.Model) =
-  match document model with
-  | Some document -> document.Slug
-  | None -> ""
+  document model |> Option.bind Editor.retryFailureText
 
 let private isTyping (model: Shell.Model) =
   match document model with
@@ -253,13 +246,18 @@ let private topBar
         button (
           type' = "button",
           class' = "text deploy-retry",
-          onClick = fun _ -> dispatch (Shell.Editor(Editor.DeployMsg(slug (model ()), Deploy.RetryClicked)))
+          onClick =
+            fun _ ->
+              document (model ())
+              |> Option.iter (fun document -> dispatch (Shell.Editor(Editor.DeployMsg(document.Slug, Deploy.RetryClicked))))
         ) {
           "retry"
         }
       }
 
-      Show(when' = (retryFailure (model ()) <> "")) { span (class' = "deploy-retry") { retryFailure (model ()) } }
+      Show(when' = (retryFailure (model ())).IsSome) {
+        span (class' = "deploy-retry") { retryFailure (model ()) |> Option.defaultValue "" }
+      }
     }
 
     div (class' = "editor-actions") {

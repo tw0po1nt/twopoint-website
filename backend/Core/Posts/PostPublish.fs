@@ -300,10 +300,9 @@ module PublishPost =
               | Error _ -> upsert ()
 
             let! deleted = dependencies.DeleteWorkingBlob slug gated.Working.ETag
+            let changedDate = dependencies.GetUtcNow()
             let! dispatched = dependencies.DispatchSite()
-
-            let! tracked =
-              dependencies.RecordChange(PostChange.ofDispatch slug (dependencies.GetUtcNow()) dispatched)
+            let! tracked = dependencies.RecordChange(PostChange.ofDispatch slug changedDate dispatched)
 
             return
               Ok(

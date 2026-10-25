@@ -43,7 +43,7 @@ type Document =
     Deploy: Deploy.Model }
 
 type Model =
-  | Loading of slug: string
+  | Loading of slug: string * page: int
   | Loaded of Document
   | NotLoaded of reason: string
 
@@ -108,14 +108,14 @@ type Effect =
   | MoveToBodyLine of line: int
   | ReadDeploy of slug: string
   /// Starts a timer of `Deploy.pollDelay` milliseconds. The timer sends `DeployMsg(slug, Deploy.PollElapsed)`.
-  | WaitToPollDeploy of slug: string
+  | WaitToPollDeploy of slug: string * Deploy.Chain
   | RetryDeploy of slug: string
 
 let autosaveDelay = 2000
 
-let init (slug: string) = Loading slug
+let init (slug: string) (page: int) = Loading(slug, page)
 
-let private loaded (post: Api.PostDocument) =
+let private loaded (page: int) (post: Api.PostDocument) =
   Loaded
     { Slug = post.Slug
       State = post.State
@@ -136,7 +136,7 @@ let private loaded (post: Api.PostDocument) =
       Details = Details.init post.Slug post.Details
       Preview = Preview.Closed
       Publish = Publish.init
-      Deploy = Deploy.init }
+      Deploy = Deploy.init page }
 
 let private deployRead (post: Api.PostDocument) =
   match post.State with
@@ -409,7 +409,7 @@ let private publishAnswered (result: Result<Api.PublishedPost, Api.Failure>) (do
           PendingEdit = pendingEdit
           Check = None
           Publish = Publish.closedWith published.Warnings
-          Deploy = Deploy.init },
+          Deploy = Deploy.restart document.Deploy },
     Some(ReadDeploy document.Slug)
   | Publish.Sending choice, Error failure ->
     Loaded(withPublish (Publish.Failed(choice, Api.reason failure)) document), None
@@ -428,13 +428,13 @@ let private deployChanged (slug: string) (msg: Deploy.Msg) (document: Document) 
   |> Option.map (fun effect ->
     match effect with
     | Deploy.ReadStatus -> ReadDeploy slug
-    | Deploy.WaitToPoll -> WaitToPollDeploy slug
+    | Deploy.WaitToPoll chain -> WaitToPollDeploy(slug, chain)
     | Deploy.Rebuild -> RetryDeploy slug)
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
-  | Loading slug, Answered(answered, Ok post) when answered = slug -> loaded post, deployRead post
-  | Loading slug, Answered(answered, Error failure) when answered = slug -> NotLoaded(Api.reason failure), None
+  | Loading(slug, page), Answered(answered, Ok post) when answered = slug -> loaded page post, deployRead post
+  | Loading(slug, _), Answered(answered, Error failure) when answered = slug -> NotLoaded(Api.reason failure), None
   | Loaded document, TitleChanged title -> edit (fun fields -> { fields with Title = title }) document
   | Loaded document, ExcerptChanged excerpt -> edit (fun fields -> { fields with Excerpt = excerpt }) document
   | Loaded document, BodyChanged body -> edit (fun fields -> { fields with Body = body }) document

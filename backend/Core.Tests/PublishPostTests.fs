@@ -60,6 +60,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable publishedWriteFails = false
   let mutable beforeDelete = ignore
   let mutable beforePublishedWrite = ignore
+  let mutable now = utcNow
   let mutable changes : PostChange list = []
   let mutable recordFails = false
 
@@ -98,7 +99,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   interface PublishPost.Dependencies with
     member _.Stage = Stage.Staging
     member _.Images = images
-    member _.GetUtcNow () = utcNow
+    member _.GetUtcNow () = now
     member _.ParsePublished = PostCheck.parsePublished Stage.Staging
 
     member _.GetPublishedBlob slug =
@@ -167,6 +168,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
 
     member _.DispatchSite () =
       log.Add "dispatch"
+      now <- now.AddSeconds 5.
 
       let dispatched : Result<Dispatch, DependencyError> = Ok(Queued(RunNumber 7L))
 
@@ -410,6 +412,17 @@ let tests =
         [ { Slug = slug "my-draft"
             Change = { ChangedDate = utcNow; Production = Dispatched(Queued(RunNumber 7L)) } } ]
         "The change has the run number of the dispatch"
+    }
+
+    test "the change is dated before the dispatch, so the run that the dispatch queued deploys it" {
+      let fake = store [] [ "my-draft", draftText ]
+      publish fake "my-draft" (Some "w1") ChooseNow |> ignore
+
+      match fake.Changes with
+      | [ { Change = change } ] ->
+        let queuedByDispatch = utcNow.AddSeconds 2.
+        Expect.isLessThan change.ChangedDate queuedByDispatch "A run queued by the dispatch is later than the change"
+      | other -> failtestf "Expected one change, got %A" other
     }
 
     test "a failed dispatch records a change with no run number" {

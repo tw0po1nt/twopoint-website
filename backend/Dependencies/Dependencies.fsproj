@@ -27,6 +27,7 @@
     <Compile Include="Subscriptions\SubscriptionEmails.fs" />
     <Compile Include="Subscriptions\DeliveryDependencies.fs" />
     <Compile Include="Deploys\SiteDispatch.fs" />
+    <Compile Include="Deploys\ChangeColumns.fs" />
     <Compile Include="Deploys\RebuildDb.fs" />
     <Compile Include="Deploys\DeployDb.fs" />
   </ItemGroup>

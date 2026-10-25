@@ -1,6 +1,7 @@
 namespace TwoPoint.Dependencies.Deploys
 
 open TwoPoint.Core.Deploys
+open TwoPoint.Core.Deploys.Actions
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Util
@@ -22,17 +23,6 @@ module DeployRows =
   /// A greater run number has a smaller row key, so a query reads the newest run first.
   let runRow (number : RunNumber) = (Int64.MaxValue - number.Value).ToString("D19", CultureInfo.InvariantCulture)
 
-  let eventName (event : RunEvent) =
-    match event with
-    | Push -> "push"
-    | WorkflowDispatch -> "workflow_dispatch"
-
-  let tryEvent (name : string) =
-    match name with
-    | "push" -> Some Push
-    | "workflow_dispatch" -> Some WorkflowDispatch
-    | _ -> None
-
   let stateName (state : RunState) =
     match state with
     | RunState.Waiting -> "waiting"
@@ -50,24 +40,19 @@ module DeployRows =
     | "canceled" -> Some RunState.Canceled
     | _ -> None
 
-  let dateText (date : DateTime) = date.ToString("o", CultureInfo.InvariantCulture)
-
-  let parseDate (text : string) =
-    DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime()
-
   let runEntity (run : SiteRun) =
     let entity = TableEntity(partitionKey = runPartition run.Repo, rowKey = runRow run.Number)
     entity["Number"] <- run.Number.Value
-    entity["Event"] <- eventName run.Event
+    entity["Event"] <- RunEvent.name run.Event
     entity["State"] <- stateName run.State
-    entity["CreatedDate"] <- dateText run.CreatedDate
-    entity["UpdatedDate"] <- dateText run.UpdatedDate
+    entity["CreatedDate"] <- ChangeColumns.dateText run.CreatedDate
+    entity["UpdatedDate"] <- ChangeColumns.dateText run.UpdatedDate
     entity
 
   let tryRun (repo : Repo) (entity : TableEntity) : SiteRun option =
     option {
       let! number = entity.GetInt64 "Number" |> Option.ofNullable
-      let! event = entity.TryGetString "Event" |> Option.bind tryEvent
+      let! event = entity.TryGetString "Event" |> Option.bind RunEvent.tryParse
       let! state = entity.TryGetString "State" |> Option.bind tryState
       let! created = entity.TryGetString "CreatedDate"
       let! updated = entity.TryGetString "UpdatedDate"
@@ -77,30 +62,22 @@ module DeployRows =
           Number = RunNumber number
           Event = event
           State = state
-          CreatedDate = parseDate created
-          UpdatedDate = parseDate updated }
+          CreatedDate = ChangeColumns.parseDate created
+          UpdatedDate = ChangeColumns.parseDate updated }
     }
 
   let changeEntity (change : PostChange) =
     let entity = TableEntity(partitionKey = "post", rowKey = Slug.value change.Slug)
-    entity["ChangedDate"] <- dateText change.Change.ChangedDate
-    entity["Production"] <- ProductionDispatch.name change.Change.Production
-    entity["RunNumber"] <- change.Change.Production |> ProductionDispatch.runNumber |> Option.map _.Value |> Option.toNullable
+    ChangeColumns.write "ChangedDate" entity change.Change.ChangedDate change.Change.Production
     entity
 
   let tryChange (entity : TableEntity) : (Slug * Change) option =
     option {
       let! slug = Slug.create entity.RowKey |> Result.toOption
-      let! changed = entity.TryGetString "ChangedDate"
-      let number = entity.GetInt64 "RunNumber" |> Option.ofNullable
-      let! production = entity.TryGetString "Production" |> Option.bind (fun name -> ProductionDispatch.tryParse name number)
-      return slug, { ChangedDate = parseDate changed; Production = production }
+      let! changedDate, production = ChangeColumns.read "ChangedDate" entity
+      return slug, { ChangedDate = changedDate; Production = production }
     }
 
-/// <summary>
-/// The table <c>siteRuns</c> has one row for each run of <c>site.yml</c>: the partition is the repo, and the row is
-/// the run number. The table <c>postChanges</c> has one row for the latest change of each post.
-/// </summary>
 type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
 
   [<Literal>]
@@ -124,25 +101,37 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
     return first |> Option.bind (DeployRows.tryRun repo)
   }
 
-  member _.SaveRun (run : SiteRun) : DependencyResult<unit> =
+  member _.SaveRun (incoming : SiteRun) : DependencyResult<ReceiveWorkflowRun.Next> =
     runDependencyWithLogging Dependency.Database logger $"{nameof DeployDb}.SaveRun"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
       let! runs = table RunsTable
-      let! _ = runs.UpsertEntityAsync(DeployRows.runEntity run, TableUpdateMode.Replace, ct)
-      return ()
-    }
+      let partition = DeployRows.runPartition incoming.Repo
+      let row = DeployRows.runRow incoming.Number
 
-  member _.GetRun (repo : Repo) (number : RunNumber) : DependencyResult<SiteRun option> =
-    runDependencyWithLogging Dependency.Database logger $"{nameof DeployDb}.GetRun"
-    <| cancellableTaskResult {
-      let! ct = CancellableTask.getCancellationToken()
-      let! runs = table RunsTable
+      let mutable outcome = None
+      let mutable remaining = 5
 
-      let! response =
-        runs.GetEntityIfExistsAsync<TableEntity>(DeployRows.runPartition repo, DeployRows.runRow number, cancellationToken = ct)
+      while outcome.IsNone do
+        let! response = runs.GetEntityIfExistsAsync<TableEntity>(partition, row, cancellationToken = ct)
+        let stored = if response.HasValue then DeployRows.tryRun incoming.Repo response.Value else None
 
-      return if response.HasValue then DeployRows.tryRun repo response.Value else None
+        match ReceiveWorkflowRun.Logic.next stored incoming with
+        | ReceiveWorkflowRun.Next.OlderThanStored -> outcome <- Some ReceiveWorkflowRun.Next.OlderThanStored
+        | ReceiveWorkflowRun.Newer run ->
+          try
+            if response.HasValue then
+              let! _ = runs.UpdateEntityAsync(DeployRows.runEntity run, response.Value.ETag, TableUpdateMode.Replace, ct)
+              ()
+            else
+              let! _ = runs.AddEntityAsync(DeployRows.runEntity run, ct)
+              ()
+
+            outcome <- Some(ReceiveWorkflowRun.Newer run)
+          with :? RequestFailedException as ex when (ex.Status = 409 || ex.Status = 412) && remaining > 1 ->
+            remaining <- remaining - 1
+
+      return outcome.Value
     }
 
   member _.RecordChange (change : PostChange) : DependencyResult<unit> =
@@ -164,7 +153,7 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
       let! entities = changes.QueryAsync<TableEntity>("PartitionKey eq 'post'", cancellationToken = ct) |> TaskSeq.toListAsync
       let! rebuild = rebuilds.GetEntityIfExistsAsync<TableEntity>("site", "latest", cancellationToken = ct)
       let! latest = runs production ""
-      let! succeeded = runs production " and State eq 'succeeded'"
+      let! succeeded = runs production $" and State eq '{DeployRows.stateName RunState.Succeeded}'"
 
       return
         { Changes = entities |> List.choose DeployRows.tryChange |> Map.ofList

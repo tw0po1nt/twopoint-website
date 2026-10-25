@@ -95,6 +95,18 @@ type RunEvent =
   | Push
   | WorkflowDispatch
 
+module RunEvent =
+  let name (event : RunEvent) =
+    match event with
+    | Push -> "push"
+    | WorkflowDispatch -> "workflow_dispatch"
+
+  let tryParse (name : string) =
+    match name with
+    | "push" -> Some Push
+    | "workflow_dispatch" -> Some WorkflowDispatch
+    | _ -> None
+
 [<RequireQualifiedAccess>]
 type RunState =
   | Waiting

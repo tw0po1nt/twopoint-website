@@ -13,7 +13,7 @@ let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
   | Shell.LoadPosts -> Shell.Posts(Posts.Answered(Error Api.Unanswered))
-  | Shell.PollPosts -> Shell.Posts(Posts.Polled(Error Api.Unanswered))
+  | Shell.PollPosts generation -> Shell.Posts(Posts.Polled(generation, Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
   | Shell.TrustCommenter comment -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
@@ -35,7 +35,6 @@ let private fail (call: Shell.Call) =
   | Shell.RegisterDevice _ -> Shell.Notifications(Notifications.RegisterAnswered(Error Api.Unanswered))
   | Shell.RemoveDevice deviceId -> Shell.Notifications(Notifications.Removed(deviceId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
-  | Shell.RetryPostsDeploy -> Shell.Posts(Posts.Retried(Error Api.Unanswered))
   | Shell.CreateDraft -> Shell.Posts(Posts.DraftCreated(Error Api.Unanswered))
   | Shell.LoadPost slug -> Shell.Editor(Editor.Answered(slug, Error Api.Unanswered))
   | Shell.SavePost request -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, Error Api.Unanswered))
@@ -70,7 +69,9 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
   | Shell.LoadPosts -> Api.getPosts (Config.api ()) token |> Promise.map (Posts.Answered >> Shell.Posts)
-  | Shell.PollPosts -> Api.getPosts (Config.api ()) token |> Promise.map (Posts.Polled >> Shell.Posts)
+  | Shell.PollPosts generation ->
+    Api.getPosts (Config.api ()) token
+    |> Promise.map (fun result -> Shell.Posts(Posts.Polled(generation, result)))
   | Shell.LoadQueue ->
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
@@ -131,7 +132,6 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
     Api.deleteDevice (Config.api ()) token deviceId
     |> Promise.map (fun result -> Shell.Notifications(Notifications.Removed(deviceId, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
-  | Shell.RetryPostsDeploy -> Api.rebuildSite (Config.api ()) token |> Promise.map (Posts.Retried >> Shell.Posts)
   | Shell.CreateDraft -> Api.createDraft (Config.api ()) token |> Promise.map (Posts.DraftCreated >> Shell.Posts)
   | Shell.LoadPost slug ->
     Api.getPost (Config.api ()) token slug
@@ -256,14 +256,15 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
   | Shell.Autosave version ->
     window.setTimeout ((fun () -> dispatch (Shell.Editor(Editor.AutosaveElapsed version))), Editor.autosaveDelay)
     |> ignore
-  | Shell.WaitToPollDeploy slug ->
+  | Shell.WaitToPollDeploy(slug, chain) ->
     window.setTimeout (
-      (fun () -> dispatch (Shell.Editor(Editor.DeployMsg(slug, Deploy.PollElapsed)))),
+      (fun () -> dispatch (Shell.Editor(Editor.DeployMsg(slug, Deploy.PollElapsed chain)))),
       Deploy.pollDelay
     )
     |> ignore
-  | Shell.WaitToPollPosts ->
-    window.setTimeout ((fun () -> dispatch (Shell.Posts Posts.PollElapsed)), Deploy.pollDelay) |> ignore
+  | Shell.WaitToPollPosts generation ->
+    window.setTimeout ((fun () -> dispatch (Shell.Posts(Posts.PollElapsed generation))), Deploy.pollDelay)
+    |> ignore
 
 let private site = "https://twopoint.dev"
 
@@ -729,7 +730,7 @@ let private deployTone (state: Api.DeployState) =
   | Api.DeployState.DeployFailed -> Parts.Bad
 
 [<SolidComponent>]
-let private postRow (dispatch: Shell.Msg -> unit) (retrying: bool) (post: Api.Post) =
+let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   let route = Shell.Router >> dispatch
   let stats = post.CommentStats
   let date = post.PublishDate |> Option.map Dates.dateText |> Option.defaultValue "No publish date"
@@ -747,13 +748,6 @@ let private postRow (dispatch: Shell.Msg -> unit) (retrying: bool) (post: Api.Po
       }
     }
 
-    Show(when' = Posts.canRetry post) {
-      p (class' = "small") {
-        button (type' = "button", class' = "text", disabled = retrying, onClick = fun _ -> dispatch (Shell.Posts Posts.RetryClicked)) {
-          "Retry"
-        }
-      }
-    }
 
     p (class' = "muted small") { $"{post.Slug} · {date}" }
 
@@ -779,7 +773,7 @@ let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
     }
   | Posts.Loaded _, posts ->
     Fragment() {
-      div (class' = "queue") { For(each = Array.ofList posts) { yield fun post _ -> postRow dispatch model.Retrying post } }
+      div (class' = "queue") { For(each = Array.ofList posts) { yield fun post _ -> postRow dispatch post } }
     }
   | Posts.NotLoaded reason, _ ->
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The posts did not load.").Has(p () { reason }) }
@@ -806,12 +800,6 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
       Parts
         .Alert(tone = Parts.Bad, title = "The draft was not made.")
         .Has(p () { model.CreateFailure |> Option.defaultValue "" })
-    }
-
-    Show(when' = model.RetryFailure.IsSome) {
-      Parts
-        .Alert(tone = Parts.Bad, title = "The rebuild did not start.")
-        .Has(p () { model.RetryFailure |> Option.defaultValue "" })
     }
 
     postList dispatch model

@@ -10,7 +10,6 @@ open FsToolkit.ErrorHandling
 open IcedTasks
 open Microsoft.Extensions.Logging
 
-/// The local backend has no `Deploy` section, and it dispatches nothing, so each change there is deployed.
 type DeployStore(config : Config, tableServiceClient : TableServiceClient, logger : ILogger) =
 
   let noRuns = { Latest = None; LatestSucceeded = None }

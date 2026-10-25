@@ -107,11 +107,11 @@ let tests =
       stateAt 5 None (runs (Some waiting) None) (change 0 ProductionDispatch.Failed) |> expect Deploying
     }
 
-    test "a dispatch with no run number is deploying until a run is created after the change" {
+    test "a dispatch with no run number is deploying until a run is created after the change, also a run that the dispatch queued" {
       let change = change 0 (ProductionDispatch.Dispatched QueuedWithoutRunNumber)
       stateAt 5 None (runs None None) change |> expect Deploying
 
-      let after = run 20L RunState.Succeeded WorkflowDispatch 2
+      let after = run 20L RunState.Succeeded WorkflowDispatch 1
       stateAt 5 None (runs (Some after) (Some after)) change |> expect Deployed
     }
 
