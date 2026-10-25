@@ -151,7 +151,7 @@ let private edit (change: Fields -> Fields) (document: Document) =
 
 let private saveNow (document: Document) =
   match document.Save with
-  | _ when document.Details.Slug = Details.Changing -> Loaded document, None
+  | _ when Details.isChangingSlug document.Details -> Loaded document, None
   | Unsaved
   | SaveFailed _ -> startSave document
   | Saving _ -> Loaded { document with SaveAgain = true }, None
@@ -203,25 +203,26 @@ let private detailsChanged (msg: Details.Msg) (document: Document) =
   else
     editWith (fun document -> { document with Details = details }) document
 
-let private withSlugState (state: Details.SlugState) (document: Document) =
-  { document with Details = { document.Details with Slug = state } }
+let private changeDetails (change: Details.Model -> Details.Model) (document: Document) =
+  { document with Details = change document.Details }
 
 let private requestSlugChange (document: Document) =
-  match document.State, document.ETag, document.Save, document.Details.Slug with
-  | _, _, _, Details.Changing -> Loaded document, None
+  match document.State, document.ETag, document.Save, Details.isChangingSlug document.Details with
+  | _, _, _, true -> Loaded document, None
   | Api.Draft, Some eTag, Saved, _ when Details.slugChangeable document.Slug document.Details ->
-    Loaded(withSlugState Details.Changing document),
+    Loaded(changeDetails Details.slugChangeStarted document),
     Some(
       ChangeSlug
         { Slug = document.Slug
           ETag = eTag
-          NewSlug = document.Details.SlugInput }
+          NewSlug = Details.typedSlug document.Details }
     )
   | Api.Draft, _, Saved, _ -> Loaded document, None
   | Api.Draft, _, _, _ ->
-    Loaded(withSlugState (Details.ChangeFailed "Wait until the post is saved, and then change the slug.") document), None
+    Loaded(changeDetails (Details.slugChangeRefused "Wait until the post is saved, and then change the slug.") document),
+    None
   | (Api.Published | Api.Upcoming), _, _, _ ->
-    Loaded(withSlugState (Details.ChangeFailed "The slug of a published post is fixed.") document), None
+    Loaded(changeDetails (Details.slugChangeRefused "The slug of a published post is fixed.") document), None
 
 let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
   match result with
@@ -231,15 +232,15 @@ let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document
           Slug = changed.Slug
           ETag = Some changed.ETag
           LeaveTo = Some(Route.path (Route.Post changed.Slug))
-          Details = { document.Details with Slug = Details.Idle; SlugInput = changed.Slug } }
+          Details = Details.slugChanged changed.Slug document.Details }
 
     if needsSave document then
       startSave { document with Save = Unsaved }
     else
       Loaded document, None
   | Error Api.Stale ->
-    Loaded { withSlugState Details.Idle document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
-  | Error failure -> Loaded(withSlugState (Details.ChangeFailed(Api.reason failure)) document), None
+    Loaded { changeDetails Details.slugChangeStale document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
+  | Error failure -> Loaded(changeDetails (Details.slugChangeRefused (Api.reason failure)) document), None
 let private togglePreview (document: Document) =
   match document.Preview with
   | Preview.Closed ->
