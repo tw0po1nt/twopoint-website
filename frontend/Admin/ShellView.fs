@@ -40,6 +40,7 @@ let private fail (call: Shell.Call) =
   | Shell.LoadDetailsOptions -> Shell.Editor(Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Unanswered)))
   | Shell.ChangeSlug request -> Shell.Editor(Editor.SlugChangeAnswered(request.Slug, Error Api.Unanswered))
   | Shell.PreviewPost request -> Shell.Editor(Editor.PreviewAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
@@ -159,6 +160,9 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
       request.Fields.Body
       request.Details
     |> Promise.map (fun result -> Shell.Editor(Editor.PreviewAnswered(request.Slug, result)))
+  | Shell.UploadAsset(id, source) ->
+    Api.uploadAsset (Config.api ()) token (unbox<File> source)
+    |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()

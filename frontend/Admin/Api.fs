@@ -495,3 +495,24 @@ let previewPost
     |> Encode.toString 0
 
   sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some json) []
+type private UploadedAsset = { Url: string }
+
+/// `file` is the browser file. The API checks its type and its size.
+let uploadAsset (api: string) (token: string) (file: Browser.Types.File) : JS.Promise<Result<string, Failure>> =
+  fetchUnsafe $"{api}/api/internal/assets" [
+    Method HttpMethod.POST
+    requestHeaders [ Accept "application/json"; Authorization $"Bearer {token}" ]
+    Body(U3.Case1 file)
+  ]
+  |> Promise.bind (fun response ->
+    if response.Status = 401 || response.Status = 403 then
+      Promise.lift (Error Refused)
+    else
+      response.text ()
+      |> Promise.map (fun text ->
+        match Decode.Auto.fromString<ApiResponse<UploadedAsset>> (text, caseStrategy = CamelCase) with
+        | Ok { Success = true; Data = Some uploaded } -> Ok uploaded.Url
+        | Ok { Message = Some reason } -> Error(Failed reason)
+        | Ok _
+        | Error _ -> Error Invalid))
+  |> Promise.catch (fun _ -> Error Unanswered)

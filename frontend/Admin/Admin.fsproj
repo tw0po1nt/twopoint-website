@@ -14,6 +14,7 @@
     <Compile Include="Route.fs" />
     <Compile Include="Router.fs" />
     <Compile Include="Api.fs" />
+    <Compile Include="Upload.fs" />
     <Compile Include="Session.fs" />
     <Compile Include="Dashboard.fs" />
     <Compile Include="Rebuild.fs" />
