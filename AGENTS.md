@@ -54,6 +54,13 @@ through a GitHub App. Key Vault keeps the private key of the app and signs each 
 `scripts/setup-site-dispatch.sh` sets up the app. The local backend logs each dispatch and sends
 nothing.
 
+`Admin-Posts-Publish` publishes a draft now or on a future date. It sets the publish date in the
+working text and runs the check of the build, with the card image, so an error refuses the publish.
+It then writes the `revisions` blob, the `published` blob, and the post-table row, deletes the
+`working` blob, and dispatches `site.yml` as "Rebuild site" does. A step after the `published` write
+that fails gives a warning, and the post stays published. `Admin-Posts-CheckPublish` gives the
+problems for the dialog before the author confirms.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

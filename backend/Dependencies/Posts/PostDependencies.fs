@@ -100,12 +100,12 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreatePost (newPost : NewPost) = cancellableTaskResult {
+  member _.UpsertPost (newPost : NewPost) = cancellableTaskResult {
     let newPost =
       { DbPost.Title = newPost.Title |> NonEmptyString.value
         Slug = newPost.Slug |> Slug.value
         CreatedDate = newPost.CreatedDate }
-    let! (dbPost: DbPost) = postDb.CreatePost newPost
+    let! (dbPost: DbPost) = postDb.UpsertPost newPost
     return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
   }
 

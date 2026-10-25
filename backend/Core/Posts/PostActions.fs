@@ -9,96 +9,11 @@ open IcedTasks
 
 open System
 
-// ====================================================================================================================
-// Create post
-// ====================================================================================================================
-
-// Input
-
+/// The row of a published post in the post table. The comment path finds the post by it.
 type NewPost =
   { Title : NonEmptyString
     Slug : Slug
     CreatedDate : DateTime }
-
-module NewPost =
-  
-  type Title = Title of string
-  type Slug = Slug of string
-  type CreatedDate = CreatedDate of string
-
-  type Dto =
-    { Title : Title
-      Slug : Slug
-      CreatedDate : CreatedDate }
-    
-  let create (dto : Dto) = validation {
-    let (Title title) = dto.Title
-    let (Slug slug) = dto.Slug
-    let (CreatedDate createdDate) = dto.CreatedDate
-    let! title = title |> NonEmptyString.create (Some (nameof title))
-    and! slug = Slug.create slug
-    and! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
-    
-    return
-      { NewPost.Title = title
-        Slug = slug
-        CreatedDate = createdDate }
-  }
-    
-[<RequireQualifiedAccess>]
-module CreatePost =
-  
-  // Output
-
-  type Error = PostAlreadyExists of Post
-  type Success = Created of NewPost
-  type Decision = Decision<Success, Error>
-  type Event = Created of Post
-  
-  // Logic
-  
-  type Logic =
-    Post option
-      -> NewPost
-      -> Decision
-
-  [<RequireQualifiedAccess>]
-  module Logic =
-    let decide : Logic =
-      fun existingPost newPost -> result {
-        do! existingPost |> Result.requireNoneWith PostAlreadyExists
-        return Success.Created newPost
-      }
-
-  // Action
-  
-  type Action = NewPost.Dto -> CancellableTask<ActionResult<Event, Error>>
-  
-  type Dependencies =
-    abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
-    abstract member CreatePost: newPost: NewPost -> DependencyResult<Post>
-    
-  let withDependencies (dependencies : Dependencies) : Action =
-    fun newPost -> cancellableTaskResult {
-      let! newPost =
-        newPost
-        |> NewPost.create
-        |> Result.mapError ActionError<Error>.Validation
-                    
-      let! existingPost =
-        dependencies.GetPostBySlug newPost.Slug
-        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-        
-      let decision = Logic.decide existingPost newPost
-        
-      return!
-        decision
-        |> Result.map (fun (Success.Created newPost) -> newPost)
-        |> Result.traverseCancellableTask dependencies.CreatePost
-        |> CancellableTaskResult.foldResult
-          (DependencyResult.toActionResult Event.Created)
-          (Logic >> ActionResult.failure) 
-    }
 
 // ====================================================================================================================
 // Create draft
