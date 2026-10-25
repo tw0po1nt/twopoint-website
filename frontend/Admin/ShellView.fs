@@ -46,6 +46,7 @@ let private fail (call: Shell.Call) =
   | Shell.PublishPost request -> Shell.Editor(Editor.PublishAnswered(request.Slug, Error Api.Unanswered))
   | Shell.LoadPostDeploy slug -> Shell.Editor(Editor.DeployMsg(slug, Deploy.StatusRead(Error Api.Unanswered)))
   | Shell.RetryPostDeploy slug -> Shell.Editor(Editor.DeployMsg(slug, Deploy.Retried(Error Api.Unanswered)))
+  | Shell.DiscardPending request -> Shell.Editor(Editor.DiscardAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -181,6 +182,9 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.RetryPostDeploy slug ->
     Api.rebuildSite (Config.api ()) token
     |> Promise.map (fun result -> Shell.Editor(Editor.DeployMsg(slug, Deploy.Retried result)))
+  | Shell.DiscardPending request ->
+    Api.discardPending (Config.api ()) token request.Slug request.ETag
+    |> Promise.map (fun result -> Shell.Editor(Editor.DiscardAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))

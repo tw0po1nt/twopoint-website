@@ -51,6 +51,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable published = published
   let mutable working = working
   let mutable version = 1
+  let mutable publishedVersion = 1
   let mutable revisions = Map.empty<string, string>
   let mutable rows = Map.empty<string, PostRow>
   let mutable images : IImageSize = okImages
@@ -84,7 +85,9 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
     version <- version + 1
     working <- working |> Map.add name text
 
-  member _.Publish (name : string) (text : string) = published <- published |> Map.add name text
+  member _.Publish (name : string) (text : string) =
+    publishedVersion <- publishedVersion + 1
+    published <- published |> Map.add name text
 
   member _.AddRevision (name : string) (time : string) = revisions <- revisions |> Map.add $"{name}/{time}" "older"
 
@@ -96,14 +99,14 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
         changes <- change :: changes
         CancellableTaskResult.singleton ()
 
-  interface PublishPost.Dependencies with
+  interface PublishSteps.GatedDependencies with
     member _.Stage = Stage.Staging
     member _.Images = images
     member _.GetUtcNow () = now
     member _.ParsePublished = PostCheck.parsePublished Stage.Staging
 
     member _.GetPublishedBlob slug =
-      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1" }) |> CancellableTaskResult.singleton
+      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = $"p{publishedVersion}" }) |> CancellableTaskResult.singleton
 
     member _.GetWorkingBlob slug =
       working |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = $"w{version}" }) |> CancellableTaskResult.singleton
@@ -111,7 +114,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
     member _.GetPublishedPosts () =
       published
       |> Map.toList
-      |> List.map (fun (name, text) -> { StoredPost.Slug = slug name; Text = text; ETag = "p1" })
+      |> List.map (fun (name, text) -> { StoredPost.Slug = slug name; Text = text; ETag = $"p{publishedVersion}" })
       |> CancellableTaskResult.singleton
 
     member _.GetSeriesRecords () = CancellableTaskResult.singleton []
@@ -143,7 +146,12 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
         | MustNotExist, None ->
           log.Add "published"
           published <- published |> Map.add (Slug.value slug) text
-          CancellableTaskResult.singleton (Written "p1")
+          CancellableTaskResult.singleton (Written $"p{publishedVersion}")
+        | MatchesETag eTag, Some _ when eTag = $"p{publishedVersion}" ->
+          log.Add "published"
+          publishedVersion <- publishedVersion + 1
+          published <- published |> Map.add (Slug.value slug) text
+          CancellableTaskResult.singleton (Written $"p{publishedVersion}")
         | _ -> CancellableTaskResult.singleton ConditionFailed
 
     member _.UpsertPostRow post =
@@ -395,7 +403,7 @@ let tests =
       fake.Dispatch <- WholeCallFails
 
       match publish fake "my-draft" (Some "w1") ChooseNow |> outcomeOf with
-      | { Warnings = [ PublishPost.SiteNotRebuilt _ ]; Production = ProductionDispatch.Failed } -> ()
+      | { Warnings = [ PublishSteps.SiteNotRebuilt _ ]; Production = ProductionDispatch.Failed } -> ()
       | other -> failtestf "Expected SiteNotRebuilt, got %A" other
 
       Expect.isTrue (fake.Published.ContainsKey "my-draft") "The published blob stays"
@@ -441,7 +449,7 @@ let tests =
       fake.RecordFails <- true
 
       match warningsOf fake with
-      | [ PublishPost.DeployNotTracked _ ] -> ()
+      | [ PublishSteps.DeployNotTracked _ ] -> ()
       | other -> failtestf "Expected DeployNotTracked, got %A" other
 
       Expect.isTrue (fake.Published.ContainsKey "my-draft") "The published blob stays"
@@ -452,14 +460,14 @@ let tests =
       staging.Dispatch <- StagingFails
 
       match publish staging "my-draft" (Some "w1") ChooseNow |> outcomeOf with
-      | { Warnings = [ PublishPost.StagingRebuildFailed _ ]; Production = Dispatched(Queued _) } -> ()
+      | { Warnings = [ PublishSteps.StagingRebuildFailed _ ]; Production = Dispatched(Queued _) } -> ()
       | other -> failtestf "Expected StagingRebuildFailed, got %A" other
 
       let production = store [] [ "my-draft", draftText ]
       production.Dispatch <- ProductionFails
 
       match publish production "my-draft" (Some "w1") ChooseNow |> outcomeOf with
-      | { Warnings = [ PublishPost.ProductionRebuildFailed _ ]; Production = ProductionDispatch.Failed } -> ()
+      | { Warnings = [ PublishSteps.ProductionRebuildFailed _ ]; Production = ProductionDispatch.Failed } -> ()
       | other -> failtestf "Expected ProductionRebuildFailed, got %A" other
     }
 
@@ -477,7 +485,7 @@ let tests =
       fake.RowFailures <- 2
 
       match warningsOf fake with
-      | [ PublishPost.CommentRowNotWritten _ ] -> ()
+      | [ PublishSteps.CommentRowNotWritten _ ] -> ()
       | other -> failtestf "Expected CommentRowNotWritten, got %A" other
 
       Expect.equal (List.rev fake.Log |> List.take 2) [ "dispatch"; "delete working" ] "The delete and the dispatch ran"
@@ -488,7 +496,7 @@ let tests =
       let fake = store [] [ "my-draft", draftText ]
       fake.BeforeDelete <- fun () -> fake.Overwrite "my-draft" "newer text"
 
-      Expect.equal (warningsOf fake) [ PublishPost.NewerTextKept ] "The warning"
+      Expect.equal (warningsOf fake) [ PublishSteps.NewerTextKept ] "The warning"
       Expect.equal fake.Working["my-draft"] "newer text" "The newer text stays"
     }
 
@@ -594,5 +602,330 @@ let tests =
       match commentOnPostsOf fake (DateTime(2026, 4, 1, 13, 0, 1, DateTimeKind.Utc)) with
       | Ok(PostComment.Event.Posted _) -> ()
       | other -> failtestf "Expected Posted, got %A" other
+    }
+  ]
+
+let private changedText =
+  pendingEdit.Replace("title: Live", "title: Live, edited").Replace("Edited.", "Edited, again.")
+
+let private publishChanges (fake : FakeStore) name ifMatch updateDate =
+  run (PublishChanges.withDependencies fake { Slug = name; IfMatch = ifMatch; UpdateDate = updateDate })
+
+let private checkChanges (fake : FakeStore) name ifMatch updateDate =
+  run (CheckChanges.withDependencies fake { Slug = name; IfMatch = ifMatch; UpdateDate = updateDate })
+
+let private discard (fake : FakeStore) name ifMatch =
+  let dependencies = fake :> PublishSteps.GatedDependencies
+
+  let discardChanges =
+    DiscardChanges.withDependencies
+      { new DiscardChanges.Dependencies with
+          member _.GetPublishedBlob slug = dependencies.GetPublishedBlob slug
+          member _.GetWorkingBlob slug = dependencies.GetWorkingBlob slug
+          member _.DeleteWorkingBlob slug eTag = dependencies.DeleteWorkingBlob slug eTag }
+
+  run (discardChanges { Slug = name; IfMatch = ifMatch })
+
+let private changesOutcomeOf result =
+  match result with
+  | Ok(PublishChanges.Event.Published outcome) -> outcome
+  | Error error -> failtestf "Expected published changes, got %A" error
+
+let private refusedWith expected result =
+  match result with
+  | Error(ActionError.Logic(PublishChanges.Refused refusal)) -> Expect.equal refusal expected "The refusal"
+  | other -> failtestf "Expected %A, got %A" expected other
+
+[<Tests>]
+let changesTests =
+  testList "Publish changes" [
+    test "the publish writes the revision, the published blob, and the row with the new title, deletes the working blob, and then dispatches" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      let outcome = publishChanges fake "live" (Some "w1") None |> changesOutcomeOf
+
+      Expect.equal
+        fake.Log
+        [ "revision live/2026-03-01T09:30:45Z"; "published"; "row"; "delete working"; "dispatch" ]
+        "The steps, in order"
+
+      Expect.equal fake.Published["live"] changedText "The published text is the pending edit"
+      Expect.equal fake.Revisions["live/2026-03-01T09:30:45Z"] changedText "The revision is a copy"
+      Expect.equal (NonEmptyString.value fake.Rows["live"].Title) "Live, edited" "The new title"
+      Expect.equal fake.Rows["live"].CreatedDate (DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)) "The publish date stays"
+      Expect.isEmpty fake.Working "The working blob is gone"
+
+      Expect.equal
+        outcome
+        { PublishDate = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+          State = TwoPoint.Core.Posts.PostState.Published
+          Production = Dispatched(Queued(RunNumber 7L))
+          Warnings = [] }
+        "The outcome has the production run"
+    }
+
+    test "the publish records the change with the production run number" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      publishChanges fake "live" (Some "w1") None |> changesOutcomeOf |> ignore
+
+      Expect.equal
+        fake.Changes
+        [ { Slug = slug "live"
+            Change = { ChangedDate = utcNow; Production = Dispatched(Queued(RunNumber 7L)) } } ]
+        "The change has the run number of the dispatch"
+    }
+
+    test "an update date is written into the published text and the revision" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      publishChanges fake "live" (Some "w1") (Some "2026-02-04T08:00:00.700Z") |> changesOutcomeOf |> ignore
+
+      Expect.stringContains fake.Published["live"] "updateDate: 2026-02-04T08:00:00Z" "The update date in whole seconds"
+      Expect.equal fake.Revisions["live/2026-03-01T09:30:45Z"] fake.Published["live"] "The revision has the date"
+      Expect.stringContains fake.Published["live"] "Edited, again." "The body stays"
+    }
+
+    test "no update date leaves the text as the author saved it" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      publishChanges fake "live" (Some "w1") None |> changesOutcomeOf |> ignore
+      Expect.equal fake.Published["live"] changedText "The text"
+    }
+
+    test "an update date that is not a UTC time is a validation error before any store read" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+
+      match publishChanges fake "live" (Some "w1") (Some "next week") with
+      | Error(ActionError.Validation _) -> ()
+      | other -> failtestf "Expected a validation error, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "a post with an error is refused, and the store does not change" {
+      let broken = changedText.Replace("Edited, again.", "See [it](/posts/nowhere/).")
+      let fake = store [ "live", livePost ] [ "live", broken ]
+
+      match publishChanges fake "live" (Some "w1") None with
+      | Error(ActionError.Logic(PublishChanges.HasErrors problems)) ->
+        Expect.isTrue (problems |> List.forall Problem.isError) "Only errors"
+        Expect.isNonEmpty problems "The errors"
+      | other -> failtestf "Expected HasErrors, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+      Expect.equal fake.Published["live"] livePost "The published text stays"
+      Expect.equal fake.Working["live"] broken "The pending edit stays"
+    }
+
+    test "the check gives the problems and writes nothing" {
+      let broken = changedText.Replace("Edited, again.", "See [it](/posts/nowhere/).")
+      let fake = store [ "live", livePost ] [ "live", broken ]
+
+      match checkChanges fake "live" (Some "w1") None with
+      | Ok(CheckChanges.Event.Checked problems) -> Expect.isTrue (problems |> List.exists Problem.isError) "The error"
+      | Error error -> failtestf "Expected a check, got %A" error
+
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "the check refuses a draft and a published post with no pending edit" {
+      let draft = store [] [ "my-draft", draftText ]
+
+      match checkChanges draft "my-draft" (Some "w1") None with
+      | Error(ActionError.Logic(CheckChanges.Refused(PendingGate.NotPublished _))) -> ()
+      | other -> failtestf "Expected NotPublished, got %A" other
+
+      let clean = store [ "live", livePost ] []
+
+      match checkChanges clean "live" (Some "w1") None with
+      | Error(ActionError.Logic(CheckChanges.Refused(PendingGate.NoPendingEdit _))) -> ()
+      | other -> failtestf "Expected NoPendingEdit, got %A" other
+    }
+
+    test "a draft is refused, and the draft stays" {
+      let fake = store [] [ "my-draft", draftText ]
+      publishChanges fake "my-draft" (Some "w1") None |> refusedWith (PendingGate.NotPublished(slug "my-draft"))
+      Expect.isEmpty fake.Log "No write"
+      Expect.equal fake.Working["my-draft"] draftText "The draft stays"
+    }
+
+    test "a published post with no pending edit is refused" {
+      let fake = store [ "live", livePost ] []
+      publishChanges fake "live" (Some "w1") None |> refusedWith (PendingGate.NoPendingEdit(slug "live"))
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "a post that does not exist is refused" {
+      let fake = store [] []
+      publishChanges fake "nothing" (Some "w1") None |> refusedWith (PendingGate.PostNotFound(slug "nothing"))
+    }
+
+    test "an old ETag is refused, and the store does not change" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      publishChanges fake "live" (Some "w0") None |> refusedWith PendingGate.WorkingBlobChanged
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "a published text that changes during the publish is refused, and leaves no revision" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.BeforePublishedWrite <- fun () -> fake.Publish "live" (livePost.Replace("Live body.", "Other body."))
+
+      publishChanges fake "live" (Some "w1") None |> refusedWith PendingGate.PublishedBlobChanged
+
+      Expect.isEmpty fake.Revisions "The revision is deleted"
+      Expect.stringContains fake.Published["live"] "Other body." "The other published text stays"
+      Expect.equal fake.Working["live"] changedText "The pending edit stays"
+      Expect.isEmpty fake.Rows "No row"
+    }
+
+    test "a revision that exists is not replaced" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.AddRevision "live" "2026-03-01T09:30:45Z"
+
+      match publishChanges fake "live" (Some "w1") None with
+      | Error(ActionError.Logic(PublishChanges.RevisionExists _)) -> ()
+      | other -> failtestf "Expected RevisionExists, got %A" other
+
+      Expect.equal fake.Published["live"] livePost "The published text stays"
+    }
+
+    test "a failed write of the published blob leaves the pending edit as it was, and deletes the revision" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.PublishedWriteFails <- true
+
+      match publishChanges fake "live" (Some "w1") None with
+      | Error(ActionError.Dependency _) -> ()
+      | other -> failtestf "Expected a dependency error, got %A" other
+
+      Expect.isEmpty fake.Revisions "No revision"
+      Expect.isEmpty fake.Rows "No row"
+      Expect.equal fake.Working["live"] changedText "The pending edit stays"
+    }
+
+    test "two failed row writes give a warning, and the later steps still run" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.RowFailures <- 2
+
+      match (publishChanges fake "live" (Some "w1") None |> changesOutcomeOf).Warnings with
+      | [ PublishSteps.CommentRowNotWritten _ ] -> ()
+      | other -> failtestf "Expected CommentRowNotWritten, got %A" other
+
+      Expect.isEmpty fake.Rows "No row yet"
+      Expect.equal (List.rev fake.Log |> List.take 2) [ "dispatch"; "delete working" ] "The later steps ran"
+
+    }
+
+    test "a working blob that changes during the publish stays as the pending edit, with a warning" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.BeforeDelete <- fun () -> fake.Overwrite "live" "newer text"
+
+      Expect.equal (publishChanges fake "live" (Some "w1") None |> changesOutcomeOf).Warnings [ PublishSteps.NewerTextKept ] "The warning"
+      Expect.equal fake.Working["live"] "newer text" "The newer text stays"
+    }
+
+    test "a failed dispatch leaves the changes published and gives a warning" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.Dispatch <- WholeCallFails
+
+      match publishChanges fake "live" (Some "w1") None |> changesOutcomeOf with
+      | { Warnings = [ PublishSteps.SiteNotRebuilt _ ]; Production = ProductionDispatch.Failed } -> ()
+      | other -> failtestf "Expected SiteNotRebuilt, got %A" other
+
+      Expect.equal fake.Published["live"] changedText "The published text stays"
+    }
+
+    test "a card image that the build cannot fetch is refused with the error of the build" {
+      let image = "https://example.com/card.jpg"
+      let withImage = changedText.Replace("category: One-offs", $"category: One-offs\nimage: {image}")
+      let fake = store [ "live", livePost ] [ "live", withImage ]
+
+      fake.Images <-
+        { new IImageSize with
+            member _.Size _ = Result.Error "HTTP 404" }
+
+      match publishChanges fake "live" (Some "w1") None with
+      | Error(ActionError.Logic(PublishChanges.HasErrors problems)) ->
+        Expect.equal
+          (problems |> List.map _.Message)
+          [ $"The front matter gives the Open Graph image {image}, and the build cannot make its crop: HTTP 404." ]
+          "The message of the build"
+      | other -> failtestf "Expected HasErrors, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "the publish date of the pending edit does not move the publish date of the post" {
+      let moved = changedText.Replace("publishDate: 2026-01-01T00:00:00Z", "publishDate: 2027-05-05T00:00:00Z")
+      let fake = store [ "live", livePost ] [ "live", moved ]
+      let outcome = publishChanges fake "live" (Some "w1") None |> changesOutcomeOf
+      let date = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+
+      Expect.equal outcome.PublishDate date "The outcome"
+      Expect.equal fake.Rows["live"].CreatedDate date "The row"
+      Expect.equal (Post.summary fake.Published["live"]).PublishDate (Some(DateTimeOffset date)) "The published blob"
+      Expect.equal fake.Revisions["live/2026-03-01T09:30:45Z"] fake.Published["live"] "The revision"
+    }
+
+    test "a published text with no publish date is refused" {
+      let undated = livePost.Replace("publishDate: 2026-01-01T00:00:00Z\n", "")
+      let fake = store [ "live", undated ] [ "live", changedText ]
+      publishChanges fake "live" (Some "w1") None |> refusedWith (PendingGate.NoPublishDate(slug "live"))
+      Expect.isEmpty fake.Log "No write"
+    }
+  ]
+
+[<Tests>]
+let discardTests =
+  testList "Discard changes" [
+    test "the discard deletes only the working blob" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+
+      match discard fake "live" (Some "w1") with
+      | Ok DiscardChanges.Discarded -> ()
+      | other -> failtestf "Expected Discarded, got %A" other
+
+      Expect.equal fake.Log [ "delete working" ] "Only the delete"
+      Expect.isEmpty fake.Working "The working blob is gone"
+      Expect.equal fake.Published["live"] livePost "The published text stays"
+      Expect.isEmpty fake.Revisions "No revision"
+      Expect.isEmpty fake.Rows "No row"
+    }
+
+    test "a draft is refused, so the draft is not deleted" {
+      let fake = store [] [ "my-draft", draftText ]
+
+      match discard fake "my-draft" (Some "w1") with
+      | Error(ActionError.Logic(DiscardChanges.Refused(PendingGate.NotPublished _))) -> ()
+      | other -> failtestf "Expected NotPublished, got %A" other
+
+      Expect.isEmpty fake.Log "No delete"
+      Expect.equal fake.Working["my-draft"] draftText "The draft stays"
+    }
+
+    test "a published post with no pending edit is refused" {
+      let fake = store [ "live", livePost ] []
+
+      match discard fake "live" (Some "w1") with
+      | Error(ActionError.Logic(DiscardChanges.Refused(PendingGate.NoPendingEdit _))) -> ()
+      | other -> failtestf "Expected NoPendingEdit, got %A" other
+    }
+
+    test "an old ETag is refused, and the pending edit stays" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+
+      match discard fake "live" (Some "w0") with
+      | Error(ActionError.Logic(DiscardChanges.Refused PendingGate.WorkingBlobChanged)) -> ()
+      | other -> failtestf "Expected WorkingBlobChanged, got %A" other
+
+      Expect.isEmpty fake.Log "No delete"
+      Expect.equal fake.Working["live"] changedText "The pending edit stays"
+    }
+
+    test "a working blob that changes before the delete is refused, and the newer text stays" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.BeforeDelete <- fun () -> fake.Overwrite "live" "newer text"
+
+      match discard fake "live" (Some "w1") with
+      | Error(ActionError.Logic(DiscardChanges.Refused PendingGate.WorkingBlobChanged)) -> ()
+      | other -> failtestf "Expected WorkingBlobChanged, got %A" other
+
+      Expect.equal fake.Working["live"] "newer text" "The newer text stays"
     }
   ]

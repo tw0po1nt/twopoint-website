@@ -23,7 +23,7 @@ let private post: Api.PostDocument =
     Body = "Some text.\n"
     Details = noDetails
     Text = ""
-    PublishedText = None }
+    Published = None }
 
 let private opened =
   let model, _ = Shell.init "/posts/my-post"

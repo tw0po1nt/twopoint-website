@@ -23,7 +23,7 @@ let private document state : Api.PostDocument =
     Body = "Some text.\n"
     Details = noDetails
     Text = ""
-    PublishedText = None }
+    Published = None }
 
 let private started (path: string) =
   let model, _ = Shell.init path
@@ -161,7 +161,7 @@ let tests =
     test "a publish reads the deploy state of the post" {
       let model, _ = open' { document Api.Draft with ETag = Some "\"v1\"" }
       let model, _ = Shell.update (Shell.Editor Editor.PublishClicked) model
-      let model, _ = Shell.update (Shell.Editor(Editor.PublishCheckAnswered("my-post", Publish.Now, Ok { Problems = [] }))) model
+      let model, _ = Shell.update (Shell.Editor(Editor.PublishCheckAnswered("my-post", Publish.Draft Publish.Now, Ok { Problems = [] }))) model
       let model, _ = Shell.update (Shell.Editor Editor.PublishConfirmed) model
 
       let published: Api.PublishedPost =

@@ -16,7 +16,7 @@ const post = {
   body: 'Intro.\n\nSee below.\n\n![](https://example.com/a.png)\n',
   details: noDetails,
   text: '',
-  publishedText: null,
+  published: null,
 };
 
 const problems = [

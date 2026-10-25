@@ -36,6 +36,17 @@ type PublishedPostDto =
 
 type PublishCheckDto = { Problems : ProblemDto list }
 
+module PreconditionResponse =
+
+  let missing<'T> (req : HttpRequestData) : CancellableTask<HttpResponseData> =
+    cancellableTask {
+      let! ct = CancellableTask.getCancellationToken()
+      let apiResponse : ApiResponse<'T> = { Success = false; Message = Some "Send If-Match with the ETag"; Data = None }
+      let response = req.CreateResponse HttpStatusCode.PreconditionRequired
+      do! response.WriteAsJsonAsync(apiResponse, ct)
+      return response
+    }
+
 module PublishMapping =
 
   let choice (json : PublishPostJson) =
@@ -43,17 +54,17 @@ module PublishMapping =
     | Some date when date <> "" -> ChooseDate date
     | _ -> ChooseNow
 
-  let warning (warning : PublishPost.Warning) =
+  let warning (warning : PublishSteps.Warning) =
     match warning with
-    | PublishPost.CommentRowNotWritten _ -> "comment-row"
-    | PublishPost.PendingEditKept _ -> "pending-edit"
-    | PublishPost.NewerTextKept -> "newer-text"
-    | PublishPost.ProductionRebuildFailed _ -> "production-rebuild"
-    | PublishPost.StagingRebuildFailed _ -> "staging-rebuild"
-    | PublishPost.SiteNotRebuilt _ -> "site-rebuild"
-    | PublishPost.DeployNotTracked _ -> "deploy-tracking"
+    | PublishSteps.CommentRowNotWritten _ -> "comment-row"
+    | PublishSteps.PendingEditKept _ -> "pending-edit"
+    | PublishSteps.NewerTextKept -> "newer-text"
+    | PublishSteps.ProductionRebuildFailed _ -> "production-rebuild"
+    | PublishSteps.StagingRebuildFailed _ -> "staging-rebuild"
+    | PublishSteps.SiteNotRebuilt _ -> "site-rebuild"
+    | PublishSteps.DeployNotTracked _ -> "deploy-tracking"
 
-  let published (outcome : PublishPost.Outcome) : PublishedPostDto =
+  let published (outcome : PublishSteps.Outcome) : PublishedPostDto =
     { PublishDate = TwoPoint.Site.Render.Time.isoTime (DateTimeOffset outcome.PublishDate)
       State =
         match outcome.State with
@@ -161,13 +172,7 @@ type CheckPublish(
           do! response.WriteAsJsonAsync(apiResponse, ct)
           return response
         | IfNoneMatchAny
-        | Missing ->
-          let apiResponse : ApiResponse<PublishCheckDto> =
-            { Success = false; Message = Some "Send If-Match with the ETag"; Data = None }
-
-          response.StatusCode <- HttpStatusCode.PreconditionRequired
-          do! response.WriteAsJsonAsync(apiResponse, ct)
-          return response
+        | Missing -> return! PreconditionResponse.missing<PublishCheckDto> req
       }
     )
 
@@ -240,12 +245,6 @@ type PublishPost(
           do! response.WriteAsJsonAsync(apiResponse, ct)
           return response
         | IfNoneMatchAny
-        | Missing ->
-          let apiResponse : ApiResponse<PublishedPostDto> =
-            { Success = false; Message = Some "Send If-Match with the ETag"; Data = None }
-
-          response.StatusCode <- HttpStatusCode.PreconditionRequired
-          do! response.WriteAsJsonAsync(apiResponse, ct)
-          return response
+        | Missing -> return! PreconditionResponse.missing<PublishedPostDto> req
       }
     )

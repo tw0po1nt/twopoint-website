@@ -53,6 +53,12 @@ type SeriesListing = { Slug: string; Title: string }
 
 type ChangedSlug = { Slug: string; ETag: string }
 
+type PublishedFields =
+  { Title: string
+    Excerpt: string
+    Body: string
+    Details: PostDetails }
+
 /// `ETag` is the ETag of the working blob. A published post with no pending edit has none.
 type PostDocument =
   { Slug: string
@@ -65,7 +71,7 @@ type PostDocument =
     Body: string
     Details: PostDetails
     Text: string
-    PublishedText: string option }
+    Published: PublishedFields option }
 
 type CreatedDraft = { Slug: string; ETag: string }
 
@@ -174,10 +180,19 @@ type SavedPost = { ETag: string; Check: Check }
 
 type PublishCheck = { Problems: Problem list }
 
-type PublishTarget =
+type PublishTime =
   | PublishNow
   /// An ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
   | PublishOn of iso: string
+
+type UpdateDate =
+  | KeepUpdateDate
+  /// An ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
+  | SetUpdateDate of iso: string
+
+type PublishTarget =
+  | Publish of PublishTime
+  | PublishChanges of UpdateDate
 
 type PublishWarning =
   | CommentRowMissing
@@ -595,12 +610,19 @@ let previewPost
 
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "preview" ]) (Some(Json json)) []
 let private publishBody (target: PublishTarget) =
-  let date =
+  let name, date =
     match target with
-    | PublishOn iso -> Encode.string iso
-    | PublishNow -> Encode.nil
+    | Publish(PublishOn iso) -> "publishDate", Encode.string iso
+    | Publish PublishNow -> "publishDate", Encode.nil
+    | PublishChanges(SetUpdateDate iso) -> "updateDate", Encode.string iso
+    | PublishChanges KeepUpdateDate -> "updateDate", Encode.nil
 
-  Encode.object [ "publishDate", date ] |> Encode.toString 0
+  Encode.object [ name, date ] |> Encode.toString 0
+
+let private publishPath (slug: string) (target: PublishTarget) (last: string list) =
+  match target with
+  | Publish _ -> internalPath ([ "posts"; slug; "publish" ] @ last)
+  | PublishChanges _ -> internalPath ([ "posts"; slug; "changes"; "publish" ] @ last)
 
 let checkPublish
   (api: string)
@@ -613,7 +635,7 @@ let checkPublish
     HttpMethod.POST
     api
     token
-    (internalPath [ "posts"; slug; "publish"; "check" ])
+    (publishPath slug target [ "check" ])
     (Some(Json(publishBody target)))
     [ IfMatch eTag ]
 
@@ -628,9 +650,18 @@ let publishPost
     HttpMethod.POST
     api
     token
-    (internalPath [ "posts"; slug; "publish" ])
+    (publishPath slug target [])
     (Some(Json(publishBody target)))
     [ IfMatch eTag ]
+
+let discardPending (api: string) (token: string) (slug: string) (eTag: string) : JS.Promise<Result<unit, Failure>> =
+  request<unit> HttpMethod.POST api token (internalPath [ "posts"; slug; "changes"; "discard" ]) None [ IfMatch eTag ]
+  |> Promise.map (
+    Result.bind (fun answer ->
+      match answer with
+      | { Success = true } -> Ok()
+      | _ -> Error Invalid)
+  )
 
 type private UploadedAsset = { Url: string }
 

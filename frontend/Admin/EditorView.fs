@@ -82,17 +82,33 @@ let private publishModel (model: Shell.Model) =
   | None -> Publish.init
 
 let private publishChoice (model: Shell.Model) =
-  Publish.choice (publishModel model) |> Option.defaultValue Publish.Now
+  match document model with
+  | Some document -> Publish.choice document.Publish |> Option.defaultValue (Editor.firstChoice document)
+  | None -> Publish.Draft Publish.Now
 
-let private isOnDate (model: Shell.Model) =
-  match publishChoice model with
-  | Publish.OnDate _ -> true
-  | Publish.Now -> false
+let private publishesChanges (model: Shell.Model) = Publish.isChanges (publishChoice model)
 
 let private typedDate (model: Shell.Model) =
   match publishChoice model with
-  | Publish.OnDate typed -> typed
-  | Publish.Now -> ""
+  | Publish.Draft(Publish.OnDate typed)
+  | Publish.Changes(Publish.UpdateOn typed) -> Some typed
+  | Publish.Draft Publish.Now
+  | Publish.Changes Publish.KeepDate -> None
+
+let private changedParts (model: Shell.Model) =
+  match document model with
+  | Some document -> Array.ofList (Editor.changesFromLive document)
+  | None -> [||]
+
+let private isChangesOpen (model: Shell.Model) =
+  match document model with
+  | Some document -> document.Changes = Editor.ChangesShown
+  | None -> false
+
+let private discardState (model: Shell.Model) =
+  match document model with
+  | Some document -> document.Discard
+  | None -> Discard.Closed
 
 let private publishIsBusy (model: Shell.Model) =
   match (publishModel model).State with
@@ -436,6 +452,95 @@ let private loading (model: unit -> Shell.Model) =
     }
 
 [<SolidComponent>]
+let private diffEntry (entry: Diff.Entry) : HtmlElement =
+  match entry with
+  | Diff.Shown(Diff.Same text) ->
+    div (class' = "diff-line") {
+      span (class' = "diff-mark", ariaHidden = true) { " " }
+      text
+    }
+  | Diff.Shown(Diff.Added text) ->
+    div (class' = "diff-line diff-added") {
+      span (class' = "diff-mark", ariaHidden = true) { "+" }
+      span (class' = "sr-only") { "Added: " }
+      text
+    }
+  | Diff.Shown(Diff.Removed text) ->
+    div (class' = "diff-line diff-removed") {
+      span (class' = "diff-mark", ariaHidden = true) { "-" }
+      span (class' = "sr-only") { "Removed: " }
+      text
+    }
+  | Diff.Skipped count -> div (class' = "diff-skip") { $"{count} unchanged lines" }
+
+[<SolidComponent>]
+let private noChanges () =
+  p (class' = "muted small") { "The title, the excerpt, and the body are the same as the published text." }
+
+[<SolidComponent>]
+let private changesView (model: unit -> Shell.Model) =
+  Show(when' = ((changedParts (model ())).Length > 0), fallback = noChanges ()) {
+    div (class' = "diff") {
+      For(each = changedParts (model ())) {
+        yield fun part _ ->
+          section () {
+            h3 () { part.Name }
+
+            div (class' = "diff-lines") {
+              For(each = Array.ofList part.Entries) { yield fun entry _ -> diffEntry entry }
+            }
+          }
+      }
+    }
+  }
+
+[<SolidComponent>]
+let private changesDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Editor Editor.ChangesClosed)
+
+  Parts.modalDialog
+    "changes-dialog"
+    (fun () -> isChangesOpen (model ()))
+    close
+    "Changes from live"
+    (changesView model)
+    (Fragment() { Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Close" }) })
+
+[<SolidComponent>]
+let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+
+  dialog(id = "discard-dialog", class' = "dialog", ariaLabelledBy = "discard-dialog-title")
+    .ref(Parts.followOpen (fun () -> Discard.isOpen (discardState (model ()))))
+    .on("cancel", fun event ->
+      if Discard.isSending (discardState (model ())) then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.DiscardClosed) {
+    h2 (id = "discard-dialog-title") { "Discard the changes?" }
+
+    div (class' = "dialog-body") {
+      p () { "The pending edit goes away permanently. The editor shows the published text again." }
+
+      Show(when' = (Discard.reason (discardState (model ()))).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The changes are not discarded.").Has(
+          p () { Discard.reason (discardState (model ())) |> Option.defaultValue "" }
+        )
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = Discard.isSending (discardState (model ())), onClick = fun _ -> send Editor.DiscardClosed).Has(Fragment() { "Keep" })
+
+      Parts.Button(
+        kind = Parts.Danger,
+        disabled = Discard.isSending (discardState (model ())),
+        onClick = fun _ -> send Editor.DiscardConfirmed
+      )
+        .Has(Fragment() { "Discard" })
+    }
+  }
+
+[<SolidComponent>]
 let private publishProblems (model: unit -> Shell.Model) =
   Show(when' = not (List.isEmpty (Publish.problems (publishModel (model ()))))) {
     ul (class' = "preview-problems", ariaLabel = "Problems") {
@@ -446,6 +551,65 @@ let private publishProblems (model: unit -> Shell.Model) =
             Preview.problemText problem
           }
       }
+    }
+  }
+
+type private Choices =
+  { Group: string
+    FieldId: string
+    FieldLabel: string
+    Hint: string
+    Plain: string * Publish.When
+    Dated: string * (string -> Publish.When) }
+
+[<SolidComponent>]
+let private publishChoices (model: unit -> Shell.Model) (choose: Publish.When -> unit) (choices: Choices) =
+  let plainLabel, plain = choices.Plain
+  let datedLabel, dated = choices.Dated
+  let isDated () = (typedDate (model ())).IsSome
+  let busy () = publishIsBusy (model ())
+
+  div () {
+    div (class' = "publish-choices", role = "radiogroup", ariaLabel = choices.Group) {
+      label (class' = "publish-choice") {
+        input (
+          type' = "radio",
+          name = "publish-when",
+          checked' = not (isDated ()),
+          disabled = busy (),
+          onChange = fun _ -> choose plain
+        )
+
+        plainLabel
+      }
+
+      label (class' = "publish-choice") {
+        input (
+          type' = "radio",
+          name = "publish-when",
+          checked' = isDated (),
+          disabled = busy (),
+          onChange = fun _ -> choose (dated (typedDate (model ()) |> Option.defaultValue ""))
+        )
+
+        datedLabel
+      }
+    }
+
+    Show(when' = isDated ()) {
+      Parts
+        .Field(id = choices.FieldId, label = choices.FieldLabel, hint = choices.Hint)
+        .Has(
+          Parts
+            .Input(
+              id = choices.FieldId,
+              kind = "datetime-local",
+              value = (fun () -> typedDate (model ()) |> Option.defaultValue ""),
+              disabledWhen = busy,
+              onInput = fun event -> choose (dated (event.target :?> HTMLInputElement).value)
+            )
+            .View()
+        )
     }
   }
 
@@ -460,57 +624,43 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
       if Publish.isSending (publishModel (model ())) then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.PublishClosed) {
-    h2 (id = "publish-dialog-title") { "Publish the post" }
+    h2 (id = "publish-dialog-title") { if publishesChanges (model ()) then "Publish the changes" else "Publish the post" }
 
     div (class' = "dialog-body") {
       p (class' = "muted small", role = "status") { Publish.statusText (publishModel (model ())) }
 
-      div (class' = "publish-choices", role = "radiogroup", ariaLabel = "When to publish") {
-        label (class' = "publish-choice") {
-          input (
-            type' = "radio",
-            name = "publish-when",
-            checked' = not (isOnDate (model ())),
-            disabled = publishIsBusy (model ()),
-            onChange = fun _ -> choose Publish.Now
-          )
+      Show(when' = publishesChanges (model ())) {
+        div () {
+          changesView model
 
-          "Now"
-        }
-
-        label (class' = "publish-choice") {
-          input (
-            type' = "radio",
-            name = "publish-when",
-            checked' = isOnDate (model ()),
-            disabled = publishIsBusy (model ()),
-            onChange = fun _ -> choose (Publish.OnDate(typedDate (model ())))
-          )
-
-          "On a date"
+          publishChoices
+            model
+            choose
+            { Group = "Update date"
+              FieldId = "update-date"
+              FieldLabel = "Update date and time in UTC"
+              Hint = "The post page shows this date as the date of the update."
+              Plain = "Leave the update date as it is", Publish.Changes Publish.KeepDate
+              Dated = "Set the update date", (Publish.UpdateOn >> Publish.Changes) }
         }
       }
 
-      Show(when' = isOnDate (model ())) {
-        Parts
-          .Field(id = "publish-date", label = "Date and time in UTC", hint = "Until then, the site shows the post with the Upcoming badge.")
-          .Has(
-            Parts
-              .Input(
-                id = "publish-date",
-                kind = "datetime-local",
-                value = (fun () -> typedDate (model ())),
-                disabledWhen = (fun () -> publishIsBusy (model ())),
-                onInput = fun event -> choose (Publish.OnDate((event.target :?> HTMLInputElement).value))
-              )
-              .View()
-          )
+      Show(when' = not (publishesChanges (model ()))) {
+        publishChoices
+          model
+          choose
+          { Group = "When to publish"
+            FieldId = "publish-date"
+            FieldLabel = "Date and time in UTC"
+            Hint = "Until then, the site shows the post with the Upcoming badge."
+            Plain = "Now", Publish.Draft Publish.Now
+            Dated = "On a date", (Publish.OnDate >> Publish.Draft) }
       }
 
       publishProblems model
 
       Show(when' = (Publish.reason (publishModel (model ()))).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = "The post is not published.").Has(
+        Parts.Alert(tone = Parts.Bad, title = (if publishesChanges (model ()) then "The changes are not published." else "The post is not published.")).Has(
           p () { Publish.reason (publishModel (model ())) |> Option.defaultValue "" }
         )
       }
@@ -524,7 +674,7 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
         disabled = not (Publish.canConfirm (publishModel (model ()))),
         onClick = fun _ -> send Editor.PublishConfirmed
       )
-        .Has(Fragment() { "Publish" })
+        .Has(Fragment() { if publishesChanges (model ()) then "Publish changes" else "Publish" })
     }
   }
 
@@ -585,4 +735,6 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
 
     DetailsView.sheet dispatch model
     publishDialog dispatch model
+    changesDialog dispatch model
+    discardDialog dispatch model
   }

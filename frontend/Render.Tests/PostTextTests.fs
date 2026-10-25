@@ -160,4 +160,16 @@ let detailsTests =
       | Ok replaced -> Expect.equal (Post.summary replaced).PublishDate (Some date) "The new date"
       | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
     }
+
+    test "withUpdateDate sets the update date and keeps the publish date, the fields, and the body" {
+      let dated = "---\npublishDate: 2020-01-01T00:00:00Z\nupdateDate: 2021-01-01T00:00:00Z\ntitle: T\n---\n\nBody.\n"
+      let date = System.DateTimeOffset(2026, 11, 2, 13, 0, 0, System.TimeSpan.Zero)
+
+      match PostText.withUpdateDate dated date with
+      | Ok updated ->
+        Expect.stringContains updated "updateDate: 2026-11-02T13:00:00Z" "The new date"
+        Expect.stringContains updated "publishDate: 2020-01-01T00:00:00Z" "The publish date stays"
+        Expect.equal (PostText.split updated) (PostText.split dated) "The fields and the body"
+      | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
+    }
   ]

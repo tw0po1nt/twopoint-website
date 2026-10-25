@@ -44,6 +44,13 @@ module PostDetailsDto =
       Image = Option.ofObj dto.Image
       ShowOnHomepage = dto.ShowOnHomepage }
 
+/// A draft has no published text, so its `Published` is null.
+type PublishedDto =
+  { Title : string
+    Excerpt : string
+    Body : string
+    Details : PostDetailsDto }
+
 type PostDocumentDto =
   { Slug : string
     State : string
@@ -55,7 +62,7 @@ type PostDocumentDto =
     Body : string
     Details : PostDetailsDto
     Text : string
-    PublishedText : string }
+    Published : PublishedDto }
 
 [<AutoOpen>]
 module PostDocumentExt =
@@ -63,6 +70,17 @@ module PostDocumentExt =
   type PostDocument with
     member this.ToDto() =
       let fields = TwoPoint.Site.Render.PostText.split this.Text
+      let published =
+        match this.PublishedText with
+        | Some text ->
+          let fields = TwoPoint.Site.Render.PostText.split text
+
+          { Title = fields.Title
+            Excerpt = fields.Excerpt
+            Body = fields.Body
+            Details = PostDetailsDto.ofDetails (TwoPoint.Site.Render.PostText.details text) }
+        | None -> Unchecked.defaultof<PublishedDto>
+
 
       { PostDocumentDto.Slug = this.Slug.ToString()
         State = this.State.Name
@@ -74,7 +92,7 @@ module PostDocumentExt =
         Body = fields.Body
         Details = PostDetailsDto.ofDetails (TwoPoint.Site.Render.PostText.details this.Text)
         Text = this.Text
-        PublishedText = Option.toObj this.PublishedText }
+        Published = published }
 
 module GetPostDocumentQuery = TwoPoint.Core.Posts.Queries.GetPostDocument
 

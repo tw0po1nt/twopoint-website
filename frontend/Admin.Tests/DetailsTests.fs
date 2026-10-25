@@ -23,7 +23,7 @@ let private document state eTag details : Api.PostDocument =
     Body = "Some text.\n"
     Details = details
     Text = ""
-    PublishedText = None }
+    Published = None }
 
 let private savedAs eTag : Api.SavedPost = { ETag = eTag; Check = Api.Found [] }
 
