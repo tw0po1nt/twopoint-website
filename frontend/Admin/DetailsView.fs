@@ -1,0 +1,320 @@
+[<RequireQualifiedAccess>]
+module TwoPoint.Admin.DetailsView
+
+open Browser.Types
+open Fable.Core.JsInterop
+open Oxpecker.Solid
+open Oxpecker.Solid.Aria
+
+let private document (model: Shell.Model) =
+  match model.Editor with
+  | Some(Editor.Loaded document) -> Some document
+  | Some(Editor.Loading _)
+  | Some(Editor.NotLoaded _)
+  | None -> None
+
+let private empty =
+  Details.init
+    ""
+    { Author = None
+      Category = None
+      Tags = []
+      Series = None
+      Image = None
+      ShowOnHomepage = true }
+
+let private details (model: Shell.Model) =
+  document model |> Option.map _.Details |> Option.defaultValue empty
+
+let private slug (model: Shell.Model) =
+  document model |> Option.map _.Slug |> Option.defaultValue ""
+
+/// The slug of a published post is fixed, and a slug change needs a saved draft.
+let private isDraft (model: Shell.Model) =
+  match document model with
+  | Some document -> document.State = Api.Draft
+  | None -> false
+
+let private canChangeSlug (model: Shell.Model) =
+  match document model with
+  | Some document ->
+    document.State = Api.Draft
+    && document.Save = Editor.Saved
+    && document.Details.Slug <> Details.Changing
+    && Details.slugChangeable document.Slug document.Details
+  | None -> false
+
+let private choices (model: Shell.Model) =
+  match (details model).Options with
+  | Details.Ready choices -> choices
+  | Details.NotAsked
+  | Details.Waiting
+  | Details.NotLoaded _ ->
+    { Terms = { Categories = []; Tags = [] }
+      Series = [] }
+
+let private optionsText (model: Shell.Model) =
+  match (details model).Options with
+  | Details.Waiting -> "Loading the suggestions…"
+  | Details.NotLoaded reason -> $"The suggestions did not load. {reason}"
+  | Details.NotAsked
+  | Details.Ready _ -> ""
+
+let private typed (event: InputEvent) = (event.target :?> HTMLInputElement).value
+
+let private onEnter (act: unit -> unit) (event: Browser.Types.Event) =
+  let key = event :?> KeyboardEvent
+
+  if key.key = "Enter" then
+    key.preventDefault ()
+    act ()
+
+/// A text input that runs `enter` at the Enter key.
+[<SolidComponent>]
+let private entry
+  (id: string)
+  (placeholder: string)
+  (disabled: unit -> bool)
+  (value: unit -> string)
+  (input': InputEvent -> unit)
+  (enter: unit -> unit)
+  =
+  input(
+    id = id,
+    type' = "text",
+    class' = "input",
+    placeholder = placeholder,
+    disabled = disabled (),
+    value = value (),
+    onInput = input'
+  )
+    .on ("keydown", onEnter enter)
+
+[<SolidComponent>]
+let private chip (label: string) (remove: unit -> unit) =
+  span (class' = "chip") {
+    label
+
+    button (type' = "button", ariaLabel = $"Remove {label}", onClick = fun _ -> remove ()) { Icon.view Icon.Close }
+  }
+
+[<SolidComponent>]
+let private suggestionButton (choose: string -> unit) (term: Api.Term) =
+  button (type' = "button", class' = "suggestion", onClick = fun _ -> choose term.Value) {
+    span () { term.Title }
+    span (class' = "muted") { if term.Posts = 1 then "1 post" else $"{term.Posts} posts" }
+  }
+
+[<SolidComponent>]
+let private suggestionList (choose: string -> unit) (terms: Api.Term list) =
+  div (class' = "suggestions") { For(each = Array.ofList terms) { yield fun term _ -> suggestionButton choose term } }
+
+[<SolidComponent>]
+let private slugField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  // A read of the model in the body of a component would build the field again at each change, and the input would lose its focus.
+  let hint () = Details.slugHint (slug (model ())) (details (model ()))
+
+  Parts
+    .Field(id = "details-slug", label = "Slug", hint = "The address of the post.")
+    .Has(
+      Fragment() {
+        div (class' = "row") {
+          entry
+            "details-slug"
+            null
+            (fun () -> not (isDraft (model ())))
+            (fun () -> (details (model ())).SlugInput)
+            (fun event -> dispatch (Shell.Editor(Editor.DetailsMsg(Details.SlugTyped(typed event)))))
+            (fun () -> dispatch (Shell.Editor Editor.SlugChangeRequested))
+
+          button (
+            type' = "button",
+            class' = Parts.buttonClass Parts.Secondary Parts.Medium,
+            disabled = not (canChangeSlug (model ())),
+            onClick = fun _ -> dispatch (Shell.Editor Editor.SlugChangeRequested)
+          ) {
+            "Change"
+          }
+        }
+
+        Show(when' = (hint () <> "")) { p (class' = "err", role = "alert") { hint () } }
+      }
+    )
+
+[<SolidComponent>]
+let private categoryField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
+  let locked () = Details.categoryLocked (details (model ())).Values
+
+  Parts
+    .Field(id = "details-category", label = "Category")
+    .Has(
+      Fragment() {
+        Show(when' = locked ()) { p (class' = "hint") { "A post in a series has the category Series." } }
+
+        Show(when' = (details (model ())).Values.Category.IsSome) {
+          div (class' = "chips") {
+            chip
+              (Details.termTitle ((details (model ())).Values.Category |> Option.defaultValue ""))
+              (fun () -> if not (locked ()) then send Details.CategoryCleared)
+          }
+        }
+
+        entry
+          "details-category"
+          "Type a category"
+          locked
+          (fun () -> (details (model ())).CategoryInput)
+          (fun event -> send (Details.CategoryTyped(typed event)))
+          (fun () -> send (Details.CategoryChosen (details (model ())).CategoryInput))
+
+        Show(when' = not (locked ())) {
+          suggestionList
+            (Details.CategoryChosen >> send)
+            (Details.suggestions
+              (choices (model ())).Terms.Categories
+              (details (model ())).CategoryInput
+              ((details (model ())).Values.Category |> Option.toList))
+        }
+      }
+    )
+
+[<SolidComponent>]
+let private tagsField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
+
+  Parts
+    .Field(id = "details-tags", label = "Tags")
+    .Has(
+      Fragment() {
+        div (class' = "chips") {
+          For(each = Array.ofList (details (model ())).Values.Tags) {
+            yield
+              fun tag _ ->
+                chip (Details.termTitle tag) (fun () -> send (Details.TagRemoved(Details.termSlug tag)))
+          }
+        }
+
+        entry
+          "details-tags"
+          "Type a tag, and press Enter"
+          (fun () -> false)
+          (fun () -> (details (model ())).TagInput)
+          (fun event -> send (Details.TagTyped(typed event)))
+          (fun () -> send (Details.TagAdded (details (model ())).TagInput))
+
+        suggestionList
+          (Details.TagAdded >> send)
+          (Details.suggestions
+            (choices (model ())).Terms.Tags
+            (details (model ())).TagInput
+            (details (model ())).Values.Tags)
+      }
+    )
+
+[<SolidComponent>]
+let private seriesOption (current: string) (series: Api.SeriesListing) =
+  option (value = series.Slug, selected = (series.Slug = current)) { series.Title }
+
+[<SolidComponent>]
+let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
+  let current () = (details (model ())).Values.Series |> Option.defaultValue ""
+
+  // A series that the list does not have still shows, so the select does not hide it.
+  let listed () =
+    let series = (choices (model ())).Series
+
+    if current () = "" || series |> List.exists (fun item -> item.Slug = current ()) then
+      series
+    else
+      series @ [ { Slug = current (); Title = current () } ]
+
+  Parts
+    .Field(
+      id = "details-series",
+      label = "Series",
+      hint = "A series sets the category to Series."
+    )
+    .Has(
+      Parts
+        .Select(
+          id = "details-series",
+          value = current,
+          onChange =
+            fun event ->
+              match (event.target :?> HTMLSelectElement).value with
+              | "" -> send Details.SeriesRemoved
+              | slug -> send (Details.SeriesChosen slug)
+        )
+        .Has(
+          Fragment() {
+            option (value = "") { "No series" }
+            For(each = Array.ofList (listed ())) { yield fun series _ -> seriesOption (current ()) series }
+          }
+        )
+    )
+
+[<SolidComponent>]
+let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
+  let values () = (details (model ())).Values
+
+  Fragment() {
+    Show(when' = (optionsText (model ()) <> "")) { p (class' = "muted small", role = "status") { optionsText (model ()) } }
+
+    slugField dispatch model
+    categoryField dispatch model
+    tagsField dispatch model
+    seriesField dispatch model
+
+    Parts
+      .Field(id = "details-image", label = "Card image", hint = "The https URL of the image.")
+      .Has(
+        Parts
+          .Input(
+            id = "details-image",
+            kind = "url",
+            value = (fun () -> (values ()).Image |> Option.defaultValue ""),
+            onInput = fun event -> send (Details.ImageChanged(typed event))
+          )
+          .View()
+      )
+
+    Parts
+      .Field(id = "details-author", label = "Author")
+      .Has(
+        Parts
+          .Input(
+            id = "details-author",
+            value = (fun () -> (values ()).Author |> Option.defaultValue ""),
+            onInput = fun event -> send (Details.AuthorChanged(typed event))
+          )
+          .View()
+      )
+
+    div (class' = "row switch-row") {
+      Parts.switch' "Show on the home page" (fun () -> (values ()).ShowOnHomepage) (fun () ->
+        send (Details.ShowOnHomepageChanged(not (values ()).ShowOnHomepage)))
+
+      span () { "Show on the home page" }
+    }
+  }
+
+/// The sheet fills the screen on a phone.
+[<SolidComponent>]
+let sheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Editor(Editor.DetailsMsg Details.Closed))
+
+  Parts.sheet
+    "details-sheet"
+    (fun () -> (details (model ())).Open)
+    close
+    "Details"
+    (Fragment() {
+      Parts.sheetHead "Details" close
+      Parts.sheetBody (fields dispatch model)
+    })
+
+let open' (dispatch: Shell.Msg -> unit) =
+  dispatch (Shell.Editor(Editor.DetailsMsg Details.Opened))

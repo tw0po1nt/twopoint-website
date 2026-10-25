@@ -32,6 +32,7 @@
     <Compile Include="Parts.fs" />
     <Compile Include="Banner.fs" />
     <Compile Include="CodeMirror.fs" />
+    <Compile Include="DetailsView.fs" />
     <Compile Include="EditorView.fs" />
     <Compile Include="ShellView.fs" />
     <Compile Include="App.fs" />
