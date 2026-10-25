@@ -29,6 +29,10 @@ let publishAnswer = () => ok({ publishDate: '2026-03-01T09:30:45Z', state: 'publ
 const respond = (url, init = {}) => {
   const headers = new Headers(init.headers);
 
+  if (url.endsWith('/api/internal/posts/my-post/deploy')) {
+    return ok({ deploy: 'deployed' });
+  }
+
   if (url.endsWith('/api/internal/posts/my-post/publish/check')) {
     checks.push({ ifMatch: headers.get('If-Match'), body: JSON.parse(init.body) });
     return checkAnswer();
@@ -138,7 +142,7 @@ test('Publish sends the ETag and the date, closes the dialog, and shows the new 
 
   assert.deepEqual(publishes, [{ ifMatch: '"v1"', body: { publishDate: '2099-12-31T13:00:00Z' } }]);
   assert.ok(!dialog().open, 'The dialog closes');
-  assert.equal(status(), 'Upcoming Dec 31, 2099');
+  assert.equal(status(), 'Upcoming Dec 31, 2099 · deployed');
   assert.match(document.querySelector('main .alert').textContent, /The site rebuild did not start/);
   assert.equal(bar().querySelector('.editor-primary').disabled, true, 'Publish changes comes in a later version');
   assert.equal(bar().querySelector('.editor-primary').textContent.trim(), 'Publish changes');

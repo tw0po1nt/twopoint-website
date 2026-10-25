@@ -10,6 +10,7 @@ let private post slug state pendingEdit : Api.Post =
     State = state
     PendingEdit = pendingEdit
     PublishDate = None
+    Deploy = Api.DeployState.Deployed
     CommentStats = { New = 0; Approved = 0; Rejected = 0 } }
 
 let private draft = post "draft" Api.Draft false

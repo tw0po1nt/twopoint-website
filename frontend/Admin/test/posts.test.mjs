@@ -6,10 +6,10 @@ import { answer, apiAnswer, heading, load, press, settle } from './load.mjs';
 const stats = { new: 1, approved: 2, rejected: 0 };
 
 const posts = [
-  { slug: 'new-draft', title: 'A draft', state: 'draft', pendingEdit: false, publishDate: null, commentStats: { new: 0, approved: 0, rejected: 0 } },
-  { slug: 'soon', title: 'Soon', state: 'upcoming', pendingEdit: false, publishDate: '2099-01-02T00:00:00Z', commentStats: stats },
-  { slug: 'edited', title: 'Edited', state: 'published', pendingEdit: true, publishDate: '2026-01-03T00:00:00Z', commentStats: stats },
-  { slug: 'live', title: 'Live', state: 'published', pendingEdit: false, publishDate: '2026-01-02T00:00:00Z', commentStats: stats },
+  { slug: 'new-draft', title: 'A draft', state: 'draft', pendingEdit: false, publishDate: null, deploy: 'deployed', commentStats: { new: 0, approved: 0, rejected: 0 } },
+  { slug: 'soon', title: 'Soon', state: 'upcoming', pendingEdit: false, publishDate: '2099-01-02T00:00:00Z', deploy: 'deployed', commentStats: stats },
+  { slug: 'edited', title: 'Edited', state: 'published', pendingEdit: true, publishDate: '2026-01-03T00:00:00Z', deploy: 'deployed', commentStats: stats },
+  { slug: 'live', title: 'Live', state: 'published', pendingEdit: false, publishDate: '2026-01-02T00:00:00Z', deploy: 'deployed', commentStats: stats },
 ];
 
 const reads = [];

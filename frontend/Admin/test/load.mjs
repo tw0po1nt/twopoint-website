@@ -4,8 +4,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const posts = [
-  { slug: 'first', title: 'First', state: 'published', pendingEdit: false, publishDate: '2026-01-02T00:00:00Z', commentStats: { new: 2, approved: 5, rejected: 0 } },
-  { slug: 'second', title: 'Second', state: 'published', pendingEdit: false, publishDate: '2026-02-03T00:00:00Z', commentStats: { new: 1, approved: 0, rejected: 1 } },
+  { slug: 'first', title: 'First', state: 'published', pendingEdit: false, publishDate: '2026-01-02T00:00:00Z', deploy: 'deployed', commentStats: { new: 2, approved: 5, rejected: 0 } },
+  { slug: 'second', title: 'Second', state: 'published', pendingEdit: false, publishDate: '2026-02-03T00:00:00Z', deploy: 'deployed', commentStats: { new: 1, approved: 0, rejected: 1 } },
 ];
 
 const queued = (id, postSlug, postTitle, name, status, content) => ({

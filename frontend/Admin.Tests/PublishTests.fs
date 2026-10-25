@@ -184,7 +184,7 @@ let tests =
     test "a published draft shows its state and closes the dialog" {
       let model, _ = send Editor.PublishConfirmed ready
       let model, effect = send (Editor.PublishAnswered("my-post", Ok(published Api.Published []))) model
-      Expect.isNone effect "No call"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The read of the deploy state"
       Expect.equal (publishState model) Publish.Closed "The dialog closes"
       Expect.equal (Editor.statusText (document' model)) "Published Mar 1, 2026" "The status"
       Expect.isNone (document' model).ETag "No working blob"

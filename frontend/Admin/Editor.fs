@@ -39,7 +39,8 @@ type Document =
     Typing: bool
     Details: Details.Model
     Preview: Preview.State
-    Publish: Publish.Model }
+    Publish: Publish.Model
+    Deploy: Deploy.Model }
 
 type Model =
   | Loading of slug: string
@@ -92,6 +93,7 @@ type Msg =
   | PublishAnswered of slug: string * Result<Api.PublishedPost, Api.Failure>
   | PublishClosed
   | PublishNoticeDismissed
+  | DeployMsg of slug: string * Deploy.Msg
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -104,6 +106,10 @@ type Effect =
   | PublishPost of PublishRequest
   | Focus of elementId: string
   | MoveToBodyLine of line: int
+  | ReadDeploy of slug: string
+  /// Starts a timer of `Deploy.pollDelay` milliseconds. The timer sends `DeployMsg(slug, Deploy.PollElapsed)`.
+  | WaitToPollDeploy of slug: string
+  | RetryDeploy of slug: string
 
 let autosaveDelay = 2000
 
@@ -129,7 +135,14 @@ let private loaded (post: Api.PostDocument) =
       Typing = false
       Details = Details.init post.Slug post.Details
       Preview = Preview.Closed
-      Publish = Publish.init }
+      Publish = Publish.init
+      Deploy = Deploy.init }
+
+let private deployRead (post: Api.PostDocument) =
+  match post.State with
+  | Api.Draft -> None
+  | Api.Published
+  | Api.Upcoming -> Some(ReadDeploy post.Slug)
 
 let private requestOf (document: Document) : SaveRequest =
   { Slug = document.Slug
@@ -395,8 +408,9 @@ let private publishAnswered (result: Result<Api.PublishedPost, Api.Failure>) (do
           ETag = eTag
           PendingEdit = pendingEdit
           Check = None
-          Publish = Publish.closedWith published.Warnings },
-    None
+          Publish = Publish.closedWith published.Warnings
+          Deploy = Deploy.init },
+    Some(ReadDeploy document.Slug)
   | Publish.Sending choice, Error failure ->
     Loaded(withPublish (Publish.Failed(choice, Api.reason failure)) document), None
   | _ -> Loaded document, None
@@ -406,9 +420,20 @@ let private publishClosed (document: Document) =
   | Publish.Sending _ -> Loaded document, None
   | _ -> Loaded(withPublish Publish.Closed document), None
 
+let private deployChanged (slug: string) (msg: Deploy.Msg) (document: Document) =
+  let deploy, effect = Deploy.update msg document.Deploy
+
+  Loaded { document with Deploy = deploy },
+  effect
+  |> Option.map (fun effect ->
+    match effect with
+    | Deploy.ReadStatus -> ReadDeploy slug
+    | Deploy.WaitToPoll -> WaitToPollDeploy slug
+    | Deploy.Rebuild -> RetryDeploy slug)
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
-  | Loading slug, Answered(answered, Ok post) when answered = slug -> loaded post, None
+  | Loading slug, Answered(answered, Ok post) when answered = slug -> loaded post, deployRead post
   | Loading slug, Answered(answered, Error failure) when answered = slug -> NotLoaded(Api.reason failure), None
   | Loaded document, TitleChanged title -> edit (fun fields -> { fields with Title = title }) document
   | Loaded document, ExcerptChanged excerpt -> edit (fun fields -> { fields with Excerpt = excerpt }) document
@@ -435,6 +460,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, PublishClosed -> publishClosed document
   | Loaded document, PublishNoticeDismissed ->
     Loaded { document with Publish = Publish.dismissed document.Publish }, None
+  | Loaded document, DeployMsg(slug, msg) when slug = document.Slug -> deployChanged slug msg document
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -479,6 +505,12 @@ let private saveText (document: Document) =
   | SaveFailed _ -> Some "save failed"
   | Stale -> Some "changed in another tab"
 
+let private deployText (document: Document) =
+  match document.State with
+  | Api.Draft -> None
+  | Api.Published
+  | Api.Upcoming -> Deploy.statusText document.Deploy
+
 /// For example `Draft · saved` or `Published Feb 4, 2026 · changes not live · saving…`.
 let statusText (document: Document) =
   let notLive =
@@ -487,7 +519,14 @@ let statusText (document: Document) =
     else
       None
 
-  [ Some(stateText document); notLive; saveText document ] |> List.choose id |> String.concat " · "
+  [ Some(stateText document); deployText document; notLive; saveText document ]
+  |> List.choose id
+  |> String.concat " · "
+
+let canRetryDeploy (document: Document) =
+  document.State <> Api.Draft && Deploy.canRetry document.Deploy
+
+let retryFailureText (document: Document) = Deploy.retryFailure document.Deploy
 
 /// The reason for the status text of a failed save, or empty when no save failed.
 let failureText (model: Model) =
