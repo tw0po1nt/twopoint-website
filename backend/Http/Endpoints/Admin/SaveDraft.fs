@@ -24,7 +24,11 @@ type SaveDraftJson =
     /// Null leaves the details of the stored text as they are.
     Details : Nullable<PostDetailsDto> }
 
-type SavedDraftDto = { ETag : string }
+/// `CheckFailed` is true when the draft is saved and the check did not run. `Problems` is then empty.
+type SavedDraftDto =
+  { ETag : string
+    Problems : PreviewProblemDto list
+    CheckFailed : bool }
 
 /// The precondition of a save: the ETag in `If-Match`, or `If-None-Match: *` for a post with no working blob.
 type SavePrecondition =
@@ -46,8 +50,11 @@ module SaveDraftHeaders =
     | None, _ -> Missing
 
 type SaveDraft (
+  config : Config,
   logger : ILogger<SaveDraft>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  images : TwoPoint.Site.Render.IImageSize,
+  parseCache : PublishedParseCache
 ) =
 
   [<Function("Admin-Posts-SaveDraft")>]
@@ -88,6 +95,12 @@ type SaveDraft (
             member _.GetPublishedBlob slug = postStore.GetPublishedBlob slug
             member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug
             member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
+            member _.Stage = config.Stage
+            member _.Images = images
+            member _.GetUtcNow () = System.DateTime.UtcNow
+            member _.GetPublishedPosts () = postStore.GetPublishedPosts()
+            member _.GetSeriesRecords () = postStore.GetSeriesRecords()
+            member _.ParsePublished = parseCache.Parse
           }
 
           let! result =
@@ -102,7 +115,11 @@ type SaveDraft (
           let apiResponse, statusCode =
             result
             |> ActionResult.toApiResponse
-              (fun (SaveDraft.Event.Saved eTag) -> Some { ETag = eTag })
+              (fun (SaveDraft.Event.Saved(eTag, check)) ->
+                match check with
+                | PostCheck.Problems problems ->
+                  Some { ETag = eTag; Problems = problems |> List.map ProblemMapping.problem; CheckFailed = false }
+                | PostCheck.Unavailable -> Some { ETag = eTag; Problems = []; CheckFailed = true })
               (function
                 | SaveDraft.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
                 | SaveDraft.Error.FrontMatterUnreadable reason ->

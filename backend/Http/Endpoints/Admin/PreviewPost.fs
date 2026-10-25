@@ -24,12 +24,6 @@ type PreviewPostJson =
     /// Null leaves the details of the stored text as they are.
     Details : Nullable<PostDetailsDto> }
 
-/// `Place` is null for a problem about the whole post.
-type PreviewProblemDto =
-  { Severity : string
-    Place : string
-    Message : string }
-
 [<AllowNullLiteral>]
 type PreviewArticleDto(content : string, outline : string) =
   member _.Content = content
@@ -44,30 +38,19 @@ module PreviewPostMapping =
 
   open TwoPoint.Site.Render
 
-  let problem (problem : Problem) : PreviewProblemDto =
-    { Severity =
-        match problem.Severity with
-        | Severity.Error -> "error"
-        | Severity.Warning -> "warning"
-      Place =
-        match problem.Place with
-        | Place.Field(name, _) -> $"Field {name}"
-        | Place.Body line -> $"Body line {line}"
-        | Place.Post _ -> null
-      Message = problem.Message }
-
   let preview (checkedPost : Check.CheckedPost) : PreviewDto =
     { Article =
         checkedPost.Article
         |> Option.map (fun article -> PreviewArticleDto(article.Content, article.Outline))
         |> Option.toObj
-      Problems = checkedPost.Problems |> List.map problem }
+      Problems = checkedPost.Problems |> List.map ProblemMapping.problem }
 
 type PreviewPost (
   config : Config,
   logger : ILogger<PreviewPost>,
   postStoreClient : BlobServiceClient,
-  images : TwoPoint.Site.Render.IImageSize
+  images : TwoPoint.Site.Render.IImageSize,
+  parseCache : PublishedParseCache
 ) =
 
   [<Function("Admin-Posts-Preview")>]
@@ -102,6 +85,7 @@ type PreviewPost (
           member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug
           member _.GetPublishedPosts () = postStore.GetPublishedPosts()
           member _.GetSeriesRecords () = postStore.GetSeriesRecords()
+          member _.ParsePublished = parseCache.Parse
         }
 
         let! result =

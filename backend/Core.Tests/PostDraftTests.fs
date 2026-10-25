@@ -4,6 +4,7 @@ open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Posts.Queries
 open TwoPoint.Core.Util
+open TwoPoint.Site.Render
 
 open Expecto
 open FsToolkit.ErrorHandling
@@ -21,12 +22,20 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable working = working
   let mutable beforeWrite = ignore
   let mutable beforeDelete = ignore
+  let mutable images : IImageSize =
+    { new IImageSize with
+        member _.Size _ = Result.Ok { Width = 1600; Height = 900 } }
+  let mutable storeDown = false
 
   member _.Working = working |> Map.map (fun _ (text, _) -> text)
 
   member _.BeforeWrite with set action = beforeWrite <- action
 
   member _.BeforeDelete with set action = beforeDelete <- action
+
+  member _.Images with set value = images <- value
+
+  member _.StoreDown with set value = storeDown <- value
 
   member _.Overwrite (name : string) (text : string) =
     let version = working |> Map.tryFind name |> Option.map snd |> Option.defaultValue 0
@@ -43,6 +52,19 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       |> CancellableTaskResult.singleton
 
   interface SaveDraft.Dependencies with
+    member _.Stage = Stage.Staging
+    member _.Images = images
+    member _.GetUtcNow () = utcNow
+    member _.ParsePublished = PostCheck.parsePublished Stage.Staging
+    member _.GetPublishedPosts () =
+      if storeDown then
+        CancellableTaskResult.error { Dependency = Dependency.BlobStorage; Type = Unknown (exn "The store is down") }
+      else
+        published
+        |> Map.toList
+        |> List.map (fun (name, text) -> { StoredPost.Slug = slug name; Text = text; ETag = "p1" })
+        |> CancellableTaskResult.singleton
+    member _.GetSeriesRecords () = CancellableTaskResult.singleton []
     member this.GetPublishedBlob slug = (this :> GetPostDocument.Dependencies).GetPublishedBlob slug
     member this.GetWorkingBlob slug = (this :> GetPostDocument.Dependencies).GetWorkingBlob slug
     member _.WriteWorkingBlob slug text condition =
@@ -110,8 +132,18 @@ let private save (store : FakeStore) name ifMatch title body =
   run (
     SaveDraft.withDependencies
       store
-      { Slug = name; IfMatch = ifMatch; Title = title; Excerpt = ""; Body = body; Details = None }
+      { Slug = name; IfMatch = ifMatch; Title = title; Excerpt = "An excerpt"; Body = body; Details = None }
   )
+
+let private draftWithCategory = "---\ntitle: Old\nexcerpt: E\nauthor: A\ncategory: One-offs\n---\n"
+
+let private publishedPost heading body =
+  $"---\npublishDate: 2026-01-01T00:00:00Z\nauthor: A\ntitle: {heading}\nexcerpt: E\ncategory: One-offs\n---\n\n{body}"
+
+let private checkOf result =
+  match result with
+  | Ok(SaveDraft.Event.Saved(_, check)) -> check
+  | Error error -> failtestf "Expected a save, got %A" error
 
 let private published = "---\ntitle: Live post\npublishDate: 2026-01-01T00:00:00Z\ntags:\n  - FSharp\n---\n\nLive body.\n"
 
@@ -147,7 +179,7 @@ let tests =
     test "a save with the current ETag writes the working blob and gives the new ETag" {
       let fake = store [] [ "draft", "---\ntitle: Old\n---\n\nOld body.\n" ]
       match save fake "draft" (Some "v1") "New" "New body.\n" with
-      | Ok(SaveDraft.Event.Saved etag) ->
+      | Ok(SaveDraft.Event.Saved(etag, _)) ->
         Expect.equal etag "v2" "The new ETag"
         Expect.equal (titleAndBody fake.Working["draft"]) ("New", "New body.\n") "The new text"
       | Error error -> failtestf "Expected a save, got %A" error
@@ -187,7 +219,7 @@ let tests =
       let fake = store [ "live", published ] []
 
       match save fake "live" None "Live post, edited" "Edited body.\n" with
-      | Ok(SaveDraft.Event.Saved etag) -> Expect.equal etag "v1" "The ETag of the new blob"
+      | Ok(SaveDraft.Event.Saved(etag, _)) -> Expect.equal etag "v1" "The ETag of the new blob"
       | Error error -> failtestf "Expected a save, got %A" error
 
       let text = fake.Working["live"]
@@ -225,6 +257,72 @@ let tests =
       match save (store [] []) "Not A Slug" None "x" "x" with
       | Error(ActionError.Validation _) -> ()
       | other -> failtestf "Expected a validation error, got %A" other
+    }
+
+    test "a save of an image with no alt text returns a warning at its body line" {
+      let fake = store [] [ "draft", draftWithCategory ]
+
+      match checkOf (save fake "draft" (Some "v1") "Title" "Text.\n\n![](https://example.com/cat.png)\n") with
+      | PostCheck.Problems problems ->
+        let problem = problems |> List.find (fun problem -> problem.Message.Contains "no alt text")
+        Expect.equal problem.Severity Severity.Warning "A warning"
+        Expect.equal problem.Place (Place.Body 4) "The body line of the image"
+      | other -> failtestf "Expected one warning, got %A" other
+    }
+
+    test "a save that breaks a link in another published post returns an error for each link" {
+      let target = publishedPost "Target" "Text.\n\n## Step\n"
+      let linker = publishedPost "Linker" "See [one](/posts/target/#step) and [two](/posts/target/#step).\n"
+      let fake = store [ "target", target; "linker", linker ] []
+
+      match checkOf (save fake "target" None "Target" "Text without the step.\n") with
+      | PostCheck.Problems problems ->
+        Expect.hasLength problems 2 "One error for each link"
+
+        for problem in problems do
+          Expect.equal problem.Severity Severity.Error "An error"
+          Expect.stringContains problem.Message "the post 'linker'" "The post with the link"
+      | other -> failtestf "Expected the errors, got %A" other
+    }
+
+    test "a draft with no category returns an error and is saved" {
+      let fake = store [] [ "draft", "---\ntitle: Old\nexcerpt: E\nauthor: A\n---\n" ]
+
+      match checkOf (save fake "draft" (Some "v1") "Title" "Text.\n") with
+      | PostCheck.Problems [ problem ] ->
+        Expect.equal problem.Severity Severity.Error "An error"
+        Expect.equal problem.Place (Place.Field("category", 1)) "The category field"
+      | other -> failtestf "Expected the category error, got %A" other
+
+      Expect.stringContains fake.Working["draft"] "Title" "The draft is saved"
+    }
+
+    test "a draft with a category and no publish date returns no problem" {
+      let fake = store [] [ "draft", draftWithCategory ]
+      Expect.equal (checkOf (save fake "draft" (Some "v1") "Title" "Text.\n")) (PostCheck.Problems []) "No problem"
+    }
+
+    test "a failed image fetch returns the error of the build" {
+      let fake = store [] [ "draft", draftWithCategory ]
+
+      fake.Images <-
+        { new IImageSize with
+            member _.Size _ = Result.Error "HTTP 404" }
+
+      match checkOf (save fake "draft" (Some "v1") "Title" "![A cat](https://example.com/cat.png)\n") with
+      | PostCheck.Problems problems ->
+        let problem = problems |> List.find (fun problem -> problem.Message.Contains "cannot read the size")
+        Expect.equal problem.Severity Severity.Error "An error"
+        Expect.stringContains problem.Message "HTTP 404" "The reason"
+      | other -> failtestf "Expected the error, got %A" other
+    }
+
+    test "a failed read of the published posts leaves the draft saved and says that the check did not run" {
+      let fake = store [] [ "draft", draftWithCategory ]
+      fake.StoreDown <- true
+
+      Expect.equal (checkOf (save fake "draft" (Some "v1") "Title" "Text.\n")) PostCheck.Unavailable "Unavailable"
+      Expect.stringContains fake.Working["draft"] "Title" "The draft is saved"
     }
 
     test "a draft saved with an empty title and body is kept" {

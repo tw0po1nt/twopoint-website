@@ -22,6 +22,7 @@
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Endpoints\Admin\GetPost.fs" />
     <Compile Include="Endpoints\Admin\CreateDraft.fs" />
+    <Compile Include="Endpoints\Admin\ProblemDto.fs" />
     <Compile Include="Endpoints\Admin\SaveDraft.fs" />
     <Compile Include="Endpoints\Admin\ChangeSlug.fs" />
     <Compile Include="Endpoints\Admin\GetTerms.fs" />

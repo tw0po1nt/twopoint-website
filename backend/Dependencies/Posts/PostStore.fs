@@ -36,7 +36,7 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
           match Slug.create (blob.Name.Substring(0, blob.Name.Length - extension.Length)) with
           | Ok slug ->
             let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-            posts.Add({ Slug = slug; Text = content.Value.Content.ToString() } : StoredPost)
+            posts.Add({ Slug = slug; Text = content.Value.Content.ToString(); ETag = content.Value.Details.ETag.ToString() } : StoredPost)
           | Error reason ->
             logger.LogWarning("The blob '{blobName}' in '{container}' is not a post: {reason}", blob.Name, container, reason)
 
@@ -93,7 +93,10 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
 
         for blob in blobs |> List.filter (fun blob -> blob.Name.EndsWith ".yml" && not (blob.Name.Contains '/')) do
           let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-          records.Add { Slug = blob.Name.Substring(0, blob.Name.Length - ".yml".Length); Text = content.Value.Content.ToString() }
+          records.Add
+            { Slug = blob.Name.Substring(0, blob.Name.Length - ".yml".Length)
+              Text = content.Value.Content.ToString()
+              ETag = content.Value.Details.ETag.ToString() }
 
         return List.ofSeq records
       with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->

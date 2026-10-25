@@ -183,7 +183,7 @@ module SaveDraft =
     /// The working blob changed after the editor read it, or the editor read a blob that no longer exists.
     | Stale
 
-  type Event = Saved of eTag: string
+  type Event = Saved of eTag: string * check: PostCheck.Outcome
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -206,6 +206,12 @@ module SaveDraft =
     abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member WriteWorkingBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
+    abstract member Stage: TwoPoint.Site.Render.Stage
+    abstract member Images: TwoPoint.Site.Render.IImageSize
+    abstract member GetUtcNow: unit -> System.DateTime
+    abstract member GetPublishedPosts: unit -> DependencyResult<StoredPost list>
+    abstract member GetSeriesRecords: unit -> DependencyResult<StoredSeries list>
+    abstract member ParsePublished: PostCheck.ParsePublished
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
@@ -235,7 +241,28 @@ module SaveDraft =
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       match outcome with
-      | Written eTag -> return Event.Saved eTag
+      | Written eTag ->
+        let! sources =
+          CancellableTaskResult.parallelZip (dependencies.GetPublishedPosts()) (dependencies.GetSeriesRecords())
+          |> CancellableTask.map Result.toOption
+
+        let check =
+          match sources with
+          | Some(posts, records) ->
+            PostCheck.Problems(
+              (PostCheck.run
+                dependencies.Stage
+                dependencies.Images
+                (dependencies.GetUtcNow())
+                published.IsSome
+                (dependencies.ParsePublished posts records)
+                slug
+                text)
+                .Problems
+            )
+          | None -> PostCheck.Unavailable
+
+        return Event.Saved(eTag, check)
       | ConditionFailed -> return! Result.Error(ActionError.Logic Stale)
     }
 

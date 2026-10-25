@@ -28,6 +28,7 @@ module PreviewPost =
     abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member GetPublishedPosts: unit -> DependencyResult<StoredPost list>
     abstract member GetSeriesRecords: unit -> DependencyResult<StoredSeries list>
+    abstract member ParsePublished: PostCheck.ParsePublished
 
   type Action = Dto -> CancellableTask<ActionResult<TwoPoint.Site.Render.Check.CheckedPost, Error>>
 
@@ -39,10 +40,6 @@ module PreviewPost =
       | Some blob, _ -> Decision.success blob.Text
       | None, Some post -> Decision.success post.Text
       | None, None -> Decision.failure (PostNotFound slug)
-
-    let publishedPosts (stage : TwoPoint.Site.Render.Stage) (series : TwoPoint.Site.Render.Series list) (posts : StoredPost list) : TwoPoint.Site.Render.Post list =
-      posts
-      |> List.choose (fun post -> TwoPoint.Site.Render.Check.published stage series (Slug.value post.Slug) post.Text |> Result.toOption)
 
   let withDependencies (dependencies : Dependencies) : Action =
     fun dto -> cancellableTaskResult {
@@ -65,21 +62,15 @@ module PreviewPost =
 
       let! text = composed |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
 
-      let series = StoredSeries.parse records
-      let posts = Logic.publishedPosts dependencies.Stage series published
-
       let isPublished = published |> List.exists (fun post -> post.Slug = slug)
 
       return
-        if isPublished then
-          TwoPoint.Site.Render.Check.post dependencies.Stage dependencies.Images series posts dto.Slug text
-        else
-          TwoPoint.Site.Render.Check.draft
-            dependencies.Stage
-            dependencies.Images
-            series
-            (System.DateTimeOffset(dependencies.GetUtcNow()))
-            posts
-            dto.Slug
-            text
+        PostCheck.run
+          dependencies.Stage
+          dependencies.Images
+          (dependencies.GetUtcNow())
+          isPublished
+          (dependencies.ParsePublished published records)
+          slug
+          text
     }

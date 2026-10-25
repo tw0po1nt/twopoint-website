@@ -14,7 +14,7 @@ open System.Threading
 
 let private utcNow = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
 
-let private stored slug text : StoredPost = { Slug = Slug.Unsafe.create slug; Text = text }
+let private stored slug text : StoredPost = { Slug = Slug.Unsafe.create slug; Text = text; ETag = "v1" }
 
 let private text title (publishDate : string option) =
   let date = publishDate |> Option.map (sprintf "publishDate: %s\n") |> Option.defaultValue ""

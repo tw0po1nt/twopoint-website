@@ -18,6 +18,7 @@
     <Compile Include="PostedCommentTests.fs" />
     <Compile Include="DbTests.fs" />
     <Compile Include="PostDbTests.fs" />
+    <Compile Include="PublishedParseCacheTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

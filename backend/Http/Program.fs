@@ -99,6 +99,7 @@ let main args =
     :> TwoPoint.Site.Render.IImageSize
 
   builder.Services.AddSingleton<TwoPoint.Site.Render.IImageSize>(fun _ -> previewImages) |> ignore
+  builder.Services.AddSingleton<TwoPoint.Dependencies.Posts.PublishedParseCache>(fun _ -> TwoPoint.Dependencies.Posts.PublishedParseCache config.Stage) |> ignore
   builder.Services.AddSingleton<AssetsClient>(fun _ -> { Service = assetsClient }) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore
   builder.Services.AddSingleton<WebPushSetup>(fun services ->

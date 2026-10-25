@@ -205,8 +205,8 @@ type PostState =
   | Published
   | Upcoming
 
-/// The text of one blob in the post store.
-type StoredPost = { Slug : Slug; Text : string }
+/// The text of one blob in the post store, with the ETag that the store gave the blob.
+type StoredPost = { Slug : Slug; Text : string; ETag : string }
 
 /// The text of one blob in the post store, with the ETag that the store gave the blob.
 type StoredBlob = { Text : string; ETag : string }
@@ -225,8 +225,8 @@ type DeleteOutcome =
   /// The blob changed since the caller read it, or it is gone.
   | DeleteConditionFailed
 
-/// The text of one series record. The slug is the blob name without `.yml`.
-type StoredSeries = { Slug : string; Text : string }
+/// The text of one series record, with the ETag of its blob. The slug is the blob name without `.yml`.
+type StoredSeries = { Slug : string; Text : string; ETag : string }
 
 [<RequireQualifiedAccess>]
 module StoredSeries =
