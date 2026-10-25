@@ -359,3 +359,25 @@
   border: 1px solid var(--line, currentColor);
   border-radius: var(--r-2, 6px);
 }
+
+.problem-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--bad);
+  vertical-align: middle;
+}
+
+.problem-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

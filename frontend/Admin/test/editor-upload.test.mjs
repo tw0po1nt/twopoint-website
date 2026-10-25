@@ -30,7 +30,7 @@ const respond = (url, init = {}) => {
   }
 
   if (url.endsWith('/api/internal/posts/my-post')) {
-    return answer(200, { success: true, message: null, data: init.method === 'PUT' ? { eTag: '"v2"' } : post });
+    return answer(200, { success: true, message: null, data: init.method === 'PUT' ? { eTag: '"v2"', check: { kind: 'found', problems: [] } } : post });
   }
 
   return apiAnswer(url);

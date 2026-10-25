@@ -63,7 +63,8 @@ type GetAllPosts (
   emailClient: EmailClient,
   logger : ILogger<GetAllPosts>,
   tableServiceClient: TableServiceClient,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Posts-GetAll")>]
@@ -92,7 +93,7 @@ type GetAllPosts (
           tableServiceClient,
           logger
         )
-        let postStore = PostStore(postStoreClient, logger)
+        let postStore = PostStore(postStoreClient, logger, texts)
         let getAllPosts = TwoPoint.Core.Posts.Queries.GetAllPosts.withDependencies {
           new GetAllPostsQuery.Dependencies with
 

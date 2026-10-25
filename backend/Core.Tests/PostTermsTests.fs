@@ -12,7 +12,7 @@ open System.Threading
 
 let private slug value = Slug.Unsafe.create value
 
-let private stored name text : StoredPost = { Slug = slug name; Text = text }
+let private stored name text : StoredPost = { Slug = slug name; Text = text; ETag = "v1" }
 
 let private post slug (date : string) (category : string) (tags : string list) =
   let tagLines = tags |> List.map (sprintf "  - %s\n") |> String.concat ""
@@ -92,9 +92,9 @@ let tests =
     test "the series list has the slug and the title of each readable record, in title order" {
       let listing =
         seriesList
-          [ { Slug = "zeta"; Text = "title: Zeta\nexcerpt: Last.\n" }
-            { Slug = "alpha"; Text = "title: Alpha\nexcerpt: First.\n" }
-            { Slug = "broken"; Text = "title: [\n" } ]
+          [ { Slug = "zeta"; Text = "title: Zeta\nexcerpt: Last.\n"; ETag = "v1" }
+            { Slug = "alpha"; Text = "title: Alpha\nexcerpt: First.\n"; ETag = "v1" }
+            { Slug = "broken"; Text = "title: [\n"; ETag = "v1" } ]
 
       Expect.equal listing [ { Slug = slug "alpha"; Title = "Alpha" }; { Slug = slug "zeta"; Title = "Zeta" } ] "The list"
     }

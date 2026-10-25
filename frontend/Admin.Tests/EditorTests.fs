@@ -25,6 +25,8 @@ let private document state pendingEdit publishDate eTag : Api.PostDocument =
     Text = ""
     PublishedText = None }
 
+let private savedAs eTag : Api.SavedPost = { ETag = eTag; Check = Api.Found [] }
+
 let private draft = document Api.Draft false None (Some "\"v1\"")
 let private live = document Api.Published false (Some "2026-02-04T13:00:00Z") None
 
@@ -44,6 +46,15 @@ let private document' (model: Shell.Model) =
   | other -> failtestf "Expected a loaded editor, got %A" other
 
 let private status (model: Shell.Model) = Editor.statusText (document' model)
+
+let private problemAt place severity message : Api.Problem =
+  { Severity = severity
+    Place = place
+    Message = message }
+
+let private warning place message = problemAt (Some place) Api.Severity.Warning message
+
+let private error place message = problemAt (Some place) Api.Severity.Error message
 
 let private request eTag title excerpt body version : Editor.SaveRequest =
   { Slug = "my-post"
@@ -117,7 +128,7 @@ let tests =
     test "a save answer shows saved and keeps the new ETag for the next save" {
       let model, _ = send (Editor.ExcerptChanged "New excerpt") (opened draft)
       let model, _ = send (Editor.AutosaveElapsed 1) model
-      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
       Expect.isNone effect "Nothing more to save"
       Expect.equal (status model) "Draft · saved" "Saved"
 
@@ -150,7 +161,7 @@ let tests =
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.BodyChanged "xy") model
-      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
       Expect.equal effect (Some(Shell.Autosave 2)) "A timer for the last input"
       Expect.equal (status model) "Draft · unsaved changes" "Unsaved"
       Expect.equal (document' model).Fields.Body "xy" "The text stays"
@@ -162,7 +173,7 @@ let tests =
       let model, _ = send (Editor.BodyChanged "xy") model
       let model, none = send Editor.SaveRequested model
       Expect.isNone none "One save at a time"
-      let _, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      let _, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
       Expect.equal effect (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "xy" 2) ])) "The second save"
     }
 
@@ -212,7 +223,7 @@ let tests =
         "No ETag"
 
       Expect.equal (status model) "Published Feb 4, 2026 · changes not live · saving…" "Saving"
-      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok "\"w1\"")) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"w1\""))) model
       Expect.equal (status model) "Published Feb 4, 2026 · changes not live · saved" "Saved"
       Expect.isTrue (document' model).PendingEdit "A pending edit"
     }
@@ -255,7 +266,7 @@ let tests =
       Expect.equal model.Router.Route (Route.Post "my-post") "The author stays on the editor"
       Expect.equal (document' model).Fields.Body "x" "The text stays"
 
-      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
       Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "Now the author leaves"
       Expect.equal model.Router.Route Route.Posts "The post list"
       Expect.isNone model.Editor "The editor goes"
@@ -269,7 +280,7 @@ let tests =
       Expect.isNone effect "One save at a time"
       Expect.equal model.Router.Route (Route.Post "my-post") "The author stays"
 
-      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
 
       Expect.equal
         effect
@@ -277,7 +288,7 @@ let tests =
         "The newest text"
 
       Expect.equal model.Router.Route (Route.Post "my-post") "The author still stays"
-      let model, effect = send (Editor.SaveAnswered("my-post", 2, Ok "\"v3\"")) model
+      let model, effect = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
       Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "Now the author leaves"
       Expect.equal model.Router.Route Route.Posts "The post list"
     }
@@ -317,14 +328,14 @@ let tests =
       let model, effect = Shell.update (Shell.Session Session.Renewed) model
       Expect.equal effect (Some(Shell.SignIn(Session.Retry [ call ]))) "The waiting save runs"
 
-      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok "\"v2\"")) model
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
 
       Expect.equal
         effect
         (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "ab" 2) ]))
         "The newest text"
 
-      let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok "\"v3\"")) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
       Expect.equal model.Router.Route Route.Posts "The author leaves"
     }
 
@@ -355,8 +366,95 @@ let tests =
 
     test "an answer for another post changes nothing" {
       let model = opened draft
-      let after, _ = send (Editor.SaveAnswered("other", 1, Ok "\"x\"")) model
+      let after, _ = send (Editor.SaveAnswered("other", 1, Ok(savedAs "\"x\""))) model
       Expect.equal after model "No change"
+    }
+
+    test "a save answer with a problem shows the dot, and an answer with no problem clears it" {
+      let problem = warning (Api.BodyLine 4) "The image has no alt text."
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.AutosaveElapsed 1) model
+      Expect.isFalse (Editor.hasProblems (document' model)) "No answer yet"
+
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.Found [ problem ] })) model
+      Expect.isTrue (Editor.hasProblems (document' model)) "The dot"
+      Expect.equal (document' model).Check (Some(Api.Found [ problem ])) "The problem"
+
+      let model, _ = send (Editor.BodyChanged "xy") model
+      let model, _ = send (Editor.AutosaveElapsed 2) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
+      Expect.isFalse (Editor.hasProblems (document' model)) "No dot"
+    }
+
+    test "a warning shows the dot" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let answer = Ok { savedAs "\"v2\"" with Check = Api.Found [ warning (Api.Field "tags") "Add the tag 2026." ] }
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, answer)) model
+      Expect.isTrue (Editor.hasProblems (document' model)) "The dot"
+    }
+
+    test "a late answer for an older version keeps the problems of the newer answer" {
+      let older = Ok { savedAs "\"v2\"" with Check = Api.Found [ warning (Api.BodyLine 2) "Old." ] }
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, older)) model
+      let model, _ = send (Editor.BodyChanged "xy") model
+      let model, _ = send (Editor.AutosaveElapsed 2) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, older)) model
+
+      Expect.equal (document' model).Check (Some(Api.Found [])) "The newer answer stays"
+      Expect.equal (document' model).ETag (Some "\"v3\"") "The newer ETag"
+    }
+
+    test "a check that did not run shows no dot and keeps the save" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.CheckFailed })) model
+      Expect.equal (document' model).Check (Some Api.CheckFailed) "The check did not run"
+      Expect.isFalse (Editor.hasProblems (document' model)) "No dot"
+      Expect.equal (status model) "Draft · saved" "Saved"
+    }
+
+    test "a body problem moves the cursor to its line in the body" {
+      let model, _ = send (Editor.DetailsMsg Details.Opened) (opened draft)
+
+      let target = Problem.targetOf (warning (Api.BodyLine 4) "The image has no alt text.")
+      Expect.equal target (Some(Problem.BodyLine 4)) "The line of the problem"
+
+      let model, effect = send (Editor.ProblemChosen target.Value) model
+      Expect.equal effect (Some(Shell.MoveToBodyLine 4)) "The move"
+      Expect.isFalse (document' model).Details.Open "The sheet closes"
+    }
+
+    test "a field problem of the sheet focuses its control, and a field problem of the writing column closes the sheet" {
+      let model, _ = send (Editor.DetailsMsg Details.Opened) (opened draft)
+      let author = (Problem.targetOf (error (Api.Field "author") "The post has no author.")).Value
+
+      let model, effect = send (Editor.ProblemChosen author) model
+      Expect.equal effect (Some(Shell.Focus "details-author")) "The control"
+      Expect.isTrue (document' model).Details.Open "The sheet stays"
+
+      let title = (Problem.targetOf (error (Api.Field "title") "The post has no title.")).Value
+      let model, effect = send (Editor.ProblemChosen title) model
+      Expect.equal effect (Some(Shell.Focus "editor-title")) "The field"
+      Expect.isFalse (document' model).Details.Open "The sheet closes"
+    }
+
+    test "Command and S after a check that did not run saves the same text again" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.CheckFailed })) model
+      let model, effect = send Editor.SaveRequested model
+
+      Expect.equal effect (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "x" 1) ])) "The save"
+      Expect.equal (status model) "Draft · saving…" "The status"
+    }
+
+    test "a problem about the whole post, or about a field with no control, has no target" {
+      Expect.isNone (Problem.targetOf { Severity = Api.Severity.Error; Place = None; Message = "A YAML error." }) "The whole post"
+      Expect.isNone (Problem.targetOf (error (Api.Field "publishDate") "Bad date.")) "No control"
     }
 
     test "the primary action says Publish for a draft and Publish changes for a published post" {

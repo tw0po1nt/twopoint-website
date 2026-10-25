@@ -24,7 +24,12 @@ type SaveDraftJson =
     /// Null leaves the details of the stored text as they are.
     Details : Nullable<PostDetailsDto> }
 
-type SavedDraftDto = { ETag : string }
+/// `Kind` is `found` or `unavailable`. `Unavailable` means that the draft is saved and the check did not run.
+type CheckDto =
+  { Kind : string
+    Problems : ProblemDto list }
+
+type SavedDraftDto = { ETag : string; Check : CheckDto }
 
 /// The precondition of a save: the ETag in `If-Match`, or `If-None-Match: *` for a post with no working blob.
 type SavePrecondition =
@@ -46,8 +51,12 @@ module SaveDraftHeaders =
     | None, _ -> Missing
 
 type SaveDraft (
+  config : Config,
   logger : ILogger<SaveDraft>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  images : TwoPoint.Site.Render.IImageSize,
+  parseCache : PublishedParseCache,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Posts-SaveDraft")>]
@@ -81,13 +90,19 @@ type SaveDraft (
           let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
           let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Nullable() }
 
-          let postStore = PostStore(postStoreClient, logger)
+          let postStore = PostStore(postStoreClient, logger, texts)
           let saveDraft = SaveDraft.withDependencies {
             new SaveDraft.Dependencies with
 
             member _.GetPublishedBlob slug = postStore.GetPublishedBlob slug
             member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug
             member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
+            member _.Stage = config.Stage
+            member _.Images = images
+            member _.GetUtcNow () = System.DateTime.UtcNow
+            member _.GetPublishedPosts () = postStore.GetPublishedPosts()
+            member _.GetSeriesRecords () = postStore.GetSeriesRecords()
+            member _.ParsePublished = parseCache.Parse
           }
 
           let! result =
@@ -102,7 +117,15 @@ type SaveDraft (
           let apiResponse, statusCode =
             result
             |> ActionResult.toApiResponse
-              (fun (SaveDraft.Event.Saved eTag) -> Some { ETag = eTag })
+              (fun (SaveDraft.Event.Saved(eTag, check)) ->
+                match check with
+                | PostCheck.Problems problems ->
+                  Some
+                    { ETag = eTag
+                      Check = { Kind = "found"; Problems = problems |> List.map ProblemMapping.problem } }
+                | PostCheck.Unavailable reason ->
+                  logger.LogWarning("The check of the post '{slug}' did not run: {reason}", slug, reason)
+                  Some { ETag = eTag; Check = { Kind = "unavailable"; Problems = [] } })
               (function
                 | SaveDraft.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
                 | SaveDraft.Error.FrontMatterUnreadable reason ->

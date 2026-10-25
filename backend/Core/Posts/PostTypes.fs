@@ -206,7 +206,7 @@ type PostState =
   | Upcoming
 
 /// The text of one blob in the post store.
-type StoredPost = { Slug : Slug; Text : string }
+type StoredPost = { Slug : Slug; Text : string; ETag : string }
 
 /// The text of one blob in the post store, with the ETag that the store gave the blob.
 type StoredBlob = { Text : string; ETag : string }
@@ -226,16 +226,16 @@ type DeleteOutcome =
   | DeleteConditionFailed
 
 /// The text of one series record. The slug is the blob name without `.yml`.
-type StoredSeries = { Slug : string; Text : string }
+type StoredSeries = { Slug : string; Text : string; ETag : string }
 
 [<RequireQualifiedAccess>]
 module StoredSeries =
 
+  let parseOne (record : StoredSeries) : TwoPoint.Site.Render.Series option =
+    TwoPoint.Site.Render.FrontMatter.parseSeries $"{record.Slug}.yml" record.Text |> Result.toOption
+
   /// A record that the parser cannot read is not in the list.
-  let parse (records : StoredSeries list) : TwoPoint.Site.Render.Series list =
-    records
-    |> List.choose (fun record ->
-      TwoPoint.Site.Render.FrontMatter.parseSeries $"{record.Slug}.yml" record.Text |> Result.toOption)
+  let parse (records : StoredSeries list) : TwoPoint.Site.Render.Series list = records |> List.choose parseOne
 
 /// A category or a tag on the published posts. `Value` is the text in the front matter of the newest published post
 /// with the slug, and `Title` is the title that the site shows for it.

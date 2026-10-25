@@ -26,7 +26,7 @@ const respond = (url, init = {}) => {
       const headers = new Headers(init.headers);
       saves.push({ ifMatch: headers.get('If-Match'), body: JSON.parse(init.body) });
       saved += 1;
-      return answer(200, { success: true, message: null, data: { eTag: `"v${saved + 1}"` } });
+      return answer(200, { success: true, message: null, data: { eTag: `"v${saved + 1}"`, check: { kind: 'found', problems: [] } } });
     }
 
     return answer(200, { success: true, message: null, data: post });

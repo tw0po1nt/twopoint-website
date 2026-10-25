@@ -15,7 +15,10 @@
     <Compile Include="Notifications\NewCommentPushDependencies.fs" />
     <Compile Include="Comms\Comms.fs" />
     <Compile Include="Posts\PostDb.fs" />
+    <Compile Include="Posts\BlobTextCache.fs" />
+    <Compile Include="Posts\ImageSizeCache.fs" />
     <Compile Include="Posts\PostStore.fs" />
+    <Compile Include="Posts\PublishedParseCache.fs" />
     <Compile Include="Posts\AssetStore.fs" />
     <Compile Include="Posts\PostEmails.fs" />
     <Compile Include="Posts\PostDependencies.fs" />

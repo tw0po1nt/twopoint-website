@@ -62,6 +62,7 @@ let private brokenElsewhere (published: Post list) (post: Post) (before: Map<str
               $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
 
 let private check
+  (ownProblems: Post -> Problem list)
   (parse: Result<Post * FileProblems, FileProblems>)
   (stage: Stage)
   (published: Post list)
@@ -87,6 +88,7 @@ let private check
     { Article = Some article
       Problems =
         warnings.Problems
+        @ ownProblems post
         @ Rules.termTitles published post
         @ own
         @ brokenElsewhere published post (linkProblems stage published) after }
@@ -100,7 +102,13 @@ let post
   (slug: string)
   (text: string)
   : CheckedPost =
-  check (Post.parse images stage series (file slug) text) stage published slug
+  check (fun _ -> []) (Post.parse images stage series (file slug) text) stage published slug
+
+let private missingCategory (post: Post) =
+  if FrontMatter.missesCategory post.FrontMatter then
+    [ Problem.error (Place.Field("category", post.FrontMatter.CategoryLine)) "The post has no category." ]
+  else
+    []
 
 /// `previewTime` is the publish date of a draft that has none.
 let draft
@@ -112,4 +120,4 @@ let draft
   (slug: string)
   (text: string)
   : CheckedPost =
-  check (Post.parseDraft images stage series previewTime (file slug) text) stage published slug
+  check missingCategory (Post.parseDraft images stage series previewTime (file slug) text) stage published slug

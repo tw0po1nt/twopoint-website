@@ -61,6 +61,9 @@ let split (text: string) : Fields =
     Excerpt = excerpt
     Body = rest |> withoutLine |> withoutLine }
 
+/// Body line 1 is the blank line that `compose` writes after the front matter, so the editor line is one less.
+let editorLine (bodyLine: int) = max 1 (bodyLine - 1)
+
 /// The front matter fields that the Details sheet edits. A missing or empty field is `None`, or an empty list.
 type Details =
   { Author: string option

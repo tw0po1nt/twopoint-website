@@ -49,7 +49,7 @@ const respond = (url, init = {}) => {
     if (init.method === 'PUT') {
       saves.push({ ifMatch: headers.get('If-Match'), body: JSON.parse(init.body) });
       saved += 1;
-      return ok({ eTag: `"v${saved + 1}"` });
+      return ok({ eTag: `"v${saved + 1}"`, check: { kind: 'found', problems: [] } });
     }
 
     return ok(post('my-post'));

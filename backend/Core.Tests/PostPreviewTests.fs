@@ -27,6 +27,7 @@ type private FakeStore(published : (string * string) list, working : (string * s
     member _.Stage = Stage.Staging
     member _.Images = images
     member _.GetUtcNow () = System.DateTime(2026, 3, 5, 9, 30, 0, System.DateTimeKind.Utc)
+    member _.ParsePublished = PostCheck.parsePublished Stage.Staging
 
     member _.GetWorkingBlob slug =
       working
@@ -36,11 +37,11 @@ type private FakeStore(published : (string * string) list, working : (string * s
 
     member _.GetPublishedPosts () =
       published
-      |> List.map (fun (name, text) -> { StoredPost.Slug = Slug.Unsafe.create name; Text = text })
+      |> List.map (fun (name, text) -> { StoredPost.Slug = Slug.Unsafe.create name; Text = text; ETag = "v1" })
       |> CancellableTaskResult.singleton
 
     member _.GetSeriesRecords () =
-      series |> List.map (fun (slug, text) -> { StoredSeries.Slug = slug; Text = text }) |> CancellableTaskResult.singleton
+      series |> List.map (fun (slug, text) -> { StoredSeries.Slug = slug; Text = text; ETag = "v1" }) |> CancellableTaskResult.singleton
 
 let private previewWith (store : FakeStore) slug details title body =
   let task =
@@ -97,7 +98,10 @@ let tests =
       let store = FakeStore([ "live", published ], [ "draft", draft ], [])
       let result = preview store "draft" "New title" "Body.\n" |> articleOf
 
-      Expect.isEmpty result.Problems "A draft can have no publish date and no category"
+      Expect.equal
+        result.Problems
+        [ Problem.error (Place.Field("category", 1)) "The post has no category." ]
+        "A draft can have no publish date, and it needs a category to publish"
       let html = contentOf result
       Expect.stringContains html "<h1>New title</h1>" "The title"
       Expect.stringContains html "<time datetime=\"2026-03-05T09:30:00Z\">" "The time of the preview is the publish date"

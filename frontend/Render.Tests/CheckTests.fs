@@ -22,6 +22,9 @@ let private draftFrontMatter = "author: Matthew Watt\ntitle: A draft\nexcerpt: A
 let private draft (published: Post list) slug body =
   Check.draft Stage.Production anyImages [] previewTime published slug (text draftFrontMatter body)
 
+let private categorizedDraft (published: Post list) slug body =
+  Check.draft Stage.Production anyImages [] previewTime published slug (text $"{draftFrontMatter}\ncategory: One-offs" body)
+
 [<Tests>]
 let tests =
   testList "Check" [
@@ -112,10 +115,14 @@ let tests =
       Expect.stringEnds article.Outline """<a href="#first-step">First step</a></li></ul></aside>""" "The link"
     }
 
-    test "a draft with a title, an excerpt, and an author, and with no publish date and no category, has an article and no problem" {
+    test "a draft with a title, an excerpt, and an author, and with no publish date and no category, has an article and the error of the category" {
       let checkedPost = draft [ target ] "b-post" "## A step\n\nText."
-      Expect.isEmpty checkedPost.Problems "A draft can have no publish date and no category"
+      Expect.equal checkedPost.Problems [ Problem.error (Place.Field("category", 1)) "The post has no category." ] "Only the category"
       Expect.isSome checkedPost.Article "The article"
+    }
+
+    test "a draft with a category and no publish date has no problem" {
+      Expect.isEmpty (categorizedDraft [ target ] "b-post" "Text.").Problems "A draft can have no publish date"
     }
 
     test "the article of a draft shows the time of the preview as the publish date and shows no category" {
@@ -153,18 +160,18 @@ let tests =
     }
 
     test "a draft with tags and no publish date gets no year warning" {
-      let checkedPost = Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text $"{draftFrontMatter}\ntags:\n  - Fable" "Text.")
+      let checkedPost = Check.draft Stage.Production anyImages [] previewTime [ target ] "b-post" (text $"{draftFrontMatter}\ncategory: One-offs\ntags:\n  - Fable" "Text.")
       Expect.isEmpty checkedPost.Problems "The year rule is for a post with a publish date"
     }
 
     test "a broken link in a draft is an error at its body line" {
       Expect.equal
-        (draft [ target ] "b-post" "Text.\n\nRead [c](/posts/c-post/).").Problems
+        (categorizedDraft [ target ] "b-post" "Text.\n\nRead [c](/posts/c-post/).").Problems
         [ Problem.error (Place.Body 4) "The output has no page at /posts/c-post/." ]
         "The error is at the line of the link"
     }
 
     test "a draft can link to a published post" {
-      Expect.isEmpty (draft [ target ] "b-post" "See [the step](/posts/a-post/).").Problems "The link resolves"
+      Expect.isEmpty (categorizedDraft [ target ] "b-post" "See [the step](/posts/a-post/).").Problems "The link resolves"
     }
   ]

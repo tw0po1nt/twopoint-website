@@ -25,6 +25,8 @@ let private document state eTag details : Api.PostDocument =
     Text = ""
     PublishedText = None }
 
+let private savedAs eTag : Api.SavedPost = { ETag = eTag; Check = Api.Found [] }
+
 let private choices: Details.Choices =
   { Terms =
       { Categories = [ { Slug = "dev"; Title = "Dev"; Value = "Dev"; Posts = 4 }; { Slug = "life"; Title = "Life"; Value = "Life"; Posts = 1 } ]
@@ -302,7 +304,7 @@ let tests =
 
       Expect.equal model.Router.Route (Route.Post "my-post") "The author stays until the save"
 
-      let model, effect = send (Editor.SaveAnswered("new-slug", 1, Ok "\"v3\"")) model
+      let model, effect = send (Editor.SaveAnswered("new-slug", 1, Ok(savedAs "\"v3\""))) model
 
       Expect.equal
         effect

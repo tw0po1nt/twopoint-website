@@ -22,7 +22,8 @@ type ChangedSlugDto = { Slug : string; ETag : string }
 
 type ChangeSlug (
   logger : ILogger<ChangeSlug>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Posts-ChangeSlug")>]
@@ -47,7 +48,7 @@ type ChangeSlug (
         | IfMatch eTag ->
           let! json = req.ReadFromJsonAsync<ChangeSlugJson> ct
           let newSlug = json |> Option.ofObj |> Option.bind (fun json -> Option.ofObj json.Slug) |> Option.defaultValue ""
-          let postStore = PostStore(postStoreClient, logger)
+          let postStore = PostStore(postStoreClient, logger, texts)
 
           let changeSlug = ChangeSlug.withDependencies {
             new ChangeSlug.Dependencies with

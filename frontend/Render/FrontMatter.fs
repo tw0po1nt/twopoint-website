@@ -138,6 +138,9 @@ let private fieldNames =
 /// No post has a term with an empty slug.
 let private noCategory: Term = { Slug = ""; Title = "" }
 
+/// A draft that `parseDraft` gave has the placeholder category when its text has none.
+let missesCategory (frontMatter: FrontMatter) = frontMatter.Category = noCategory
+
 type private Mode =
   | Published
   | Draft

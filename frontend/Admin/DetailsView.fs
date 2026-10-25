@@ -59,6 +59,16 @@ let private optionsText (model: Shell.Model) =
   | Details.NotAsked
   | Details.Ready _ -> ""
 
+let private problems (model: Shell.Model) =
+  match document model with
+  | Some { Check = Some(Api.Found found) } -> found |> List.map (fun problem -> problem, Problem.targetOf problem) |> Array.ofList
+  | _ -> [||]
+
+let private checkFailed (model: Shell.Model) =
+  match document model with
+  | Some { Check = Some Api.CheckFailed } -> true
+  | _ -> false
+
 let private typed (event: InputEvent) = (event.target :?> HTMLInputElement).value
 
 [<SolidComponent>]
@@ -233,6 +243,37 @@ let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
     )
 
 [<SolidComponent>]
+let private problemText (dispatch: Shell.Msg -> unit) (problem: Api.Problem) (target: Problem.Target option) =
+  match target with
+  | Some target ->
+    span () {
+      button (type' = "button", class' = "problem-link", onClick = fun _ -> dispatch (Shell.Editor(Editor.ProblemChosen target))) {
+        Preview.problemText problem
+      }
+    }
+  | None -> span () { Preview.problemText problem }
+
+[<SolidComponent>]
+let private problemList (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  Fragment() {
+    Show(when' = checkFailed (model ())) {
+      p (class' = "muted small", role = "status") { "The check did not run. Save again to see the problems." }
+    }
+
+    Show(when' = ((problems (model ())).Length > 0)) {
+      ul (class' = "preview-problems details-problems", ariaLabel = "Problems") {
+        For(each = problems (model ())) {
+          yield fun (problem, target) _ ->
+            li (class' = $"preview-problem {Preview.severityClass problem}") {
+              span (class' = "preview-severity") { $"{Preview.severityText problem} " }
+              problemText dispatch problem target
+            }
+        }
+      }
+    }
+  }
+
+[<SolidComponent>]
 let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
   let values () = (details (model ())).Values
@@ -240,6 +281,7 @@ let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   Fragment() {
     Show(when' = (optionsText (model ()) <> "")) { p (class' = "muted small", role = "status") { optionsText (model ()) } }
 
+    problemList dispatch model
     slugField dispatch model
     categoryField dispatch model
     tagsField dispatch model
@@ -271,7 +313,7 @@ let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
       )
 
     div (class' = "row switch-row") {
-      Parts.switch' "Show on the home page" (fun () -> (values ()).ShowOnHomepage) (fun () ->
+      Parts.switch' "details-show-on-homepage" "Show on the home page" (fun () -> (values ()).ShowOnHomepage) (fun () ->
         send (Details.ShowOnHomepageChanged(not (values ()).ShowOnHomepage)))
 
       span () { "Show on the home page" }

@@ -15,6 +15,7 @@
     <Compile Include="Router.fs" />
     <Compile Include="Api.fs" />
     <Compile Include="Dates.fs" />
+    <Compile Include="Problem.fs" />
     <Compile Include="Progress.fs" />
     <Compile Include="Upload.fs" />
     <Compile Include="Session.fs" />

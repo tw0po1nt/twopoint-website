@@ -21,7 +21,8 @@ module GetSeriesQuery = TwoPoint.Core.Posts.Queries.GetSeries
 
 type GetSeries (
   logger : ILogger<GetSeries>,
-  postStoreClient: BlobServiceClient
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Series-GetAll")>]
@@ -40,7 +41,7 @@ type GetSeries (
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request", op)
         let response = req.CreateResponse HttpStatusCode.OK
-        let postStore = PostStore(postStoreClient, logger)
+        let postStore = PostStore(postStoreClient, logger, texts)
 
         let getSeries = GetSeriesQuery.withDependencies {
           new GetSeriesQuery.Dependencies with

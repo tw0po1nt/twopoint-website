@@ -88,6 +88,8 @@ type Effect =
   | SetBadge of count: int
   /// Starts the autosave timer of the editor.
   | Autosave of version: int
+  | Focus of elementId: string
+  | MoveToBodyLine of line: int
 
 let private enter (route: Route) (model: Model) =
   let left =
@@ -174,7 +176,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.Autosave _
           | Editor.LoadDetailsOptions
           | Editor.ChangeSlug _
-          | Editor.FetchPreview _ -> [])
+          | Editor.FetchPreview _
+          | Editor.Focus _
+          | Editor.MoveToBodyLine _ -> [])
 
       match routerMsg, calls with
       | Router.UrlChanged _, calls -> next, Some(Navigate(Router.PushUrl(Route.path model.Router.Route), calls))
@@ -271,7 +275,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.Save request -> Send [ SavePost request ]
           | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
           | Editor.ChangeSlug request -> Send [ ChangeSlug request ]
-          | Editor.FetchPreview request -> Send [ PreviewPost request ])
+          | Editor.FetchPreview request -> Send [ PreviewPost request ]
+          | Editor.Focus elementId -> Focus elementId
+          | Editor.MoveToBodyLine line -> MoveToBodyLine line)
   | Upload msg ->
     let uploads, effect = Upload.update msg model.Uploads
     let next = { model with Uploads = uploads }

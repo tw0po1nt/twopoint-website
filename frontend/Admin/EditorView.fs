@@ -16,6 +16,36 @@ let private document (model: Shell.Model) =
   | Some(Editor.NotLoaded _)
   | None -> None
 
+let focus (elementId: string) =
+  window.setTimeout (
+    (fun () -> Dom.document.getElementById elementId |> Option.ofObj |> Option.iter _.focus()),
+    0
+  )
+  |> ignore
+
+let moveToBodyLine (line: int) =
+  window.setTimeout (
+    (fun () ->
+      Dom.document.querySelector ".editor-body"
+      |> Option.ofObj
+      |> Option.bind (fun host -> CodeMirror.EditorView.findFromDOM (host :?> HTMLElement) |> Option.ofObj)
+      |> Option.iter (fun view -> CodeMirror.moveToLine view line)),
+    0
+  )
+  |> ignore
+
+let private hasProblems (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.hasProblems document
+  | None -> false
+
+[<SolidComponent>]
+let private problemDot (model: unit -> Shell.Model) =
+  Show(when' = hasProblems (model ())) {
+    span (class' = "problem-dot", ariaHidden = true)
+    span (class' = "sr-only") { ", has problems" }
+  }
+
 let private isLoaded (model: Shell.Model) = (document model).IsSome
 
 let private statusText (model: Shell.Model) =
@@ -165,9 +195,13 @@ let private topBar
 
       button (type' = "button", class' = "text", disabled = not (isLoaded (model ())), onClick = fun _ -> DetailsView.open' dispatch) {
         "Details"
+        problemDot model
       }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/259): Publish
-      button (type' = "button", class' = "editor-primary", disabled = true) { primaryText (model ()) }
+      button (type' = "button", class' = "editor-primary", disabled = true) {
+        primaryText (model ())
+        problemDot model
+      }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): more items in the actions menu
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): more items in the actions menu
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): more items in the actions menu
@@ -217,6 +251,7 @@ let private writing (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorVi
 
   article (class' = (if isPreviewing (model ()) then "editor-column is-hidden" else "editor-column")) {
     textarea(
+      id = "editor-title",
       class' = "editor-title",
       rows = 1,
       placeholder = "Title",
@@ -232,6 +267,7 @@ let private writing (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorVi
       .ref (fun element -> follow element (fun () -> (fields (model ())).Title))
 
     textarea(
+      id = "editor-excerpt",
       class' = "editor-excerpt",
       rows = 1,
       placeholder = "Excerpt",
