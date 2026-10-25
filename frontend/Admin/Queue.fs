@@ -7,10 +7,7 @@ type Action =
   | Reject
   | Delete
 
-type RowState =
-  | Ready
-  | Sending of Action
-  | NotDone of Action * reason: string
+type RowState = Progress<Action>
 
 type Row =
   { Comment: Api.PostedComment
@@ -60,7 +57,7 @@ let private withTrust (commenterId: string) (row: Row) =
 
 let private choose (commentId: string) (action: Action) (rows: Row list) =
   match find commentId rows with
-  | Some({ State = Ready | NotDone _ } as row) when List.contains action (actions (commenter row).Status) ->
+  | Some({ State = Progress.Ready | Progress.NotDone _ } as row) when List.contains action (actions (commenter row).Status) ->
     let effect =
       match action with
       | ApproveAndTrust -> Trust row.Comment
@@ -68,7 +65,7 @@ let private choose (commentId: string) (action: Action) (rows: Row list) =
       | Reject
       | Delete -> Moderate(row.Comment, action)
 
-    Loaded(change commentId (Sending action) rows), Some effect
+    Loaded(change commentId (Progress.Sending action) rows), Some effect
   | Some _
   | None -> Loaded rows, None
 
@@ -81,15 +78,15 @@ let private trusted (commentId: string) (rows: Row list) =
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
-  | _, Answered(Ok comments) -> Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Ready })), None
+  | _, Answered(Ok comments) -> Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Progress.Ready })), None
   | _, Answered(Error failure) -> NotLoaded(Api.reason failure), None
   | Loaded rows, Chosen(commentId, action) -> choose commentId action rows
   | Loaded rows, Trusted(commentId, Ok()) -> trusted commentId rows
   | Loaded rows, Trusted(commentId, Error failure) ->
-    Loaded(change commentId (NotDone(ApproveAndTrust, Api.reason failure)) rows), None
+    Loaded(change commentId (Progress.NotDone(ApproveAndTrust, Api.reason failure)) rows), None
   | Loaded rows, Done(commentId, _, Ok()) -> Loaded(rows |> List.filter (fun row -> id row <> commentId)), None
   | Loaded rows, Done(commentId, action, Error failure) ->
-    Loaded(change commentId (NotDone(action, Api.reason failure)) rows), None
+    Loaded(change commentId (Progress.NotDone(action, Api.reason failure)) rows), None
   | (Waiting | NotLoaded _), (Chosen _ | Trusted _ | Done _) -> model, None
 
 let count (model: Model) =
@@ -104,20 +101,14 @@ let tryFind (commentId: string) (model: Model) =
   | Waiting
   | NotLoaded _ -> None
 
-let sends (state: RowState) =
-  match state with
-  | Sending _ -> true
-  | Ready
-  | NotDone _ -> false
-
 let failure (state: RowState) =
   match state with
-  | NotDone(Approve, reason) -> Some $"The approval did not complete. {reason}"
-  | NotDone(ApproveAndTrust, reason) -> Some $"The trust did not complete, and the comment is not approved. {reason}"
-  | NotDone(Reject, reason) -> Some $"The rejection did not complete. {reason}"
-  | NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
-  | Ready
-  | Sending _ -> None
+  | Progress.NotDone(Approve, reason) -> Some $"The approval did not complete. {reason}"
+  | Progress.NotDone(ApproveAndTrust, reason) -> Some $"The trust did not complete, and the comment is not approved. {reason}"
+  | Progress.NotDone(Reject, reason) -> Some $"The rejection did not complete. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Progress.Ready
+  | Progress.Sending _ -> None
 
 let statusText (status: Api.CommenterStatus) =
   match status with

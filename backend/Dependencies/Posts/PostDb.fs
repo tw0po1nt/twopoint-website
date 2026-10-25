@@ -368,6 +368,9 @@ module internal PostDb =
       
     let delete table onError filter =
       Db.delete tableServiceClient logger db table onError filter
+
+    let deleteByKeys table onError partitionKey rowKey =
+      Db.deleteByKeys tableServiceClient logger db table onError partitionKey rowKey
       
     let postsTable = "posts"
     let commentsTable = "comments"
@@ -404,7 +407,7 @@ module internal PostDb =
           entity
 
       member _.DeleteCommenter validationId =
-        eq "PartitionKey" validationId + eq "RowKey" validationId |> delete commentersTable PostDbError.validation
+        deleteByKeys commentersTable PostDbError.validation validationId validationId
         
       member _.GetCommentsForPost approvals post = cancellableTaskResult {
         // Get comments

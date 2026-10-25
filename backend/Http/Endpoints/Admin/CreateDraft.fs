@@ -56,15 +56,11 @@ type CreateDraft (
         let! result = createDraft { Title = title }
 
         let apiResponse, statusCode =
-          match result with
-          | Ok(CreateDraft.Event.Created(slug, eTag)) ->
-            { Success = true; Message = None; Data = Some { Slug = slug.ToString(); ETag = eTag } }, HttpStatusCode.Created
-          | Error(Logic(CreateDraft.Error.SlugTaken slug)) ->
-            { Success = false; Message = Some $"Post '{slug}' exists"; Data = None }, HttpStatusCode.Conflict
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          result
+          |> ActionResult.toApiResponseWithStatus
+            HttpStatusCode.Created
+            (fun (CreateDraft.Event.Created(slug, eTag)) -> Some { Slug = slug.ToString(); ETag = eTag })
+            (fun (CreateDraft.Error.SlugTaken slug) -> $"Post '{slug}' exists", HttpStatusCode.Conflict)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

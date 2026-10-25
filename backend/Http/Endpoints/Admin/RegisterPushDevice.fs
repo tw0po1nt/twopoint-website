@@ -70,13 +70,10 @@ type RegisterPushDevice(
 
         let! result = ct |> registerDevice dto
         let apiResponse, statusCode =
-          match result with
-          | Ok (RegisterPushDevice.Event.Registered device) ->
-            { Success = true; Message = None; Data = Some (device.ToDto()) }, HttpStatusCode.OK
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          result
+          |> ActionResult.toApiResponse
+            (fun (RegisterPushDevice.Event.Registered device) -> Some(device.ToDto()))
+            (fun logicError -> $"{logicError}", HttpStatusCode.InternalServerError)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

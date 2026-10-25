@@ -100,21 +100,14 @@ type SaveDraft (
                 Details = json.Details |> Option.ofNullable |> Option.map PostDetailsDto.toDetails }
 
           let apiResponse, statusCode =
-            match result with
-            | Ok(SaveDraft.Event.Saved eTag) -> { Success = true; Message = None; Data = Some { ETag = eTag } }, HttpStatusCode.OK
-            | Error(Logic SaveDraft.Error.Stale) ->
-              { Success = false; Message = Some "The post changed since you opened it"; Data = None }, HttpStatusCode.PreconditionFailed
-            | Error(Logic(SaveDraft.Error.FrontMatterUnreadable reason)) ->
-              { Success = false
-                Message = Some $"The front matter of the stored post is not readable: {reason}"
-                Data = None },
-              HttpStatusCode.UnprocessableEntity
-            | Error(Logic(SaveDraft.Error.PostNotFound slug)) ->
-              { Success = false; Message = Some $"Post '{slug}' not found"; Data = None }, HttpStatusCode.NotFound
-            | Error actionError when actionError.IsValidation ->
-              { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-            | Error actionError ->
-              { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+            result
+            |> ActionResult.toApiResponse
+              (fun (SaveDraft.Event.Saved eTag) -> Some { ETag = eTag })
+              (function
+                | SaveDraft.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
+                | SaveDraft.Error.FrontMatterUnreadable reason ->
+                  $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity
+                | SaveDraft.Error.PostNotFound slug -> $"Post '{slug}' not found", HttpStatusCode.NotFound)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

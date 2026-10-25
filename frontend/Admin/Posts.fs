@@ -72,6 +72,3 @@ let stateText (state: Api.PostState) =
   | Api.Draft -> "Draft"
   | Api.Published -> "Published"
   | Api.Upcoming -> "Upcoming"
-
-/// The API sends each date in ISO 8601.
-let dateText (date: string) = date.Split 'T' |> Array.head

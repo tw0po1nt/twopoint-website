@@ -138,6 +138,5 @@ module internal DeviceDb =
         device.ToEntity() |> Db.upsert tableServiceClient logger db table validation DbRegisteredDevice.FromEntity
 
       member _.DeleteDevice device =
-        (eq "PartitionKey" device.UserExternalId + eq "RowKey" device.DeviceId)
-        |> Db.delete tableServiceClient logger db table validation
+        Db.deleteByKeys tableServiceClient logger db table validation device.UserExternalId device.DeviceId
     }

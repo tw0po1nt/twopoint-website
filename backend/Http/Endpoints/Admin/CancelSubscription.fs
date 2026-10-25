@@ -58,16 +58,11 @@ type CancelSubscription (
 
         let! cancelResult = ct |> cancelSubscription cancellation
         let apiResponse, statusCode =
-          match cancelResult with
-          | Ok canceled ->
-            let (CancelSubscriptionAction.Event.Cancelled subscription) = canceled
-            { Success = true; Message = None; Data = Some (subscription.ToDto()) }, HttpStatusCode.OK
-          | Error (Logic (CancelSubscriptionAction.Error.SubscriptionNotFound _)) ->
-            { Success = false; Message = Some $"Subscription '{subscriptionId}' not found"; Data = None }, HttpStatusCode.NotFound
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          cancelResult
+          |> ActionResult.toApiResponse
+            (fun (CancelSubscriptionAction.Event.Cancelled subscription) -> Some(subscription.ToDto()))
+            (fun (CancelSubscriptionAction.Error.SubscriptionNotFound _) ->
+              $"Subscription '{subscriptionId}' not found", HttpStatusCode.NotFound)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

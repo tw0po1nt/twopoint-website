@@ -70,19 +70,14 @@ type UpdateCommentApproval(
 
         let! approvalUpdateResult = ct |> updateCommentApproval approvalUpdate
         let apiResponse, statusCode =
-          match approvalUpdateResult with
-          | Ok _ ->
-            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic (UpdateCommentApproval.Error.CommentNotFound commentId)) ->
-            let errorMessage = $"Comment '{commentId.ToString()}' not found for post '{slug}'"
-            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
-          | Error (Logic (UpdateCommentApproval.Error.ChangeNotAllowed (current, requested))) ->
-            let errorMessage = $"Comment is {current} and cannot become {requested}"
-            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.Conflict
-          | Error actionError when actionError.IsValidation ->
-            { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          approvalUpdateResult
+          |> ActionResult.toApiResponse
+            (fun _ -> None)
+            (function
+              | UpdateCommentApproval.Error.CommentNotFound commentId ->
+                $"Comment '{commentId.ToString()}' not found for post '{slug}'", HttpStatusCode.NotFound
+              | UpdateCommentApproval.Error.ChangeNotAllowed(current, requested) ->
+                $"Comment is {current} and cannot become {requested}", HttpStatusCode.Conflict)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

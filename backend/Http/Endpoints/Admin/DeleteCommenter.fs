@@ -61,16 +61,11 @@ type DeleteCommenter(
 
         let! deletionResult = ct |> deleteCommenter deletion
         let apiResponse, statusCode =
-          match deletionResult with
-          | Ok _ ->
-            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic (DeleteCommenter.Error.CommenterNotFound validationId)) ->
-            let errorMessage = $"Commenter '{validationId.ToString()}' not found"
-            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
-          | Error actionError when actionError.IsValidation ->
-            { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          deletionResult
+          |> ActionResult.toApiResponse
+            (fun _ -> None)
+            (fun (DeleteCommenter.Error.CommenterNotFound validationId) ->
+              $"Commenter '{validationId.ToString()}' not found", HttpStatusCode.NotFound)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

@@ -91,7 +91,7 @@ let private listTests =
     }
 
     test "the first date is the day of the date" {
-      Expect.equal (Commenters.dateText ada.CreatedDate) "2026-01-02" "The day"
+      Expect.equal (Dates.dateText ada.CreatedDate) "2026-01-02" "The day"
     }
 
     test "commenters that did not load show the reason" {
@@ -133,7 +133,7 @@ let private pageTests =
     test "Trust sends the trust, and the answer trusts the commenter and loads the moderation queue again" {
       let model, effect = send (Commenter.Chosen Commenter.Trust) (opened ())
       Expect.equal effect (Some(Shell.Send [ Shell.ChangeCommenter("ada", Commenter.Trust) ])) "The trust call"
-      Expect.isTrue (Commenter.sends (snd (loaded model))) "The buttons are off"
+      Expect.isTrue (Progress.isSending (snd (loaded model))) "The buttons are off"
       let model, effect = send (Commenter.Done("ada", Commenter.Trust, Ok())) model
       Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue ])) "The queue again"
       Expect.equal (fst (loaded model)).Commenter.Status Api.Trusted "Trusted"

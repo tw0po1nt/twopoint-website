@@ -39,7 +39,7 @@ let private canChangeSlug (model: Shell.Model) =
   | Some document ->
     document.State = Api.Draft
     && document.Save = Editor.Saved
-    && document.Details.Slug <> Details.Changing
+    && not (Details.isChangingSlug document.Details)
     && Details.slugChangeable document.Slug document.Details
   | None -> false
 
@@ -93,7 +93,7 @@ let private slugField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
           Parts
             .Input(
               id = "details-slug",
-              value = (fun () -> (details (model ())).SlugInput),
+              value = (fun () -> Details.typedSlug (details (model ()))),
               disabledWhen = (fun () -> not (isDraft (model ()))),
               onInput = (fun event -> dispatch (Shell.Editor(Editor.DetailsMsg(Details.SlugTyped(typed event))))),
               onEnter = fun () -> dispatch (Shell.Editor Editor.SlugChangeRequested)

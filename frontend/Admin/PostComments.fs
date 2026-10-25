@@ -65,7 +65,7 @@ let private change (commentId: string) (next: Row -> Row) (rows: Row list) =
 
 let private withApproval (approval: Api.CommentApproval) (row: Row) =
   { Comment = { row.Comment with Status = approval }
-    State = Queue.Ready }
+    State = Progress.Ready }
 
 let private moderated (commentId: string) (action: Queue.Action) (rows: Row list) =
   match action with
@@ -76,8 +76,8 @@ let private moderated (commentId: string) (action: Queue.Action) (rows: Row list
 
 let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (model: Model) =
   match rows |> List.tryFind (fun row -> id row = commentId) with
-  | Some({ State = Queue.Ready | Queue.NotDone _ } as row) when List.contains action (actions row.Comment.Status) ->
-    { model with Comments = Loaded(change commentId (fun row -> { row with State = Queue.Sending action }) rows) },
+  | Some({ State = Progress.Ready | Progress.NotDone _ } as row) when List.contains action (actions row.Comment.Status) ->
+    { model with Comments = Loaded(change commentId (fun row -> { row with State = Progress.Sending action }) rows) },
     Some(Moderate(model.Slug, row.Comment, action))
   | Some _
   | None -> model, None
@@ -86,14 +86,14 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with
   | _, Answered(slug, _) when slug <> model.Slug -> model, None
   | _, Answered(_, Ok comments) ->
-    { model with Comments = Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Queue.Ready })) },
+    { model with Comments = Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Progress.Ready })) },
     None
   | _, Answered(_, Error failure) -> { model with Comments = NotLoaded(Api.reason failure) }, None
   | _, Filtered filter -> { model with Filter = filter }, None
   | Loaded rows, Chosen(commentId, action) -> choose commentId action rows model
   | Loaded rows, Done(commentId, action, Ok()) -> { model with Comments = Loaded(moderated commentId action rows) }, None
   | Loaded rows, Done(commentId, action, Error failure) ->
-    { model with Comments = Loaded(change commentId (fun row -> { row with State = Queue.NotDone(action, Api.reason failure) }) rows) },
+    { model with Comments = Loaded(change commentId (fun row -> { row with State = Progress.NotDone(action, Api.reason failure) }) rows) },
     None
   | (Waiting | NotLoaded _), (Chosen _ | Done _) -> model, None
 

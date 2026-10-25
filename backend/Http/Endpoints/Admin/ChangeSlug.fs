@@ -62,22 +62,15 @@ type ChangeSlug (
           let! result = changeSlug { Slug = slug; IfMatch = Some eTag; NewSlug = newSlug }
 
           let apiResponse, statusCode =
-            match result with
-            | Ok(ChangeSlug.Event.Changed(changed, eTag)) ->
-              { Success = true; Message = None; Data = Some { Slug = changed.ToString(); ETag = eTag } }, HttpStatusCode.OK
-            | Error(Logic ChangeSlug.Error.Stale) ->
-              { Success = false; Message = Some "The post changed since you opened it"; Data = None }, HttpStatusCode.PreconditionFailed
-            | Error(Logic(ChangeSlug.Error.PostNotFound missing)) ->
-              { Success = false; Message = Some $"Post '{missing}' not found"; Data = None }, HttpStatusCode.NotFound
-            | Error(Logic(ChangeSlug.Error.PostPublished published)) ->
-              { Success = false; Message = Some $"The slug of the published post '{published}' is fixed"; Data = None },
-              HttpStatusCode.Conflict
-            | Error(Logic(ChangeSlug.Error.SlugTaken taken)) ->
-              { Success = false; Message = Some $"Another post has the slug '{taken}'"; Data = None }, HttpStatusCode.Conflict
-            | Error actionError when actionError.IsValidation ->
-              { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-            | Error actionError ->
-              { Success = false; Message = Some(actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+            result
+            |> ActionResult.toApiResponse
+              (fun (ChangeSlug.Event.Changed(changed, eTag)) -> Some { Slug = changed.ToString(); ETag = eTag })
+              (function
+                | ChangeSlug.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
+                | ChangeSlug.Error.PostNotFound missing -> $"Post '{missing}' not found", HttpStatusCode.NotFound
+                | ChangeSlug.Error.PostPublished published ->
+                  $"The slug of the published post '{published}' is fixed", HttpStatusCode.Conflict
+                | ChangeSlug.Error.SlugTaken taken -> $"Another post has the slug '{taken}'", HttpStatusCode.Conflict)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

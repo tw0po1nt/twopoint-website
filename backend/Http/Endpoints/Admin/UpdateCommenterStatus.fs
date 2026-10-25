@@ -71,19 +71,14 @@ type UpdateCommenterStatus(
 
         let! statusUpdateResult = ct |> updateCommenterStatus statusUpdate
         let apiResponse, statusCode =
-          match statusUpdateResult with
-          | Ok _ ->
-            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic (UpdateCommenterStatus.Error.CommenterNotFound validationId)) ->
-            let errorMessage = $"Commenter '{validationId.ToString()}' not found"
-            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
-          | Error (Logic (UpdateCommenterStatus.Error.ChangeNotAllowed (current, requested))) ->
-            let errorMessage = $"Commenter is {current} and cannot become {requested}"
-            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.Conflict
-          | Error actionError when actionError.IsValidation ->
-            { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          statusUpdateResult
+          |> ActionResult.toApiResponse
+            (fun _ -> None)
+            (function
+              | UpdateCommenterStatus.Error.CommenterNotFound validationId ->
+                $"Commenter '{validationId.ToString()}' not found", HttpStatusCode.NotFound
+              | UpdateCommenterStatus.Error.ChangeNotAllowed(current, requested) ->
+                $"Commenter is {current} and cannot become {requested}", HttpStatusCode.Conflict)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

@@ -24,10 +24,7 @@ type GitHubApp =
 
 module GitHubAppJwt =
 
-  let private base64Url (bytes : byte array) =
-    Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
-
-  let private encode (json : string) = json |> Encoding.UTF8.GetBytes |> base64Url
+  let private encode (json : string) = json |> Encoding.UTF8.GetBytes |> Base64Url.encode
 
   /// GitHub refuses an app JWT with a life of more than 10 minutes, and the clock of GitHub can be behind.
   let unsigned (clientId : string) (now : DateTimeOffset) =
@@ -39,7 +36,7 @@ module GitHubAppJwt =
            iss = clientId |}
     $"{encode header}.{encode payload}"
 
-  let complete (unsigned : string) (signature : byte array) = $"{unsigned}.{base64Url signature}"
+  let complete (unsigned : string) (signature : byte array) = $"{unsigned}.{Base64Url.encode signature}"
 
 type Installation = { Id : int64 }
 

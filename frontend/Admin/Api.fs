@@ -311,17 +311,19 @@ let private act (method: HttpMethod) (api: string) (token: string) (path: string
       | _ -> Error Invalid)
   )
 
-let private commentsPath (slug: string) =
-  $"internal/posts/{JS.encodeURIComponent slug}/comments"
+let private internalPath (segments: string list) =
+  segments |> List.map JS.encodeURIComponent |> String.concat "/" |> (+) "internal/"
+
+let private commentsPath (slug: string) = internalPath [ "posts"; slug; "comments" ]
 
 let private commentPath (slug: string) (comment: Comment) =
-  $"{commentsPath slug}/{JS.encodeURIComponent comment.Id}"
+  internalPath [ "posts"; slug; "comments"; comment.Id ]
 
 let getPosts (api: string) (token: string) : JS.Promise<Result<Post list, Failure>> =
-  send HttpMethod.GET api token "internal/posts"
+  send HttpMethod.GET api token (internalPath [ "posts" ])
 
 let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failure>> =
-  send<Rebuild> HttpMethod.POST api token "internal/deploys"
+  send<Rebuild> HttpMethod.POST api token (internalPath [ "deploys" ])
   |> Promise.map (
     Result.bind (fun rebuild ->
       match rebuild.Dispatch, rebuild.ProductionRun with
@@ -332,7 +334,7 @@ let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failu
   )
 
 let getModerationQueue (api: string) (token: string) : JS.Promise<Result<PostedComment list, Failure>> =
-  send HttpMethod.GET api token "internal/comments"
+  send HttpMethod.GET api token (internalPath [ "comments" ])
 
 let getPostComments (api: string) (token: string) (slug: string) : JS.Promise<Result<Comment list, Failure>> =
   send HttpMethod.GET api token (commentsPath slug)
@@ -357,11 +359,10 @@ let changeApproval
 let deleteComment (api: string) (token: string) (slug: string) (comment: Comment) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token (commentPath slug comment) None
 
-let private commenterPath (commenterId: string) =
-  $"internal/commenters/{JS.encodeURIComponent commenterId}"
+let private commenterPath (commenterId: string) = internalPath [ "commenters"; commenterId ]
 
 let getCommenters (api: string) (token: string) : JS.Promise<Result<Commenter list, Failure>> =
-  send HttpMethod.GET api token "internal/commenters"
+  send HttpMethod.GET api token (internalPath [ "commenters" ])
 
 let getCommenter (api: string) (token: string) (commenterId: string) : JS.Promise<Result<CommenterComments, Failure>> =
   send HttpMethod.GET api token (commenterPath commenterId)
@@ -381,13 +382,12 @@ let deleteCommenter (api: string) (token: string) (commenterId: string) : JS.Pro
   act HttpMethod.DELETE api token (commenterPath commenterId) None
 
 let getSubscriptions (api: string) (token: string) : JS.Promise<Result<Subscription list, Failure>> =
-  send HttpMethod.GET api token "internal/subscriptions"
+  send HttpMethod.GET api token (internalPath [ "subscriptions" ])
 
-let private subscriptionPath (subscriptionId: string) =
-  $"internal/subscriptions/{JS.encodeURIComponent subscriptionId}"
+let private subscriptionPath (subscriptionId: string) = internalPath [ "subscriptions"; subscriptionId ]
 
 let cancelSubscription (api: string) (token: string) (subscriptionId: string) : JS.Promise<Result<Subscription, Failure>> =
-  send HttpMethod.POST api token $"{subscriptionPath subscriptionId}/cancellations"
+  send HttpMethod.POST api token (internalPath [ "subscriptions"; subscriptionId; "cancellations" ])
 
 let deleteSubscription (api: string) (token: string) (subscriptionId: string) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token (subscriptionPath subscriptionId) None
@@ -397,10 +397,10 @@ let getSubscriptionDeliveries
   (token: string)
   (subscriptionId: string)
   : JS.Promise<Result<Delivery list, Failure>> =
-  send HttpMethod.GET api token $"internal/subscriptions/{JS.encodeURIComponent subscriptionId}/deliveries"
+  send HttpMethod.GET api token (internalPath [ "subscriptions"; subscriptionId; "deliveries" ])
 
 let getDevices (api: string) (token: string) : JS.Promise<Result<Device list, Failure>> =
-  send HttpMethod.GET api token "internal/notifications/devices"
+  send HttpMethod.GET api token (internalPath [ "notifications"; "devices" ])
 
 let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<Result<Device, Failure>> =
   let body =
@@ -411,7 +411,7 @@ let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<R
     ]
     |> Encode.toString 0
 
-  request<Device> HttpMethod.POST api token "internal/notifications/devices" (Some(Json body)) []
+  request<Device> HttpMethod.POST api token (internalPath [ "notifications"; "devices" ]) (Some(Json body)) []
   |> Promise.map (
     Result.bind (fun answer ->
       match answer with
@@ -420,16 +420,15 @@ let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<R
   )
 
 let deleteDevice (api: string) (token: string) (deviceId: string) : JS.Promise<Result<unit, Failure>> =
-  act HttpMethod.DELETE api token $"internal/notifications/devices/{JS.encodeURIComponent deviceId}" None
+  act HttpMethod.DELETE api token (internalPath [ "notifications"; "devices"; deviceId ]) None
 
-let private postPath (slug: string) =
-  $"internal/posts/{JS.encodeURIComponent slug}"
+let private postPath (slug: string) = internalPath [ "posts"; slug ]
 
 let getPost (api: string) (token: string) (slug: string) : JS.Promise<Result<PostDocument, Failure>> =
   send HttpMethod.GET api token (postPath slug)
 
 let createDraft (api: string) (token: string) : JS.Promise<Result<CreatedDraft, Failure>> =
-  sendWith HttpMethod.POST api token "internal/posts" (Some(Json "{}")) []
+  sendWith HttpMethod.POST api token (internalPath [ "posts" ]) (Some(Json "{}")) []
 
 let private encodeDetails (details: PostDetails) =
   let optional (value: string option) =
@@ -475,14 +474,14 @@ let savePost
   |> Promise.map (Result.map (fun saved -> saved.ETag))
 
 let getTerms (api: string) (token: string) : JS.Promise<Result<Terms, Failure>> =
-  send HttpMethod.GET api token "internal/terms"
+  send HttpMethod.GET api token (internalPath [ "terms" ])
 
 let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing list, Failure>> =
-  send HttpMethod.GET api token "internal/series"
+  send HttpMethod.GET api token (internalPath [ "series" ])
 
 let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
-  sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some(Json json)) [ IfMatch eTag ]
+  sendWith HttpMethod.PUT api token (internalPath [ "posts"; slug; "slug" ]) (Some(Json json)) [ IfMatch eTag ]
 
 let previewPost
   (api: string)
@@ -502,9 +501,9 @@ let previewPost
     ]
     |> Encode.toString 0
 
-  sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some(Json json)) []
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "preview" ]) (Some(Json json)) []
 type private UploadedAsset = { Url: string }
 
 let uploadAsset (api: string) (token: string) (file: Browser.Types.File) : JS.Promise<Result<string, Failure>> =
-  sendWith<UploadedAsset> HttpMethod.POST api token "internal/assets" (Some(Binary file)) []
+  sendWith<UploadedAsset> HttpMethod.POST api token (internalPath [ "assets" ]) (Some(Binary file)) []
   |> Promise.map (Result.map (fun uploaded -> uploaded.Url))

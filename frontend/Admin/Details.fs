@@ -168,3 +168,15 @@ let slugHint (slug: string) (model: Model) =
   | Changing -> ""
   | Idle when model.SlugInput = slug || isSlug model.SlugInput -> ""
   | Idle -> "Use lowercase letters and digits, with a single - between them."
+
+let isChangingSlug (model: Model) = model.Slug = Changing
+
+let typedSlug (model: Model) = model.SlugInput
+
+let slugChangeStarted (model: Model) = { model with Slug = Changing }
+
+let slugChangeRefused (reason: string) (model: Model) = { model with Slug = ChangeFailed reason }
+
+let slugChangeStale (model: Model) = { model with Slug = Idle }
+
+let slugChanged (slug: string) (model: Model) = { model with Slug = Idle; SlugInput = slug }

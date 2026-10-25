@@ -47,15 +47,10 @@ type DeletePushDevice(
 
         let! result = ct |> removeDevice { UserExternalId = authInfo.UserExternalId; DeviceId = deviceId }
         let apiResponse, statusCode =
-          match result with
-          | Ok _ ->
-            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic (RemovePushDevice.Error.DeviceNotFound _)) ->
-            { Success = false; Message = Some $"Device '{deviceId}' not found"; Data = None }, HttpStatusCode.NotFound
-          | Error actionError when actionError.IsValidation ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          result
+          |> ActionResult.toApiResponse
+            (fun _ -> None)
+            (fun (RemovePushDevice.Error.DeviceNotFound _) -> $"Device '{deviceId}' not found", HttpStatusCode.NotFound)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

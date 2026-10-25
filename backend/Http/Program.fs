@@ -1,5 +1,6 @@
 open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints.Auth
 

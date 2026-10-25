@@ -64,8 +64,6 @@ let private previewFrame (model: Shell.Model) =
 
 let private hasPreviewFrame (model: Shell.Model) = previewFrame model <> ""
 
-let private bodyView: CodeMirror.EditorView option ref = ref None
-
 let private dropFiles (dispatch: Shell.Msg -> unit) (files: File array) (at: int) =
   for file in files do
     dispatch (
@@ -92,7 +90,7 @@ let private pickFiles (onPicked: File array -> unit) =
 
   input.click ()
 
-let private addImage (dispatch: Shell.Msg -> unit) () =
+let private addImage (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorView option ref) () =
   pickFiles (fun files ->
     let at = bodyView.Value |> Option.map CodeMirror.cursor |> Option.defaultValue 0
     dropFiles dispatch files at)
@@ -140,7 +138,12 @@ let private typed (send: string -> unit) (event: InputEvent) =
   send element.value
 
 [<SolidComponent>]
-let private topBar (dispatch: Shell.Msg -> unit) (back: MouseEvent -> unit) (model: unit -> Shell.Model) =
+let private topBar
+  (dispatch: Shell.Msg -> unit)
+  (bodyView: CodeMirror.EditorView option ref)
+  (back: MouseEvent -> unit)
+  (model: unit -> Shell.Model)
+  =
   header (class' = (if isTyping (model ()) then "editor-bar is-typing" else "editor-bar")) {
     a (class' = "back", href = Route.path Posts, onClick = back) {
       Icon.view Icon.Back
@@ -181,7 +184,7 @@ let private topBar (dispatch: Shell.Msg -> unit) (back: MouseEvent -> unit) (mod
       Parts.menu
         "editor-menu"
         { Side = Menu.Below; Edge = Menu.End }
-        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch) (Fragment() { "Add image" }) })
+        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch bodyView) (Fragment() { "Add image" }) })
     }
   }
 
@@ -208,7 +211,7 @@ let private uploadNotices (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
-let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+let private writing (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorView option ref) (model: unit -> Shell.Model) =
   let send (toMsg: string -> Editor.Msg) = toMsg >> Shell.Editor >> dispatch
   let excerpt: HTMLTextAreaElement option ref = ref None
 
@@ -327,6 +330,8 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     elif key.key = "Escape" && isPreviewing (model ()) then
       dispatch (Shell.Editor Editor.PreviewClosed))
 
+  let bodyView: CodeMirror.EditorView option ref = ref None
+
   let fade (_: Event) =
     if isTyping (model ()) then
       dispatch (Shell.Editor Editor.PointerMoved)
@@ -340,13 +345,13 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     | _ -> ())
 
   Fragment() {
-    topBar dispatch back model
+    topBar dispatch bodyView back model
 
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
       h1 (class' = "sr-only") { heading () }
 
-      Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch model }
+      Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }
       Show(when' = isPreviewing (model ())) { preview model }
     }
 
