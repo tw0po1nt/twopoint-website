@@ -235,8 +235,8 @@ module internal SubscriptionDb =
     let where table onEntity filter =
       Db.where tableServiceClient logger db table onEntity filter
 
-    let delete table onError filter =
-      Db.delete tableServiceClient logger db table onError filter
+    let deleteByKeys table onError partitionKey rowKey =
+      Db.deleteByKeys tableServiceClient logger db table onError partitionKey rowKey
 
     let subscriptionsTable = "subscriptions"
     let deliveriesTable = "deliveries"
@@ -271,11 +271,9 @@ module internal SubscriptionDb =
         delivery.ToEntity() |> add deliveriesTable SubscriptionDbError.validation DbSubscriptionDelivery.FromEntity
 
       member _.DeleteSubscription subscriptionId =
-        eq "PartitionKey" subscriptionId + eq "RowKey" subscriptionId
-        |> delete subscriptionsTable SubscriptionDbError.validation
+        deleteByKeys subscriptionsTable SubscriptionDbError.validation subscriptionId subscriptionId
 
       member _.DeleteDelivery subscriptionId deliveryId =
-        eq "PartitionKey" subscriptionId + eq "RowKey" deliveryId
-        |> delete deliveriesTable SubscriptionDbError.validation
+        deleteByKeys deliveriesTable SubscriptionDbError.validation subscriptionId deliveryId
     }
   

@@ -365,3 +365,7 @@ module Db =
         errors |> List.iter (fun ex -> logger.LogError(message = "{op}: An error occurred when deleting an entity", ``exception`` = ex, args = [| operation |]))
         return onError "One or more errors occurred when deleting entities" |> Error
     }
+
+  let deleteByKeys tableServiceClient logger db table onError (partitionKey : string) (rowKey : string) =
+    eq "PartitionKey" partitionKey + eq "RowKey" rowKey
+    |> delete tableServiceClient logger db table onError
