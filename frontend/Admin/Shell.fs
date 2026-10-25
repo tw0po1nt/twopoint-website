@@ -31,6 +31,8 @@ type Call =
   | LoadDetailsOptions
   | ChangeSlug of Editor.SlugRequest
   | PreviewPost of Editor.PreviewRequest
+  | CheckPublish of Editor.PublishRequest * choice: Publish.When
+  | PublishPost of Editor.PublishRequest
   | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -152,7 +154,7 @@ let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
 let private layerOpenOverEditor (model: Model) =
   model.Overlay.IsSome
   || (match model.Editor with
-      | Some(Editor.Loaded document) -> document.Details.Open
+      | Some(Editor.Loaded document) -> document.Details.Open || Publish.isOpen document.Publish
       | _ -> false)
 
 /// The author goes to another page, and the editor has text that the API does not have.
@@ -177,6 +179,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.LoadDetailsOptions
           | Editor.ChangeSlug _
           | Editor.FetchPreview _
+          | Editor.CheckPublish _
+          | Editor.PublishPost _
           | Editor.Focus _
           | Editor.MoveToBodyLine _ -> [])
 
@@ -263,7 +267,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.SaveAnswered(_, _, Error Api.Refused), _
       | Editor.SlugChangeAnswered(_, Error Api.Refused), _
       | Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Refused)), _
-      | Editor.PreviewAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
+      | Editor.PreviewAnswered(_, Error Api.Refused), _
+      | Editor.PublishCheckAnswered(_, _, Error Api.Refused), _
+      | Editor.PublishAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -276,6 +282,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
           | Editor.ChangeSlug request -> Send [ ChangeSlug request ]
           | Editor.FetchPreview request -> Send [ PreviewPost request ]
+          | Editor.CheckPublish(request, choice) -> Send [ CheckPublish(request, choice) ]
+          | Editor.PublishPost request -> Send [ PublishPost request ]
           | Editor.Focus elementId -> Focus elementId
           | Editor.MoveToBodyLine line -> MoveToBodyLine line)
   | Upload msg ->

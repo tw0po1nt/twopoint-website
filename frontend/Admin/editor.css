@@ -352,6 +352,23 @@
   font-weight: var(--w-semibold);
 }
 
+.publish-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-3) 0;
+}
+
+.publish-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.publish-dialog .preview-problems {
+  margin-top: var(--s-3);
+}
+
 .preview-frame {
   display: block;
   width: 100%;

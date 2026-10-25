@@ -143,8 +143,8 @@ test('an SVG is refused with no upload, and the author can dismiss the notice', 
 });
 
 test('the actions menu has Add image, and it opens the file picker for images and PDFs', async () => {
-  const items = [...document.querySelectorAll('#editor-menu [role="menuitem"]')].map((item) => item.textContent.trim());
-  assert.deepEqual(items, ['Add image']);
+  const addImage = () => [...document.querySelectorAll('#editor-menu [role="menuitem"]')].find((item) => item.textContent.trim() === 'Add image');
+  assert.ok(addImage());
   assert.equal(document.querySelector('button[aria-label="More actions"]').getAttribute('popovertarget'), 'editor-menu');
 
   const clicked = [];
@@ -153,7 +153,7 @@ test('the actions menu has Add image, and it opens the file picker for images an
     clicked.push(this);
   };
 
-  [...document.querySelectorAll('#editor-menu [role="menuitem"]')][0].click();
+  addImage().click();
   HTMLInputElement.prototype.click = click;
 
   assert.equal(clicked.length, 1);

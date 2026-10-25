@@ -163,6 +163,23 @@ type Check =
 
 type SavedPost = { ETag: string; Check: Check }
 
+/// The problems of the working text with the chosen publish date. A publish with an error is refused.
+type PublishCheck = { Problems: Problem list }
+
+/// A step after the write of the published blob that failed. The post stays published.
+type PublishWarning =
+  /// The post table has no row for the post, so comments on the post fail.
+  | CommentRow
+  /// The working blob stays, because it changed during the publish or the delete failed.
+  | PendingEdit
+  | SiteRebuild
+
+/// `PublishDate` is an ISO 8601 UTC time. `State` is `Published` or `Upcoming`.
+type PublishedPost =
+  { PublishDate: string
+    State: PostState
+    Warnings: PublishWarning list }
+
 type Failure =
   /// The API answered 401 or 403.
   | Refused
@@ -267,6 +284,15 @@ let private check: Decoder<Check> =
     | "unavailable" -> Decode.succeed CheckFailed
     | _ -> Decode.fail $"The check state '{kind}' is not known.")
 
+let private publishWarning: Decoder<PublishWarning> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "comment-row" -> Decode.succeed CommentRow
+    | "pending-edit" -> Decode.succeed PendingEdit
+    | "site-rebuild" -> Decode.succeed SiteRebuild
+    | _ -> Decode.fail $"The publish warning '{name}' is not known.")
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
@@ -276,6 +302,7 @@ let private coders =
   |> Extra.withCustom (severityName >> Encode.string) severity
   |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
   |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check
+  |> Extra.withCustom (fun (_: PublishWarning) -> failwith "The admin sends no publish warning.") publishWarning
 
 type private Payload =
   | Json of string
@@ -535,6 +562,45 @@ let previewPost
     |> Encode.toString 0
 
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "preview" ]) (Some(Json json)) []
+let private publishBody (publishDate: string option) =
+  let date =
+    match publishDate with
+    | Some date -> Encode.string date
+    | None -> Encode.nil
+
+  Encode.object [ "publishDate", date ] |> Encode.toString 0
+
+/// `publishDate` is an ISO 8601 UTC time, or `None` for the publish time.
+let checkPublish
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string)
+  (publishDate: string option)
+  : JS.Promise<Result<PublishCheck, Failure>> =
+  sendWith
+    HttpMethod.POST
+    api
+    token
+    (internalPath [ "posts"; slug; "publish"; "check" ])
+    (Some(Json(publishBody publishDate)))
+    [ IfMatch eTag ]
+
+let publishPost
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string)
+  (publishDate: string option)
+  : JS.Promise<Result<PublishedPost, Failure>> =
+  sendWith
+    HttpMethod.POST
+    api
+    token
+    (internalPath [ "posts"; slug; "publish" ])
+    (Some(Json(publishBody publishDate)))
+    [ IfMatch eTag ]
+
 type private UploadedAsset = { Url: string }
 
 let uploadAsset (api: string) (token: string) (file: Browser.Types.File) : JS.Promise<Result<string, Failure>> =

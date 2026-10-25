@@ -18,6 +18,7 @@
     <Compile Include="EditorTests.fs" />
     <Compile Include="DetailsTests.fs" />
     <Compile Include="PreviewTests.fs" />
+    <Compile Include="PublishTests.fs" />
     <Compile Include="UploadTests.fs" />
     <Compile Include="PostCommentsTests.fs" />
     <Compile Include="CommentersTests.fs" />
