@@ -60,12 +60,17 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable publishedWriteFails = false
   let mutable beforeDelete = ignore
   let mutable beforePublishedWrite = ignore
+  let mutable now = utcNow
+  let mutable changes : PostChange list = []
+  let mutable recordFails = false
 
   member _.Log = List.ofSeq log
   member _.Published = published
   member _.Working = working
   member _.Revisions = revisions
   member _.Rows = rows
+  member _.Changes = changes
+  member _.RecordFails with set value = recordFails <- value
 
   member _.Images with set value = images <- value
   member _.RowFailures with set value = rowFailures <- value
@@ -83,10 +88,18 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
 
   member _.AddRevision (name : string) (time : string) = revisions <- revisions |> Map.add $"{name}/{time}" "older"
 
+  interface PostChanges with
+    member _.RecordChange change =
+      if recordFails then
+        CancellableTaskResult.error (down "The change table")
+      else
+        changes <- change :: changes
+        CancellableTaskResult.singleton ()
+
   interface PublishPost.Dependencies with
     member _.Stage = Stage.Staging
     member _.Images = images
-    member _.GetUtcNow () = utcNow
+    member _.GetUtcNow () = now
     member _.ParsePublished = PostCheck.parsePublished Stage.Staging
 
     member _.GetPublishedBlob slug =
@@ -155,6 +168,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
 
     member _.DispatchSite () =
       log.Add "dispatch"
+      now <- now.AddSeconds 5.
 
       let dispatched : Result<Dispatch, DependencyError> = Ok(Queued(RunNumber 7L))
 
@@ -387,6 +401,50 @@ let tests =
       Expect.isTrue (fake.Published.ContainsKey "my-draft") "The published blob stays"
       Expect.isTrue (fake.Rows.ContainsKey "my-draft") "The row stays"
       Expect.isEmpty fake.Working "The working blob is gone"
+    }
+
+    test "a publish records the change with the production run number" {
+      let fake = store [] [ "my-draft", draftText ]
+      publish fake "my-draft" (Some "w1") ChooseNow |> ignore
+
+      Expect.equal
+        fake.Changes
+        [ { Slug = slug "my-draft"
+            Change = { ChangedDate = utcNow; Production = Dispatched(Queued(RunNumber 7L)) } } ]
+        "The change has the run number of the dispatch"
+    }
+
+    test "the change is dated before the dispatch, so the run that the dispatch queued deploys it" {
+      let fake = store [] [ "my-draft", draftText ]
+      publish fake "my-draft" (Some "w1") ChooseNow |> ignore
+
+      match fake.Changes with
+      | [ { Change = change } ] ->
+        let queuedByDispatch = utcNow.AddSeconds 2.
+        Expect.isLessThan change.ChangedDate queuedByDispatch "A run queued by the dispatch is later than the change"
+      | other -> failtestf "Expected one change, got %A" other
+    }
+
+    test "a failed dispatch records a change with no run number" {
+      let fake = store [] [ "my-draft", draftText ]
+      fake.Dispatch <- WholeCallFails
+      publish fake "my-draft" (Some "w1") ChooseNow |> ignore
+
+      Expect.equal
+        (fake.Changes |> List.map _.Change.Production)
+        [ ProductionDispatch.Failed ]
+        "The change has no run number"
+    }
+
+    test "a record of the change that fails gives a warning, and the post stays published" {
+      let fake = store [] [ "my-draft", draftText ]
+      fake.RecordFails <- true
+
+      match warningsOf fake with
+      | [ PublishPost.DeployNotTracked _ ] -> ()
+      | other -> failtestf "Expected DeployNotTracked, got %A" other
+
+      Expect.isTrue (fake.Published.ContainsKey "my-draft") "The published blob stays"
     }
 
     test "a dispatch that fails for one repo names that repo" {

@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Deploys
 
+open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 
 open System
@@ -65,6 +66,14 @@ module ProductionDispatch =
     | Dispatched dispatch -> Dispatch.runNumber dispatch
     | Failed -> None
 
+  let tryParse (name : string) (number : int64 option) =
+    match name, number with
+    | "queued", Some number -> Some (Dispatched (Queued (RunNumber number)))
+    | "queued", None -> Some (Dispatched QueuedWithoutRunNumber)
+    | "logged", _ -> Some (Dispatched Logged)
+    | "failed", _ -> Some Failed
+    | _ -> None
+
 type Rebuild =
   { DispatchedDate : DateTime
     Production : ProductionDispatch }
@@ -72,3 +81,73 @@ type Rebuild =
 type SiteDispatch =
   { Production : Result<Dispatch, DependencyError>
     Staging : Result<Dispatch, DependencyError> }
+
+module SiteDispatch =
+  let production (dispatched : Result<SiteDispatch, DependencyError>) =
+    match dispatched with
+    | Ok site ->
+      match site.Production with
+      | Ok dispatch -> ProductionDispatch.Dispatched dispatch
+      | Error _ -> ProductionDispatch.Failed
+    | Error _ -> ProductionDispatch.Failed
+
+type RunEvent =
+  | Push
+  | WorkflowDispatch
+
+module RunEvent =
+  let name (event : RunEvent) =
+    match event with
+    | Push -> "push"
+    | WorkflowDispatch -> "workflow_dispatch"
+
+  let tryParse (name : string) =
+    match name with
+    | "push" -> Some Push
+    | "workflow_dispatch" -> Some WorkflowDispatch
+    | _ -> None
+
+[<RequireQualifiedAccess>]
+type RunState =
+  | Waiting
+  | Running
+  | Succeeded
+  | Failed
+  | Canceled
+
+type SiteRun =
+  { Repo : Repo
+    Number : RunNumber
+    Event : RunEvent
+    State : RunState
+    CreatedDate : DateTime
+    UpdatedDate : DateTime }
+
+type ProductionRuns =
+  { Latest : SiteRun option
+    LatestSucceeded : SiteRun option }
+
+type Change =
+  { ChangedDate : DateTime
+    Production : ProductionDispatch }
+
+module Change =
+  let ofRebuild (rebuild : Rebuild) : Change =
+    { ChangedDate = rebuild.DispatchedDate; Production = rebuild.Production }
+
+type PostChange =
+  { Slug : Slug
+    Change : Change }
+
+module PostChange =
+  let ofDispatch (slug : Slug) (changedDate : DateTime) (dispatched : Result<SiteDispatch, DependencyError>) =
+    { Slug = slug
+      Change = { ChangedDate = changedDate; Production = SiteDispatch.production dispatched } }
+
+type PostChanges =
+  abstract member RecordChange: change: PostChange -> DependencyResult<unit>
+
+type DeployContext =
+  { Changes : Map<Slug, Change>
+    Rebuild : Rebuild option
+    Runs : ProductionRuns }

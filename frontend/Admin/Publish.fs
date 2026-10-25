@@ -109,3 +109,4 @@ let warningText (warning: Api.PublishWarning) =
   | Api.ProductionRebuildFailed -> "The production rebuild did not start. Select Rebuild site on the dashboard."
   | Api.StagingRebuildFailed -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
   | Api.SiteNotRebuilt -> "The site rebuild did not start. Select Rebuild site on the dashboard."
+  | Api.DeployNotTracked -> "The admin cannot show the deploy state of this post. The site still builds."

@@ -17,13 +17,22 @@ type PostState =
   | Published
   | Upcoming
 
+[<RequireQualifiedAccess>]
+type DeployState =
+  | Deploying
+  | Deployed
+  | DeployFailed
+
 type Post =
   { Slug: string
     Title: string
     State: PostState
     PendingEdit: bool
     PublishDate: string option
+    Deploy: DeployState
     CommentStats: CommentStats }
+
+type PostDeploy = { Deploy: DeployState }
 
 /// `Category` and `Tags` give the text of the front matter. `Series` gives the slug.
 type PostDetails =
@@ -177,6 +186,7 @@ type PublishWarning =
   | ProductionRebuildFailed
   | StagingRebuildFailed
   | SiteNotRebuilt
+  | DeployNotTracked
 
 /// `PublishDate` is an ISO 8601 UTC time. `State` is `Published` or `Upcoming`.
 type PublishedPost =
@@ -209,6 +219,15 @@ let private postState: Decoder<PostState> =
     | "published" -> Decode.succeed Published
     | "upcoming" -> Decode.succeed Upcoming
     | _ -> Decode.fail $"The post state '{name}' is not known.")
+
+let private deployState: Decoder<DeployState> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "deploying" -> Decode.succeed DeployState.Deploying
+    | "deployed" -> Decode.succeed DeployState.Deployed
+    | "failed" -> Decode.succeed DeployState.DeployFailed
+    | _ -> Decode.fail $"The deploy state '{name}' is not known.")
 
 let private commenterStatusName (status: CommenterStatus) =
   match status with
@@ -298,11 +317,13 @@ let private publishWarning: Decoder<PublishWarning> =
     | "production-rebuild" -> Decode.succeed ProductionRebuildFailed
     | "staging-rebuild" -> Decode.succeed StagingRebuildFailed
     | "site-rebuild" -> Decode.succeed SiteNotRebuilt
+    | "deploy-tracking" -> Decode.succeed DeployNotTracked
     | _ -> Decode.fail $"The publish warning '{name}' is not known.")
 
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
+  |> Extra.withCustom (fun (_: DeployState) -> failwith "The admin sends no deploy state.") deployState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
@@ -389,6 +410,10 @@ let private commentPath (slug: string) (comment: Comment) =
 
 let getPosts (api: string) (token: string) : JS.Promise<Result<Post list, Failure>> =
   send HttpMethod.GET api token (internalPath [ "posts" ])
+
+let getPostDeploy (api: string) (token: string) (slug: string) : JS.Promise<Result<DeployState, Failure>> =
+  send<PostDeploy> HttpMethod.GET api token (internalPath [ "posts"; slug; "deploy" ])
+  |> Promise.map (Result.map _.Deploy)
 
 let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failure>> =
   send<Rebuild> HttpMethod.POST api token (internalPath [ "deploys" ])

@@ -17,6 +17,8 @@
     <Compile Include="StartNewPostDeliveryTests.fs" />
     <Compile Include="SendNewPostDeliveryTests.fs" />
     <Compile Include="RebuildSiteTests.fs" />
+    <Compile Include="DeployRuleTests.fs" />
+    <Compile Include="ReceiveWorkflowRunTests.fs" />
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PostListTests.fs" />
     <Compile Include="DeviceTests.fs" />

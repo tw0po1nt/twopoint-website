@@ -21,7 +21,10 @@
     <Compile Include="Notifications\DeviceTypes.fs" />
     <Compile Include="Notifications\DeviceActions.fs" />
     <Compile Include="Notifications\DeviceQueries.fs" />
+    <Compile Include="Deploys\DeployState.fs" />
     <Compile Include="Posts\PostTypes.fs" />
+    <Compile Include="Deploys\DeployTypes.fs" />
+    <Compile Include="Deploys\DeployRule.fs" />
     <Compile Include="Posts\PostCheck.fs" />
     <Compile Include="Posts\Newsletter.fs" />
     <Compile Include="Posts\PostActions.fs" />
@@ -33,8 +36,9 @@
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
     <Compile Include="Subscriptions\SubscriptionActions.fs" />
     <Compile Include="Subscriptions\SubscriptionQueries.fs" />
-    <Compile Include="Deploys\DeployTypes.fs" />
     <Compile Include="Deploys\DeployActions.fs" />
+    <Compile Include="Deploys\WebhookActions.fs" />
+    <Compile Include="Deploys\DeployQueries.fs" />
     <Compile Include="Posts\PostPublish.fs" />
   </ItemGroup>
 

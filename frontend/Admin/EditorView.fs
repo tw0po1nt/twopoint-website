@@ -53,6 +53,14 @@ let private statusText (model: Shell.Model) =
   | Some document -> Editor.statusText document
   | None -> ""
 
+let private canRetryDeploy (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.canRetryDeploy document
+  | None -> false
+
+let private retryFailure (model: Shell.Model) =
+  document model |> Option.bind Editor.retryFailureText
+
 let private isTyping (model: Shell.Model) =
   match document model with
   | Some document -> document.Typing
@@ -231,7 +239,26 @@ let private topBar
       "Posts"
     }
 
-    p (class' = "editor-status", role = "status", ariaLive = "polite") { statusText (model ()) }
+    p (class' = "editor-status", role = "status", ariaLive = "polite") {
+      statusText (model ())
+
+      Show(when' = canRetryDeploy (model ())) {
+        button (
+          type' = "button",
+          class' = "text deploy-retry",
+          onClick =
+            fun _ ->
+              document (model ())
+              |> Option.iter (fun document -> dispatch (Shell.Editor(Editor.DeployMsg(document.Slug, Deploy.RetryClicked))))
+        ) {
+          "retry"
+        }
+      }
+
+      Show(when' = (retryFailure (model ())).IsSome) {
+        span (class' = "deploy-retry") { retryFailure (model ()) |> Option.defaultValue "" }
+      }
+    }
 
     div (class' = "editor-actions") {
       button (

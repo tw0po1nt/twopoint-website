@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Posts.Queries
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 
@@ -22,6 +23,7 @@ module GetAllPosts =
     abstract member GetPublishedPosts: unit -> DependencyResult<StoredPost list>
     abstract member GetWorkingPosts: unit -> DependencyResult<StoredPost list>
     abstract member GetPostsInTable: unit -> DependencyResult<PostInfo list>
+    abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -34,6 +36,7 @@ module GetAllPosts =
       (published : StoredPost list)
       (working : StoredPost list)
       (table : PostInfo list)
+      (deploys : DeployContext)
       : PostListing list =
       let published = summaries published
       let working = summaries working
@@ -61,6 +64,7 @@ module GetAllPosts =
           State = state
           HasPendingEdit = hasPublished && working.ContainsKey slug
           PublishDate = publishDate
+          Deploy = DeployRule.stateOf utcNow deploys slug
           CommentStats = stats slug })
       |> List.ofSeq
       |> List.sortBy (fun listing ->
@@ -69,13 +73,15 @@ module GetAllPosts =
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun () -> cancellableTaskResult {
-      let! published, (working, table) =
+      let! published, (working, (table, deploys)) =
         CancellableTaskResult.parallelZip
           (dependencies.GetPublishedPosts())
-          (CancellableTaskResult.parallelZip (dependencies.GetWorkingPosts()) (dependencies.GetPostsInTable()))
+          (CancellableTaskResult.parallelZip
+            (dependencies.GetWorkingPosts())
+            (CancellableTaskResult.parallelZip (dependencies.GetPostsInTable()) (dependencies.GetDeployContext())))
         |> CancellableTaskResult.mapError QueryError.Dependency
 
-      return Logic.list (dependencies.GetUtcNow()) published working table
+      return Logic.list (dependencies.GetUtcNow()) published working table deploys
     }
 
 // ====================================================================================================================

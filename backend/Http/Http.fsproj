@@ -19,6 +19,7 @@
     <Compile Include="Endpoints\Blog\ValidateCommenter.fs" />
     <Compile Include="Endpoints\Blog\Subscribe.fs" />
     <Compile Include="Endpoints\Blog\Unsubscribe.fs" />
+    <Compile Include="Endpoints\Admin\DeployStore.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Endpoints\Admin\GetPost.fs" />
     <Compile Include="Endpoints\Admin\CreateDraft.fs" />
@@ -45,10 +46,12 @@
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
     <Compile Include="Endpoints\Admin\StartNewPostDelivery.fs" />
     <Compile Include="Endpoints\Admin\RebuildSite.fs" />
+    <Compile Include="Endpoints\Admin\GetPostDeploy.fs" />
     <Compile Include="Endpoints\Admin\GetAllSubscriptions.fs" />
     <Compile Include="Endpoints\Admin\GetSubscriptionDeliveries.fs" />
     <Compile Include="Endpoints\Admin\CancelSubscription.fs" />
     <Compile Include="Endpoints\Admin\DeleteSubscription.fs" />
+    <Compile Include="Endpoints\Github\ReceiveGitHubWebhook.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewCommentMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostDeliveryMessage.fs" />

@@ -1,5 +1,6 @@
 module TwoPoint.Core.Tests.PostListTests
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Queries
 open TwoPoint.Core.Tests.Fixtures
@@ -20,17 +21,25 @@ let private text title (publishDate : string option) =
   let date = publishDate |> Option.map (sprintf "publishDate: %s\n") |> Option.defaultValue ""
   $"---\ntitle: {title}\n{date}---\n\nBody."
 
-type private FakeStore(published : StoredPost list, working : StoredPost list, table : PostInfo list) =
+type private FakeStore(published : StoredPost list, working : StoredPost list, table : PostInfo list, deploys : DeployContext) =
   interface GetAllPosts.Dependencies with
     member _.GetUtcNow () = utcNow
     member _.GetPublishedPosts () = CancellableTaskResult.singleton published
     member _.GetWorkingPosts () = CancellableTaskResult.singleton working
     member _.GetPostsInTable () = CancellableTaskResult.singleton table
+    member _.GetDeployContext () = CancellableTaskResult.singleton deploys
 
-let private list published working table =
-  match (GetAllPosts.withDependencies (FakeStore(published, working, table)) () CancellationToken.None).Result with
+let private noDeploys =
+  { Changes = Map.empty
+    Rebuild = None
+    Runs = { Latest = None; LatestSucceeded = None } }
+
+let private listWith deploys published working table =
+  match (GetAllPosts.withDependencies (FakeStore(published, working, table, deploys)) () CancellationToken.None).Result with
   | Ok listings -> listings
   | Error error -> failtestf "Expected a list, got %A" error
+
+let private list published working table = listWith noDeploys published working table
 
 let private find slug (listings : PostListing list) =
   listings |> List.find (fun listing -> listing.Slug = Slug.Unsafe.create slug)
@@ -94,6 +103,15 @@ let tests =
     test "a blob with no title gets its slug as title" {
       let untitled = stored "untitled-post" "No front matter."
       Expect.equal (list [] [ untitled ] [] |> find "untitled-post").Title "untitled-post" "The slug"
+    }
+
+    test "a post with a failed dispatch shows a failed deploy, and a post with no change shows a deployed state" {
+      let failed = { ChangedDate = utcNow; Production = ProductionDispatch.Failed }
+      let deploys = { noDeploys with Changes = Map.ofList [ Slug.Unsafe.create "published-post", failed ] }
+      let listings = listWith deploys [ published; upcoming ] [] []
+
+      Expect.equal (find "published-post" listings).Deploy DeployFailed "The failed dispatch"
+      Expect.equal (find "upcoming-post" listings).Deploy Deployed "No change is recorded"
     }
 
     test "the list shows the drafts first, and then the newest post first" {

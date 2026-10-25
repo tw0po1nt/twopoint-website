@@ -182,6 +182,7 @@ module PublishPost =
     | ProductionRebuildFailed of DependencyError
     | StagingRebuildFailed of DependencyError
     | SiteNotRebuilt of DependencyError
+    | DeployNotTracked of DependencyError
 
   type Outcome =
     { PublishDate: DateTime
@@ -193,6 +194,7 @@ module PublishPost =
 
   type Dependencies =
     inherit PublishGate.Dependencies
+    inherit PostChanges
     abstract member WriteRevisionBlob: slug: Slug -> time: DateTime -> text: string -> DependencyResult<WriteOutcome>
     abstract member DeleteRevisionBlob: slug: Slug -> time: DateTime -> DependencyResult<unit>
     abstract member WritePublishedBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
@@ -206,18 +208,11 @@ module PublishPost =
     let state (publishedAt: DateTime) (publishDate: DateTime) =
       if publishDate > publishedAt then PostState.Upcoming else PostState.Published
 
-    let production (dispatched: Result<SiteDispatch, DependencyError>) =
-      match dispatched with
-      | Ok site ->
-        match site.Production with
-        | Ok dispatch -> ProductionDispatch.Dispatched dispatch
-        | Error _ -> ProductionDispatch.Failed
-      | Error _ -> ProductionDispatch.Failed
-
     let warnings
       (row: Result<unit, DependencyError>)
       (deleted: Result<DeleteOutcome, DependencyError>)
       (dispatched: Result<SiteDispatch, DependencyError>)
+      (tracked: Result<unit, DependencyError>)
       : Warning list =
       [ match row with
         | Error error -> CommentRowNotWritten error
@@ -237,7 +232,11 @@ module PublishPost =
 
           match site.Staging with
           | Error error -> StagingRebuildFailed error
-          | Ok _ -> () ]
+          | Ok _ -> ()
+
+        match tracked with
+        | Error error -> DeployNotTracked error
+        | Ok() -> () ]
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
@@ -301,15 +300,17 @@ module PublishPost =
               | Error _ -> upsert ()
 
             let! deleted = dependencies.DeleteWorkingBlob slug gated.Working.ETag
+            let changedDate = dependencies.GetUtcNow()
             let! dispatched = dependencies.DispatchSite()
+            let! tracked = dependencies.RecordChange(PostChange.ofDispatch slug changedDate dispatched)
 
             return
               Ok(
                 Published
                   { PublishDate = gated.PublishDate
                     State = Logic.state gated.PublishedAt gated.PublishDate
-                    Production = Logic.production dispatched
-                    Warnings = Logic.warnings row deleted dispatched }
+                    Production = SiteDispatch.production dispatched
+                    Warnings = Logic.warnings row deleted dispatched tracked }
               )
           }
     }

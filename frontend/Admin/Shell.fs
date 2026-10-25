@@ -5,6 +5,7 @@ module TwoPoint.Admin.Shell
 type Call =
   | LoadDashboard
   | LoadPosts
+  | PollPosts of generation: int
   | LoadQueue
   | TrustCommenter of comment: Api.PostedComment
   | Moderate of comment: Api.PostedComment * Queue.Action
@@ -33,6 +34,8 @@ type Call =
   | PreviewPost of Editor.PreviewRequest
   | CheckPublish of Editor.PublishRequest * choice: Publish.When
   | PublishPost of Editor.PublishRequest
+  | LoadPostDeploy of slug: string
+  | RetryPostDeploy of slug: string
   | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -57,6 +60,8 @@ type Model =
     Commenter: Commenter.Model option
     Subscriptions: Subscriptions.Model
     Notifications: Notifications.Model
+    /// Counts each opened editor page. A deploy timer names the page that started it.
+    Pages: int
     Overlay: Overlay option }
 
 type Msg =
@@ -90,6 +95,8 @@ type Effect =
   | SetBadge of count: int
   /// Starts the autosave timer of the editor.
   | Autosave of version: int
+  | WaitToPollDeploy of slug: string * Deploy.Chain
+  | WaitToPollPosts of generation: int
   | Focus of elementId: string
   | MoveToBodyLine of line: int
 
@@ -103,7 +110,11 @@ let private enter (route: Route) (model: Model) =
 
   match route with
   | Route.Posts -> { left with Posts = Posts.reload model.Posts }, [ LoadPosts ]
-  | Route.Post slug -> { left with Editor = Some(Editor.init slug) }, [ LoadPost slug ]
+  | Route.Post slug ->
+    { left with
+        Editor = Some(Editor.init slug (model.Pages + 1))
+        Pages = model.Pages + 1 },
+    [ LoadPost slug ]
   | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
   | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
@@ -132,6 +143,7 @@ let init (path: string) : Model * Effect option =
     Commenter = None
     Subscriptions = Subscriptions.init
     Notifications = Notifications.init
+    Pages = 0
     Overlay = None }
   |> enter router.Route
   |> fst,
@@ -181,6 +193,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.FetchPreview _
           | Editor.CheckPublish _
           | Editor.PublishPost _
+          | Editor.ReadDeploy _
+          | Editor.WaitToPollDeploy _
+          | Editor.RetryDeploy _
           | Editor.Focus _
           | Editor.MoveToBodyLine _ -> [])
 
@@ -242,6 +257,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Rebuild.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | _ -> next, effect |> Option.map (fun Rebuild.Dispatch -> Send [ RebuildSite ])
+  | Posts(Posts.PollElapsed _) when model.Router.Route <> Route.Posts -> model, None
   | Posts msg ->
     let posts, effect = Posts.update msg model.Posts
     let next = { model with Posts = posts }
@@ -250,10 +266,20 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Posts.Answered(Error Api.Refused)
     | Posts.DraftCreated(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | Posts.DraftCreated(Ok draft) -> update (Router(Router.LinkFollowed(Route.path (Route.Post draft.Slug)))) next
+    | Posts.Polled(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
     | Posts.Answered _
+    | Posts.Polled _
+    | Posts.PollElapsed _
     | Posts.DraftCreated _
     | Posts.Filtered _
-    | Posts.NewDraftClicked -> next, effect |> Option.map (fun Posts.CreateDraft -> Send [ CreateDraft ])
+    | Posts.NewDraftClicked ->
+      next,
+      effect
+      |> Option.map (fun effect ->
+        match effect with
+        | Posts.CreateDraft -> Send [ CreateDraft ]
+        | Posts.Poll generation -> Send [ PollPosts generation ]
+        | Posts.WaitToPoll generation -> WaitToPollPosts generation)
   | Editor Editor.PreviewClosed when layerOpenOverEditor model -> model, None
   | Editor msg ->
     match model.Editor with
@@ -269,7 +295,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Refused)), _
       | Editor.PreviewAnswered(_, Error Api.Refused), _
       | Editor.PublishCheckAnswered(_, _, Error Api.Refused), _
-      | Editor.PublishAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
+      | Editor.PublishAnswered(_, Error Api.Refused), _
+      | Editor.DeployMsg(_, Deploy.StatusRead(Error Api.Refused)), _
+      | Editor.DeployMsg(_, Deploy.Retried(Error Api.Refused)), _ -> update (Session Session.AccountRefused) next
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -284,6 +312,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.FetchPreview request -> Send [ PreviewPost request ]
           | Editor.CheckPublish(request, choice) -> Send [ CheckPublish(request, choice) ]
           | Editor.PublishPost request -> Send [ PublishPost request ]
+          | Editor.ReadDeploy slug -> Send [ LoadPostDeploy slug ]
+          | Editor.WaitToPollDeploy(slug, chain) -> WaitToPollDeploy(slug, chain)
+          | Editor.RetryDeploy slug -> Send [ RetryPostDeploy slug ]
           | Editor.Focus elementId -> Focus elementId
           | Editor.MoveToBodyLine line -> MoveToBodyLine line)
   | Upload msg ->

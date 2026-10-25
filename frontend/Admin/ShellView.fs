@@ -13,6 +13,7 @@ let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
   | Shell.LoadPosts -> Shell.Posts(Posts.Answered(Error Api.Unanswered))
+  | Shell.PollPosts generation -> Shell.Posts(Posts.Polled(generation, Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
   | Shell.TrustCommenter comment -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
@@ -43,6 +44,8 @@ let private fail (call: Shell.Call) =
   | Shell.CheckPublish(request, choice) ->
     Shell.Editor(Editor.PublishCheckAnswered(request.Slug, choice, Error Api.Unanswered))
   | Shell.PublishPost request -> Shell.Editor(Editor.PublishAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.LoadPostDeploy slug -> Shell.Editor(Editor.DeployMsg(slug, Deploy.StatusRead(Error Api.Unanswered)))
+  | Shell.RetryPostDeploy slug -> Shell.Editor(Editor.DeployMsg(slug, Deploy.Retried(Error Api.Unanswered)))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -66,6 +69,9 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   match call with
   | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
   | Shell.LoadPosts -> Api.getPosts (Config.api ()) token |> Promise.map (Posts.Answered >> Shell.Posts)
+  | Shell.PollPosts generation ->
+    Api.getPosts (Config.api ()) token
+    |> Promise.map (fun result -> Shell.Posts(Posts.Polled(generation, result)))
   | Shell.LoadQueue ->
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
@@ -169,6 +175,12 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.PublishPost request ->
     Api.publishPost (Config.api ()) token request.Slug request.ETag request.Target
     |> Promise.map (fun result -> Shell.Editor(Editor.PublishAnswered(request.Slug, result)))
+  | Shell.LoadPostDeploy slug ->
+    Api.getPostDeploy (Config.api ()) token slug
+    |> Promise.map (fun result -> Shell.Editor(Editor.DeployMsg(slug, Deploy.StatusRead result)))
+  | Shell.RetryPostDeploy slug ->
+    Api.rebuildSite (Config.api ()) token
+    |> Promise.map (fun result -> Shell.Editor(Editor.DeployMsg(slug, Deploy.Retried result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))
@@ -243,6 +255,15 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
   | Shell.MoveToBodyLine line -> EditorView.moveToBodyLine line
   | Shell.Autosave version ->
     window.setTimeout ((fun () -> dispatch (Shell.Editor(Editor.AutosaveElapsed version))), Editor.autosaveDelay)
+    |> ignore
+  | Shell.WaitToPollDeploy(slug, chain) ->
+    window.setTimeout (
+      (fun () -> dispatch (Shell.Editor(Editor.DeployMsg(slug, Deploy.PollElapsed chain)))),
+      Deploy.pollDelay
+    )
+    |> ignore
+  | Shell.WaitToPollPosts generation ->
+    window.setTimeout ((fun () -> dispatch (Shell.Posts(Posts.PollElapsed generation))), Deploy.pollDelay)
     |> ignore
 
 let private site = "https://twopoint.dev"
@@ -702,6 +723,12 @@ let private stateTone (state: Api.PostState) =
   | Api.Published -> Parts.Good
   | Api.Upcoming -> Parts.Info
 
+let private deployTone (state: Api.DeployState) =
+  match state with
+  | Api.DeployState.Deploying -> Parts.Info
+  | Api.DeployState.Deployed -> Parts.Good
+  | Api.DeployState.DeployFailed -> Parts.Bad
+
 [<SolidComponent>]
 let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   let route = Shell.Router >> dispatch
@@ -716,8 +743,11 @@ let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
         Parts.badge (stateTone post.State) (Posts.stateText post.State)
 
         Show(when' = post.PendingEdit) { Parts.badge Parts.Warn "Pending edit" }
+
+        Show(when' = Posts.showsDeploy post) { Parts.badge (deployTone post.Deploy) (Deploy.badgeText post.Deploy) }
       }
     }
+
 
     p (class' = "muted small") { $"{post.Slug} · {date}" }
 

@@ -26,7 +26,8 @@ type WelcomeConfig =
 
 type GitHubAppConfig =
   { ClientId : string
-    SigningKeyUri : Uri }
+    SigningKeyUri : Uri
+    WebhookSecretName : string option }
 
 /// The local backend needs no GitHub App, because it sends no dispatch.
 type DeployConfig =
@@ -120,7 +121,8 @@ module Config =
         let! gitHubApp = Bind.optSection "GitHubApp" <| bind {
           let! clientId = Bind.valueAt "ClientId" Bind.string
           let! signingKeyUri = Bind.valueAt "SigningKeyUri" (Bind.uri UriKind.Absolute)
-          return { ClientId = clientId; SigningKeyUri = signingKeyUri }
+          let! webhookSecretName = Bind.optValueAt "WebhookSecretName" Bind.string
+          return { ClientId = clientId; SigningKeyUri = signingKeyUri; WebhookSecretName = webhookSecretName }
         }
         return
           { ProductionRepo = productionRepo
