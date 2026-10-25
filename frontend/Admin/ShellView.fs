@@ -37,6 +37,8 @@ let private fail (call: Shell.Call) =
   | Shell.CreateDraft -> Shell.Posts(Posts.DraftCreated(Error Api.Unanswered))
   | Shell.LoadPost slug -> Shell.Editor(Editor.Answered(slug, Error Api.Unanswered))
   | Shell.SavePost request -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, Error Api.Unanswered))
+  | Shell.LoadDetailsOptions -> Shell.Editor(Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Unanswered)))
+  | Shell.ChangeSlug request -> Shell.Editor(Editor.SlugChangeAnswered(request.Slug, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
@@ -132,7 +134,20 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
       request.Fields.Title
       request.Fields.Excerpt
       request.Fields.Body
+      request.Details
     |> Promise.map (fun result -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, result)))
+  | Shell.LoadDetailsOptions ->
+    Api.getTerms (Config.api ()) token
+    |> Promise.bind (fun terms ->
+      match terms with
+      | Ok terms ->
+        Api.getSeries (Config.api ()) token
+        |> Promise.map (Result.map (fun series -> { Details.Terms = terms; Details.Series = series }))
+      | Error failure -> Promise.lift (Error failure))
+    |> Promise.map (Details.OptionsAnswered >> Editor.DetailsMsg >> Shell.Editor)
+  | Shell.ChangeSlug request ->
+    Api.changeSlug (Config.api ()) token request.Slug request.ETag request.NewSlug
+    |> Promise.map (fun result -> Shell.Editor(Editor.SlugChangeAnswered(request.Slug, result)))
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()

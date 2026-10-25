@@ -4,6 +4,14 @@ open TwoPoint.Admin
 
 open Expecto
 
+let private noDetails: Api.PostDetails =
+  { Author = None
+    Category = None
+    Tags = []
+    Series = None
+    Image = None
+    ShowOnHomepage = true }
+
 let private document state pendingEdit publishDate eTag : Api.PostDocument =
   { Slug = "my-post"
     State = state
@@ -13,6 +21,7 @@ let private document state pendingEdit publishDate eTag : Api.PostDocument =
     Title = "My post"
     Excerpt = "About it."
     Body = "Some text.\n"
+    Details = noDetails
     Text = ""
     PublishedText = None }
 
@@ -40,6 +49,7 @@ let private request eTag title excerpt body version : Editor.SaveRequest =
   { Slug = "my-post"
     ETag = eTag
     Fields = { Title = title; Excerpt = excerpt; Body = body }
+    Details = noDetails
     Version = version }
 
 [<Tests>]

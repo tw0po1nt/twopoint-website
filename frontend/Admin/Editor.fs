@@ -35,7 +35,8 @@ type Document =
     /// The page that the author wants to go to. The editor stays until the API has the newest text.
     LeaveTo: string option
     /// The top bar fades until the pointer moves.
-    Typing: bool }
+    Typing: bool
+    Details: Details.Model }
 
 type Model =
   | Loading of slug: string
@@ -46,7 +47,14 @@ type SaveRequest =
   { Slug: string
     ETag: string option
     Fields: Fields
+    Details: Api.PostDetails
     Version: int }
+
+/// `ETag` is the ETag of the working blob that the page read.
+type SlugRequest =
+  { Slug: string
+    ETag: string
+    NewSlug: string }
 
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
@@ -58,11 +66,16 @@ type Msg =
   | SaveAnswered of slug: string * version: int * Result<string, Api.Failure>
   | PointerMoved
   | LeaveRequested of path: string
+  | DetailsMsg of Details.Msg
+  | SlugChangeRequested
+  | SlugChangeAnswered of slug: string * Result<Api.ChangedSlug, Api.Failure>
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
   | Autosave of version: int
   | Save of SaveRequest
+  | LoadDetailsOptions
+  | ChangeSlug of SlugRequest
 
 let autosaveDelay = 2000
 
@@ -84,12 +97,14 @@ let private loaded (post: Api.PostDocument) =
       Save = Saved
       SaveAgain = false
       LeaveTo = None
-      Typing = false }
+      Typing = false
+      Details = Details.init post.Slug post.Details }
 
 let private requestOf (document: Document) : SaveRequest =
   { Slug = document.Slug
     ETag = document.ETag
     Fields = document.Fields
+    Details = document.Details.Values
     Version = document.Version }
 
 /// A page with a stale save has no text that it can send.
@@ -103,7 +118,7 @@ let private startSave (document: Document) =
         SaveAgain = false },
   Some(Save(requestOf document))
 
-let private edit (change: Fields -> Fields) (document: Document) =
+let private editWith (change: Document -> Document) (document: Document) =
   let version = document.Version + 1
 
   let save, effect =
@@ -115,15 +130,18 @@ let private edit (change: Fields -> Fields) (document: Document) =
     | SaveFailed _ -> Unsaved, Some(Autosave version)
 
   Loaded
-    { document with
-        Fields = change document.Fields
+    { change document with
         Version = version
         Save = save
         Typing = true },
   effect
 
+let private edit (change: Fields -> Fields) (document: Document) =
+  editWith (fun document -> { document with Fields = change document.Fields }) document
+
 let private saveNow (document: Document) =
   match document.Save with
+  | _ when document.Details.Slug = Details.Changing -> Loaded document, None
   | Unsaved
   | SaveFailed _ -> startSave document
   | Saving _ -> Loaded { document with SaveAgain = true }, None
@@ -166,6 +184,55 @@ let private answered (version: int) (result: Result<string, Api.Failure>) (docum
     retry
   | _ -> Loaded document, None
 
+let private detailsChanged (msg: Details.Msg) (document: Document) =
+  let details, effect = Details.update msg document.Details
+  let effect = effect |> Option.map (fun Details.LoadOptions -> LoadDetailsOptions)
+
+  if details.Values = document.Details.Values then
+    Loaded { document with Details = details }, effect
+  else
+    editWith (fun document -> { document with Details = details }) document
+
+let private withSlugState (state: Details.SlugState) (document: Document) =
+  { document with Details = { document.Details with Slug = state } }
+
+/// Only a draft that the API has in full changes its slug. A change in flight blocks a second change.
+let private requestSlugChange (document: Document) =
+  match document.State, document.ETag, document.Save, document.Details.Slug with
+  | _, _, _, Details.Changing -> Loaded document, None
+  | Api.Draft, Some eTag, Saved, _ when Details.slugChangeable document.Slug document.Details ->
+    Loaded(withSlugState Details.Changing document),
+    Some(
+      ChangeSlug
+        { Slug = document.Slug
+          ETag = eTag
+          NewSlug = document.Details.SlugInput }
+    )
+  | Api.Draft, _, Saved, _ -> Loaded document, None
+  | Api.Draft, _, _, _ ->
+    Loaded(withSlugState (Details.ChangeFailed "Wait until the post is saved, and then change the slug.") document), None
+  | (Api.Published | Api.Upcoming), _, _, _ ->
+    Loaded(withSlugState (Details.ChangeFailed "The slug of a published post is fixed.") document), None
+
+/// The page goes to the new address. Text that the author typed during the call is saved under the new slug first.
+let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
+  match result with
+  | Ok changed ->
+    let document =
+      { document with
+          Slug = changed.Slug
+          ETag = Some changed.ETag
+          LeaveTo = Some(Route.path (Route.Post changed.Slug))
+          Details = { document.Details with Slug = Details.Idle; SlugInput = changed.Slug } }
+
+    if needsSave document then
+      startSave { document with Save = Unsaved }
+    else
+      Loaded document, None
+  | Error Api.Stale ->
+    Loaded { withSlugState Details.Idle document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
+  | Error failure -> Loaded(withSlugState (Details.ChangeFailed(Api.reason failure)) document), None
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
   | Loading slug, Answered(answered, Ok post) when answered = slug -> loaded post, None
@@ -177,6 +244,9 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, SaveRequested -> saveNow document
   | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug -> answered version result document
   | Loaded document, PointerMoved -> Loaded { document with Typing = false }, None
+  | Loaded document, DetailsMsg msg -> detailsChanged msg document
+  | Loaded document, SlugChangeRequested -> requestSlugChange document
+  | Loaded document, SlugChangeAnswered(slug, result) when slug = document.Slug -> slugChanged result document
   | Loaded document, LeaveRequested path when needsSave document -> saveNow { document with LeaveTo = Some path }
   | _ -> model, None
 

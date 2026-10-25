@@ -28,6 +28,8 @@ type Call =
   | CreateDraft
   | LoadPost of slug: string
   | SavePost of Editor.SaveRequest
+  | LoadDetailsOptions
+  | ChangeSlug of Editor.SlugRequest
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -151,7 +153,14 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Some editor ->
       let editor, effect = Editor.update (Editor.LeaveRequested path) editor
       let next = { model with Editor = Some editor }
-      let calls = effect |> Option.toList |> List.collect (function Editor.Save request -> [ SavePost request ] | Editor.Autosave _ -> [])
+      let calls =
+        effect
+        |> Option.toList
+        |> List.collect (function
+          | Editor.Save request -> [ SavePost request ]
+          | Editor.Autosave _
+          | Editor.LoadDetailsOptions
+          | Editor.ChangeSlug _ -> [])
 
       match routerMsg, calls with
       | Router.UrlChanged _, calls -> next, Some(Navigate(Router.PushUrl(Route.path model.Router.Route), calls))
@@ -232,7 +241,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
       match msg, editor with
       | Editor.Answered(_, Error Api.Refused), _
-      | Editor.SaveAnswered(_, _, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
+      | Editor.SaveAnswered(_, _, Error Api.Refused), _
+      | Editor.SlugChangeAnswered(_, Error Api.Refused), _
+      | Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Refused)), _ -> update (Session Session.AccountRefused) next
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -241,7 +252,9 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         |> Option.map (fun effect ->
           match effect with
           | Editor.Autosave version -> Autosave version
-          | Editor.Save request -> Send [ SavePost request ])
+          | Editor.Save request -> Send [ SavePost request ]
+          | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
+          | Editor.ChangeSlug request -> Send [ ChangeSlug request ])
   | Queue(Queue.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) -> model, None
   | Queue msg ->
     let queue, effect = Queue.update msg model.Queue

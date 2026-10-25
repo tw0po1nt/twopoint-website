@@ -16,6 +16,7 @@
     <Compile Include="QueueTests.fs" />
     <Compile Include="PostsTests.fs" />
     <Compile Include="EditorTests.fs" />
+    <Compile Include="DetailsTests.fs" />
     <Compile Include="PostCommentsTests.fs" />
     <Compile Include="CommentersTests.fs" />
     <Compile Include="SubscriptionsTests.fs" />
@@ -29,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Admin\Admin.fsproj" />
     <ProjectReference Include="..\Admin.Dev\Admin.Dev.fsproj" />
+    <ProjectReference Include="..\Render\Render.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
