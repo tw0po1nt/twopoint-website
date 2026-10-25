@@ -26,6 +26,7 @@
     <Compile Include="Endpoints\Admin\ChangeSlug.fs" />
     <Compile Include="Endpoints\Admin\GetTerms.fs" />
     <Compile Include="Endpoints\Admin\GetSeries.fs" />
+    <Compile Include="Endpoints\Admin\PreviewPost.fs" />
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />
     <Compile Include="Endpoints\Admin\GetModerationQueue.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
