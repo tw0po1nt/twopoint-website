@@ -42,9 +42,15 @@ type private FakeStore(published : (string * string) list, working : (string * s
     member _.GetSeriesRecords () =
       series |> List.map (fun (slug, text) -> { StoredSeries.Slug = slug; Text = text }) |> CancellableTaskResult.singleton
 
-let private preview (store : FakeStore) slug title body =
-  let task = PreviewPost.withDependencies store { Slug = slug; Title = title; Excerpt = "New excerpt"; Body = body }
+let private previewWith (store : FakeStore) slug details title body =
+  let task =
+    PreviewPost.withDependencies
+      store
+      { Slug = slug; Title = title; Excerpt = "New excerpt"; Body = body; Details = details }
+
   (task CancellationToken.None).Result
+
+let private preview (store : FakeStore) slug title body = previewWith store slug None title body
 
 let private contentOf (checkedPost : Check.CheckedPost) =
   checkedPost.Article |> Option.map _.Content |> Option.defaultValue ""
@@ -104,6 +110,46 @@ let tests =
       Expect.isNone result.Article "No article"
       Expect.isTrue (result.Problems |> List.exists (fun problem -> problem.Place = Place.Field("author", 1))) "No author"
       Expect.isFalse (result.Problems |> List.exists (fun problem -> problem.Place = Place.Field("publishDate", 1))) "No problem about the publish date"
+    }
+
+    test "the preview shows the series and the author of the request details before a save" {
+      let draft = "---\ntitle: Old\nexcerpt: An excerpt\nauthor: Matthew Watt\n---\n"
+      let store = FakeStore([], [ "draft", draft ], [ "tour", "title: Tour\nexcerpt: A tour\n" ])
+
+      let details : TwoPoint.Site.Render.PostText.Details =
+        { Author = Some "A guest"
+          Category = Some "Series"
+          Tags = []
+          Series = Some "tour"
+          Image = None
+          ShowOnHomepage = true }
+
+      let withDetails = previewWith store "draft" (Some details) "T" "Body.\n" |> articleOf
+      Expect.isEmpty withDetails.Problems "The series and the category agree"
+      Expect.stringContains (contentOf withDetails) "href=\"/series/tour/\"" "The series of the request"
+      Expect.stringContains (contentOf withDetails) "A guest" "The author of the request"
+
+      let without = preview store "draft" "T" "Body.\n" |> articleOf
+      Expect.isFalse ((contentOf without).Contains "/series/tour/") "The stored text has no series"
+    }
+
+    test "the preview reports a series in the request details whose category is not Series" {
+      let draft = "---\ntitle: Old\nexcerpt: An excerpt\nauthor: Matthew Watt\n---\n"
+      let store = FakeStore([], [ "draft", draft ], [ "tour", "title: Tour\nexcerpt: A tour\n" ])
+
+      let details : TwoPoint.Site.Render.PostText.Details =
+        { Author = Some "Matthew Watt"
+          Category = Some "One-offs"
+          Tags = []
+          Series = Some "tour"
+          Image = None
+          ShowOnHomepage = true }
+
+      let result = previewWith store "draft" (Some details) "T" "Body.\n" |> articleOf
+      Expect.isNone result.Article "No article"
+      Expect.isTrue
+        (result.Problems |> List.exists (fun problem -> problem.Message.Contains "give it the category 'Series'"))
+        "The category problem"
     }
 
     test "the preview finds the series record of the post" {

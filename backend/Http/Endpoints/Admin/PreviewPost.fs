@@ -13,13 +13,16 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
+open System
 open System.Net
 open System.Threading
 
 type PreviewPostJson =
   { Title : string
     Excerpt : string
-    Body : string }
+    Body : string
+    /// Null leaves the details of the stored text as they are.
+    Details : Nullable<PostDetailsDto> }
 
 /// `Place` is null for a problem about the whole post.
 type PreviewProblemDto =
@@ -87,7 +90,7 @@ type PreviewPost (
 
         let! json = req.ReadFromJsonAsync<PreviewPostJson> ct
         let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
-        let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = "" }
+        let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Nullable() }
 
         let postStore = PostStore(postStoreClient, logger)
         let previewPost = PreviewPost.withDependencies {
@@ -102,7 +105,12 @@ type PreviewPost (
         }
 
         let! result =
-          previewPost { Slug = slug; Title = text json.Title; Excerpt = text json.Excerpt; Body = text json.Body }
+          previewPost
+            { Slug = slug
+              Title = text json.Title
+              Excerpt = text json.Excerpt
+              Body = text json.Body
+              Details = json.Details |> Option.ofNullable |> Option.map PostDetailsDto.toDetails }
 
         let apiResponse, statusCode =
           match result with

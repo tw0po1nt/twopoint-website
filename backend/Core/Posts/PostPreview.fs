@@ -14,7 +14,8 @@ module PreviewPost =
     { Slug : string
       Title : string
       Excerpt : string
-      Body : string }
+      Body : string
+      Details : TwoPoint.Site.Render.PostText.Details option }
 
   type Error =
     | PostNotFound of Slug
@@ -55,9 +56,14 @@ module PreviewPost =
 
       let! baseText = Logic.baseText slug working published |> Result.mapError ActionError<Error>.Logic
 
-      let! text =
-        TwoPoint.Site.Render.PostText.compose baseText { Title = dto.Title; Excerpt = dto.Excerpt; Body = dto.Body }
-        |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
+      let fields : TwoPoint.Site.Render.PostText.Fields = { Title = dto.Title; Excerpt = dto.Excerpt; Body = dto.Body }
+
+      let composed =
+        match dto.Details with
+        | Some details -> TwoPoint.Site.Render.PostText.composeWithDetails baseText fields details
+        | None -> TwoPoint.Site.Render.PostText.compose baseText fields
+
+      let! text = composed |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
 
       let series = StoredSeries.parse records
       let posts = Logic.publishedPosts dependencies.Stage series published
