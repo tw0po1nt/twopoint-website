@@ -85,8 +85,8 @@ test('the problems of the text show with their place, and a text with an error s
   previewAnswer = {
     article: null,
     problems: [
-      { severity: 'error', place: 'Body line 4', message: 'The output has no page at /posts/missing/.' },
-      { severity: 'warning', place: 'Field tags', message: 'A tag has no posts.' },
+      { severity: 'error', place: { kind: 'body', field: null, line: 4 }, message: 'The output has no page at /posts/missing/.' },
+      { severity: 'warning', place: { kind: 'field', field: 'tags', line: 0 }, message: 'A tag has no posts.' },
       { severity: 'error', place: null, message: 'The change breaks a link.' },
     ],
   };

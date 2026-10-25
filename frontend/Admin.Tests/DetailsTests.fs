@@ -25,10 +25,7 @@ let private document state eTag details : Api.PostDocument =
     Text = ""
     PublishedText = None }
 
-let private savedAs eTag : Api.SavedPost =
-  { ETag = eTag
-    Problems = []
-    CheckFailed = false }
+let private savedAs eTag : Api.SavedPost = { ETag = eTag; Check = Api.Found [] }
 
 let private choices: Details.Choices =
   { Terms =

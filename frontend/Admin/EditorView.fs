@@ -16,8 +16,6 @@ let private document (model: Shell.Model) =
   | Some(Editor.NotLoaded _)
   | None -> None
 
-let private bodyView: CodeMirror.EditorView option ref = ref None
-
 let focus (elementId: string) =
   window.setTimeout (
     (fun () -> Dom.document.getElementById elementId |> Option.ofObj |> Option.iter _.focus()),
@@ -26,7 +24,14 @@ let focus (elementId: string) =
   |> ignore
 
 let moveToBodyLine (line: int) =
-  window.setTimeout ((fun () -> bodyView.Value |> Option.iter (fun view -> CodeMirror.moveToLine view line)), 0)
+  window.setTimeout (
+    (fun () ->
+      Dom.document.querySelector ".editor-body"
+      |> Option.ofObj
+      |> Option.bind (fun host -> CodeMirror.EditorView.findFromDOM (host :?> HTMLElement) |> Option.ofObj)
+      |> Option.iter (fun view -> CodeMirror.moveToLine view line)),
+    0
+  )
   |> ignore
 
 let private hasProblems (model: Shell.Model) =
@@ -36,7 +41,10 @@ let private hasProblems (model: Shell.Model) =
 
 [<SolidComponent>]
 let private problemDot (model: unit -> Shell.Model) =
-  Show(when' = hasProblems (model ())) { span (class' = "problem-dot", ariaHidden = true) }
+  Show(when' = hasProblems (model ())) {
+    span (class' = "problem-dot", ariaHidden = true)
+    span (class' = "sr-only") { ", has problems" }
+  }
 
 let private isLoaded (model: Shell.Model) = (document model).IsSome
 
@@ -112,7 +120,7 @@ let private pickFiles (onPicked: File array -> unit) =
 
   input.click ()
 
-let private addImage (dispatch: Shell.Msg -> unit) () =
+let private addImage (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorView option ref) () =
   pickFiles (fun files ->
     let at = bodyView.Value |> Option.map CodeMirror.cursor |> Option.defaultValue 0
     dropFiles dispatch files at)
@@ -162,6 +170,7 @@ let private typed (send: string -> unit) (event: InputEvent) =
 [<SolidComponent>]
 let private topBar
   (dispatch: Shell.Msg -> unit)
+  (bodyView: CodeMirror.EditorView option ref)
   (back: MouseEvent -> unit)
   (model: unit -> Shell.Model)
   =
@@ -209,7 +218,7 @@ let private topBar
       Parts.menu
         "editor-menu"
         { Side = Menu.Below; Edge = Menu.End }
-        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch) (Fragment() { "Add image" }) })
+        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch bodyView) (Fragment() { "Add image" }) })
     }
   }
 
@@ -236,7 +245,7 @@ let private uploadNotices (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
-let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+let private writing (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorView option ref) (model: unit -> Shell.Model) =
   let send (toMsg: string -> Editor.Msg) = toMsg >> Shell.Editor >> dispatch
   let excerpt: HTMLTextAreaElement option ref = ref None
 
@@ -357,6 +366,8 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     elif key.key = "Escape" && isPreviewing (model ()) then
       dispatch (Shell.Editor Editor.PreviewClosed))
 
+  let bodyView: CodeMirror.EditorView option ref = ref None
+
   let fade (_: Event) =
     if isTyping (model ()) then
       dispatch (Shell.Editor Editor.PointerMoved)
@@ -370,13 +381,13 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     | _ -> ())
 
   Fragment() {
-    topBar dispatch back model
+    topBar dispatch bodyView back model
 
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
       h1 (class' = "sr-only") { heading () }
 
-      Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch model }
+      Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }
       Show(when' = isPreviewing (model ())) { preview model }
     }
 

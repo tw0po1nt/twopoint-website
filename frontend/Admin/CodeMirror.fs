@@ -40,6 +40,7 @@ type EditorView(config: obj) =
   static member updateListener: Facet<ViewUpdate -> unit> = jsNative
   static member contentAttributes: Facet<obj> = jsNative
   static member scrollIntoView(pos: int, options: obj) : obj = jsNative
+  static member findFromDOM(dom: HTMLElement) : EditorView = jsNative
 
 [<Import("HighlightStyle", "@codemirror/language")>]
 type HighlightStyle() =

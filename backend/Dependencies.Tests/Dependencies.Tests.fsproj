@@ -19,6 +19,7 @@
     <Compile Include="DbTests.fs" />
     <Compile Include="PostDbTests.fs" />
     <Compile Include="PublishedParseCacheTests.fs" />
+    <Compile Include="ImageSizeCacheTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

@@ -24,11 +24,12 @@ type SaveDraftJson =
     /// Null leaves the details of the stored text as they are.
     Details : Nullable<PostDetailsDto> }
 
-/// `CheckFailed` is true when the draft is saved and the check did not run. `Problems` is then empty.
-type SavedDraftDto =
-  { ETag : string
-    Problems : PreviewProblemDto list
-    CheckFailed : bool }
+/// `Kind` is `found` or `unavailable`. `Unavailable` means that the draft is saved and the check did not run.
+type CheckDto =
+  { Kind : string
+    Problems : ProblemDto list }
+
+type SavedDraftDto = { ETag : string; Check : CheckDto }
 
 /// The precondition of a save: the ETag in `If-Match`, or `If-None-Match: *` for a post with no working blob.
 type SavePrecondition =
@@ -54,7 +55,8 @@ type SaveDraft (
   logger : ILogger<SaveDraft>,
   postStoreClient: BlobServiceClient,
   images : TwoPoint.Site.Render.IImageSize,
-  parseCache : PublishedParseCache
+  parseCache : PublishedParseCache,
+  texts : BlobTextCache
 ) =
 
   [<Function("Admin-Posts-SaveDraft")>]
@@ -88,7 +90,7 @@ type SaveDraft (
           let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
           let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Nullable() }
 
-          let postStore = PostStore(postStoreClient, logger)
+          let postStore = PostStore(postStoreClient, logger, Some texts)
           let saveDraft = SaveDraft.withDependencies {
             new SaveDraft.Dependencies with
 
@@ -118,8 +120,12 @@ type SaveDraft (
               (fun (SaveDraft.Event.Saved(eTag, check)) ->
                 match check with
                 | PostCheck.Problems problems ->
-                  Some { ETag = eTag; Problems = problems |> List.map ProblemMapping.problem; CheckFailed = false }
-                | PostCheck.Unavailable -> Some { ETag = eTag; Problems = []; CheckFailed = true })
+                  Some
+                    { ETag = eTag
+                      Check = { Kind = "found"; Problems = problems |> List.map ProblemMapping.problem } }
+                | PostCheck.Unavailable reason ->
+                  logger.LogWarning("The check of the post '{slug}' did not run: {reason}", slug, reason)
+                  Some { ETag = eTag; Check = { Kind = "unavailable"; Problems = [] } })
               (function
                 | SaveDraft.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
                 | SaveDraft.Error.FrontMatterUnreadable reason ->

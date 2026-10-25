@@ -178,11 +178,11 @@ let tests =
     }
 
     test "a problem shows its place and its message" {
-      let problem place message : Api.PreviewProblem =
+      let problem place message : Api.Problem =
         { Severity = Api.Severity.Error; Place = place; Message = message }
 
-      Expect.equal (Preview.problemText (problem (Some "Body line 4") "The output has no page.")) "Body line 4: The output has no page." "A body line"
-      Expect.equal (Preview.problemText (problem (Some "Field category") "No category.")) "Field category: No category." "A field"
+      Expect.equal (Preview.problemText (problem (Some(Api.BodyLine 4)) "The output has no page.")) "Body line 4: The output has no page." "A body line"
+      Expect.equal (Preview.problemText (problem (Some(Api.Field "category")) "No category.")) "Field category: No category." "A field"
       Expect.equal (Preview.problemText (problem None "The change breaks a link.")) "The change breaks a link." "The whole post"
     }
   ]

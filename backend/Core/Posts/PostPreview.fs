@@ -62,14 +62,17 @@ module PreviewPost =
 
       let! text = composed |> Result.mapError (FrontMatterUnreadable >> ActionError<Error>.Logic)
 
-      let isPublished = published |> List.exists (fun post -> post.Slug = slug)
+      let kind =
+        if published |> List.exists (fun post -> post.Slug = slug) then
+          PostCheck.Published
+        else
+          PostCheck.Draft(dependencies.GetUtcNow())
 
       return
-        PostCheck.run
+        PostCheck.forEditor
           dependencies.Stage
           dependencies.Images
-          (dependencies.GetUtcNow())
-          isPublished
+          kind
           (dependencies.ParsePublished published records)
           slug
           text

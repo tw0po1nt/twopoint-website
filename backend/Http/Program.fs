@@ -92,13 +92,15 @@ let main args =
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore
   builder.Services.AddSingleton<BlobServiceClient>(fun _ -> postStoreClient) |> ignore
   let previewImages =
-    new System.Net.Http.HttpClient(Timeout = TimeSpan.FromSeconds 10.0)
-    |> TwoPoint.Site.Render.ImageFetch.http
-    |> TwoPoint.Site.Render.ImageFetch.memoize
-    |> TwoPoint.Site.Render.Images.ofFetch
+    TwoPoint.Dependencies.Posts.ImageSizeCache(
+      TwoPoint.Site.Render.ImageFetch.http (new System.Net.Http.HttpClient(Timeout = TimeSpan.FromSeconds 10.0)),
+      TimeSpan.FromMinutes 5.0,
+      fun () -> DateTimeOffset.UtcNow
+    )
     :> TwoPoint.Site.Render.IImageSize
 
   builder.Services.AddSingleton<TwoPoint.Site.Render.IImageSize>(fun _ -> previewImages) |> ignore
+  builder.Services.AddSingleton<TwoPoint.Dependencies.Posts.BlobTextCache>(fun _ -> TwoPoint.Dependencies.Posts.BlobTextCache()) |> ignore
   builder.Services.AddSingleton<TwoPoint.Dependencies.Posts.PublishedParseCache>(fun _ -> TwoPoint.Dependencies.Posts.PublishedParseCache config.Stage) |> ignore
   builder.Services.AddSingleton<AssetsClient>(fun _ -> { Service = assetsClient }) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore

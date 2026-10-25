@@ -242,25 +242,30 @@ module SaveDraft =
 
       match outcome with
       | Written eTag ->
-        let! sources =
-          CancellableTaskResult.parallelZip (dependencies.GetPublishedPosts()) (dependencies.GetSeriesRecords())
-          |> CancellableTask.map Result.toOption
+        let kind = if published.IsSome then PostCheck.Published else PostCheck.Draft(dependencies.GetUtcNow())
 
-        let check =
-          match sources with
-          | Some(posts, records) ->
-            PostCheck.Problems(
-              (PostCheck.run
-                dependencies.Stage
-                dependencies.Images
-                (dependencies.GetUtcNow())
-                published.IsSome
-                (dependencies.ParsePublished posts records)
-                slug
-                text)
-                .Problems
-            )
-          | None -> PostCheck.Unavailable
+        let! check =
+          cancellableTask {
+            try
+              let! sources =
+                CancellableTaskResult.parallelZip (dependencies.GetPublishedPosts()) (dependencies.GetSeriesRecords())
+
+              match sources with
+              | Ok(posts, records) ->
+                let checkedPost =
+                  PostCheck.forEditor
+                    dependencies.Stage
+                    dependencies.Images
+                    kind
+                    (dependencies.ParsePublished posts records)
+                    slug
+                    text
+
+                return PostCheck.Problems checkedPost.Problems
+              | Result.Error error -> return PostCheck.Unavailable(PostCheck.StoreUnavailable error)
+            with error when not (error :? System.OperationCanceledException) ->
+              return PostCheck.Unavailable(PostCheck.CheckCrashed error)
+          }
 
         return Event.Saved(eTag, check)
       | ConditionFailed -> return! Result.Error(ActionError.Logic Stale)

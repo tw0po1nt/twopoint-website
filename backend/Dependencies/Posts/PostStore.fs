@@ -13,34 +13,60 @@ open IcedTasks
 open Microsoft.Extensions.Logging
 
 open System
+open System.Threading
+open System.Threading.Tasks
 
 /// <summary>
 /// The post store keeps each version of a post as the blob <c>&lt;slug&gt;.md</c> in one of four containers.
 /// </summary>
-type PostStore(service : BlobServiceClient, logger : ILogger) =
+type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCache option) =
 
   let extension = ".md"
+
+  let downloadText (container : string) (client : BlobContainerClient) (ct : CancellationToken) (blob : BlobItem) : Task<string> =
+    task {
+      let listed = blob.Properties.ETag |> Option.ofNullable |> Option.map string
+
+      match listed |> Option.bind (fun eTag -> texts |> Option.bind (fun cache -> cache.TryFind container blob.Name eTag)) with
+      | Some text -> return text
+      | None ->
+        let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
+        let text = content.Value.Content.ToString()
+        texts |> Option.iter (fun cache -> cache.Add container blob.Name (string content.Value.Details.ETag) text)
+        return text
+    }
+
+  let listAndDownload (container : string) (isBlob : BlobItem -> bool) (ct : CancellationToken) =
+    task {
+      let client = service.GetBlobContainerClient container
+      let! blobs = client.GetBlobsAsync(cancellationToken = ct) |> TaskSeq.toListAsync
+      let wanted = blobs |> List.filter isBlob
+
+      texts
+      |> Option.iter (fun cache ->
+        cache.Retain container (wanted |> List.choose (fun blob -> blob.Properties.ETag |> Option.ofNullable |> Option.map (fun eTag -> blob.Name, string eTag)) |> Set.ofList))
+
+      let! downloaded = wanted |> List.map (downloadText container client ct) |> Task.WhenAll
+      return List.zip wanted (List.ofArray downloaded)
+    }
 
   let read (container : string) : DependencyResult<StoredPost list> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.Read({container})"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
-      let client = service.GetBlobContainerClient container
 
       try
-        let! blobs = client.GetBlobsAsync(cancellationToken = ct) |> TaskSeq.toListAsync
+        let! blobs =
+          listAndDownload container (fun blob -> blob.Name.EndsWith extension && not (blob.Name.Contains '/')) ct
 
-        let posts = ResizeArray()
-
-        for blob in blobs |> List.filter (fun blob -> blob.Name.EndsWith extension && not (blob.Name.Contains '/')) do
-          match Slug.create (blob.Name.Substring(0, blob.Name.Length - extension.Length)) with
-          | Ok slug ->
-            let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-            posts.Add({ Slug = slug; Text = content.Value.Content.ToString(); ETag = content.Value.Details.ETag.ToString() } : StoredPost)
-          | Error reason ->
-            logger.LogWarning("The blob '{blobName}' in '{container}' is not a post: {reason}", blob.Name, container, reason)
-
-        return List.ofSeq posts
+        return
+          blobs
+          |> List.choose (fun (blob, text) ->
+            match Slug.create (blob.Name.Substring(0, blob.Name.Length - extension.Length)) with
+            | Ok slug -> Some({ Slug = slug; Text = text; ETag = string blob.Properties.ETag } : StoredPost)
+            | Error reason ->
+              logger.LogWarning("The blob '{blobName}' in '{container}' is not a post: {reason}", blob.Name, container, reason)
+              None)
       with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
         return []
     }
@@ -80,25 +106,23 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
         return []
     }
 
+  new (service : BlobServiceClient, logger : ILogger) = PostStore(service, logger, None)
+
   /// A series record is the blob `<slug>.yml` in the `series` container.
   member _.GetSeriesRecords () : DependencyResult<StoredSeries list> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.GetSeriesRecords"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
-      let client = service.GetBlobContainerClient "series"
 
       try
-        let! blobs = client.GetBlobsAsync(cancellationToken = ct) |> TaskSeq.toListAsync
-        let records = ResizeArray()
+        let! blobs = listAndDownload "series" (fun blob -> blob.Name.EndsWith ".yml" && not (blob.Name.Contains '/')) ct
 
-        for blob in blobs |> List.filter (fun blob -> blob.Name.EndsWith ".yml" && not (blob.Name.Contains '/')) do
-          let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-          records.Add
+        return
+          blobs
+          |> List.map (fun (blob, text) ->
             { Slug = blob.Name.Substring(0, blob.Name.Length - ".yml".Length)
-              Text = content.Value.Content.ToString()
-              ETag = content.Value.Details.ETag.ToString() }
-
-        return List.ofSeq records
+              Text = text
+              ETag = string blob.Properties.ETag })
       with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
         return []
     }

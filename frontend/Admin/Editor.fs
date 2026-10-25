@@ -17,12 +17,6 @@ type SaveState =
   /// Another tab saved newer text. This page keeps its text and stops saving.
   | Stale
 
-type Check =
-  | NotChecked
-  | Found of Api.PreviewProblem list
-  /// The API saved the post and could not check it.
-  | CheckFailed
-
 type Document =
   { Slug: string
     State: Api.PostState
@@ -36,7 +30,7 @@ type Document =
     /// The newest version that the API has. A version after it has text that only this page has.
     Confirmed: int
     Save: SaveState
-    Check: Check
+    Check: Api.Check option
     /// A save was asked for while another save was in flight.
     SaveAgain: bool
     /// The page that the author wants to go to. The editor stays until the API has the newest text.
@@ -114,7 +108,7 @@ let private loaded (post: Api.PostDocument) =
       Version = 0
       Confirmed = 0
       Save = Saved
-      Check = NotChecked
+      Check = None
       SaveAgain = false
       LeaveTo = None
       Typing = false
@@ -166,6 +160,7 @@ let private saveNow (document: Document) =
   | Unsaved
   | SaveFailed _ -> startSave document
   | Saving _ -> Loaded { document with SaveAgain = true }, None
+  | Saved when document.Check = Some Api.CheckFailed -> startSave document
   | Saved
   | Stale -> Loaded document, None
 
@@ -175,7 +170,7 @@ let private answered (version: int) (result: Result<Api.SavedPost, Api.Failure>)
     let document =
       { document with
           ETag = Some saved.ETag
-          Check = (if saved.CheckFailed then CheckFailed else Found saved.Problems)
+          Check = Some saved.Check
           Confirmed = version
           PendingEdit = document.PendingEdit || document.State <> Api.Draft }
 
@@ -275,8 +270,8 @@ let private chooseProblem (target: Problem.Target) (document: Document) =
   let closed = { document with Details = fst (Details.update Details.Closed document.Details) }
 
   match target with
-  | Problem.Control(id, true) -> Loaded document, Some(Focus id)
-  | Problem.Control(id, false) -> Loaded closed, Some(Focus id)
+  | Problem.Control(id, Problem.Sheet) -> Loaded document, Some(Focus id)
+  | Problem.Control(id, Problem.WritingColumn) -> Loaded closed, Some(Focus id)
   | Problem.BodyLine line -> Loaded closed, Some(MoveToBodyLine line)
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
@@ -361,10 +356,10 @@ let failureText (model: Model) =
 
 let hasProblems (document: Document) =
   match document.Check with
-  | Found(_ :: _) -> true
-  | Found []
-  | NotChecked
-  | CheckFailed -> false
+  | Some(Api.Found(_ :: _)) -> true
+  | Some(Api.Found [])
+  | Some Api.CheckFailed
+  | None -> false
 
 let primaryAction (document: Document) =
   match document.State with

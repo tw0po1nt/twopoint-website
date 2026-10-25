@@ -287,8 +287,9 @@ let avatar (name: string) =
 let kbd' (text: string) = kbd () { text }
 
 [<SolidComponent>]
-let switch' (label: string) (isOn: unit -> bool) (toggle: unit -> unit) =
+let switch' (id: string) (label: string) (isOn: unit -> bool) (toggle: unit -> unit) =
   button (
+    id = id,
     type' = "button",
     class' = "switch",
     role = "switch",

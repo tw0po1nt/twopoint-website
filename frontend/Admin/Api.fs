@@ -138,10 +138,15 @@ type Severity =
   | Error
   | Warning
 
+type ProblemPlace =
+  | Field of name: string
+  /// A line of the body text in the editor, from 1.
+  | BodyLine of line: int
+
 /// `Place` is `None` for a problem about the whole post.
-type PreviewProblem =
+type Problem =
   { Severity: Severity
-    Place: string option
+    Place: ProblemPlace option
     Message: string }
 
 type PreviewArticle = { Content: string; Outline: string }
@@ -149,13 +154,14 @@ type PreviewArticle = { Content: string; Outline: string }
 /// `Article` is `None` when the text has an error in its parse.
 type PostPreview =
   { Article: PreviewArticle option
-    Problems: PreviewProblem list }
+    Problems: Problem list }
 
-/// `CheckFailed` is true when the API saved the post and could not check it. `Problems` is then empty.
-type SavedPost =
-  { ETag: string
-    Problems: PreviewProblem list
-    CheckFailed: bool }
+type Check =
+  | Found of Problem list
+  /// The API saved the post and could not check it.
+  | CheckFailed
+
+type SavedPost = { ETag: string; Check: Check }
 
 type Failure =
   /// The API answered 401 or 403.
@@ -239,6 +245,28 @@ let private severity: Decoder<Severity> =
     | "warning" -> Decode.succeed Severity.Warning
     | _ -> Decode.fail $"The problem severity '{name}' is not known.")
 
+let private problemPlace: Decoder<ProblemPlace> =
+  Decode.field "kind" Decode.string
+  |> Decode.andThen (fun kind ->
+    match kind with
+    | "field" -> Decode.field "field" Decode.string |> Decode.map Field
+    | "body" -> Decode.field "line" Decode.int |> Decode.map BodyLine
+    | _ -> Decode.fail $"The problem place '{kind}' is not known.")
+
+let private problem: Decoder<Problem> =
+  Decode.object (fun get ->
+    { Severity = get.Required.Field "severity" severity
+      Place = get.Optional.Field "place" problemPlace
+      Message = get.Required.Field "message" Decode.string })
+
+let private check: Decoder<Check> =
+  Decode.field "kind" Decode.string
+  |> Decode.andThen (fun kind ->
+    match kind with
+    | "found" -> Decode.field "problems" (Decode.list problem) |> Decode.map Found
+    | "unavailable" -> Decode.succeed CheckFailed
+    | _ -> Decode.fail $"The check state '{kind}' is not known.")
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
@@ -246,6 +274,8 @@ let private coders =
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
   |> Extra.withCustom (severityName >> Encode.string) severity
+  |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
+  |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check
 
 type private Payload =
   | Json of string

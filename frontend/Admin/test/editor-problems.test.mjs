@@ -20,20 +20,19 @@ const post = {
 };
 
 const problems = [
-  { severity: 'warning', place: 'Body line 6', message: 'The image has no alt text.' },
-  { severity: 'error', place: 'Field category', message: 'The post has no category.' },
-  { severity: 'error', place: 'Field title', message: 'The post has no title.' },
+  { severity: 'warning', place: { kind: 'body', field: null, line: 5 }, message: 'The image has no alt text.' },
+  { severity: 'error', place: { kind: 'field', field: 'category', line: 0 }, message: 'The post has no category.' },
+  { severity: 'error', place: { kind: 'field', field: 'title', line: 0 }, message: 'The post has no title.' },
 ];
 
-let nextProblems = problems;
-let checkFailed = false;
+let nextCheck = { kind: 'found', problems };
 let saved = 0;
 
 const respond = (url, init = {}) => {
   if (url.endsWith('/api/internal/posts/my-post')) {
     if (init.method === 'PUT') {
       saved += 1;
-      return answer(200, { success: true, message: null, data: { eTag: `"v${saved + 1}"`, problems: nextProblems, checkFailed } });
+      return answer(200, { success: true, message: null, data: { eTag: `"v${saved + 1}"`, check: nextCheck } });
     }
 
     return answer(200, { success: true, message: null, data: post });
@@ -70,7 +69,7 @@ test('before a save answer, no dot shows and the sheet has no problem list', () 
 
 test('a save answer with problems puts a dot on Details and on the primary action, and no error text in the writing column', async () => {
   await saveNow();
-  assert.deepEqual(buttonWithDot(), ['Details', 'Publish']);
+  assert.deepEqual(buttonWithDot(), ['Details, has problems', 'Publish, has problems']);
   assert.equal(document.querySelector('.editor-column [role="alert"]'), null);
   assert.doesNotMatch(document.querySelector('.editor-column').textContent, /no alt text/);
 });
@@ -78,7 +77,7 @@ test('a save answer with problems puts a dot on Details and on the primary actio
 test('the Details sheet lists each problem, and a problem with a place is a link', () => {
   const items = [...sheet().querySelectorAll('.details-problems li')].map((item) => item.textContent.trim());
   assert.deepEqual(items, [
-    'Warning Body line 6: The image has no alt text.',
+    'Warning Body line 5: The image has no alt text.',
     'Error Field category: The post has no category.',
     'Error Field title: The post has no title.',
   ]);
@@ -112,14 +111,13 @@ test('a field problem of the sheet focuses its control, and a title problem clos
 });
 
 test('a save answer with no problem takes the dot away', async () => {
-  nextProblems = [];
+  nextCheck = { kind: 'found', problems: [] };
   await saveNow();
   assert.equal(dots(), 0);
 });
 
 test('a check that did not run shows a note in the sheet and no dot', async () => {
-  nextProblems = [];
-  checkFailed = true;
+  nextCheck = { kind: 'unavailable', problems: [] };
   await saveNow();
   assert.equal(dots(), 0);
   assert.match(sheet().textContent, /The check did not run/);

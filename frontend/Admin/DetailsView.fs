@@ -61,12 +61,12 @@ let private optionsText (model: Shell.Model) =
 
 let private problems (model: Shell.Model) =
   match document model with
-  | Some { Check = Editor.Found found } -> found |> List.map (fun problem -> problem, Problem.targetOf problem) |> Array.ofList
+  | Some { Check = Some(Api.Found found) } -> found |> List.map (fun problem -> problem, Problem.targetOf problem) |> Array.ofList
   | _ -> [||]
 
 let private checkFailed (model: Shell.Model) =
   match document model with
-  | Some { Check = Editor.CheckFailed } -> true
+  | Some { Check = Some Api.CheckFailed } -> true
   | _ -> false
 
 let private typed (event: InputEvent) = (event.target :?> HTMLInputElement).value
@@ -243,7 +243,7 @@ let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
     )
 
 [<SolidComponent>]
-let private problemText (dispatch: Shell.Msg -> unit) (problem: Api.PreviewProblem) (target: Problem.Target option) =
+let private problemText (dispatch: Shell.Msg -> unit) (problem: Api.Problem) (target: Problem.Target option) =
   match target with
   | Some target ->
     span () {
@@ -313,7 +313,7 @@ let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
       )
 
     div (class' = "row switch-row") {
-      Parts.switch' "Show on the home page" (fun () -> (values ()).ShowOnHomepage) (fun () ->
+      Parts.switch' "details-show-on-homepage" "Show on the home page" (fun () -> (values ()).ShowOnHomepage) (fun () ->
         send (Details.ShowOnHomepageChanged(not (values ()).ShowOnHomepage)))
 
       span () { "Show on the home page" }

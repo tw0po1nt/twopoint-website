@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Posts
 
+open TwoPoint.Core.Util
 open TwoPoint.Site.Render
 
 [<RequireQualifiedAccess>]
@@ -7,29 +8,35 @@ module PostCheck =
 
   type ParsePublished = StoredPost list -> StoredSeries list -> Series list * Post list
 
+  let parsePost (stage : Stage) (series : Series list) (post : StoredPost) : Post option =
+    Check.published stage series (Slug.value post.Slug) post.Text |> Result.toOption
+
   let parsePublished (stage : Stage) : ParsePublished =
     fun posts records ->
       let series = StoredSeries.parse records
+      series, posts |> List.choose (parsePost stage series)
 
-      series,
-      posts
-      |> List.choose (fun post -> Check.published stage series (Slug.value post.Slug) post.Text |> Result.toOption)
+  type Kind =
+    | Published
+    | Draft of previewTime : System.DateTime
 
-  /// `now` stands in for the missing publish date of a draft.
-  let run
+  let forEditor
     (stage : Stage)
     (images : IImageSize)
-    (now : System.DateTime)
-    (isPublished : bool)
+    (kind : Kind)
     (series : Series list, posts : Post list)
     (slug : Slug)
     (text : string)
     : Check.CheckedPost =
-    if isPublished then
-      Check.post stage images series posts (Slug.value slug) text
-    else
-      Check.draft stage images series (System.DateTimeOffset now) posts (Slug.value slug) text
+    match kind with
+    | Published -> Check.post stage images series posts (Slug.value slug) text
+    | Draft previewTime ->
+      Check.draft stage images series (System.DateTimeOffset previewTime) posts (Slug.value slug) text
+
+  type CheckFailure =
+    | StoreUnavailable of DependencyError
+    | CheckCrashed of exn
 
   type Outcome =
     | Problems of Problem list
-    | Unavailable
+    | Unavailable of CheckFailure

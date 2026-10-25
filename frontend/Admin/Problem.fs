@@ -1,34 +1,28 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Problem
 
-open System
+type Surface =
+  | Sheet
+  | WritingColumn
 
-/// Where the author goes to fix a problem.
 type Target =
-  /// `InSheet` is true for a control of the Details sheet, and false for a field of the writing column.
-  | Control of id: string * inSheet: bool
-  /// A line of the body text in the editor, from 1.
+  | Control of id: string * Surface
   | BodyLine of line: int
 
 let private controlOf (field: string) =
   match field with
-  | "title" -> Some(Control("editor-title", false))
-  | "excerpt" -> Some(Control("editor-excerpt", false))
-  | "author" -> Some(Control("details-author", true))
-  | "category" -> Some(Control("details-category", true))
-  | "tags" -> Some(Control("details-tags", true))
-  | "series" -> Some(Control("details-series", true))
-  | "image" -> Some(Control("details-image", true))
+  | "title" -> Some(Control("editor-title", WritingColumn))
+  | "excerpt" -> Some(Control("editor-excerpt", WritingColumn))
+  | "author" -> Some(Control("details-author", Sheet))
+  | "category" -> Some(Control("details-category", Sheet))
+  | "tags" -> Some(Control("details-tags", Sheet))
+  | "series" -> Some(Control("details-series", Sheet))
+  | "image" -> Some(Control("details-image", Sheet))
+  | "showOnHomepage" -> Some(Control("details-show-on-homepage", Sheet))
   | _ -> None
 
-/// Body line 1 of a problem is the blank line between the front matter and the body text.
-let private editorLine (bodyLine: int) = max 1 (bodyLine - 1)
-
-let targetOf (problem: Api.PreviewProblem) : Target option =
+let targetOf (problem: Api.Problem) : Target option =
   match problem.Place with
-  | Some place when place.StartsWith "Field " -> controlOf (place.Substring "Field ".Length)
-  | Some place when place.StartsWith "Body line " ->
-    match Int32.TryParse(place.Substring "Body line ".Length) with
-    | true, line -> Some(BodyLine(editorLine line))
-    | _ -> None
-  | _ -> None
+  | Some(Api.Field name) -> controlOf name
+  | Some(Api.BodyLine line) -> Some(BodyLine line)
+  | None -> None

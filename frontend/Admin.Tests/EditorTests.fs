@@ -25,10 +25,7 @@ let private document state pendingEdit publishDate eTag : Api.PostDocument =
     Text = ""
     PublishedText = None }
 
-let private savedAs eTag : Api.SavedPost =
-  { ETag = eTag
-    Problems = []
-    CheckFailed = false }
+let private savedAs eTag : Api.SavedPost = { ETag = eTag; Check = Api.Found [] }
 
 let private draft = document Api.Draft false None (Some "\"v1\"")
 let private live = document Api.Published false (Some "2026-02-04T13:00:00Z") None
@@ -50,14 +47,14 @@ let private document' (model: Shell.Model) =
 
 let private status (model: Shell.Model) = Editor.statusText (document' model)
 
-let private problemAt place severity message : Api.PreviewProblem =
+let private problemAt place severity message : Api.Problem =
   { Severity = severity
-    Place = Some place
+    Place = place
     Message = message }
 
-let private warning place message = problemAt place Api.Severity.Warning message
+let private warning place message = problemAt (Some place) Api.Severity.Warning message
 
-let private error place message = problemAt place Api.Severity.Error message
+let private error place message = problemAt (Some place) Api.Severity.Error message
 
 let private request eTag title excerpt body version : Editor.SaveRequest =
   { Slug = "my-post"
@@ -374,14 +371,14 @@ let tests =
     }
 
     test "a save answer with a problem shows the dot, and an answer with no problem clears it" {
-      let problem = warning "Body line 4" "The image has no alt text."
+      let problem = warning (Api.BodyLine 4) "The image has no alt text."
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send (Editor.AutosaveElapsed 1) model
       Expect.isFalse (Editor.hasProblems (document' model)) "No answer yet"
 
-      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Problems = [ problem ] })) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.Found [ problem ] })) model
       Expect.isTrue (Editor.hasProblems (document' model)) "The dot"
-      Expect.equal (document' model).Check (Editor.Found [ problem ]) "The problem"
+      Expect.equal (document' model).Check (Some(Api.Found [ problem ])) "The problem"
 
       let model, _ = send (Editor.BodyChanged "xy") model
       let model, _ = send (Editor.AutosaveElapsed 2) model
@@ -392,13 +389,13 @@ let tests =
     test "a warning shows the dot" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send (Editor.AutosaveElapsed 1) model
-      let answer = Ok { savedAs "\"v2\"" with Problems = [ warning "Field tags" "Add the tag 2026." ] }
+      let answer = Ok { savedAs "\"v2\"" with Check = Api.Found [ warning (Api.Field "tags") "Add the tag 2026." ] }
       let model, _ = send (Editor.SaveAnswered("my-post", 1, answer)) model
       Expect.isTrue (Editor.hasProblems (document' model)) "The dot"
     }
 
     test "a late answer for an older version keeps the problems of the newer answer" {
-      let older = Ok { savedAs "\"v2\"" with Problems = [ warning "Body line 2" "Old." ] }
+      let older = Ok { savedAs "\"v2\"" with Check = Api.Found [ warning (Api.BodyLine 2) "Old." ] }
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send (Editor.AutosaveElapsed 1) model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, older)) model
@@ -407,47 +404,57 @@ let tests =
       let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, older)) model
 
-      Expect.equal (document' model).Check (Editor.Found []) "The newer answer stays"
+      Expect.equal (document' model).Check (Some(Api.Found [])) "The newer answer stays"
       Expect.equal (document' model).ETag (Some "\"v3\"") "The newer ETag"
     }
 
     test "a check that did not run shows no dot and keeps the save" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send (Editor.AutosaveElapsed 1) model
-      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with CheckFailed = true })) model
-      Expect.equal (document' model).Check Editor.CheckFailed "The check did not run"
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.CheckFailed })) model
+      Expect.equal (document' model).Check (Some Api.CheckFailed) "The check did not run"
       Expect.isFalse (Editor.hasProblems (document' model)) "No dot"
       Expect.equal (status model) "Draft · saved" "Saved"
     }
 
-    test "a body problem moves the cursor to its line in the body, one line before the line of the problem" {
+    test "a body problem moves the cursor to its line in the body" {
       let model, _ = send (Editor.DetailsMsg Details.Opened) (opened draft)
 
-      let target = Problem.targetOf (warning "Body line 4" "The image has no alt text.")
-      Expect.equal target (Some(Problem.BodyLine 3)) "Body line 1 is the blank line before the text"
+      let target = Problem.targetOf (warning (Api.BodyLine 4) "The image has no alt text.")
+      Expect.equal target (Some(Problem.BodyLine 4)) "The line of the problem"
 
       let model, effect = send (Editor.ProblemChosen target.Value) model
-      Expect.equal effect (Some(Shell.MoveToBodyLine 3)) "The move"
+      Expect.equal effect (Some(Shell.MoveToBodyLine 4)) "The move"
       Expect.isFalse (document' model).Details.Open "The sheet closes"
     }
 
     test "a field problem of the sheet focuses its control, and a field problem of the writing column closes the sheet" {
       let model, _ = send (Editor.DetailsMsg Details.Opened) (opened draft)
-      let author = (Problem.targetOf (error "Field author" "The post has no author.")).Value
+      let author = (Problem.targetOf (error (Api.Field "author") "The post has no author.")).Value
 
       let model, effect = send (Editor.ProblemChosen author) model
       Expect.equal effect (Some(Shell.Focus "details-author")) "The control"
       Expect.isTrue (document' model).Details.Open "The sheet stays"
 
-      let title = (Problem.targetOf (error "Field title" "The post has no title.")).Value
+      let title = (Problem.targetOf (error (Api.Field "title") "The post has no title.")).Value
       let model, effect = send (Editor.ProblemChosen title) model
       Expect.equal effect (Some(Shell.Focus "editor-title")) "The field"
       Expect.isFalse (document' model).Details.Open "The sheet closes"
     }
 
+    test "Command and S after a check that did not run saves the same text again" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.CheckFailed })) model
+      let model, effect = send Editor.SaveRequested model
+
+      Expect.equal effect (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "x" 1) ])) "The save"
+      Expect.equal (status model) "Draft · saving…" "The status"
+    }
+
     test "a problem about the whole post, or about a field with no control, has no target" {
       Expect.isNone (Problem.targetOf { Severity = Api.Severity.Error; Place = None; Message = "A YAML error." }) "The whole post"
-      Expect.isNone (Problem.targetOf (error "Field publishDate" "Bad date.")) "No control"
+      Expect.isNone (Problem.targetOf (error (Api.Field "publishDate") "Bad date.")) "No control"
     }
 
     test "the primary action says Publish for a draft and Publish changes for a published post" {

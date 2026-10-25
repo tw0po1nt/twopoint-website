@@ -271,17 +271,17 @@ let tests =
     }
 
     test "a save that breaks a link in another published post returns an error for each link" {
-      let target = publishedPost "Target" "Text.\n\n## Step\n"
-      let linker = publishedPost "Linker" "See [one](/posts/target/#step) and [two](/posts/target/#step).\n"
+      let target = publishedPost "Target" "Text.\n\n## Step\n\n## Other\n"
+      let linker = publishedPost "Linker" "See [one](/posts/target/#step).\n\nSee [two](/posts/target/#other).\n"
       let fake = store [ "target", target; "linker", linker ] []
 
-      match checkOf (save fake "target" None "Target" "Text without the step.\n") with
+      match checkOf (save fake "target" None "Target" "Text without the steps.\n") with
       | PostCheck.Problems problems ->
         Expect.hasLength problems 2 "One error for each link"
-
-        for problem in problems do
-          Expect.equal problem.Severity Severity.Error "An error"
-          Expect.stringContains problem.Message "the post 'linker'" "The post with the link"
+        Expect.all problems (fun problem -> problem.Severity = Severity.Error) "Errors"
+        Expect.all problems (fun problem -> problem.Message.Contains "the post 'linker'") "The post with the links"
+        Expect.exists problems (fun problem -> problem.Message.Contains "id 'step'") "The first link"
+        Expect.exists problems (fun problem -> problem.Message.Contains "id 'other'") "The second link"
       | other -> failtestf "Expected the errors, got %A" other
     }
 
@@ -321,7 +321,26 @@ let tests =
       let fake = store [] [ "draft", draftWithCategory ]
       fake.StoreDown <- true
 
-      Expect.equal (checkOf (save fake "draft" (Some "v1") "Title" "Text.\n")) PostCheck.Unavailable "Unavailable"
+      match checkOf (save fake "draft" (Some "v1") "Title" "Text.\n") with
+      | PostCheck.Unavailable(PostCheck.StoreUnavailable _) -> ()
+      | other -> failtestf "Expected StoreUnavailable, got %A" other
+
+      Expect.stringContains fake.Working["draft"] "Title" "The draft is saved"
+    }
+
+    test "a check that throws leaves the draft saved and gives the reason" {
+      let fake = store [] [ "draft", draftWithCategory ]
+
+      fake.Images <-
+        { new IImageSize with
+            member _.Size _ = raise (System.IO.IOException "The connection closed") }
+
+      match save fake "draft" (Some "v1") "Title" "![A cat](https://example.com/cat.png)\n" with
+      | Ok(SaveDraft.Event.Saved(etag, PostCheck.Unavailable(PostCheck.CheckCrashed error))) ->
+        Expect.equal etag "v2" "The new ETag"
+        Expect.stringContains error.Message "The connection closed" "The reason"
+      | other -> failtestf "Expected Saved with CheckCrashed, got %A" other
+
       Expect.stringContains fake.Working["draft"] "Title" "The draft is saved"
     }
 
