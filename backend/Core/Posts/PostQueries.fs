@@ -150,20 +150,20 @@ module GetTerms =
   [<RequireQualifiedAccess>]
   module Logic =
 
-    /// The category `Series` is set by the series picker, so the category picker does not suggest it.
-    let private seriesCategory = "series"
-
     let private counts (titles : string list list) : TermCount list =
       titles
       |> List.collect (List.distinctBy TwoPoint.Site.Render.Slug.term)
       |> List.groupBy TwoPoint.Site.Render.Slug.term
-      |> List.filter (fun (slug, _) -> slug <> "")
-      |> List.map (fun (slug, group) ->
+      // A term slug can contain `_`, and a post slug cannot, so a term with such a slug is not a suggestion.
+      |> List.choose (fun (slug, group) ->
+        Slug.create slug
+        |> Result.toOption
         // The input is in newest-first order, so the first title is the title of the newest post.
-        { Slug = slug
-          Title = TwoPoint.Site.Render.Slug.termTitle group.Head
-          Value = group.Head
-          Posts = group.Length })
+        |> Option.map (fun slug ->
+          { Slug = slug
+            Title = TwoPoint.Site.Render.Slug.termTitle group.Head
+            Value = group.Head
+            Posts = group.Length }))
       |> List.sortBy (fun term -> -term.Posts, term.Title)
 
     let suggestions (published : StoredPost list) : TermSuggestions =
@@ -178,7 +178,7 @@ module GetTerms =
         newestFirst
         |> List.map (fun details -> Option.toList details.Category)
         |> counts
-        |> List.filter (fun term -> term.Slug <> seriesCategory)
+        |> List.filter (fun term -> Slug.value term.Slug <> TwoPoint.Site.Render.Rules.seriesCategory)
 
       let tags =
         newestFirst
@@ -211,14 +211,13 @@ module GetSeries =
   [<RequireQualifiedAccess>]
   module Logic =
 
-    /// A record that the parser cannot read is not in the list.
     let listing (records : StoredSeries list) : SeriesListing list =
-      records
-      |> List.choose (fun record ->
-        TwoPoint.Site.Render.FrontMatter.parseSeries record.File record.Text
+      StoredSeries.parse records
+      |> List.choose (fun series ->
+        Slug.create series.Slug
         |> Result.toOption
-        |> Option.map (fun series -> { Slug = series.Slug; Title = series.Title }))
-      |> List.sortBy (fun series -> series.Title.ToLowerInvariant(), series.Slug)
+        |> Option.map (fun slug -> { Slug = slug; Title = series.Title }))
+      |> List.sortBy (fun series -> series.Title.ToLowerInvariant(), Slug.value series.Slug)
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun () -> cancellableTaskResult {

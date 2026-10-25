@@ -36,7 +36,7 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
           match Slug.create (blob.Name.Substring(0, blob.Name.Length - extension.Length)) with
           | Ok slug ->
             let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-            posts.Add { Slug = slug; Text = content.Value.Content.ToString() }
+            posts.Add({ Slug = slug; Text = content.Value.Content.ToString() } : StoredPost)
           | Error reason ->
             logger.LogWarning("The blob '{blobName}' in '{container}' is not a post: {reason}", blob.Name, container, reason)
 
@@ -93,7 +93,7 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
 
         for blob in blobs |> List.filter (fun blob -> blob.Name.EndsWith ".yml" && not (blob.Name.Contains '/')) do
           let! content = client.GetBlobClient(blob.Name).DownloadContentAsync(ct)
-          records.Add { File = blob.Name; Text = content.Value.Content.ToString() }
+          records.Add { Slug = blob.Name.Substring(0, blob.Name.Length - ".yml".Length); Text = content.Value.Content.ToString() }
 
         return List.ofSeq records
       with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
@@ -101,15 +101,11 @@ type PostStore(service : BlobServiceClient, logger : ILogger) =
     }
 
   /// A blob that is gone or has another ETag gives <c>DeleteConditionFailed</c>.
-  member _.DeleteWorkingBlob (slug : Slug) (condition : WriteCondition) : DependencyResult<DeleteOutcome> =
+  member _.DeleteWorkingBlob (slug : Slug) (eTag : string) : DependencyResult<DeleteOutcome> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteWorkingBlob({slug})"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
-      let conditions = BlobRequestConditions()
-
-      match condition with
-      | MatchesETag eTag -> conditions.IfMatch <- ETag eTag
-      | MustNotExist -> conditions.IfNoneMatch <- ETag.All
+      let conditions = BlobRequestConditions(IfMatch = ETag eTag)
 
       try
         let! _ =

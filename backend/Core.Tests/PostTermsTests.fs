@@ -10,7 +10,9 @@ open IcedTasks
 
 open System.Threading
 
-let private stored slug text : StoredPost = { Slug = Slug.Unsafe.create slug; Text = text }
+let private slug value = Slug.Unsafe.create value
+
+let private stored name text : StoredPost = { Slug = slug name; Text = text }
 
 let private post slug (date : string) (category : string) (tags : string list) =
   let tagLines = tags |> List.map (sprintf "  - %s\n") |> String.concat ""
@@ -45,14 +47,14 @@ let tests =
 
       Expect.equal
         suggestions.Categories
-        [ { Slug = "dev"; Title = "Dev"; Value = "Dev"; Posts = 2 }
-          { Slug = "life"; Title = "Life"; Value = "Life"; Posts = 1 } ]
+        [ { Slug = slug "dev"; Title = "Dev"; Value = "Dev"; Posts = 2 }
+          { Slug = slug "life"; Title = "Life"; Value = "Life"; Posts = 1 } ]
         "Categories"
 
       Expect.equal
         suggestions.Tags
-        [ { Slug = "fsharp"; Title = "F#"; Value = "FSharp"; Posts = 2 }
-          { Slug = "testing"; Title = "Testing"; Value = "Testing"; Posts = 1 } ]
+        [ { Slug = slug "fsharp"; Title = "F#"; Value = "FSharp"; Posts = 2 }
+          { Slug = slug "testing"; Title = "Testing"; Value = "Testing"; Posts = 1 } ]
         "Tags"
     }
 
@@ -63,7 +65,7 @@ let tests =
             post "new" "2026-02-01" "Dev" [ "functional Programming" ] ]
 
       let expected =
-        { Slug = "functional-programming"
+        { Slug = slug "functional-programming"
           Title = "functional Programming"
           Value = "functional Programming"
           Posts = 2 }
@@ -90,10 +92,10 @@ let tests =
     test "the series list has the slug and the title of each readable record, in title order" {
       let listing =
         seriesList
-          [ { File = "zeta.yml"; Text = "title: Zeta\nexcerpt: Last.\n" }
-            { File = "alpha.yml"; Text = "title: Alpha\nexcerpt: First.\n" }
-            { File = "broken.yml"; Text = "title: [\n" } ]
+          [ { Slug = "zeta"; Text = "title: Zeta\nexcerpt: Last.\n" }
+            { Slug = "alpha"; Text = "title: Alpha\nexcerpt: First.\n" }
+            { Slug = "broken"; Text = "title: [\n" } ]
 
-      Expect.equal listing [ { Slug = "alpha"; Title = "Alpha" }; { Slug = "zeta"; Title = "Zeta" } ] "The list"
+      Expect.equal listing [ { Slug = slug "alpha"; Title = "Alpha" }; { Slug = slug "zeta"; Title = "Zeta" } ] "The list"
     }
   ]

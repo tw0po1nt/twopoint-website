@@ -257,7 +257,6 @@ module ChangeSlug =
     /// The slug of a published post is fixed, because a public URL uses it.
     | PostPublished of Slug
     | SlugTaken of Slug
-    /// The working blob changed after the editor read it.
     | Stale
 
   type Event = Changed of Slug * eTag: string
@@ -265,7 +264,6 @@ module ChangeSlug =
   [<RequireQualifiedAccess>]
   module Logic =
 
-    /// The working blob to move.
     let decide
       (slug : Slug)
       (newSlug : Slug)
@@ -286,11 +284,10 @@ module ChangeSlug =
     abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member WriteWorkingBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
-    abstract member DeleteWorkingBlob: slug: Slug -> condition: WriteCondition -> DependencyResult<DeleteOutcome>
+    abstract member DeleteWorkingBlob: slug: Slug -> eTag: string -> DependencyResult<DeleteOutcome>
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
-  /// The new blob is written first, so a failure in the middle leaves the draft under at least one slug.
   let withDependencies (dependencies : Dependencies) : Action =
     fun dto -> cancellableTaskResult {
       let! slug = dto.Slug |> Slug.create |> Result.mapError ActionError<Error>.Validation
@@ -317,15 +314,14 @@ module ChangeSlug =
         | ConditionFailed -> return! Result.Error(ActionError.Logic(SlugTaken newSlug))
         | Written newETag ->
           let! deleted =
-            dependencies.DeleteWorkingBlob slug (MatchesETag blob.ETag)
+            dependencies.DeleteWorkingBlob slug blob.ETag
             |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
           match deleted with
           | Deleted -> return Event.Changed(newSlug, newETag)
           | DeleteConditionFailed ->
-            // The draft changed after the read, so the copy is out of date.
             let! _ =
-              dependencies.DeleteWorkingBlob newSlug (MatchesETag newETag)
+              dependencies.DeleteWorkingBlob newSlug newETag
               |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
             return! Result.Error(ActionError.Logic Stale)

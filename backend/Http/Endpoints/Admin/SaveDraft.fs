@@ -13,6 +13,7 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
+open System
 open System.Net
 open System.Threading
 
@@ -21,7 +22,7 @@ type SaveDraftJson =
     Excerpt : string
     Body : string
     /// Null leaves the details of the stored text as they are.
-    Details : PostDetailsDto }
+    Details : Nullable<PostDetailsDto> }
 
 type SavedDraftDto = { ETag : string }
 
@@ -78,7 +79,7 @@ type SaveDraft (
         | precondition ->
           let! json = req.ReadFromJsonAsync<SaveDraftJson> ct
           let text (value : string) = value |> Option.ofObj |> Option.defaultValue ""
-          let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Unchecked.defaultof<PostDetailsDto> }
+          let json = json |> Option.ofObj |> Option.defaultValue { Title = ""; Excerpt = ""; Body = ""; Details = Nullable() }
 
           let postStore = PostStore(postStoreClient, logger)
           let saveDraft = SaveDraft.withDependencies {
@@ -96,7 +97,7 @@ type SaveDraft (
                 Title = text json.Title
                 Excerpt = text json.Excerpt
                 Body = text json.Body
-                Details = json.Details |> Option.ofObj |> Option.map PostDetailsDto.toDetails }
+                Details = json.Details |> Option.ofNullable |> Option.map PostDetailsDto.toDetails }
 
           let apiResponse, statusCode =
             match result with

@@ -56,7 +56,7 @@ type ChangeSlug (
             member _.GetPublishedBlob slug = postStore.GetPublishedBlob slug
             member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug
             member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
-            member _.DeleteWorkingBlob slug condition = postStore.DeleteWorkingBlob slug condition
+            member _.DeleteWorkingBlob slug eTag = postStore.DeleteWorkingBlob slug eTag
           }
 
           let! result = changeSlug { Slug = slug; IfMatch = Some eTag; NewSlug = newSlug }

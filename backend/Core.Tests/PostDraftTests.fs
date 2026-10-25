@@ -68,15 +68,15 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
     member this.GetPublishedBlob slug = (this :> GetPostDocument.Dependencies).GetPublishedBlob slug
     member this.GetWorkingBlob slug = (this :> GetPostDocument.Dependencies).GetWorkingBlob slug
     member this.WriteWorkingBlob slug text condition = (this :> SaveDraft.Dependencies).WriteWorkingBlob slug text condition
-    member _.DeleteWorkingBlob slug condition =
+    member _.DeleteWorkingBlob slug etag =
       beforeDelete ()
       let name = Slug.value slug
       let current = working |> Map.tryFind name
 
       let allowed =
-        match condition, current with
-        | MatchesETag etag, Some(_, version) -> etag = $"v{version}"
-        | _ -> false
+        match current with
+        | Some(_, version) -> etag = $"v{version}"
+        | None -> false
 
       if allowed then
         working <- working |> Map.remove name

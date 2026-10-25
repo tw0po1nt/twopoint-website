@@ -17,6 +17,7 @@ open System.Net
 open System.Threading
 
 /// A missing author, category, series, or image is null.
+[<Struct>]
 type PostDetailsDto =
   { Author : string
     Category : string

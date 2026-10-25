@@ -225,16 +225,25 @@ type DeleteOutcome =
   /// The blob changed since the caller read it, or it is gone.
   | DeleteConditionFailed
 
-/// The text of one series record, with the name of its file in the `series` container.
-type StoredSeries = { File : string; Text : string }
+/// The text of one series record. The slug is the blob name without `.yml`.
+type StoredSeries = { Slug : string; Text : string }
+
+[<RequireQualifiedAccess>]
+module StoredSeries =
+
+  /// A record that the parser cannot read is not in the list.
+  let parse (records : StoredSeries list) : TwoPoint.Site.Render.Series list =
+    records
+    |> List.choose (fun record ->
+      TwoPoint.Site.Render.FrontMatter.parseSeries $"{record.Slug}.yml" record.Text |> Result.toOption)
 
 /// A category or a tag on the published posts. `Value` is the text in the front matter of the newest published post
 /// with the slug, and `Title` is the title that the site shows for it.
-type TermCount = { Slug : string; Title : string; Value : string; Posts : int }
+type TermCount = { Slug : Slug; Title : string; Value : string; Posts : int }
 
 type TermSuggestions = { Categories : TermCount list; Tags : TermCount list }
 
-type SeriesListing = { Slug : string; Title : string }
+type SeriesListing = { Slug : Slug; Title : string }
 
 /// `Text` is the pending edit when the post has one, and else the published text. `ETag` is the ETag of the working blob.
 type PostDocument =
