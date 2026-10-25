@@ -43,7 +43,6 @@ let private opened (post: Api.PostDocument) =
 
 let private draft = document Api.Draft (Some "\"v1\"") noDetails
 
-/// A draft with the Details sheet open and the suggestions loaded.
 let private withSheet (post: Api.PostDocument) =
   let model, _ = Shell.update (Shell.Editor(Editor.DetailsMsg Details.Opened)) (opened post)
   fst (Shell.update (Shell.Editor(Editor.DetailsMsg(Details.OptionsAnswered(Ok choices)))) model)
@@ -58,7 +57,6 @@ let private document' (model: Shell.Model) =
 
 let private values (model: Shell.Model) = (document' model).Details.Values
 
-/// The save that the model starts at once.
 let private saved (model: Shell.Model) =
   match send Editor.SaveRequested model with
   | _, Some(Shell.Send [ Shell.SavePost request ]) -> request

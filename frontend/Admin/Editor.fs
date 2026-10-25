@@ -50,7 +50,6 @@ type SaveRequest =
     Details: Api.PostDetails
     Version: int }
 
-/// `ETag` is the ETag of the working blob that the page read.
 type SlugRequest =
   { Slug: string
     ETag: string
@@ -196,7 +195,6 @@ let private detailsChanged (msg: Details.Msg) (document: Document) =
 let private withSlugState (state: Details.SlugState) (document: Document) =
   { document with Details = { document.Details with Slug = state } }
 
-/// Only a draft that the API has in full changes its slug. A change in flight blocks a second change.
 let private requestSlugChange (document: Document) =
   match document.State, document.ETag, document.Save, document.Details.Slug with
   | _, _, _, Details.Changing -> Loaded document, None
@@ -214,7 +212,6 @@ let private requestSlugChange (document: Document) =
   | (Api.Published | Api.Upcoming), _, _, _ ->
     Loaded(withSlugState (Details.ChangeFailed "The slug of a published post is fixed.") document), None
 
-/// The page goes to the new address. Text that the author typed during the call is saved under the new slug first.
 let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
   match result with
   | Ok changed ->

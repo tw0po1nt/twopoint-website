@@ -29,7 +29,6 @@ let private details (model: Shell.Model) =
 let private slug (model: Shell.Model) =
   document model |> Option.map _.Slug |> Option.defaultValue ""
 
-/// The slug of a published post is fixed, and a slug change needs a saved draft.
 let private isDraft (model: Shell.Model) =
   match document model with
   | Some document -> document.State = Api.Draft
@@ -62,34 +61,6 @@ let private optionsText (model: Shell.Model) =
 
 let private typed (event: InputEvent) = (event.target :?> HTMLInputElement).value
 
-let private onEnter (act: unit -> unit) (event: Browser.Types.Event) =
-  let key = event :?> KeyboardEvent
-
-  if key.key = "Enter" then
-    key.preventDefault ()
-    act ()
-
-/// A text input that runs `enter` at the Enter key.
-[<SolidComponent>]
-let private entry
-  (id: string)
-  (placeholder: string)
-  (disabled: unit -> bool)
-  (value: unit -> string)
-  (input': InputEvent -> unit)
-  (enter: unit -> unit)
-  =
-  input(
-    id = id,
-    type' = "text",
-    class' = "input",
-    placeholder = placeholder,
-    disabled = disabled (),
-    value = value (),
-    onInput = input'
-  )
-    .on ("keydown", onEnter enter)
-
 [<SolidComponent>]
 let private chip (label: string) (remove: unit -> unit) =
   span (class' = "chip") {
@@ -119,13 +90,15 @@ let private slugField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
     .Has(
       Fragment() {
         div (class' = "row") {
-          entry
-            "details-slug"
-            null
-            (fun () -> not (isDraft (model ())))
-            (fun () -> (details (model ())).SlugInput)
-            (fun event -> dispatch (Shell.Editor(Editor.DetailsMsg(Details.SlugTyped(typed event)))))
-            (fun () -> dispatch (Shell.Editor Editor.SlugChangeRequested))
+          Parts
+            .Input(
+              id = "details-slug",
+              value = (fun () -> (details (model ())).SlugInput),
+              disabledWhen = (fun () -> not (isDraft (model ()))),
+              onInput = (fun event -> dispatch (Shell.Editor(Editor.DetailsMsg(Details.SlugTyped(typed event))))),
+              onEnter = fun () -> dispatch (Shell.Editor Editor.SlugChangeRequested)
+            )
+            .View()
 
           button (
             type' = "button",
@@ -160,13 +133,16 @@ let private categoryField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
           }
         }
 
-        entry
-          "details-category"
-          "Type a category"
-          locked
-          (fun () -> (details (model ())).CategoryInput)
-          (fun event -> send (Details.CategoryTyped(typed event)))
-          (fun () -> send (Details.CategoryChosen (details (model ())).CategoryInput))
+        Parts
+          .Input(
+            id = "details-category",
+            placeholder = "Type a category",
+            value = (fun () -> (details (model ())).CategoryInput),
+            disabledWhen = locked,
+            onInput = (fun event -> send (Details.CategoryTyped(typed event))),
+            onEnter = fun () -> send (Details.CategoryChosen (details (model ())).CategoryInput)
+          )
+          .View()
 
         Show(when' = not (locked ())) {
           suggestionList
@@ -195,13 +171,15 @@ let private tagsField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
           }
         }
 
-        entry
-          "details-tags"
-          "Type a tag, and press Enter"
-          (fun () -> false)
-          (fun () -> (details (model ())).TagInput)
-          (fun event -> send (Details.TagTyped(typed event)))
-          (fun () -> send (Details.TagAdded (details (model ())).TagInput))
+        Parts
+          .Input(
+            id = "details-tags",
+            placeholder = "Type a tag, and press Enter",
+            value = (fun () -> (details (model ())).TagInput),
+            onInput = (fun event -> send (Details.TagTyped(typed event))),
+            onEnter = fun () -> send (Details.TagAdded (details (model ())).TagInput)
+          )
+          .View()
 
         suggestionList
           (Details.TagAdded >> send)
@@ -221,7 +199,6 @@ let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
   let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
   let current () = (details (model ())).Values.Series |> Option.defaultValue ""
 
-  // A series that the list does not have still shows, so the select does not hide it.
   let listed () =
     let series = (choices (model ())).Series
 
@@ -301,7 +278,6 @@ let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
     }
   }
 
-/// The sheet fills the screen on a phone.
 [<SolidComponent>]
 let sheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let close () = dispatch (Shell.Editor(Editor.DetailsMsg Details.Closed))

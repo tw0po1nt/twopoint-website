@@ -25,7 +25,7 @@ type Post =
     PublishDate: string option
     CommentStats: CommentStats }
 
-/// The front matter fields of the Details sheet. `Category` and `Tags` give the titles. `Series` gives the slug.
+/// `Category` and `Tags` give the text of the front matter. `Series` gives the slug.
 type PostDetails =
   { Author: string option
     Category: string option
@@ -440,7 +440,6 @@ let getTerms (api: string) (token: string) : JS.Promise<Result<Terms, Failure>> 
 let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing list, Failure>> =
   send HttpMethod.GET api token "internal/series"
 
-/// `eTag` is the ETag that the page read.
 let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
   sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some json) [ IfMatch eTag ]

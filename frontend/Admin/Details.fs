@@ -4,7 +4,6 @@ module TwoPoint.Admin.Details
 open System
 open System.Text.RegularExpressions
 
-/// The category that a post in a series has.
 let seriesCategory = "Series"
 
 /// The slug that the site gives to a category or a tag. It has the same rule as the build.
@@ -17,7 +16,6 @@ let termSlug (text: string) =
 let termTitle (text: string) =
   Regex.Replace(Regex.Replace(text, "fsharp", "F#", RegexOptions.IgnoreCase), "csharp", "C#", RegexOptions.IgnoreCase)
 
-/// A post slug has lowercase letters and digits, with a single `-` between them.
 let isSlug (text: string) = Regex.IsMatch(text, "^[a-z0-9]+(-[a-z0-9]+)*$")
 
 type Choices =
@@ -32,7 +30,6 @@ type Options =
 
 type SlugState =
   | Idle
-  /// The call that moves the draft is in flight.
   | Changing
   | ChangeFailed of reason: string
 
@@ -80,7 +77,6 @@ let private known (model: Model) : Api.Terms =
   | Waiting
   | NotLoaded _ -> { Categories = []; Tags = [] }
 
-/// The text of the known term that has the slug of the typed text, or else the typed text.
 /// A text with no letter or digit gives `None`.
 let resolve (terms: Api.Term list) (typed: string) : string option =
   match termSlug typed with
@@ -90,10 +86,8 @@ let resolve (terms: Api.Term list) (typed: string) : string option =
     | Some term -> Some term.Value
     | None -> Some(typed.Trim())
 
-/// The category is `Series` while the post has a series, and the author cannot change it.
 let categoryLocked (values: Api.PostDetails) = values.Series.IsSome
 
-/// The terms that match the typed text and that the post does not have yet. The most used terms come first.
 let suggestions (terms: Api.Term list) (typed: string) (chosen: string list) : Api.Term list =
   let wanted = termSlug typed
   let taken = chosen |> List.map termSlug
@@ -126,7 +120,6 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | AuthorChanged author -> { model with Values = { values with Author = blankAsNone author } }, None
   | CategoryTyped typed when not (categoryLocked values) -> { model with CategoryInput = typed }, None
   | CategoryChosen typed when not (categoryLocked values) ->
-    // The category picker does not offer `Series`, so a typed `Series` does not set it either.
     match resolve (known model).Categories typed with
     | Some title when termSlug title <> termSlug seriesCategory -> withCategory (Some title) model, None
     | Some _
@@ -166,7 +159,6 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | ShowOnHomepageChanged shown -> { model with Values = { values with ShowOnHomepage = shown } }, None
   | SlugTyped typed -> { model with SlugInput = typed; Slug = Idle }, None
 
-/// The text of the slug field is a slug that differs from the current slug.
 let slugChangeable (slug: string) (model: Model) =
   model.SlugInput <> slug && isSlug model.SlugInput
 
