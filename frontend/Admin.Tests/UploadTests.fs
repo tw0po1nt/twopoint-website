@@ -2,15 +2,19 @@ module TwoPoint.Admin.Tests.UploadTests
 
 open TwoPoint.Admin
 
+open Browser.Types
 open Expecto
 
 let private url = "https://twopointwebsite.blob.core.windows.net/assets/0123456789abcdef.png"
+
+// The model never reads the browser file, so the tests pass a null file.
+let private browserFile = Unchecked.defaultof<File>
 
 let private file name contentType size : Upload.Dropped =
   { Name = name
     ContentType = contentType
     Size = size
-    Source = box name
+    File = browserFile
     At = 5 }
 
 let private send msg (model: Shell.Model) = Shell.update (Shell.Upload msg) model
@@ -29,9 +33,9 @@ let tests =
   testList "Upload" [
     test "a dropped image starts an upload, and the answer gives the URL for the editor" {
       let model, effect = send (Upload.Dropped(file "cat.png" "image/png" 1024.)) (started ())
-      Expect.equal effect (Some(Shell.Send [ Shell.UploadAsset(1, box "cat.png") ])) "The call"
+      Expect.equal effect (Some(Shell.Send [ Shell.UploadAsset(1, browserFile) ])) "The call"
       Expect.equal (only model).State Upload.Uploading "The placeholder shows"
-      Expect.equal (only model).Kind (Some Upload.Image) "An image"
+      Expect.equal (only model).Kind Upload.Image "An image"
       Expect.equal (only model).At 5 "The place of the placeholder"
 
       let model, effect = send (Upload.Answered(1, Ok url)) model
@@ -52,7 +56,7 @@ let tests =
     test "a dropped PDF gets a ::pdf line between blank lines" {
       let model, effect = send (Upload.Dropped(file "slides.pdf" "application/pdf" 2048.)) (started ())
       Expect.isSome effect "A call"
-      Expect.equal (only model).Kind (Some Upload.Pdf) "A PDF"
+      Expect.equal (only model).Kind Upload.Pdf "A PDF"
 
       let pdf = "https://twopointwebsite.blob.core.windows.net/assets/0123456789abcdef.pdf"
       let line = $"::pdf{{file=\"{pdf}\"}}"
@@ -69,31 +73,59 @@ let tests =
       Expect.isNone (Upload.kindOf "" "notes.txt") "A text file"
     }
 
-    test "an SVG and a file above 25 MB are refused with no call" {
+    test "an SVG and a file above 25 MB are refused with no call and no upload" {
       let model, effect = send (Upload.Dropped(file "logo.svg" "image/svg+xml" 100.)) (started ())
       Expect.isNone effect "No call for an SVG"
-      Expect.equal (only model).State (Upload.Refused "logo.svg is not a JPEG, PNG, WebP, GIF, or PDF file.") "The reason"
+      Expect.isEmpty model.Uploads.Items "No upload"
+
+      Expect.equal
+        (Upload.notices model.Uploads)
+        [ { Id = 1
+            Title = "A file did not upload."
+            Reason = "logo.svg is not a JPEG, PNG, WebP, GIF, or PDF file."
+            CanRetry = false } ]
+        "The notice has no retry"
 
       let model, effect = send (Upload.Dropped(file "big.pdf" "application/pdf" (Upload.maxBytes + 1.))) model
       Expect.isNone effect "No call for a big file"
-      Expect.equal model.Uploads.Items[1].State (Upload.Refused "big.pdf is larger than 25 MB.") "The reason"
+      Expect.equal (Upload.notices model.Uploads |> List.map _.Reason |> List.last) "big.pdf is larger than 25 MB." "The reason"
 
-      let _, effect = send (Upload.Dropped(file "full.pdf" "application/pdf" Upload.maxBytes)) model
+      let model, effect = send (Upload.Dropped(file "full.pdf" "application/pdf" Upload.maxBytes)) model
       Expect.isSome effect "A file of 25 MB goes out"
+      Expect.equal (only model).Id 3 "The ids go on"
+
+      let model, _ = send (Upload.Dismissed 1) model
+      Expect.equal (Upload.notices model.Uploads |> List.map _.Id) [ 2 ] "The author dismissed the refusal"
     }
 
     test "a failed upload shows the reason, and a retry sends the same file again" {
       let model, _ = send (Upload.Dropped(file "cat.png" "image/png" 1024.)) (started ())
       let model, _ = send (Upload.Answered(1, Error Api.Unanswered)) model
       Expect.equal (only model).State (Upload.Failed "The API did not answer.") "The reason"
-      Expect.isTrue (Upload.isFailed (only model)) "The retry shows"
+
+      Expect.equal
+        (Upload.notices model.Uploads)
+        [ { Id = 1; Title = "cat.png did not upload."; Reason = "The API did not answer."; CanRetry = true } ]
+        "The retry shows"
 
       let model, effect = send (Upload.Retried 1) model
-      Expect.equal effect (Some(Shell.Send [ Shell.UploadAsset(1, box "cat.png") ])) "The same file"
+      Expect.equal effect (Some(Shell.Send [ Shell.UploadAsset(1, browserFile) ])) "The same file"
       Expect.equal (only model).State Upload.Uploading "The placeholder shows again"
+      Expect.isEmpty (Upload.notices model.Uploads) "No notice"
 
       let model, _ = send (Upload.Answered(1, Ok url)) model
       Expect.equal (only model).State (Upload.Ready url) "The second try works"
+    }
+
+    test "a retry uses the place that the placeholder had when the upload failed" {
+      let model, _ = send (Upload.Dropped(file "cat.png" "image/png" 1024.)) (started ())
+      let model, _ = send (Upload.Answered(1, Error Api.Unanswered)) model
+      let model, _ = send (Upload.Placed(1, 12)) model
+      let model, _ = send (Upload.Retried 1) model
+      Expect.equal (only model).At 12 "The moved place"
+
+      let model, _ = send (Upload.Placed(1, 30)) model
+      Expect.equal (only model).At 12 "No place is taken from an upload in flight"
     }
 
     test "the author can dismiss a failed upload, and cannot retry or dismiss an upload in flight" {
@@ -110,7 +142,7 @@ let tests =
       Expect.isEmpty model.Uploads.Items "Dismissed"
     }
 
-    test "two uploads get two ids, and an answer for a dismissed upload changes nothing" {
+    test "two uploads get two ids, and an answer for an unknown upload changes nothing" {
       let model, _ = send (Upload.Dropped(file "a.png" "image/png" 1.)) (started ())
       let model, _ = send (Upload.Dropped(file "b.png" "image/png" 1.)) model
       Expect.equal (model.Uploads.Items |> List.map _.Id) [ 1; 2 ] "The ids"

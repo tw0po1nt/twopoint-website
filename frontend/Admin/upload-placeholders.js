@@ -28,7 +28,6 @@ class Placeholder extends WidgetType {
 const added = StateEffect.define();
 const removed = StateEffect.define();
 
-// The widgets are outside the Markdown text. They move with the text around them.
 export const placeholders = StateField.define({
   create: () => Decoration.none,
   update(set, transaction) {
@@ -62,6 +61,9 @@ const find = (view, id) => {
 
 export const hasPlaceholder = (view, id) => find(view, id) !== null;
 
+// The offset of the placeholder now, or -1 when the view has no placeholder with this id.
+export const placeholderPosition = (view, id) => find(view, id) ?? -1;
+
 export const addPlaceholder = (view, id, pos, label) => {
   view.dispatch({ effects: added.of({ id, label, pos: Math.min(pos, view.state.doc.length) }) });
 };
@@ -72,7 +74,6 @@ export const removePlaceholder = (view, id) => {
 
 export const cursor = (view) => view.state.selection.main.head;
 
-// `insertion` gets the text before and after the placeholder. It gives { text, cursor }, where cursor is an offset in text.
 export const replacePlaceholder = (view, id, insertion) => {
   const pos = find(view, id) ?? cursor(view);
   const doc = view.state.doc.toString();

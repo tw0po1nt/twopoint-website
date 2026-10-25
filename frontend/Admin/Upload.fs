@@ -1,6 +1,7 @@
-/// The images and the PDFs that the author pastes, drops, or picks while the editor is open.
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Upload
+
+open Browser.Types
 
 type Kind =
   | Image
@@ -8,43 +9,45 @@ type Kind =
 
 type State =
   | Uploading
-  /// The API gave the URL. The editor writes the Markdown for it and then sends `Inserted`.
+  /// The editor writes the Markdown for the URL and then sends `Inserted`.
   | Ready of url: string
-  /// The API refused the file or did not answer. The author can retry.
   | Failed of reason: string
-  /// The admin did not send the file. A retry gives the same answer, so the author can only dismiss it.
-  | Refused of reason: string
 
 type Item =
   { Id: int
     Name: string
-    /// None when the type of the file is not allowed.
-    Kind: Kind option
-    /// The browser file. The model keeps it for a retry.
-    Source: obj
-    /// The offset in the body where the placeholder shows.
+    Kind: Kind
+    File: File
     At: int
     State: State }
 
-type Model = { Next: int; Items: Item list }
+/// A file that the admin did not send.
+type Refusal = { Id: int; Reason: string }
+
+type Model =
+  { Next: int
+    Items: Item list
+    Refusals: Refusal list }
 
 type Dropped =
   { Name: string
     ContentType: string
     Size: float
-    Source: obj
+    File: File
     At: int }
 
 type Msg =
   | Dropped of Dropped
   | Answered of id: int * Result<string, Api.Failure>
   | Retried of id: int
+  /// The editor read the place of the placeholder before it removed the placeholder of a failed upload.
+  | Placed of id: int * at: int
   | Dismissed of id: int
   | Inserted of id: int
 
-type Effect = Send of id: int * source: obj
+type Effect = Send of id: int * file: File
 
-let init = { Next = 1; Items = [] }
+let init = { Next = 1; Items = []; Refusals = [] }
 
 let maxBytes = 25. * 1024. * 1024.
 
@@ -56,7 +59,7 @@ let private extensionKinds =
     ".gif", Image
     ".pdf", Pdf ]
 
-/// The type of the file from its content type, and from its name when the browser gives no content type.
+/// The browser can give an empty content type, for example for a dropped PDF.
 let kindOf (contentType: string) (name: string) =
   match contentType with
   | "image/jpeg"
@@ -73,9 +76,9 @@ let kindOf (contentType: string) (name: string) =
 let private find (id: int) (model: Model) =
   model.Items |> List.tryFind (fun item -> item.Id = id)
 
-let private change (id: int) (state: State) (model: Model) =
+let private change (id: int) (update: Item -> Item) (model: Model) =
   { model with
-      Items = model.Items |> List.map (fun item -> if item.Id = id then { item with State = state } else item) }
+      Items = model.Items |> List.map (fun item -> if item.Id = id then update item else item) }
 
 let private remove (id: int) (model: Model) =
   { model with Items = model.Items |> List.filter (fun item -> item.Id <> id) }
@@ -83,60 +86,77 @@ let private remove (id: int) (model: Model) =
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | Dropped file ->
-    let kind = kindOf file.ContentType file.Name
+    let id = model.Next
 
-    let state, effect =
-      match kind with
-      | None -> Refused $"{file.Name} is not a JPEG, PNG, WebP, GIF, or PDF file.", None
-      | Some _ when file.Size > maxBytes -> Refused $"{file.Name} is larger than 25 MB.", None
-      | Some _ -> Uploading, Some(Send(model.Next, file.Source))
+    let refuse reason =
+      { model with
+          Next = id + 1
+          Refusals = model.Refusals @ [ { Id = id; Reason = reason } ] },
+      None
 
-    { Next = model.Next + 1
-      Items =
-        model.Items
-        @ [ { Id = model.Next
-              Name = file.Name
-              Kind = kind
-              Source = file.Source
-              At = file.At
-              State = state } ] },
-    effect
+    match kindOf file.ContentType file.Name with
+    | None -> refuse $"{file.Name} is not a JPEG, PNG, WebP, GIF, or PDF file."
+    | Some _ when file.Size > maxBytes -> refuse $"{file.Name} is larger than 25 MB."
+    | Some kind ->
+      { model with
+          Next = id + 1
+          Items =
+            model.Items
+            @ [ { Id = id
+                  Name = file.Name
+                  Kind = kind
+                  File = file.File
+                  At = file.At
+                  State = Uploading } ] },
+      Some(Send(id, file.File))
   | Answered(id, result) ->
     match find id model, result with
-    | Some { State = Uploading }, Ok url -> change id (Ready url) model, None
-    | Some { State = Uploading }, Error failure -> change id (Failed(Api.reason failure)) model, None
+    | Some { State = Uploading }, Ok url -> change id (fun item -> { item with State = Ready url }) model, None
+    | Some { State = Uploading }, Error failure ->
+      change id (fun item -> { item with State = Failed(Api.reason failure) }) model, None
+    | _ -> model, None
+  | Placed(id, at) ->
+    match find id model with
+    | Some { State = Failed _ } -> change id (fun item -> { item with At = at }) model, None
     | _ -> model, None
   | Retried id ->
     match find id model with
-    | Some { State = Failed _ } as item -> change id Uploading model, item |> Option.map (fun item -> Send(id, item.Source))
+    | Some({ State = Failed _ } as item) -> change id (fun item -> { item with State = Uploading }) model, Some(Send(id, item.File))
     | _ -> model, None
   | Dismissed id ->
     match find id model with
-    | Some { State = Failed _ | Refused _ } -> remove id model, None
-    | _ -> model, None
+    | Some { State = Failed _ } -> remove id model, None
+    | Some _ -> model, None
+    | None -> { model with Refusals = model.Refusals |> List.filter (fun refusal -> refusal.Id <> id) }, None
   | Inserted id ->
     match find id model with
     | Some { State = Ready _ } -> remove id model, None
     | _ -> model, None
 
-/// An upload that waits for the author to retry or dismiss it.
-let isFailed (item: Item) =
-  match item.State with
-  | Failed _
-  | Refused _ -> true
-  | Uploading
-  | Ready _ -> false
+type Notice =
+  { Id: int
+    Title: string
+    Reason: string
+    CanRetry: bool }
 
-let failureReason (item: Item) =
-  match item.State with
-  | Failed reason
-  | Refused reason -> reason
-  | Uploading
-  | Ready _ -> ""
+/// Each upload that waits for the author to dismiss it or, for a failed upload, to retry it.
+let notices (model: Model) : Notice list =
+  [ for item in model.Items do
+      match item.State with
+      | Failed reason ->
+        { Id = item.Id
+          Title = $"{item.Name} did not upload."
+          Reason = reason
+          CanRetry = true }
+      | Uploading
+      | Ready _ -> ()
+    for refusal in model.Refusals do
+      { Id = refusal.Id
+        Title = "A file did not upload."
+        Reason = refusal.Reason
+        CanRetry = false } ]
 
-/// The Markdown that replaces the placeholder, and the offset of the cursor in it.
-/// An image has the cursor between the brackets of the alt text. A PDF line is alone between blank lines.
-/// `before` and `after` are the body text before and after the placeholder.
+/// A PDF line is alone between blank lines. `before` and `after` are the body text around the placeholder.
 let insertion (kind: Kind) (url: string) (before: string) (after: string) : string * int =
   match kind with
   | Image -> $"![]({url})", 2

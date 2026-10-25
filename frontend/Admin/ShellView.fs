@@ -160,8 +160,8 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
       request.Fields.Body
       request.Details
     |> Promise.map (fun result -> Shell.Editor(Editor.PreviewAnswered(request.Slug, result)))
-  | Shell.UploadAsset(id, source) ->
-    Api.uploadAsset (Config.api ()) token (unbox<File> source)
+  | Shell.UploadAsset(id, file) ->
+    Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =

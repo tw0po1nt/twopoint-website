@@ -243,12 +243,16 @@ let private coders =
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
   |> Extra.withCustom (severityName >> Encode.string) severity
 
+type private Payload =
+  | Json of string
+  | Binary of Browser.Types.File
+
 let inline private request<'T>
   (method: HttpMethod)
   (api: string)
   (token: string)
   (path: string)
-  (body: string option)
+  (body: Payload option)
   (preconditions: HttpRequestHeaders list)
   : JS.Promise<Result<ApiResponse<'T>, Failure>> =
   fetchUnsafe $"{api}/api/{path}" [
@@ -256,10 +260,14 @@ let inline private request<'T>
     requestHeaders (
       [ Accept "application/json"; Authorization $"Bearer {token}" ]
       @ preconditions
-      @ (if body.IsSome then [ ContentType "application/json" ] else [])
+      @ (match body with
+         | Some(Json _) -> [ ContentType "application/json" ]
+         | _ -> [])
     )
-    if body.IsSome then
-      Body(U3.Case3 body.Value)
+    match body with
+    | Some(Json text) -> Body(U3.Case3 text)
+    | Some(Binary file) -> Body(U3.Case1 file)
+    | None -> ()
   ]
   |> Promise.bind (fun response ->
     if response.Status = 401 || response.Status = 403 then
@@ -280,7 +288,7 @@ let inline private sendWith<'T>
   (api: string)
   (token: string)
   (path: string)
-  (body: string option)
+  (body: Payload option)
   (preconditions: HttpRequestHeaders list)
   : JS.Promise<Result<'T, Failure>> =
   request<'T> method api token path body preconditions
@@ -295,7 +303,7 @@ let inline private send<'T> (method: HttpMethod) (api: string) (token: string) (
   sendWith<'T> method api token path None []
 
 let private act (method: HttpMethod) (api: string) (token: string) (path: string) (body: string option) =
-  request<unit> method api token path body []
+  request<unit> method api token path (Option.map Json body) []
   |> Promise.map (
     Result.bind (fun answer ->
       match answer with
@@ -403,7 +411,7 @@ let registerDevice (api: string) (token: string) (keys: PushKeys) : JS.Promise<R
     ]
     |> Encode.toString 0
 
-  request<Device> HttpMethod.POST api token "internal/notifications/devices" (Some body) []
+  request<Device> HttpMethod.POST api token "internal/notifications/devices" (Some(Json body)) []
   |> Promise.map (
     Result.bind (fun answer ->
       match answer with
@@ -421,7 +429,7 @@ let getPost (api: string) (token: string) (slug: string) : JS.Promise<Result<Pos
   send HttpMethod.GET api token (postPath slug)
 
 let createDraft (api: string) (token: string) : JS.Promise<Result<CreatedDraft, Failure>> =
-  sendWith HttpMethod.POST api token "internal/posts" (Some "{}") []
+  sendWith HttpMethod.POST api token "internal/posts" (Some(Json "{}")) []
 
 let private encodeDetails (details: PostDetails) =
   let optional (value: string option) =
@@ -463,7 +471,7 @@ let savePost
     ]
     |> Encode.toString 0
 
-  sendWith<SavedPost> HttpMethod.PUT api token (postPath slug) (Some json) [ precondition ]
+  sendWith<SavedPost> HttpMethod.PUT api token (postPath slug) (Some(Json json)) [ precondition ]
   |> Promise.map (Result.map (fun saved -> saved.ETag))
 
 let getTerms (api: string) (token: string) : JS.Promise<Result<Terms, Failure>> =
@@ -474,7 +482,7 @@ let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing li
 
 let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0
-  sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some json) [ IfMatch eTag ]
+  sendWith HttpMethod.PUT api token $"{postPath slug}/slug" (Some(Json json)) [ IfMatch eTag ]
 
 let previewPost
   (api: string)
@@ -494,25 +502,9 @@ let previewPost
     ]
     |> Encode.toString 0
 
-  sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some json) []
+  sendWith HttpMethod.POST api token $"{postPath slug}/preview" (Some(Json json)) []
 type private UploadedAsset = { Url: string }
 
-/// `file` is the browser file. The API checks its type and its size.
 let uploadAsset (api: string) (token: string) (file: Browser.Types.File) : JS.Promise<Result<string, Failure>> =
-  fetchUnsafe $"{api}/api/internal/assets" [
-    Method HttpMethod.POST
-    requestHeaders [ Accept "application/json"; Authorization $"Bearer {token}" ]
-    Body(U3.Case1 file)
-  ]
-  |> Promise.bind (fun response ->
-    if response.Status = 401 || response.Status = 403 then
-      Promise.lift (Error Refused)
-    else
-      response.text ()
-      |> Promise.map (fun text ->
-        match Decode.Auto.fromString<ApiResponse<UploadedAsset>> (text, caseStrategy = CamelCase) with
-        | Ok { Success = true; Data = Some uploaded } -> Ok uploaded.Url
-        | Ok { Message = Some reason } -> Error(Failed reason)
-        | Ok _
-        | Error _ -> Error Invalid))
-  |> Promise.catch (fun _ -> Error Unanswered)
+  sendWith<UploadedAsset> HttpMethod.POST api token "internal/assets" (Some(Binary file)) []
+  |> Promise.map (Result.map (fun uploaded -> uploaded.Url))

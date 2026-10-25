@@ -166,4 +166,22 @@ test('the actions menu has Add image, and it opens the file picker for images an
   await settle();
   assert.equal(uploads.length, sent + 1, 'The picked file goes out');
   assert.deepEqual(placeholders(), ['Uploading wave.gif…']);
+  await reply(200, { success: true, message: null, data: { name: 'dddddddddddddddd.gif', url: `${base}/dddddddddddddddd.gif` } });
+});
+
+test('a retry puts the image where the placeholder moved to, not where the paste happened', async () => {
+  view().dispatch({ selection: { anchor: 0 } });
+  await paste(new File(['png'], 'bird.png', { type: 'image/png' }));
+  view().dispatch({ changes: { from: 0, insert: 'Intro. ' } });
+  assert.deepEqual(placeholders(), ['Uploading bird.png…']);
+
+  await reply(500, { success: false, message: 'The storage is busy', data: null });
+  assert.deepEqual(placeholders(), []);
+
+  press('Retry');
+  await settle();
+  assert.deepEqual(placeholders(), ['Uploading bird.png…']);
+
+  await reply(200, { success: true, message: null, data: { name: 'cccccccccccccccc.png', url: `${base}/cccccccccccccccc.png` } });
+  assert.ok(doc().startsWith(`Intro. ![](${base}/cccccccccccccccc.png)`), doc().slice(0, 90));
 });

@@ -31,7 +31,7 @@ type Call =
   | LoadDetailsOptions
   | ChangeSlug of Editor.SlugRequest
   | PreviewPost of Editor.PreviewRequest
-  | UploadAsset of id: int * source: obj
+  | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -278,7 +278,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     match msg with
     | Upload.Answered(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
-    | _ -> next, effect |> Option.map (fun (Upload.Send(id, source)) -> Send [ UploadAsset(id, source) ])
+    | _ -> next, effect |> Option.map (fun (Upload.Send(id, file)) -> Send [ UploadAsset(id, file) ])
   | Queue(Queue.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) -> model, None
   | Queue msg ->
     let queue, effect = Queue.update msg model.Queue
