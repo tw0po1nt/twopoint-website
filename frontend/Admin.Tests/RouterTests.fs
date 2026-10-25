@@ -8,14 +8,31 @@ open Expecto
 let tests =
   testList "Router" [
     test "the first route comes from the path of the page" {
-      Expect.equal (Router.init "/posts/hello") { Route = Post "hello" } "The editor of a post"
-      Expect.equal (Router.init "/") { Route = Dashboard } "The dashboard"
+      Expect.equal (Router.init "/posts/hello") { Route = Post "hello"; Fragment = "" } "The editor of a post"
+      Expect.equal (Router.init "/") { Route = Dashboard; Fragment = "" } "The dashboard"
     }
 
     test "a followed link shows its route and pushes its path" {
       let model, effect = Router.update (Router.LinkFollowed "/comments") (Router.init "/")
-      Expect.equal model { Route = ModerationQueue } "The moderation queue"
+      Expect.equal model { Route = ModerationQueue; Fragment = "" } "The moderation queue"
       Expect.equal effect (Some(Router.PushUrl "/comments")) "The URL changes"
+    }
+
+    test "a followed link keeps the fragment in the route and in the pushed URL" {
+      let model, effect = Router.update (Router.LinkFollowed "/comments#c-1") (Router.init "/")
+      Expect.equal model { Route = ModerationQueue; Fragment = "c-1" } "The comment is in the route"
+      Expect.equal effect (Some(Router.PushUrl "/comments#c-1")) "The URL has the fragment"
+    }
+
+    test "the first route keeps the fragment of the page" {
+      Expect.equal (Router.init "/posts/hello/comments#c-2") { Route = PostComments "hello"; Fragment = "c-2" } "The comment"
+    }
+
+    test "a followed link to the same route with another fragment pushes the new URL" {
+      let start = Router.init "/comments#c-1"
+      let model, effect = Router.update (Router.LinkFollowed "/comments#c-2") start
+      Expect.equal model.Fragment "c-2" "The new comment"
+      Expect.equal effect (Some(Router.PushUrl "/comments#c-2")) "The URL changes"
     }
 
     test "a followed link pushes the path of its route" {
@@ -32,7 +49,7 @@ let tests =
 
     test "a URL change from the browser shows its route and pushes nothing" {
       let model, effect = Router.update (Router.UrlChanged "/subscriptions") (Router.init "/settings")
-      Expect.equal model { Route = Subscriptions } "The subscriptions"
+      Expect.equal model { Route = Subscriptions; Fragment = "" } "The subscriptions"
       Expect.isNone effect "The browser already changed the URL"
     }
 

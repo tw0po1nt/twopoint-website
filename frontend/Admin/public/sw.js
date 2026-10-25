@@ -20,8 +20,6 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(resubscribe(event));
 });
 
-// The backend sends the data of a new comment. The worker builds the notification, because the backend
-// sends no text to show. The tag is the comment ID, so a queue retry replaces the notification.
 const bodyLength = 120;
 
 const readData = (event) => {
@@ -89,7 +87,6 @@ const open = async (target) => {
     return;
   }
 
-  // The page opens the target with its router, so it keeps its state.
   await pages[0].focus();
   pages[0].postMessage({ type: 'open', target });
 };

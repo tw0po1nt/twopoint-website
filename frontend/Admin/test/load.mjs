@@ -95,8 +95,8 @@ export const stubPush = (members = {}) => {
       onOpenRequest: () => {
         events.push('onOpenRequest');
       },
-      clearBadge: () => {
-        events.push('clearBadge');
+      setBadge: (count) => {
+        events.push(`setBadge:${count}`);
       },
       ...members,
     },

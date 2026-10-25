@@ -27,6 +27,20 @@ let tests =
       Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue ])) "The first API calls"
     }
 
+    test "an open request from the push worker keeps the fragment of the comment in the route" {
+      let model, _ = Shell.init "/"
+      let model, effect = Shell.update (Shell.OpenRequested "/posts/first/comments#c-1") model
+      Expect.equal model.Router { Route = PostComments "first"; Fragment = "c-1" } "The route has the comment"
+      Expect.isSome effect "The page loads the comments"
+    }
+
+    test "a loaded moderation queue sets the badge to its count" {
+      let model, _ = Shell.init "/comments"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let _, effect = Shell.update (Shell.Queue(Queue.Answered(Ok []))) model
+      Expect.equal effect (Some(Shell.SetBadge 0)) "The badge clears at 0"
+    }
+
     test "a start with no session sends no API call" {
       let model, _ = Shell.init "/"
       let _, effect = Shell.update (Shell.Session(Session.Started false)) model

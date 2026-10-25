@@ -1,7 +1,7 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Router
 
-type Model = { Route: Route }
+type Model = { Route: Route; Fragment: string }
 
 type Msg =
   | LinkFollowed of path: string
@@ -9,18 +9,27 @@ type Msg =
 
 type Effect = PushUrl of path: string
 
-let init (path: string) = { Route = Route.parse path }
+let private split (path: string) =
+  match path.IndexOf '#' with
+  | -1 -> path, ""
+  | index -> path.Substring(0, index), path.Substring(index + 1)
+
+let init (path: string) =
+  let path, fragment = split path
+  { Route = Route.parse path; Fragment = fragment }
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | LinkFollowed path ->
+    let path, fragment = split path
     let route = Route.parse path
 
-    if route = model.Route then
+    if route = model.Route && fragment = model.Fragment then
       model, None
     else
-      { Route = route }, Some(PushUrl(Route.path route))
-  | UrlChanged path -> { Route = Route.parse path }, None
+      let hash = if fragment = "" then "" else $"#{fragment}"
+      { Route = route; Fragment = fragment }, Some(PushUrl(Route.path route + hash))
+  | UrlChanged path -> init path, None
 
 let navigation =
   [ Dashboard; Posts; ModerationQueue; Commenters; Series; Subscriptions; Settings ]

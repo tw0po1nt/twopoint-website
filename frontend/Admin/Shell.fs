@@ -65,9 +65,7 @@ type Msg =
   | Commenter of Commenter.Msg
   | Subscriptions of Subscriptions.Msg
   | Notifications of Notifications.Msg
-  /// The push worker showed the notification of a new comment, so the moderation queue can have a new row.
   | NewCommentAnnounced
-  /// The author clicked a notification, and the push worker asks this page to open the target.
   | OpenRequested of target: string
   | Opened of Overlay
   /// The browser closed the overlay, for example after the Esc key.
@@ -81,8 +79,7 @@ type Effect =
   /// Asks the browser for the permission and the subscription. A click starts it, so no token call comes first.
   | Subscribe
   | Unsubscribe
-  /// Removes the badge of the app icon.
-  | ClearBadge
+  | SetBadge of count: int
   /// Starts the autosave timer of the editor.
   | Autosave of version: int
 
@@ -128,8 +125,10 @@ let init (path: string) : Model * Effect option =
   |> fst,
   Option.map SignIn effect
 
-/// The badge shows the count of new comments, so an empty queue clears it.
-let private clearsBadge (queue: Queue.Model) = Queue.count queue = Some 0
+let private withBadge (before: Queue.Model) (after: Queue.Model) (model, effect) =
+  match effect, Queue.count after with
+  | None, Some count when Queue.count before <> Some count -> model, Some(SetBadge count)
+  | _ -> model, effect
 
 let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
   match msg with
@@ -142,7 +141,7 @@ let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
 /// The author goes to another page, and the editor has text that the API does not have.
 let private leavesUnsavedText (model: Model) (path: string) =
   match model.Editor with
-  | Some(Editor.Loaded document) -> Route.parse path <> model.Router.Route && Editor.needsSave document
+  | Some(Editor.Loaded document) -> (Router.init path).Route <> model.Router.Route && Editor.needsSave document
   | _ -> false
 
 let rec update (msg: Msg) (model: Model) : Model * Effect option =
@@ -267,9 +266,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Queue.Trust comment -> Send [ TrustCommenter comment ]
           | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ])
 
-      match effect with
-      | None when clearsBadge queue -> next, Some ClearBadge
-      | _ -> next, effect
+      withBadge model.Queue queue (next, effect)
   | PostComments(PostComments.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) ->
     model, None
   | PostComments msg ->
@@ -297,9 +294,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         effect
         |> Option.map (fun (PostComments.Moderate(slug, comment, action)) -> Send [ ModeratePostComment(slug, comment, action) ])
 
-      match effect with
-      | None when clearsBadge next.Queue -> next, Some ClearBadge
-      | _ -> next, effect
+      withBadge model.Queue next.Queue (next, effect)
   | Commenters msg ->
     let next = { model with Commenters = Commenters.update msg model.Commenters }
 
@@ -390,8 +385,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         | Notifications.Resync -> sync ResyncDevice
         | Notifications.Remove deviceId -> Some(Send [ RemoveDevice deviceId ]))
   | NewCommentAnnounced -> model, (if Session.isActive model.Session then Some(Send [ LoadQueue ]) else None)
-  // The target can end with a fragment, and the router has no use for it.
-  | OpenRequested target -> update (Router(Router.LinkFollowed(target.Split('#')[0]))) model
+  | OpenRequested target -> update (Router(Router.LinkFollowed target)) model
   | Opened overlay -> { model with Overlay = Some overlay }, None
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None
