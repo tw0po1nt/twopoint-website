@@ -20,10 +20,7 @@ type Action =
   | Cancel
   | Delete
 
-type State =
-  | Ready
-  | Sending of Action
-  | NotDone of Action * reason: string
+type State = Progress<Action>
 
 type Sheet =
   { Id: string
@@ -77,18 +74,12 @@ let label (action: Action) =
   | Cancel -> "Cancel subscription"
   | Delete -> "Delete"
 
-let isSending (state: State) =
-  match state with
-  | Sending _ -> true
-  | Ready
-  | NotDone _ -> false
-
 let failure (state: State) =
   match state with
-  | NotDone(Cancel, reason) -> Some $"The cancel did not complete. {reason}"
-  | NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
-  | Ready
-  | Sending _ -> None
+  | Progress.NotDone(Cancel, reason) -> Some $"The cancel did not complete. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Progress.Ready
+  | Progress.Sending _ -> None
 
 let private find (subscriptionId: string) (model: Model) =
   match model.Subscriptions with
@@ -103,7 +94,7 @@ let private withState (subscriptionId: string) (state: State) (model: Model) =
         |> Option.map (fun sheet -> if sheet.Id = subscriptionId then { sheet with State = state } else sheet) }
 
 let private notDone (subscriptionId: string) (action: Action) (failure: Api.Failure) (model: Model) =
-  withState subscriptionId (NotDone(action, Api.reason failure)) model
+  withState subscriptionId (Progress.NotDone(action, Api.reason failure)) model
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg, model.Sheet with
@@ -119,7 +110,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
             Some
               { Id = subscriptionId
                 Deliveries = DeliveriesWaiting
-                State = Ready } },
+                State = Progress.Ready } },
       Some(LoadDeliveries subscriptionId)
     | None -> model, None
   | Closed, _ -> { model with Sheet = None }, None
@@ -135,9 +126,9 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | DeliveriesAnswered _, _ -> model, None
   | Chosen(subscriptionId, action), Some sheet when sheet.Id = subscriptionId ->
     match sheet.State, find subscriptionId model with
-    | (Ready | NotDone _), Some subscription when List.contains action (actions subscription) ->
+    | (Progress.Ready | Progress.NotDone _), Some subscription when List.contains action (actions subscription) ->
       { model with
-          Sheet = Some { sheet with State = Sending action } },
+          Sheet = Some { sheet with State = Progress.Sending action } },
       Some(
         match action with
         | Cancel -> CancelSubscription subscriptionId
@@ -146,7 +137,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | _ -> model, None
   | Chosen _, _ -> model, None
   | Canceled(subscriptionId, Ok canceled), _ ->
-    let model = withState subscriptionId Ready model
+    let model = withState subscriptionId Progress.Ready model
 
     { model with
         Subscriptions =

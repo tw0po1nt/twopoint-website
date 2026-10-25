@@ -29,7 +29,7 @@ let private counts active inactive : Subscriptions.Counts = { Active = active; I
 let private sheet id deliveries : Subscriptions.Sheet =
   { Id = id
     Deliveries = deliveries
-    State = Subscriptions.Ready }
+    State = Progress.Ready }
 
 let private start (path: string) =
   let model, _ = Shell.init path
@@ -249,7 +249,7 @@ let private actionTests =
 
       Expect.equal
         (model.Subscriptions.Sheet |> Option.map _.State)
-        (Some(Subscriptions.Sending Subscriptions.Cancel))
+        (Some(Progress.Sending Subscriptions.Cancel))
         "Sending"
     }
 
@@ -279,7 +279,7 @@ let private actionTests =
 
       Expect.isNone effect "No call"
       Expect.equal (Subscriptions.tryOpened model.Subscriptions) (Some canceled) "Canceled"
-      Expect.equal (model.Subscriptions.Sheet |> Option.map _.State) (Some Subscriptions.Ready) "Ready"
+      Expect.equal (model.Subscriptions.Sheet |> Option.map _.State) (Some Progress.Ready) "Ready"
       Expect.equal (Subscriptions.counts model.Subscriptions) (Some(counts 1 3)) "The counts follow"
     }
 

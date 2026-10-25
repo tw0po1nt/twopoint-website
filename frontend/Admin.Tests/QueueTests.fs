@@ -52,7 +52,7 @@ let tests =
     test "Approve sends the approval, and the answer removes the row and lowers the navigation count" {
       let model, effect = send (Queue.Chosen("first", Queue.Approve)) (loaded ())
       Expect.equal effect (Some(Shell.Send [ Shell.Moderate(first, Queue.Approve) ])) "The approval call"
-      Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists (fun row -> Queue.sends row.State)) "The buttons are off"
+      Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists (fun row -> Progress.isSending row.State)) "The buttons are off"
       Expect.equal (Queue.count model.Queue) (Some 2) "The count stays until the answer"
 
       let model, effect = send (Queue.Done("first", Queue.Approve, Ok())) model
@@ -84,7 +84,7 @@ let tests =
       Expect.equal effect (Some(Shell.Send [ Shell.Moderate(trusted first, Queue.Approve) ])) "The approval call"
       Expect.equal (commenterStatus "third" model) (Some Api.Trusted) "The other comment of the commenter shows the trust"
       Expect.equal (commenterStatus "second" model) (Some Api.Trusted) "The other commenter stays as it was"
-      Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists (fun row -> Queue.sends row.State)) "The buttons stay off"
+      Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists (fun row -> Progress.isSending row.State)) "The buttons stay off"
 
       let model, effect = send (Queue.Done("first", Queue.Approve, Ok())) model
       Expect.equal effect (Some(Shell.SetBadge 2)) "The badge shows the new count"

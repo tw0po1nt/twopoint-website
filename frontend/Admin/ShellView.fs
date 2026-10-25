@@ -464,7 +464,7 @@ let private rowEnd
 
     div (class' = "actions") {
       For(each = Array.ofList actions) {
-        yield fun action _ -> actionButton dispatch commentId choose (Queue.sends state) action
+        yield fun action _ -> actionButton dispatch commentId choose (Progress.isSending state) action
       }
     }
   }
@@ -671,7 +671,7 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
 
           div (class' = "actions") {
             For(each = Array.ofList (Commenter.actions commenter.Status)) {
-              yield fun action _ -> commenterAction dispatch (Commenter.sends state) action
+              yield fun action _ -> commenterAction dispatch (Progress.isSending state) action
             }
           }
         }
@@ -911,7 +911,7 @@ let private subscriptionDetails (dispatch: Shell.Msg -> unit) (model: Subscripti
 
       div (class' = "actions") {
         For(each = Array.ofList (Subscriptions.actions subscription)) {
-          yield fun action _ -> subscriptionAction dispatch subscription.Id (Subscriptions.isSending sheet.State) action
+          yield fun action _ -> subscriptionAction dispatch subscription.Id (Progress.isSending sheet.State) action
         }
       }
 

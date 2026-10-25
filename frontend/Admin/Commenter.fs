@@ -8,10 +8,7 @@ type Action =
   | Unban
   | Delete
 
-type State =
-  | Ready
-  | Sending of Action
-  | NotDone of Action * reason: string
+type State = Progress<Action>
 
 type Page =
   | Waiting
@@ -68,8 +65,8 @@ let private changed (status: Api.CommenterStatus) (page: Api.CommenterComments) 
 
 let private choose (action: Action) (model: Model) =
   match model.Page with
-  | Loaded(page, (Ready | NotDone _)) when List.contains action (actions page.Commenter.Status) ->
-    { model with Page = Loaded(page, Sending action) }, Some(Change(model.Id, action))
+  | Loaded(page, (Progress.Ready | Progress.NotDone _)) when List.contains action (actions page.Commenter.Status) ->
+    { model with Page = Loaded(page, Progress.Sending action) }, Some(Change(model.Id, action))
   | Loaded _
   | Waiting
   | NotLoaded _ -> model, None
@@ -78,15 +75,15 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   match model.Page, msg with
   | _, Answered(commenterId, _)
   | _, Done(commenterId, _, _) when commenterId <> model.Id -> model, None
-  | _, Answered(_, Ok page) -> { model with Page = Loaded(page, Ready) }, None
+  | _, Answered(_, Ok page) -> { model with Page = Loaded(page, Progress.Ready) }, None
   | _, Answered(_, Error failure) -> { model with Page = NotLoaded(Api.reason failure) }, None
   | _, Chosen action -> choose action model
   | Loaded(page, _), Done(_, action, Ok()) ->
     match statusAfter action with
-    | Some status -> { model with Page = Loaded(changed status page, Ready) }, None
+    | Some status -> { model with Page = Loaded(changed status page, Progress.Ready) }, None
     | None -> model, None
   | Loaded(page, _), Done(_, action, Error failure) ->
-    { model with Page = Loaded(page, NotDone(action, Api.reason failure)) }, None
+    { model with Page = Loaded(page, Progress.NotDone(action, Api.reason failure)) }, None
   | (Waiting | NotLoaded _), Done _ -> model, None
 
 let tryCommenter (model: Model) =
@@ -95,18 +92,12 @@ let tryCommenter (model: Model) =
   | Waiting
   | NotLoaded _ -> None
 
-let sends (state: State) =
-  match state with
-  | Sending _ -> true
-  | Ready
-  | NotDone _ -> false
-
 let failure (state: State) =
   match state with
-  | NotDone(Trust, reason) -> Some $"The trust did not complete. {reason}"
-  | NotDone(Untrust, reason) -> Some $"The untrust did not complete. {reason}"
-  | NotDone(Ban, reason) -> Some $"The ban did not complete. {reason}"
-  | NotDone(Unban, reason) -> Some $"The unban did not complete. {reason}"
-  | NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
-  | Ready
-  | Sending _ -> None
+  | Progress.NotDone(Trust, reason) -> Some $"The trust did not complete. {reason}"
+  | Progress.NotDone(Untrust, reason) -> Some $"The untrust did not complete. {reason}"
+  | Progress.NotDone(Ban, reason) -> Some $"The ban did not complete. {reason}"
+  | Progress.NotDone(Unban, reason) -> Some $"The unban did not complete. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Progress.Ready
+  | Progress.Sending _ -> None
