@@ -120,6 +120,8 @@ module PhotoFixtures =
     [ chunk "eXIf" (tiff false orientation)
       chunk "iTXt" (Array.append (ascii "XML:com.adobe.xmp\000\000\000\000\000") (ascii "<x:xmpmeta>Canon</x:xmpmeta>"))
       title
+      chunk "tEXt" (ascii "Software\000SecretEditor")
+      chunk "caBX" [| 1uy; 2uy; 3uy |]
       chunk "zTXt" (Array.append (ascii "Raw profile type exif\000\000") [| 0x78uy; 0x9Cuy; 1uy; 2uy |])
       chunk "tEXt" (ascii "Raw profile type iptc\000\nIPTC\n 4 1c02") ]
 
@@ -188,6 +190,25 @@ let tests =
         Expect.equal (strip PhotoFormat.Jpeg input) (jpegWithOrientationOnly 3) "Orientation 3"
       }
 
+      test "only JFIF, ICC, and Adobe application segments stay, and comments go" {
+        let adobe = segment 0xEE (ascii "Adobe\000\100\000\000\000\000\001")
+        let mpf = segment 0xE2 (ascii "MPF\000secret")
+        let others =
+          [ segment 0xE3 (ascii "meta")
+            segment 0xEB (ascii "jumb c2pa")
+            segment 0xEC (ascii "Ducky")
+            segment 0xFE (ascii "Comment: home address")
+            mpf ]
+
+        let input = Array.concat [ soi; jfif; Array.concat others; adobe; icc; jpegImageData; eoi ]
+        Expect.equal (strip PhotoFormat.Jpeg input) (Array.concat [ soi; jfif; adobe; icc; jpegImageData; eoi ]) "Kept byte for byte"
+      }
+
+      test "stray bytes between segments are skipped" {
+        let input = Array.concat [ soi; jfif; [| 0uy; 0uy; 7uy |]; icc; jpegImageData; eoi ]
+        Expect.equal (strip PhotoFormat.Jpeg input) cleanJpeg "Skipped"
+      }
+
       test "a file with no Orientation gets no EXIF" {
         Expect.equal (strip PhotoFormat.Jpeg (jpegWithMetadata None)) cleanJpeg "No EXIF"
       }
@@ -216,13 +237,18 @@ let tests =
     testList "PNG" [
       test "the output has only the Orientation eXIf and no GPS, camera, XMP, or IPTC data" {
         let stripped = strip PhotoFormat.Png (pngFrom (pngMetadata (Some 6)))
-        let expected = pngFrom [ title; chunk "eXIf" (orientationTiff 6) ]
+        let expected = pngFrom [ chunk "eXIf" (orientationTiff 6) ]
         Expect.equal stripped expected "Other chunks stay, with a minimal eXIf before the first IDAT"
         expectNoPrivateText stripped
       }
 
+      test "an eXIf with an Exif prefix keeps its Orientation" {
+        let input = pngFrom [ chunk "eXIf" (exifPayload (tiff true (Some 7))) ]
+        Expect.equal (strip PhotoFormat.Png input) (pngFrom [ chunk "eXIf" (orientationTiff 7) ]) "Orientation 7"
+      }
+
       test "a file with no Orientation gets no eXIf" {
-        Expect.equal (strip PhotoFormat.Png (pngFrom (pngMetadata None))) (pngFrom [ title ]) "No eXIf"
+        Expect.equal (strip PhotoFormat.Png (pngFrom (pngMetadata None))) cleanPng "No eXIf"
       }
 
       test "the compressed image data is byte for byte the same" {
@@ -257,6 +283,17 @@ let tests =
       test "the compressed image data is byte for byte the same" {
         let stripped = strip PhotoFormat.WebP (webpWithMetadata (Some 5))
         Expect.isSome (indexOf (Array.append alph vp8) stripped) "The ALPH and VP8 chunks are unchanged"
+      }
+
+      test "a simple file loses its EXIF and XMP chunks, and the RIFF size is right" {
+        let input = riff [ vp8; riffChunk "EXIF" (tiff true (Some 6)); riffChunk "XMP " (ascii "Canon") ]
+        Expect.equal (strip PhotoFormat.WebP input) simpleWebP "Only the image chunk stays"
+      }
+
+      test "an odd last chunk with no pad byte is accepted" {
+        let odd = Array.concat [ ascii "VP8L"; le32 3; [| 1uy; 2uy; 3uy |] ]
+        let input = Array.concat [ ascii "RIFF"; le32 (4 + odd.Length); ascii "WEBP"; odd ]
+        Expect.equal (strip PhotoFormat.WebP input) (riff [ riffChunk "VP8L" [| 1uy; 2uy; 3uy |] ]) "Padded"
       }
 
       test "a simple file is unchanged, and data after the RIFF is removed" {

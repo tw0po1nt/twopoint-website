@@ -9,6 +9,7 @@ type PhotoFormat =
   | Png
   | WebP
 
+[<RequireQualifiedAccess>]
 type MalformedPhoto =
   | Truncated
   | InvalidStructure
@@ -34,7 +35,7 @@ module PhotoMetadata =
 
   let private orientationTag = 0x0112
 
-  /// Reads the Orientation of IFD0 in a TIFF structure. Only the values 1 to 8 are valid.
+  /// EXIF defines Orientation values 1 to 8 only.
   let private tiffOrientation (tiff : byte[]) : int option =
     let reader =
       if tiff.Length < 8 then None
@@ -75,10 +76,6 @@ module PhotoMetadata =
        0x01uy; 0x12uy; 0uy; 3uy; 0uy; 0uy; 0uy; 1uy; 0uy; byte orientation; 0uy; 0uy
        0uy; 0uy; 0uy; 0uy |]
 
-  let private keyword (data : byte[]) =
-    let length = match Array.tryFindIndex ((=) 0uy) data with Some index -> index | None -> data.Length
-    Encoding.Latin1.GetString(data, 0, length)
-
   // ==================================================================================================================
   // JPEG
   // ==================================================================================================================
@@ -88,7 +85,7 @@ module PhotoMetadata =
   let private isStandalone marker = marker = 0x01 || (marker >= 0xD0 && marker <= 0xD8)
 
   let rec private scanEnd (bytes : byte[]) (i : int) : Result<int, MalformedPhoto> =
-    if i + 1 >= bytes.Length then Error Truncated
+    if i + 1 >= bytes.Length then Error MalformedPhoto.Truncated
     elif bytes[i] <> 0xFFuy then scanEnd bytes (i + 1)
     else
       match int bytes[i + 1] with
@@ -98,8 +95,11 @@ module PhotoMetadata =
       | _ -> Ok i
 
   let rec private readSegments (bytes : byte[]) (pos : int) (acc : Segment list) : Result<Segment list, MalformedPhoto> =
-    if pos + 1 >= bytes.Length then Error Truncated
-    elif bytes[pos] <> 0xFFuy then Error InvalidStructure
+    if pos + 1 >= bytes.Length then Error MalformedPhoto.Truncated
+    elif bytes[pos] <> 0xFFuy then
+      match Array.IndexOf(bytes, 0xFFuy, pos) with
+      | -1 -> Error MalformedPhoto.Truncated
+      | next -> readSegments bytes next acc
     elif bytes[pos + 1] = 0xFFuy then readSegments bytes (pos + 1) acc
     else
       let marker = int bytes[pos + 1]
@@ -108,13 +108,13 @@ module PhotoMetadata =
         Ok(List.rev ({ Marker = marker; Bytes = bytes[pos .. pos + 1] } :: acc))
       elif isStandalone marker then
         readSegments bytes (pos + 2) ({ Marker = marker; Bytes = bytes[pos .. pos + 1] } :: acc)
-      elif pos + 4 > bytes.Length then Error Truncated
+      elif pos + 4 > bytes.Length then Error MalformedPhoto.Truncated
       else
         let length = be16 bytes (pos + 2)
         let headerEnd = pos + 2 + length
 
-        if length < 2 then Error InvalidStructure
-        elif headerEnd > bytes.Length then Error Truncated
+        if length < 2 then Error MalformedPhoto.InvalidStructure
+        elif headerEnd > bytes.Length then Error MalformedPhoto.Truncated
         elif marker = 0xDA then
           match scanEnd bytes headerEnd with
           | Error error -> Error error
@@ -128,6 +128,13 @@ module PhotoMetadata =
     else
       None
 
+  let private keepSegment (segment : Segment) =
+    match segment.Marker with
+    | 0xE0 -> true
+    | 0xE2 -> segment.Bytes |> startsWith (ascii "ICC_PROFILE\000") 4
+    | 0xEE -> segment.Bytes |> startsWith (ascii "Adobe") 4
+    | marker -> marker < 0xE1 || marker > 0xEF && marker <> 0xFE
+
   let private jpegExif (orientation : int) =
     let tiff = orientationTiff orientation
     let length = 2 + exifPrefix.Length + tiff.Length
@@ -135,11 +142,11 @@ module PhotoMetadata =
 
   let private stripJpeg (bytes : byte[]) : Result<byte[], MalformedPhoto> =
     if not (bytes |> startsWith [| 0xFFuy; 0xD8uy |] 0) then
-      Error InvalidStructure
+      Error MalformedPhoto.InvalidStructure
     else
       readSegments bytes 2 [ { Marker = 0xD8; Bytes = bytes[0..1] } ]
       |> Result.map (fun segments ->
-        let kept = segments |> List.filter (fun segment -> segment.Marker <> 0xE1 && segment.Marker <> 0xED)
+        let kept = segments |> List.filter keepSegment
 
         let withExif =
           match segments |> List.tryPick jpegOrientation with
@@ -172,12 +179,12 @@ module PhotoMetadata =
       Raw = Array.concat [ putBe32 data.Length; body; putBe32 (int (crc32 body)) ] }
 
   let rec private readChunks (bytes : byte[]) (pos : int) (acc : Chunk list) : Result<Chunk list, MalformedPhoto> =
-    if pos + 12 > bytes.Length then Error Truncated
+    if pos + 12 > bytes.Length then Error MalformedPhoto.Truncated
     else
       let length = be32 bytes pos
 
       if length > int64 (bytes.Length - pos - 12) then
-        Error Truncated
+        Error MalformedPhoto.Truncated
       else
         let finish = pos + 12 + int length
         let chunkType = Encoding.ASCII.GetString(bytes, pos + 4, 4)
@@ -187,24 +194,21 @@ module PhotoMetadata =
 
   let private isPngMetadata (chunk : Chunk) =
     match chunk.Type with
-    | "eXIf" -> true
-    | "tEXt" | "zTXt" | "iTXt" ->
-      let name = keyword chunk.Data
-      name = "XML:com.adobe.xmp" || name.StartsWith("Raw profile type", StringComparison.OrdinalIgnoreCase)
+    | "eXIf" | "tEXt" | "zTXt" | "iTXt" | "caBX" -> true
     | _ -> false
 
   let private pngSignature = [| 0x89uy; 0x50uy; 0x4Euy; 0x47uy; 0x0Duy; 0x0Auy; 0x1Auy; 0x0Auy |]
 
   let private stripPng (bytes : byte[]) : Result<byte[], MalformedPhoto> =
     if not (bytes |> startsWith pngSignature 0) then
-      Error InvalidStructure
+      Error MalformedPhoto.InvalidStructure
     else
       readChunks bytes pngSignature.Length []
       |> Result.map (fun chunks ->
         let kept = chunks |> List.filter (isPngMetadata >> not)
 
         let withExif =
-          match chunks |> List.tryFind (fun chunk -> chunk.Type = "eXIf") |> Option.bind (fun chunk -> tiffOrientation chunk.Data) with
+          match chunks |> List.tryFind (fun chunk -> chunk.Type = "eXIf") |> Option.bind (fun chunk -> tiffOrientation (withoutExifPrefix chunk.Data)) with
           | None -> kept
           | Some orientation ->
             let at = kept |> List.tryFindIndex (fun chunk -> chunk.Type = "IDAT") |> Option.defaultValue (kept.Length - 1)
@@ -220,13 +224,14 @@ module PhotoMetadata =
 
   let rec private readRiffChunks (bytes : byte[]) (pos : int) (finish : int) (acc : RiffChunk list) =
     if pos = finish then Ok(List.rev acc)
-    elif pos + 8 > finish then Error Truncated
+    elif pos + 8 > finish then Error MalformedPhoto.Truncated
     else
       let size = le32 bytes (pos + 4)
-      let next = int64 pos + 8L + size + (size &&& 1L)
+      let dataEnd = int64 pos + 8L + size
+      let next = if dataEnd = int64 finish then dataEnd else dataEnd + (size &&& 1L)
 
       if next > int64 finish then
-        Error Truncated
+        Error MalformedPhoto.Truncated
       else
         let chunk = { FourCc = Encoding.ASCII.GetString(bytes, pos, 4); Content = bytes[pos + 8 .. pos + 7 + int size] }
         readRiffChunks bytes (int next) finish (chunk :: acc)
@@ -235,17 +240,23 @@ module PhotoMetadata =
     let pad = if chunk.Content.Length % 2 = 1 then [| 0uy |] else [||]
     Array.concat [ ascii chunk.FourCc; putLe32 chunk.Content.Length; chunk.Content; pad ]
 
+  let private riffFile (chunks : RiffChunk list) =
+    let body = Array.concat [ ascii "WEBP"; chunks |> List.map riffBytes |> Array.concat ]
+    Array.concat [ ascii "RIFF"; putLe32 body.Length; body ]
+
+  let private isWebPMetadata (chunk : RiffChunk) = chunk.FourCc = "EXIF" || chunk.FourCc = "XMP "
+
   let private exifFlag = 0x08uy
   let private xmpFlag = 0x04uy
 
   let private stripWebP (bytes : byte[]) : Result<byte[], MalformedPhoto> =
     if bytes.Length < 12 || not (bytes |> startsWith (ascii "RIFF") 0) || not (bytes |> startsWith (ascii "WEBP") 8) then
-      Error InvalidStructure
+      Error MalformedPhoto.InvalidStructure
     else
       let riffSize = le32 bytes 4
 
-      if riffSize < 4L then Error InvalidStructure
-      elif riffSize + 8L > int64 bytes.Length then Error Truncated
+      if riffSize < 4L then Error MalformedPhoto.InvalidStructure
+      elif riffSize + 8L > int64 bytes.Length then Error MalformedPhoto.Truncated
       else
         readRiffChunks bytes 12 (int riffSize + 8) []
         |> Result.bind (fun chunks ->
@@ -261,7 +272,7 @@ module PhotoMetadata =
 
             let kept =
               chunks
-              |> List.filter (fun chunk -> chunk.FourCc <> "EXIF" && chunk.FourCc <> "XMP ")
+              |> List.filter (isWebPMetadata >> not)
               |> List.mapi (fun i chunk ->
                 if i = 0 then { chunk with Content = Array.append [| flags |] header[1..] } else chunk)
 
@@ -270,10 +281,9 @@ module PhotoMetadata =
               |> Option.map (fun value -> { FourCc = "EXIF"; Content = orientationTiff value })
               |> Option.toList
 
-            let body = Array.concat [ ascii "WEBP"; (kept @ exif) |> List.map riffBytes |> Array.concat ]
-            Ok(Array.concat [ ascii "RIFF"; putLe32 body.Length; body ])
-          | { FourCc = "VP8X" } :: _ -> Error InvalidStructure
-          | _ -> Ok bytes[0 .. int riffSize + 7])
+            Ok(riffFile (kept @ exif))
+          | { FourCc = "VP8X" } :: _ -> Error MalformedPhoto.InvalidStructure
+          | _ -> Ok(riffFile (chunks |> List.filter (isWebPMetadata >> not))))
 
   let strip (format : PhotoFormat) (bytes : byte[]) : Result<byte[], MalformedPhoto> =
     match format with

@@ -1,7 +1,7 @@
 module TwoPoint.Core.Tests.UploadAssetTests
 
-open TwoPoint.Core.Tests.PhotoMetadataTests.PhotoFixtures
 open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Tests.PhotoMetadataTests.PhotoFixtures
 open TwoPoint.Core.Util
 
 open Expecto
@@ -119,7 +119,7 @@ let tests =
         let assets = FakeAssets()
 
         match upload assets bytes with
-        | Error(ActionError.Logic UploadAsset.Error.MalformedImage) -> ()
+        | Error(ActionError.Logic(UploadAsset.Error.MalformedImage _)) -> ()
         | other -> failtestf "Expected MalformedImage, got %A" other
 
         Expect.equal assets.Blobs.Count 0 "No blob"

@@ -30,7 +30,7 @@ module UploadAsset =
   type Error =
     | UnsupportedType
     | TooLarge
-    | MalformedImage
+    | MalformedImage of MalformedPhoto
 
   type Event = Uploaded of name: string * url: Uri
 
@@ -66,7 +66,7 @@ module UploadAsset =
       $"{hash.Substring(0, 16)}.{(format kind).Extension}"
 
     let strip (kind : Kind) (bytes : byte[]) : Decision<byte[], Error> =
-      let photo format = PhotoMetadata.strip format bytes |> Result.mapError (fun _ -> MalformedImage)
+      let photo format = PhotoMetadata.strip format bytes |> Result.mapError MalformedImage
 
       match kind with
       | Jpeg -> photo PhotoFormat.Jpeg
