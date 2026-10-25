@@ -162,6 +162,7 @@ module GetTerms =
         // The input is in newest-first order, so the first title is the title of the newest post.
         { Slug = slug
           Title = TwoPoint.Site.Render.Slug.termTitle group.Head
+          Value = group.Head
           Posts = group.Length })
       |> List.sortBy (fun term -> -term.Posts, term.Title)
 

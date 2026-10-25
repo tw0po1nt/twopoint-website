@@ -228,8 +228,9 @@ type DeleteOutcome =
 /// The text of one series record, with the name of its file in the `series` container.
 type StoredSeries = { File : string; Text : string }
 
-/// A category or a tag on the published posts. `Title` is the title of the newest published post with the slug.
-type TermCount = { Slug : string; Title : string; Posts : int }
+/// A category or a tag on the published posts. `Value` is the text in the front matter of the newest published post
+/// with the slug, and `Title` is the title that the site shows for it.
+type TermCount = { Slug : string; Title : string; Value : string; Posts : int }
 
 type TermSuggestions = { Categories : TermCount list; Tags : TermCount list }
 

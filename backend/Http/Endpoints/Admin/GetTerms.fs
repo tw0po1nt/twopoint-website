@@ -15,7 +15,7 @@ open Microsoft.Extensions.Logging
 open System.Net
 open System.Threading
 
-type TermDto = { Slug : string; Title : string; Posts : int }
+type TermDto = { Slug : string; Title : string; Value : string; Posts : int }
 
 type TermSuggestionsDto = { Categories : TermDto list; Tags : TermDto list }
 
@@ -53,7 +53,7 @@ type GetTerms (
           member _.GetPublishedPosts () = postStore.GetPublishedPosts()
         }
 
-        let toDto (term : TermCount) : TermDto = { Slug = term.Slug; Title = term.Title; Posts = term.Posts }
+        let toDto (term : TermCount) : TermDto = { Slug = term.Slug; Title = term.Title; Value = term.Value; Posts = term.Posts }
 
         let! result = getTerms ()
 

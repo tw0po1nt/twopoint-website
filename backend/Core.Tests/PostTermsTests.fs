@@ -45,12 +45,14 @@ let tests =
 
       Expect.equal
         suggestions.Categories
-        [ { Slug = "dev"; Title = "Dev"; Posts = 2 }; { Slug = "life"; Title = "Life"; Posts = 1 } ]
+        [ { Slug = "dev"; Title = "Dev"; Value = "Dev"; Posts = 2 }
+          { Slug = "life"; Title = "Life"; Value = "Life"; Posts = 1 } ]
         "Categories"
 
       Expect.equal
         suggestions.Tags
-        [ { Slug = "fsharp"; Title = "F#"; Posts = 2 }; { Slug = "testing"; Title = "Testing"; Posts = 1 } ]
+        [ { Slug = "fsharp"; Title = "F#"; Value = "FSharp"; Posts = 2 }
+          { Slug = "testing"; Title = "Testing"; Value = "Testing"; Posts = 1 } ]
         "Tags"
     }
 
@@ -60,7 +62,13 @@ let tests =
           [ post "old" "2026-01-01" "Dev" [ "Functional programming" ]
             post "new" "2026-02-01" "Dev" [ "functional Programming" ] ]
 
-      Expect.equal suggestions.Tags [ { Slug = "functional-programming"; Title = "functional Programming"; Posts = 2 } ] "One term"
+      let expected =
+        { Slug = "functional-programming"
+          Title = "functional Programming"
+          Value = "functional Programming"
+          Posts = 2 }
+
+      Expect.equal suggestions.Tags [ expected ] "One term"
     }
 
     test "a post that gives one tag two times counts once" {
