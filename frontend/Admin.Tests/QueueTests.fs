@@ -56,7 +56,7 @@ let tests =
       Expect.equal (Queue.count model.Queue) (Some 2) "The count stays until the answer"
 
       let model, effect = send (Queue.Done("first", Queue.Approve, Ok())) model
-      Expect.isNone effect "No more calls"
+      Expect.equal effect (Some(Shell.SetBadge 1)) "The badge shows the new count"
       Expect.isNone (Queue.tryFind "first" model.Queue) "The row goes away"
       Expect.equal (Queue.count model.Queue) (Some 1) "One new comment"
     }
@@ -87,7 +87,7 @@ let tests =
       Expect.isTrue (Queue.tryFind "first" model.Queue |> Option.exists (fun row -> Queue.sends row.State)) "The buttons stay off"
 
       let model, effect = send (Queue.Done("first", Queue.Approve, Ok())) model
-      Expect.isNone effect "No more calls"
+      Expect.equal effect (Some(Shell.SetBadge 2)) "The badge shows the new count"
       Expect.isNone (Queue.tryFind "first" model.Queue) "The row goes away"
       Expect.equal (Queue.count model.Queue) (Some 2) "Two new comments"
     }

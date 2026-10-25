@@ -89,6 +89,15 @@ export const stubPush = (members = {}) => {
       onSubscriptionChange: () => {
         events.push('onSubscriptionChange');
       },
+      onNewComment: () => {
+        events.push('onNewComment');
+      },
+      onOpenRequest: () => {
+        events.push('onOpenRequest');
+      },
+      setBadge: (count) => {
+        events.push(`setBadge:${count}`);
+      },
       ...members,
     },
   };

@@ -12,7 +12,6 @@ open Azure.Core
 open Azure.Data.Tables
 open Azure.Messaging.ServiceBus
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Extensions.Logging
 
@@ -23,7 +22,6 @@ type ProcessNewPostDeliveryMessage(
   config: Config,
   credential: TokenCredential,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<ProcessNewPostDeliveryMessage>,
   tableServiceClient: TableServiceClient
 ) =
@@ -59,7 +57,6 @@ type ProcessNewPostDeliveryMessage(
       let deliveryDependencies = DeliveryDependencies(
         emailClient,
         config.Azure.EmailSender,
-        messaging,
         BlobContainerClient(welcomeConfig.NewsletterContainerUri, credential),
         welcomeConfig.UnsubscribeUri,
         tableServiceClient,

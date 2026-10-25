@@ -454,11 +454,17 @@ module PostComment =
         -> newComment: NewComment
         -> approval: CommentApproval
         -> DependencyResult<Comment>
+    abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
     let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<Comment> =
-      dependencies.CreateComment post commenter comment approval
+      cancellableTaskResult {
+        let! (created : Comment) = dependencies.CreateComment post commenter comment approval
+
+        let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
+        return created
+      }
 
     fun newComment -> cancellableTaskResult {
       let! newComment =

@@ -48,6 +48,11 @@ through a GitHub App. Key Vault keeps the private key of the app and signs each 
 `scripts/setup-site-dispatch.sh` sets up the app. The local backend logs each dispatch and sends
 nothing.
 
+`Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
+`Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
+builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a
+deploy to create the queue.
+
 The backend reads the post store for the post list. The setting `Azure:PostStoreUri` names the
 account. On the local stage it is the Azurite URL. `scripts/setup-post-store-access.sh` gives the
 backend identity read and write on the four containers and sets the setting on the Function App.

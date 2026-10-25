@@ -1,3 +1,4 @@
+open TwoPoint.Dependencies.Notifications
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints.Auth
 
@@ -6,16 +7,18 @@ open Azure.Data.Tables
 open Azure.Identity
 open Azure.Messaging.ServiceBus
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
+open Azure.Security.KeyVault.Secrets
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Builder
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
+open Microsoft.Extensions.Logging
 open Microsoft.Identity.Web
 open Symbolica.Extensions.Configuration.FSharp
 
 open System
+open System.Net.Http
 open System.Text.Json
 
 [<EntryPoint>]
@@ -73,19 +76,34 @@ let main args =
   // Service Bus client
   let serviceBusClient = ServiceBusClient(config.Azure.ServiceBusUri.Host, credential)
 
-  // Firebase Admin SDK
-  FirebaseInitializer.initialize config (Some credential)
-  |> Async.AwaitTask
-  |> Async.RunSynchronously
-  |> ignore
-
   builder.Services.AddSingleton<Azure.Core.TokenCredential>(fun _ -> credential :> Azure.Core.TokenCredential) |> ignore
   builder.Services.AddScoped<Config>(fun _ -> config) |> ignore
   builder.Services.AddScoped<EmailClient>(fun _ -> emailClient) |> ignore
   builder.Services.AddScoped<TableServiceClient>(fun _ -> tableServiceClient) |> ignore
   builder.Services.AddSingleton<BlobServiceClient>(fun _ -> postStoreClient) |> ignore
   builder.Services.AddScoped<ServiceBusClient>(fun _ -> serviceBusClient) |> ignore
-  builder.Services.AddSingleton<FirebaseMessaging>(fun _ -> FirebaseMessaging.DefaultInstance) |> ignore
+  builder.Services.AddSingleton<WebPushSetup>(fun services ->
+    match config.WebPush with
+    | None -> WebPushNotConfigured
+    | Some webPush ->
+      let privateKey =
+        match webPush.PrivateKey with
+        | Inline privateKey -> privateKey
+        | KeyVault(secretName, vaultUri) -> SecretClient(vaultUri, credential).GetSecret(secretName).Value.Value
+
+      let keys =
+        { VapidKeys.Subject = webPush.Subject
+          PublicKey = Base64Url.decode webPush.PublicKey
+          PrivateKey = Base64Url.decode privateKey }
+
+      WebPushConfigured(
+        WebPushSender(
+          services.GetRequiredService<IHttpClientFactory>().CreateClient(),
+          keys,
+          services.GetRequiredService<ILoggerFactory>().CreateLogger<WebPushSender>()
+        )
+      ))
+  |> ignore
 
   builder.Build().Run()
 

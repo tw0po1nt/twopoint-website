@@ -23,3 +23,7 @@ type Push =
   abstract unsubscribe: unit -> JS.Promise<unit>
   /// The push worker calls the listener after a `pushsubscriptionchange` event.
   abstract onSubscriptionChange: listener: (unit -> unit) -> unit
+  abstract onNewComment: listener: (unit -> unit) -> unit
+  abstract onOpenRequest: listener: (string -> unit) -> unit
+  /// Shows the count on the app icon, and removes the badge at 0.
+  abstract setBadge: count: int -> unit

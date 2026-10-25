@@ -15,7 +15,6 @@ open Azure.Core
 open Azure.Data.Tables
 open Azure.Messaging.ServiceBus
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
 open FsToolkit.ErrorHandling
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
@@ -37,7 +36,6 @@ type StartNewPostDelivery(
   config: Config,
   credential: TokenCredential,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   serviceBus : ServiceBusClient,
   logger : ILogger<StartNewPostDelivery>,
   tableServiceClient: TableServiceClient
@@ -107,7 +105,6 @@ type StartNewPostDelivery(
             let deliveryDependencies = DeliveryDependencies(
               emailClient,
               config.Azure.EmailSender,
-              messaging,
               BlobContainerClient(welcomeConfig.NewsletterContainerUri, credential),
               welcomeConfig.UnsubscribeUri,
               tableServiceClient,

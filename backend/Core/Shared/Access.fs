@@ -1,5 +1,7 @@
 namespace TwoPoint.Core.Shared
 
+open TwoPoint.Core.Posts
+
 /// The claims of a v2.0 access token that decide if a request can use an admin endpoint.
 type AccessClaims =
   { ObjectId : string option
@@ -19,6 +21,8 @@ type Access =
 module Access =
 
   let authorObjectId = "ad1209ae-c4cc-4360-953a-ccbab9d68c83"
+
+  let authorUserId = UserExternalId.Unsafe.create authorObjectId
 
   let scope = "access_as_user"
 

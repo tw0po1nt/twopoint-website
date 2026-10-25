@@ -1,6 +1,5 @@
 namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Comms
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
@@ -9,7 +8,6 @@ open TwoPoint.Core.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open FSharp.Control
 open FsToolkit.ErrorHandling
 open IcedTasks
@@ -25,7 +23,6 @@ type PostDependencies(
   validRedirectUris : Uri list,
   emailClient : EmailClient,
   emailSender : EmailAddress,
-  messaging : FirebaseMessaging,
   tableServiceClient : TableServiceClient,
   logger : ILogger
 ) =
@@ -40,8 +37,7 @@ type PostDependencies(
     | _ -> PostCommentStats.Zero
 
   let postDb = PostDb.live tableServiceClient logger
-  let notificationDb = NotificationDb.live tableServiceClient logger
-  let commsService = CommsService.live emailClient messaging tableServiceClient logger emailSender
+  let commsService = CommsService.live emailClient tableServiceClient logger emailSender
 
   let source = Dependency.Database
 
@@ -235,34 +231,27 @@ type PostDependencies(
     let! (dbComment: DbComment, dbCommenter, dbCommentStatus) =
       postDb.CreateComment newDbComment newDbStatus
 
-    // Notify admin
-    do! cancellableTask {
-      // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/250): send an event, and let a separate handler notify the author
-      let! notification =
-        notificationDb.GetDeviceRegistrationByUser Access.authorObjectId
-        |> CancellableTaskResult.map (
-          fun registration -> option {
-            let! registration = registration
-            let commenterName =
-              commenter.Name |> Option.map _.ToString() |> Option.defaultValue (commenter.EmailAddress.ToString())
-            return
-              { Title = NonEmptyString.Unsafe.create None "Someone posted a new comment!"
-                Body = NonEmptyString.Unsafe.create None $"{commenterName} left a comment on the post '{post.Info.Title}'"
-                Recipient = NonEmptyString.Unsafe.create None registration.Token }
-          }
-        )
-        |> CancellableTask.map (Result.defaultValue None)
-
-      return!
-        notification
-        |> Option.traverseCancellableTaskResult commsService.SendPushNotification
-        |> CancellableTaskResult.ignore
-    }
-
     return!
       dbComment.ToComment(dbCommentStatus, dbCommenter)
       |> DependencyError.ofValidation source
   }
+
+  member _.GetPostedCommentById (commentId : CommentId) = cancellableTaskResult {
+    let! dbComment = postDb.GetCommentById (commentId.ToString())
+
+    match dbComment with
+    | None -> return None
+    | Some (comment : DbComment, commenter, status) ->
+      let! dbPost = postDb.GetPostBySlug comment.PostId
+
+      return!
+        comment.ToPostedComment(dbPost, status, commenter)
+        |> Result.map Some
+        |> DependencyError.ofValidation source
+  }
+
+  member this.CountNewComments () =
+    this.GetCommentsOnAllPosts [ CommentApproval.New ] |> CancellableTaskResult.map List.length
 
   member _.UpdateCommentApproval (comment : Comment) approval = cancellableTaskResult {
     let newStatus =

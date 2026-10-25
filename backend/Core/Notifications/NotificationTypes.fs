@@ -6,23 +6,6 @@ open FsToolkit.ErrorHandling
 
 open System
 
-type DeviceRegistrationId = 
-  private | DeviceRegistrationId of Guid
-
-  override this.ToString() =
-    let (DeviceRegistrationId drid) = this
-    drid.ToString()
-    
-module DeviceRegistrationId =
-  let create =
-    Constrained.String.tryParse
-      Guid.TryParseOption
-      $"'{nameof DeviceRegistrationId}' must be a valid guid"
-      DeviceRegistrationId
-      
-  let createMaybe = Option.traverseResult create
-
-
 type UserExternalId = 
   private | UserExternalId of Guid
 
@@ -38,26 +21,6 @@ module UserExternalId =
       UserExternalId
       
   let createMaybe = Option.traverseResult create
-  
 
-type DeviceRegistration =
-  { Id : DeviceRegistrationId
-    UserExternalId : UserExternalId
-    Token : NonEmptyString
-    CreatedDate : DateTime }
-  
-module DeviceRegistration =
-  
-  let create id userExternalId token createdDate = validation {
-    // todo: update all my *other* validation CE usages to use `and!` because I didn't read the documentation first
-    let! id = DeviceRegistrationId.create id
-    and! userExternalId = UserExternalId.create userExternalId
-    and! token = NonEmptyString.create (Some (nameof token)) token
-    and! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
-    
-    return
-      { Id = id
-        UserExternalId = userExternalId
-        Token = token
-        CreatedDate = createdDate }
-  }
+  module Unsafe =
+    let create = Types.unsafeCreate create

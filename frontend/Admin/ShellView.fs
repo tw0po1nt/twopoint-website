@@ -195,6 +195,7 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
   | Shell.SignIn effect -> signInWith signIn push effect dispatch
   | Shell.Send calls -> calls |> List.iter (send signIn push dispatch)
   | Shell.Subscribe -> subscribe push dispatch
+  | Shell.SetBadge count -> push.setBadge count
   | Shell.Unsubscribe ->
     push.unsubscribe ()
     |> Promise.catch (fun error -> console.error ("admin: the push unsubscribe failed.", error))
@@ -1089,17 +1090,38 @@ let private deleteSubscriptionDialog (dispatch: Shell.Msg -> unit) (model: unit 
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
     })
 
+[<Emit "document.getElementById($0)?.scrollIntoView({ block: 'center' })">]
+let private scrollToId (id: string) : unit = jsNative
+
 [<SolidComponent>]
 let view (signIn: SignIn) (push: Push) =
   let model, dispatch =
-    Mvu.run (Shell.init window.location.pathname) Shell.update (perform signIn push)
+    Mvu.run (Shell.init (window.location.pathname + window.location.hash)) Shell.update (perform signIn push)
+
+  let fragmentToShow () =
+    let model = model ()
+
+    let loaded =
+      match model.Router.Route with
+      | ModerationQueue -> Queue.count model.Queue <> None
+      | PostComments _ -> model.PostComments |> Option.exists PostComments.isLoaded
+      | _ -> false
+
+    if loaded then model.Router.Fragment else ""
+
+  createEffect (fun () ->
+    match fragmentToShow () with
+    | "" -> ()
+    | id -> scrollToId id)
 
   dispatch (Shell.Notifications(Notifications.Detected(Notifications.detect push)))
   push.onSubscriptionChange (fun () -> dispatch (Shell.Notifications Notifications.SubscriptionChanged))
+  push.onNewComment (fun () -> dispatch Shell.NewCommentAnnounced)
+  push.onOpenRequest (Shell.OpenRequested >> dispatch)
 
   let route = Shell.Router >> dispatch
 
-  window.addEventListener ("popstate", fun _ -> route (Router.UrlChanged window.location.pathname))
+  window.addEventListener ("popstate", fun _ -> route (Router.UrlChanged(window.location.pathname + window.location.hash)))
 
   let current () = (model ()).Router.Route
   let showsNavigation () = Router.showsNavigation (current ())

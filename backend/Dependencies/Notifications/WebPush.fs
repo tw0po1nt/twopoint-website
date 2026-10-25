@@ -141,3 +141,7 @@ type WebPushSender(httpClient : HttpClient, vapid : VapidKeys, logger : ILogger)
         let! body = response.Content.ReadAsStringAsync ct
         return failwith $"The push service answered {int status} to POST {subscription.Endpoint}: {body}"
     }
+
+type WebPushSetup =
+  | WebPushConfigured of WebPushSender
+  | WebPushNotConfigured

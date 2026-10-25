@@ -8,7 +8,6 @@ open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -20,7 +19,6 @@ open System.Threading
 type DeleteComment(
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger: ILogger<UpdateCommentApproval>,
   tableServiceClient: TableServiceClient
 ) =
@@ -48,7 +46,6 @@ type DeleteComment(
           validRedirectUris,
           emailClient,
           config.Azure.EmailSender,
-          messaging,
           tableServiceClient,
           logger
         )

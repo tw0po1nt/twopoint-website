@@ -15,10 +15,6 @@ type AzureConfig =
     ServiceBusUri : Uri
     KeyVaultUri : Uri option }
 
-type FirebaseConfig =
-  { ServiceAccountJsonPath : string option
-    ServiceAccountJsonFromKeyVault : string option }
-
 type ValidRedirectUri =
   { Uri : Uri }
 
@@ -37,16 +33,17 @@ type DeployConfig =
     StagingRepo : Repo
     GitHubApp : GitHubAppConfig option }
 
-/// The local backend sets PrivateKey. The deployed backend sets PrivateKeyFromKeyVault, the name of a Key Vault secret.
+type PrivateKeySource =
+  | Inline of privateKey : string
+  | KeyVault of secretName : string * vaultUri : Uri
+
 type WebPushConfig =
   { Subject : string
     PublicKey : string
-    PrivateKey : string option
-    PrivateKeyFromKeyVault : string option }
+    PrivateKey : PrivateKeySource }
 
 type Config =
   { Azure : AzureConfig
-    Firebase : FirebaseConfig
     WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
     Welcome : WelcomeConfig option
@@ -80,24 +77,20 @@ module Config =
             KeyVaultUri = keyVaultUri }
       }
 
-      let! firebase = Bind.section "Firebase" <| bind {
-        let! serviceAccountJsonPath = Bind.optValueAt "ServiceAccountJsonPath" Bind.string
-        let! serviceAccountJsonFromKeyVault = Bind.optValueAt "ServiceAccountJsonFromKeyVault" Bind.string
-        return
-          { ServiceAccountJsonPath = serviceAccountJsonPath
-            ServiceAccountJsonFromKeyVault = serviceAccountJsonFromKeyVault }
-      }
-
       let! webPush = Bind.optSection "WebPush" <| bind {
         let! subject = Bind.valueAt "Subject" Bind.string
         let! publicKey = Bind.valueAt "PublicKey" Bind.string
-        let! privateKey = Bind.optValueAt "PrivateKey" Bind.string
-        let! privateKeyFromKeyVault = Bind.optValueAt "PrivateKeyFromKeyVault" Bind.string
+        let! inlineKey = Bind.optValueAt "PrivateKey" Bind.string
+        let! secretName = Bind.optValueAt "PrivateKeyFromKeyVault" Bind.string
+        let! privateKey =
+          match inlineKey, secretName, azure.KeyVaultUri with
+          | Some key, _, _ -> Binder.result (Inline key)
+          | None, Some name, Some vaultUri -> Binder.result (KeyVault(name, vaultUri))
+          | None, _, _ -> Binder.fail (Error.keyNotFound "PrivateKey")
         return
           { Subject = subject
             PublicKey = publicKey
-            PrivateKey = privateKey
-            PrivateKeyFromKeyVault = privateKeyFromKeyVault }
+            PrivateKey = privateKey }
       }
 
       let bindValidRedirectUri =  bind {
@@ -133,7 +126,6 @@ module Config =
 
       return
         { Azure = azure
-          Firebase = firebase
           WebPush = webPush
           ValidRedirectUris = validRedirectUris
           Welcome = welcome

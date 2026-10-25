@@ -4,18 +4,22 @@ open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
+open Azure.Messaging.ServiceBus
+open FsToolkit.ErrorHandling
+open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
 open System
 open System.Net
+open System.Text.Json
 open System.Threading
 
 type NewCommentJson =
@@ -48,10 +52,19 @@ type PostCommentResponse =
 type PostComment (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger: ILogger<PostComment>,
+  serviceBus: ServiceBusClient,
   tableServiceClient: TableServiceClient
 ) =
+
+  let queueNewCommentNotice (commentId : CommentId) =
+    runDependencyWithLogging Dependency.ServiceBus logger $"{nameof PostComment}.QueueNewCommentNotice"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      use sender = serviceBus.CreateSender NewCommentQueue.Name
+      let json = JsonSerializer.Serialize { NewCommentMessage.CommentId = commentId.ToString() }
+      do! sender.SendMessageAsync(ServiceBusMessage json, ct)
+    }
 
   [<Function("Blog-Posts-PostComment")>]
   member _.Run (
@@ -70,7 +83,6 @@ type PostComment (
       validRedirectUris,
       emailClient,
       config.Azure.EmailSender,
-      messaging,
       tableServiceClient,
       logger
     )
@@ -81,6 +93,7 @@ type PostComment (
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
       member this.CreateComment post commenter newComment approval =
         postDependencies.CreateComment post commenter newComment approval
+      member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId
     }
 
     let newComment =

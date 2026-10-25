@@ -33,3 +33,17 @@ the build cannot turn on notifications.
 The local backend has its own key pair in `backend/Http/local.settings.json.template`. Copy the
 `WebPush` section to `local.settings.json`. Change `Subject` to your `mailto:` address. The `dev`
 section of `frontend/Admin/config.json` has the public key of this pair.
+
+## The new_comment queue
+
+`Blog-Posts-PostComment` puts one message on the Service Bus queue `new_comment` for each new
+comment. The function `Queues-ProcessNewCommentMessage` reads the queue and sends the push. A merge
+deploys the function, so create the queue first:
+
+```bash
+scripts/setup-new-comment-queue.sh
+```
+
+The script finds the namespace from the Function App setting `Azure__ServiceBusUri` and creates the
+queue. A second run changes nothing. The script also checks that the backend identity can send to
+the queue and receive from it, and prints the command for a missing role. The Function App setting `TwoPointWebsiteServiceBus` already names the namespace.

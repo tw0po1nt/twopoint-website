@@ -34,6 +34,12 @@ let init (slug: string) =
     Filter = All
     Comments = Waiting }
 
+let isLoaded (model: Model) =
+  match model.Comments with
+  | Loaded _ -> true
+  | Waiting
+  | NotLoaded _ -> false
+
 let approvalText (approval: Api.CommentApproval) =
   match approval with
   | Api.CommentApproval.New -> "New"

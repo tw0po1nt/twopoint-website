@@ -161,10 +161,14 @@ let private commenter (status : CommenterStatus) =
   Commenter.create commenterId "commenter@example.com" (Some "Commenter") "2026-01-01T00:00:00.0000000Z" (status.ToString())
   |> ok
 
-type private FakePostCommentDependencies(existing : Commenter) =
+type private FakePostCommentDependencies(existing : Commenter, queueFails : bool) =
   let created = ResizeArray<CommentApproval>()
+  let queued = ResizeArray<CommentId>()
+
+  new (existing : Commenter) = FakePostCommentDependencies(existing, false)
 
   member _.Created = List.ofSeq created
+  member _.Queued = List.ofSeq queued
 
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
@@ -173,6 +177,13 @@ type private FakePostCommentDependencies(existing : Commenter) =
       created.Add approval
       let posted = comment firstId "2026-02-01T00:00:00.0000000Z" approval
       CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
+    member _.QueueNewCommentNotice commentId =
+      queued.Add commentId
+
+      if queueFails then
+        CancellableTaskResult.error { Dependency = Dependency.ServiceBus; Type = Unknown (exn "The queue is down") }
+      else
+        CancellableTaskResult.singleton ()
 
 let private postComment (dependencies : FakePostCommentDependencies) =
   let dto =
@@ -203,12 +214,32 @@ let private postCommentTests =
       | other -> failtestf "Expected Posted, got %A" other
     }
 
+    test "a posted comment goes on the new_comment queue" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+
+      match postComment dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal dependencies.Queued [ posted.Id ] "Expected the posted comment on the queue"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a failed queue leaves the comment stored and the reply successful" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New, true)
+
+      match postComment dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal dependencies.Created [ CommentApproval.New ] "Expected the comment in the store"
+        Expect.equal dependencies.Queued [ posted.Id ] "Expected one try to queue"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
     test "a banned commenter posts, and the blog stores nothing and notifies no one" {
       let dependencies = FakePostCommentDependencies (commenter CommenterStatus.Banned)
 
       match postComment dependencies with
       | Error (Logic (PostComment.Banned _)) ->
         Expect.isEmpty dependencies.Created "Expected no comment in the store, so no notification"
+        Expect.isEmpty dependencies.Queued "Expected no message on the queue"
       | other -> failtestf "Expected Banned, got %A" other
     }
   ]
