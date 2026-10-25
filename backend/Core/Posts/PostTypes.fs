@@ -261,6 +261,7 @@ type PostListing =
     State : PostState
     HasPendingEdit : bool
     PublishDate : DateTime option
+    Deploy : TwoPoint.Core.Deploys.DeployState
     CommentStats : PostCommentStats }
 
 type PostedComment =

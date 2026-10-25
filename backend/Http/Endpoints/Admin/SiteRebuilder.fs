@@ -74,6 +74,9 @@ type SiteRebuilder(
       return Attempted result
     }
 
+  member _.RecordChange (change : PostChange) : DependencyResult<unit> =
+    DeployDb(tableServiceClient, logger).RecordChange change
+
   member _.Dispatch () : DependencyResult<SiteDispatch> =
     match configured () with
     | Error problem ->

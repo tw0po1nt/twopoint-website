@@ -12,6 +12,22 @@ open Microsoft.Extensions.Logging
 open System
 open System.Globalization
 
+module RebuildRows =
+
+  [<Literal>]
+  let Table = "siteRebuilds"
+
+  let tryRebuild (entity : TableEntity) : Rebuild option =
+    option {
+      let! dispatched = entity.TryGetString "DispatchedDate"
+      let number = entity.GetInt64 "RunNumber" |> Option.ofNullable
+      let! production = entity.TryGetString "Production" |> Option.bind (fun name -> ProductionDispatch.tryParse name number)
+
+      return
+        { DispatchedDate = DateTime.Parse(dispatched, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime()
+          Production = production }
+    }
+
 /// <summary>
 /// The table has one row: the latest "Rebuild site".
 /// </summary>
@@ -28,19 +44,16 @@ open System.Globalization
 /// </remarks>
 type RebuildDb(tableServiceClient : TableServiceClient, logger : ILogger) =
 
-  [<Literal>]
-  let Table = "siteRebuilds"
-
   member _.SaveRebuild (rebuild : Rebuild) : DependencyResult<unit> =
     runDependencyWithLogging Dependency.Database logger $"{nameof RebuildDb}.SaveRebuild"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
-      let! _ = tableServiceClient.CreateTableIfNotExistsAsync(Table, ct)
+      let! _ = tableServiceClient.CreateTableIfNotExistsAsync(RebuildRows.Table, ct)
       let entity = TableEntity(partitionKey = "site", rowKey = "latest")
       entity["DispatchedDate"] <- rebuild.DispatchedDate.ToString("o", CultureInfo.InvariantCulture)
 
       entity["Production"] <- ProductionDispatch.name rebuild.Production
       entity["RunNumber"] <- rebuild.Production |> ProductionDispatch.runNumber |> Option.map _.Value |> Option.toNullable
-      let! _ = tableServiceClient.GetTableClient(Table).UpsertEntityAsync(entity, TableUpdateMode.Replace, ct)
+      let! _ = tableServiceClient.GetTableClient(RebuildRows.Table).UpsertEntityAsync(entity, TableUpdateMode.Replace, ct)
       return ()
     }

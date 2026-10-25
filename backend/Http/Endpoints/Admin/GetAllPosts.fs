@@ -2,6 +2,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
@@ -29,6 +30,8 @@ type PostDto =
     State : string
     PendingEdit : bool
     PublishDate : Nullable<DateTime>
+    /// `deploying`, `deployed`, or `failed`.
+    Deploy : string
     CommentStats : PostCommentStatsDto }
 
 [<AutoOpen>]
@@ -47,6 +50,13 @@ module PostTypesExt =
       | Published -> "published"
       | Upcoming -> "upcoming"
 
+  type DeployState with
+    member this.Name =
+      match this with
+      | Deploying -> "deploying"
+      | Deployed -> "deployed"
+      | DeployFailed -> "failed"
+
   type PostListing with
     member this.ToDto() =
       { PostDto.Slug = this.Slug.ToString()
@@ -54,6 +64,7 @@ module PostTypesExt =
         State = this.State.Name
         PendingEdit = this.HasPendingEdit
         PublishDate = Option.toNullable this.PublishDate
+        Deploy = this.Deploy.Name
         CommentStats = this.CommentStats.ToDto() }
 
 module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
@@ -101,6 +112,7 @@ type GetAllPosts (
           member _.GetPublishedPosts () = postStore.GetPublishedPosts()
           member _.GetWorkingPosts () = postStore.GetWorkingPosts()
           member _.GetPostsInTable () = postDependencies.GetAllPosts()
+          member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
         }
 
         let! postsResult = getAllPosts()

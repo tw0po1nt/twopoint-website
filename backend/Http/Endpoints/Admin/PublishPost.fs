@@ -31,7 +31,7 @@ type PublishedPostDto =
   { PublishDate : string
     State : string
     ProductionRun : Nullable<int64>
-    /// Each is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, or `site-rebuild`.
+    /// Each is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`, or `deploy-tracking`.
     Warnings : string list }
 
 type PublishCheckDto = { Problems : ProblemDto list }
@@ -51,6 +51,7 @@ module PublishMapping =
     | PublishPost.ProductionRebuildFailed _ -> "production-rebuild"
     | PublishPost.StagingRebuildFailed _ -> "staging-rebuild"
     | PublishPost.SiteNotRebuilt _ -> "site-rebuild"
+    | PublishPost.DeployNotTracked _ -> "deploy-tracking"
 
   let published (outcome : PublishPost.Outcome) : PublishedPostDto =
     { PublishDate = TwoPoint.Site.Render.Time.isoTime (DateTimeOffset outcome.PublishDate)
@@ -111,6 +112,7 @@ type PostPublishing(
     member _.UpsertPostRow post = postDependencies.UpsertPost post |> CancellableTaskResult.map ignore
     member _.DeleteWorkingBlob slug eTag = postStore.DeleteWorkingBlob slug eTag
     member _.DispatchSite () = rebuilder.Dispatch()
+    member _.RecordChange change = rebuilder.RecordChange change
 
 type CheckPublish(
   config : Config,
