@@ -29,6 +29,12 @@ After a production build, `dotnet run --project frontend/Generator -- upload --c
 sends each newsletter to Azure Blob. It then deletes each `posts/<slug>/index` blob that has no post
 in the build. The command stops if the stage marker is not `production`.
 
+Before the admin build, run
+`dotnet run --project frontend/Generator -- preview-styles --out frontend/Admin/dist/preview-styles`.
+The command writes the site CSS and its fonts. The preview frame of the editor links them, so
+without them the preview has no style. The backend serves the preview at
+`POST internal/posts/{slug}/preview`. It reads the `series` and `published` containers.
+
 `frontend/Admin/` is the admin, a separate Fable app that references the Widgets project for shared
 code. The site bundle gets no admin code. In `frontend/Admin/`, `npm run build` builds the release
 mode and `npm run watch` builds the dev mode at each change. `config.json` contains the public

@@ -28,6 +28,7 @@
       "/redirect/*",
       "/bundle/*",
       "/icons/*",
+      "/preview-styles/*",
       "/sw.js",
       "/manifest.webmanifest"
     ]
