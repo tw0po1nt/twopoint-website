@@ -27,7 +27,6 @@ module UploadAsset =
     | Pdf
 
   type Error =
-    /// The first bytes are not those of a JPEG, a PNG, a WebP, a GIF, or a PDF. An SVG is not allowed.
     | UnsupportedType
     | TooLarge
 
@@ -51,24 +50,18 @@ module UploadAsset =
       elif bytes |> startsWith (ascii "RIFF") 0 && bytes |> startsWith (ascii "WEBP") 8 then Some WebP
       else None
 
-    let extension = function
-      | Jpeg -> "jpg"
-      | Png -> "png"
-      | WebP -> "webp"
-      | Gif -> "gif"
-      | Pdf -> "pdf"
+    type Format = { Extension : string; ContentType : string }
 
-    let contentType = function
-      | Jpeg -> "image/jpeg"
-      | Png -> "image/png"
-      | WebP -> "image/webp"
-      | Gif -> "image/gif"
-      | Pdf -> "application/pdf"
+    let format = function
+      | Jpeg -> { Extension = "jpg"; ContentType = "image/jpeg" }
+      | Png -> { Extension = "png"; ContentType = "image/png" }
+      | WebP -> { Extension = "webp"; ContentType = "image/webp" }
+      | Gif -> { Extension = "gif"; ContentType = "image/gif" }
+      | Pdf -> { Extension = "pdf"; ContentType = "application/pdf" }
 
-    /// The first 16 hex characters of the SHA-256 of the bytes, in lower case, and the extension.
     let blobName (kind : Kind) (bytes : byte[]) =
       let hash = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
-      $"{hash.Substring(0, 16)}.{extension kind}"
+      $"{hash.Substring(0, 16)}.{(format kind).Extension}"
 
     let decide (bytes : byte[]) : Decision<Kind, Error> =
       match kind bytes with
@@ -77,7 +70,7 @@ module UploadAsset =
       | Some kind -> Decision.success kind
 
   type Dependencies =
-    /// The asset is public at the URL that this returns. A blob that exists with the same name is not written again.
+    /// A blob with the same name is not written again.
     abstract member WriteAsset: name: string -> contentType: string -> content: byte[] -> DependencyResult<Uri>
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
@@ -88,7 +81,7 @@ module UploadAsset =
       let name = Logic.blobName kind dto.Bytes
 
       let! url =
-        dependencies.WriteAsset name (Logic.contentType kind) dto.Bytes
+        dependencies.WriteAsset name (Logic.format kind).ContentType dto.Bytes
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       return Event.Uploaded(name, url)

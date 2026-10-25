@@ -15,18 +15,15 @@ open System
 /// The account of the `assets` container. It is not the account of the post store.
 type AssetsClient = { Service : BlobServiceClient }
 
-/// The public `assets` container keeps each image and each PDF under the name of its hash.
 type AssetStore(client : AssetsClient, logger : ILogger) =
 
   let cacheControl = "public, max-age=31536000, immutable"
 
-  /// A blob never changes, so a blob with the same name has the same bytes and a second write is not necessary.
   member _.WriteAsset (name : string) (contentType : string) (content : byte[]) : DependencyResult<Uri> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof AssetStore}.WriteAsset({name})"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
-      let container = client.Service.GetBlobContainerClient "assets"
-      let blob = container.GetBlobClient name
+      let blob = client.Service.GetBlobContainerClient("assets").GetBlobClient name
 
       let options =
         BlobUploadOptions(
@@ -34,19 +31,9 @@ type AssetStore(client : AssetsClient, logger : ILogger) =
           Conditions = BlobRequestConditions(IfNoneMatch = ETag.All)
         )
 
-      let write () =
-        cancellableTask {
-          let! _ = blob.UploadAsync(BinaryData content, options, ct)
-          ()
-        }
-
       try
-        try
-          do! write ()
-        with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
-          // Azurite starts with no container.
-          do! container.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken = ct) |> Task.ignore
-          do! write ()
+        let! _ = blob.UploadAsync(BinaryData content, options, ct)
+        ()
       with :? RequestFailedException as error when error.Status = 409 || error.Status = 412 ->
         logger.LogInformation("The asset '{name}' exists", name)
 

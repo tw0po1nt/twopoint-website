@@ -23,7 +23,6 @@ let private webp = withTail (Array.concat [ ascii "RIFF"; [| 0uy; 0uy; 0uy; 0uy 
 let private pdf = withTail (ascii "%PDF-1.7") 64
 let private svg = ascii "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"
 
-/// An asset container in memory. A blob is written once, like the Azure write with `If-None-Match: *`.
 type private FakeAssets() =
   let blobs = Collections.Generic.Dictionary<string, string * byte[]>()
   let mutable writes = 0
