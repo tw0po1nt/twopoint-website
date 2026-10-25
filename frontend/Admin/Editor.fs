@@ -207,9 +207,9 @@ let private changeDetails (change: Details.Model -> Details.Model) (document: Do
   { document with Details = change document.Details }
 
 let private requestSlugChange (document: Document) =
-  match document.State, document.ETag, document.Save, Details.isChangingSlug document.Details with
-  | _, _, _, true -> Loaded document, None
-  | Api.Draft, Some eTag, Saved, _ when Details.slugChangeable document.Slug document.Details ->
+  match document.State, document.ETag, document.Save with
+  | _ when Details.isChangingSlug document.Details -> Loaded document, None
+  | Api.Draft, Some eTag, Saved when Details.slugChangeable document.Slug document.Details ->
     Loaded(changeDetails Details.slugChangeStarted document),
     Some(
       ChangeSlug
@@ -217,11 +217,11 @@ let private requestSlugChange (document: Document) =
           ETag = eTag
           NewSlug = Details.typedSlug document.Details }
     )
-  | Api.Draft, _, Saved, _ -> Loaded document, None
-  | Api.Draft, _, _, _ ->
+  | Api.Draft, _, Saved -> Loaded document, None
+  | Api.Draft, _, _ ->
     Loaded(changeDetails (Details.slugChangeRefused "Wait until the post is saved, and then change the slug.") document),
     None
-  | (Api.Published | Api.Upcoming), _, _, _ ->
+  | (Api.Published | Api.Upcoming), _, _ ->
     Loaded(changeDetails (Details.slugChangeRefused "The slug of a published post is fixed.") document), None
 
 let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
@@ -296,8 +296,8 @@ let private months =
   [| "Jan"; "Feb"; "Mar"; "Apr"; "May"; "Jun"; "Jul"; "Aug"; "Sep"; "Oct"; "Nov"; "Dec" |]
 
 /// The API sends each date in ISO 8601 UTC. For example, `2026-02-04T13:00:00Z` gives `Feb 4, 2026`.
-let dateText (date: string) =
-  match (date.Split 'T' |> Array.head).Split '-' with
+let longDateText (date: string) =
+  match (Dates.dateText date).Split '-' with
   | [| year; month; day |] ->
     match Int32.TryParse month, Int32.TryParse day with
     | (true, month), (true, day) when month >= 1 && month <= 12 -> $"{months[month - 1]} {day}, {year}"
@@ -307,9 +307,9 @@ let dateText (date: string) =
 let private stateText (document: Document) =
   match document.State, document.PublishDate with
   | Api.Draft, _ -> "Draft"
-  | Api.Published, Some date -> $"Published {dateText date}"
+  | Api.Published, Some date -> $"Published {longDateText date}"
   | Api.Published, None -> "Published"
-  | Api.Upcoming, Some date -> $"Upcoming {dateText date}"
+  | Api.Upcoming, Some date -> $"Upcoming {longDateText date}"
   | Api.Upcoming, None -> "Upcoming"
 
 let private saveText (document: Document) =
