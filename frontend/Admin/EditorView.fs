@@ -16,6 +16,28 @@ let private document (model: Shell.Model) =
   | Some(Editor.NotLoaded _)
   | None -> None
 
+let private bodyView: CodeMirror.EditorView option ref = ref None
+
+let focus (elementId: string) =
+  window.setTimeout (
+    (fun () -> Dom.document.getElementById elementId |> Option.ofObj |> Option.iter _.focus()),
+    0
+  )
+  |> ignore
+
+let moveToBodyLine (line: int) =
+  window.setTimeout ((fun () -> bodyView.Value |> Option.iter (fun view -> CodeMirror.moveToLine view line)), 0)
+  |> ignore
+
+let private hasProblems (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.hasProblems document
+  | None -> false
+
+[<SolidComponent>]
+let private problemDot (model: unit -> Shell.Model) =
+  Show(when' = hasProblems (model ())) { span (class' = "problem-dot", ariaHidden = true) }
+
 let private isLoaded (model: Shell.Model) = (document model).IsSome
 
 let private statusText (model: Shell.Model) =
@@ -90,7 +112,7 @@ let private pickFiles (onPicked: File array -> unit) =
 
   input.click ()
 
-let private addImage (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorView option ref) () =
+let private addImage (dispatch: Shell.Msg -> unit) () =
   pickFiles (fun files ->
     let at = bodyView.Value |> Option.map CodeMirror.cursor |> Option.defaultValue 0
     dropFiles dispatch files at)
@@ -140,7 +162,6 @@ let private typed (send: string -> unit) (event: InputEvent) =
 [<SolidComponent>]
 let private topBar
   (dispatch: Shell.Msg -> unit)
-  (bodyView: CodeMirror.EditorView option ref)
   (back: MouseEvent -> unit)
   (model: unit -> Shell.Model)
   =
@@ -165,9 +186,13 @@ let private topBar
 
       button (type' = "button", class' = "text", disabled = not (isLoaded (model ())), onClick = fun _ -> DetailsView.open' dispatch) {
         "Details"
+        problemDot model
       }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/259): Publish
-      button (type' = "button", class' = "editor-primary", disabled = true) { primaryText (model ()) }
+      button (type' = "button", class' = "editor-primary", disabled = true) {
+        primaryText (model ())
+        problemDot model
+      }
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): more items in the actions menu
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): more items in the actions menu
       // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): more items in the actions menu
@@ -184,7 +209,7 @@ let private topBar
       Parts.menu
         "editor-menu"
         { Side = Menu.Below; Edge = Menu.End }
-        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch bodyView) (Fragment() { "Add image" }) })
+        (Fragment() { Parts.menuItem "editor-menu" Parts.Plain (addImage dispatch) (Fragment() { "Add image" }) })
     }
   }
 
@@ -211,12 +236,13 @@ let private uploadNotices (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
-let private writing (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorView option ref) (model: unit -> Shell.Model) =
+let private writing (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send (toMsg: string -> Editor.Msg) = toMsg >> Shell.Editor >> dispatch
   let excerpt: HTMLTextAreaElement option ref = ref None
 
   article (class' = (if isPreviewing (model ()) then "editor-column is-hidden" else "editor-column")) {
     textarea(
+      id = "editor-title",
       class' = "editor-title",
       rows = 1,
       placeholder = "Title",
@@ -232,6 +258,7 @@ let private writing (dispatch: Shell.Msg -> unit) (bodyView: CodeMirror.EditorVi
       .ref (fun element -> follow element (fun () -> (fields (model ())).Title))
 
     textarea(
+      id = "editor-excerpt",
       class' = "editor-excerpt",
       rows = 1,
       placeholder = "Excerpt",
@@ -330,8 +357,6 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     elif key.key = "Escape" && isPreviewing (model ()) then
       dispatch (Shell.Editor Editor.PreviewClosed))
 
-  let bodyView: CodeMirror.EditorView option ref = ref None
-
   let fade (_: Event) =
     if isTyping (model ()) then
       dispatch (Shell.Editor Editor.PointerMoved)
@@ -345,13 +370,13 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     | _ -> ())
 
   Fragment() {
-    topBar dispatch bodyView back model
+    topBar dispatch back model
 
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
       h1 (class' = "sr-only") { heading () }
 
-      Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }
+      Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch model }
       Show(when' = isPreviewing (model ())) { preview model }
     }
 

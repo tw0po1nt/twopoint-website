@@ -230,6 +230,8 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
     push.unsubscribe ()
     |> Promise.catch (fun error -> console.error ("admin: the push unsubscribe failed.", error))
     |> Promise.start
+  | Shell.Focus elementId -> EditorView.focus elementId
+  | Shell.MoveToBodyLine line -> EditorView.moveToBodyLine line
   | Shell.Autosave version ->
     window.setTimeout ((fun () -> dispatch (Shell.Editor(Editor.AutosaveElapsed version))), Editor.autosaveDelay)
     |> ignore

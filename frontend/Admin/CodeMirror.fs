@@ -13,8 +13,13 @@ type Extension = interface end
 type Facet<'T> =
   abstract ``of``: 'T -> Extension
 
+type Line =
+  abstract from: int
+
 type Text =
   abstract toString: unit -> string
+  abstract lines: int
+  abstract line: int -> Line
 
 [<Import("EditorState", "@codemirror/state")>]
 type EditorState() =
@@ -30,9 +35,11 @@ type EditorView(config: obj) =
   member _.state: EditorState = jsNative
   member _.focus() : unit = jsNative
   member _.destroy() : unit = jsNative
+  member _.dispatch(spec: obj) : unit = jsNative
   static member lineWrapping: Extension = jsNative
   static member updateListener: Facet<ViewUpdate -> unit> = jsNative
   static member contentAttributes: Facet<obj> = jsNative
+  static member scrollIntoView(pos: int, options: obj) : obj = jsNative
 
 [<Import("HighlightStyle", "@codemirror/language")>]
 type HighlightStyle() =
@@ -93,6 +100,20 @@ let cursor (view: EditorView) : int = jsNative
 /// `insertion` gives `{ text, cursor }`, where `cursor` is an offset in `text`.
 [<ImportMember("./upload-placeholders.js")>]
 let replacePlaceholder (view: EditorView) (id: int) (insertion: Func<string, string, obj>) : unit = jsNative
+
+/// A line after the last line gives the last line.
+let moveToLine (view: EditorView) (line: int) =
+  let doc = view.state.doc
+  let at = (doc.line (max 1 (min line doc.lines))).from
+
+  view.dispatch (
+    createObj [
+      "selection" ==> createObj [ "anchor" ==> at ]
+      "effects" ==> EditorView.scrollIntoView (at, createObj [ "y" ==> "center" ])
+    ]
+  )
+
+  view.focus ()
 
 let private quietStyle () =
   let style (tag: obj) (cls: string) = createObj [ "tag" ==> tag; "class" ==> cls ]

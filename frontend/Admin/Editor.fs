@@ -17,6 +17,12 @@ type SaveState =
   /// Another tab saved newer text. This page keeps its text and stops saving.
   | Stale
 
+type Check =
+  | NotChecked
+  | Found of Api.PreviewProblem list
+  /// The API saved the post and could not check it.
+  | CheckFailed
+
 type Document =
   { Slug: string
     State: Api.PostState
@@ -30,6 +36,7 @@ type Document =
     /// The newest version that the API has. A version after it has text that only this page has.
     Confirmed: int
     Save: SaveState
+    Check: Check
     /// A save was asked for while another save was in flight.
     SaveAgain: bool
     /// The page that the author wants to go to. The editor stays until the API has the newest text.
@@ -68,7 +75,7 @@ type Msg =
   | BodyChanged of string
   | AutosaveElapsed of version: int
   | SaveRequested
-  | SaveAnswered of slug: string * version: int * Result<string, Api.Failure>
+  | SaveAnswered of slug: string * version: int * Result<Api.SavedPost, Api.Failure>
   | PointerMoved
   | LeaveRequested of path: string
   | DetailsMsg of Details.Msg
@@ -77,6 +84,7 @@ type Msg =
   | PreviewToggled
   | PreviewClosed
   | PreviewAnswered of slug: string * Result<Api.PostPreview, Api.Failure>
+  | ProblemChosen of Problem.Target
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -85,6 +93,8 @@ type Effect =
   | LoadDetailsOptions
   | ChangeSlug of SlugRequest
   | FetchPreview of PreviewRequest
+  | Focus of elementId: string
+  | MoveToBodyLine of line: int
 
 let autosaveDelay = 2000
 
@@ -104,6 +114,7 @@ let private loaded (post: Api.PostDocument) =
       Version = 0
       Confirmed = 0
       Save = Saved
+      Check = NotChecked
       SaveAgain = false
       LeaveTo = None
       Typing = false
@@ -158,12 +169,13 @@ let private saveNow (document: Document) =
   | Saved
   | Stale -> Loaded document, None
 
-let private answered (version: int) (result: Result<string, Api.Failure>) (document: Document) =
+let private answered (version: int) (result: Result<Api.SavedPost, Api.Failure>) (document: Document) =
   match document.Save, result with
-  | Saving sent, Ok eTag when sent = version ->
+  | Saving sent, Ok saved when sent = version ->
     let document =
       { document with
-          ETag = Some eTag
+          ETag = Some saved.ETag
+          Check = (if saved.CheckFailed then CheckFailed else Found saved.Problems)
           Confirmed = version
           PendingEdit = document.PendingEdit || document.State <> Api.Draft }
 
@@ -259,6 +271,14 @@ let private previewAnswered (result: Result<Api.PostPreview, Api.Failure>) (docu
   | Preview.Loading, Error failure -> Loaded { document with Preview = Preview.Failed(Api.reason failure) }, None
   | _ -> Loaded document, None
 
+let private chooseProblem (target: Problem.Target) (document: Document) =
+  let closed = { document with Details = fst (Details.update Details.Closed document.Details) }
+
+  match target with
+  | Problem.Control(id, true) -> Loaded document, Some(Focus id)
+  | Problem.Control(id, false) -> Loaded closed, Some(Focus id)
+  | Problem.BodyLine line -> Loaded closed, Some(MoveToBodyLine line)
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with
   | Loading slug, Answered(answered, Ok post) when answered = slug -> loaded post, None
@@ -277,6 +297,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, PreviewToggled -> togglePreview document
   | Loaded document, PreviewClosed -> Loaded { document with Preview = Preview.Closed }, None
   | Loaded document, PreviewAnswered(slug, result) when slug = document.Slug -> previewAnswered result document
+  | Loaded document, ProblemChosen target -> chooseProblem target document
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -337,6 +358,13 @@ let failureText (model: Model) =
   | Loaded { Save = SaveFailed reason } -> reason
   | Loaded { Save = Stale } -> "Another tab saved newer text. Your text stays here. Copy it, and then reload the page."
   | _ -> ""
+
+let hasProblems (document: Document) =
+  match document.Check with
+  | Found(_ :: _) -> true
+  | Found []
+  | NotChecked
+  | CheckFailed -> false
 
 let primaryAction (document: Document) =
   match document.State with

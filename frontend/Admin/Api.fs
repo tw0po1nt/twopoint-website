@@ -60,8 +60,6 @@ type PostDocument =
 
 type CreatedDraft = { Slug: string; ETag: string }
 
-type SavedPost = { ETag: string }
-
 type CommenterStatus =
   | New
   | Trusted
@@ -152,6 +150,12 @@ type PreviewArticle = { Content: string; Outline: string }
 type PostPreview =
   { Article: PreviewArticle option
     Problems: PreviewProblem list }
+
+/// `CheckFailed` is true when the API saved the post and could not check it. `Problems` is then empty.
+type SavedPost =
+  { ETag: string
+    Problems: PreviewProblem list
+    CheckFailed: bool }
 
 type Failure =
   /// The API answered 401 or 403.
@@ -455,7 +459,7 @@ let savePost
   (excerpt: string)
   (body: string)
   (details: PostDetails)
-  : JS.Promise<Result<string, Failure>> =
+  : JS.Promise<Result<SavedPost, Failure>> =
   let precondition =
     match eTag with
     | Some eTag -> IfMatch eTag
@@ -470,8 +474,7 @@ let savePost
     ]
     |> Encode.toString 0
 
-  sendWith<SavedPost> HttpMethod.PUT api token (postPath slug) (Some(Json json)) [ precondition ]
-  |> Promise.map (Result.map (fun saved -> saved.ETag))
+  sendWith HttpMethod.PUT api token (postPath slug) (Some(Json json)) [ precondition ]
 
 let getTerms (api: string) (token: string) : JS.Promise<Result<Terms, Failure>> =
   send HttpMethod.GET api token (internalPath [ "terms" ])
