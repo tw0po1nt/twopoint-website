@@ -198,4 +198,26 @@ let tests =
       Check.post Stage.Production (Images.ofFetch fetch) [] [ target ] "b-post" (text fields "Text.") |> ignore
       Expect.isEmpty calls "The save check downloads no card image"
     }
+
+    test "withoutPost gives the link that breaks in another post when the post leaves the site" {
+      let other = publishedPost "b-post" "Text.\n\nRead [the step](/posts/a-post/#first-step)."
+
+      Expect.equal
+        (Check.withoutPost Stage.Production [ target; other ] "a-post")
+        [ Problem.error
+            (Place.Post 1)
+            "The change breaks a link in the post 'b-post', on body line 4: The output has no page at /posts/a-post/." ]
+        "The error names the link in the other post"
+    }
+
+    test "withoutPost gives no problem when no other post links to the post" {
+      let other = publishedPost "b-post" "Text."
+      Expect.isEmpty (Check.withoutPost Stage.Production [ target; other ] "a-post") "No broken link"
+      Expect.isEmpty (Check.withoutPost Stage.Production [ other ] "a-post") "A post that is not published"
+    }
+
+    test "withoutPost does not count a link that was already broken" {
+      let other = publishedPost "b-post" "Text.\n\nRead [nothing](/posts/nothing/)."
+      Expect.isEmpty (Check.withoutPost Stage.Production [ target; other ] "a-post") "The link was broken before"
+    }
   ]

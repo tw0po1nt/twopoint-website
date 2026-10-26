@@ -47,6 +47,8 @@ let private fail (call: Shell.Call) =
   | Shell.LoadPostDeploy slug -> Shell.Editor(Editor.DeployMsg(slug, Deploy.StatusRead(Error Api.Unanswered)))
   | Shell.RetryPostDeploy slug -> Shell.Editor(Editor.DeployMsg(slug, Deploy.Retried(Error Api.Unanswered)))
   | Shell.DiscardPending request -> Shell.Editor(Editor.DiscardAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.UnpublishPost request -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.ChangePostDate request -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -185,6 +187,12 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.DiscardPending request ->
     Api.discardPending (Config.api ()) token request.Slug request.ETag
     |> Promise.map (fun result -> Shell.Editor(Editor.DiscardAnswered(request.Slug, result)))
+  | Shell.UnpublishPost request ->
+    Api.unpublishPost (Config.api ()) token request.Slug request.ETag
+    |> Promise.map (fun result -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, result)))
+  | Shell.ChangePostDate request ->
+    Api.changePostDate (Config.api ()) token request.Slug request.ETag request.PublishDate
+    |> Promise.map (fun result -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))

@@ -29,6 +29,7 @@
     <Compile Include="Endpoints\Admin\SiteRebuilder.fs" />
     <Compile Include="Endpoints\Admin\PublishPost.fs" />
     <Compile Include="Endpoints\Admin\PublishChanges.fs" />
+    <Compile Include="Endpoints\Admin\UpcomingChange.fs" />
     <Compile Include="Endpoints\Admin\GetTerms.fs" />
     <Compile Include="Endpoints\Admin\GetSeries.fs" />
     <Compile Include="Endpoints\Admin\PreviewPost.fs" />

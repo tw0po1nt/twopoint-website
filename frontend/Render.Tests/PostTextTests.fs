@@ -172,4 +172,15 @@ let detailsTests =
         Expect.equal (PostText.split updated) (PostText.split dated) "The fields and the body"
       | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
     }
+
+    test "withoutPublishDate removes the publish date and keeps the other fields and the body" {
+      let dated = "---\npublishDate: 2020-01-01T00:00:00Z\ntitle: T\nauthor: A\n---\n\nBody.\n"
+
+      match PostText.withoutPublishDate dated with
+      | Ok undated ->
+        Expect.equal (Post.summary undated).PublishDate None "No publish date"
+        Expect.stringContains undated "author: A" "The author stays"
+        Expect.equal (PostText.split undated) (PostText.split dated) "The fields and the body"
+      | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
+    }
   ]

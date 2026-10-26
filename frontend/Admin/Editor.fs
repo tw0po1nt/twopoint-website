@@ -46,7 +46,10 @@ type Document =
     Publish: Publish.Model
     Published: Api.PublishedFields option
     Changes: ChangesDialog
-    Discard: Discard.State
+    Discard: Confirm.State
+    Unpublish: Confirm.State
+    ChangeDate: Typed.State
+    ChangeWarnings: Api.ChangeWarning list
     Deploy: Deploy.Model }
 
 type Model =
@@ -82,6 +85,14 @@ type PublishRequest =
 
 type DiscardRequest = { Slug: string; ETag: string }
 
+/// `ETag` is `None` when the post has no pending edit.
+type UnpublishRequest = { Slug: string; ETag: string option }
+
+type ChangeDateRequest =
+  { Slug: string
+    ETag: string option
+    PublishDate: string }
+
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
   | TitleChanged of string
@@ -113,6 +124,16 @@ type Msg =
   | DiscardConfirmed
   | DiscardAnswered of slug: string * Result<unit, Api.Failure>
   | DiscardClosed
+  | UnpublishRequested
+  | UnpublishConfirmed
+  | UnpublishAnswered of slug: string * Result<Api.UpcomingChange, Api.Failure>
+  | UnpublishClosed
+  | ChangeDateRequested
+  | ChangeDateTyped of string
+  | ChangeDateConfirmed
+  | ChangeDateAnswered of slug: string * Result<Api.UpcomingChange, Api.Failure>
+  | ChangeDateClosed
+  | ChangeNoticeDismissed
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -124,6 +145,8 @@ type Effect =
   | CheckPublish of PublishRequest * choice: Publish.When
   | PublishPost of PublishRequest
   | DiscardPending of DiscardRequest
+  | UnpublishPost of UnpublishRequest
+  | ChangePostDate of ChangeDateRequest
   | Reload of slug: string
   | Focus of elementId: string
   | MoveToBodyLine of line: int
@@ -159,7 +182,10 @@ let private loaded (chain: Deploy.Chain) (post: Api.PostDocument) =
       Publish = Publish.init
       Published = post.Published
       Changes = ChangesHidden
-      Discard = Discard.Closed
+      Discard = Confirm.Closed
+      Unpublish = Confirm.Closed
+      ChangeDate = Typed.Closed
+      ChangeWarnings = []
       Deploy = Deploy.start chain }
 
 let private deployRead (post: Api.PostDocument) =
@@ -481,27 +507,115 @@ let private discardAvailability (document: Document) =
 
 let private discardRequested (document: Document) =
   match discardAvailability document with
-  | Available -> Loaded { document with Discard = Discard.Confirming }, None
+  | Available -> Loaded { document with Discard = Confirm.Confirming }, None
   | Unavailable _ -> Loaded document, None
 
 let private discardConfirmed (document: Document) =
   match document.Discard, document.ETag with
-  | (Discard.Confirming | Discard.Failed _), Some eTag ->
-    Loaded { document with Discard = Discard.Sending },
+  | (Confirm.Confirming | Confirm.Failed _), Some eTag ->
+    Loaded { document with Discard = Confirm.Sending },
     Some(DiscardPending { Slug = document.Slug; ETag = eTag })
   | _ -> Loaded document, None
 
 let private discardAnswered (result: Result<unit, Api.Failure>) (document: Document) =
   match document.Discard, result with
-  | Discard.Sending, Ok() -> Loading(document.Slug, Deploy.nextChain document.Deploy), Some(Reload document.Slug)
-  | Discard.Sending, Error failure -> Loaded { document with Discard = Discard.Failed(Api.reason failure) }, None
+  | Confirm.Sending, Ok() -> Loading(document.Slug, Deploy.nextChain document.Deploy), Some(Reload document.Slug)
+  | Confirm.Sending, Error failure -> Loaded { document with Discard = Confirm.Failed(Api.reason failure) }, None
   | _ -> Loaded document, None
 
 let private discardClosed (document: Document) =
-  if Discard.isSending document.Discard then
+  if Confirm.isSending document.Discard then
     Loaded document, None
   else
-    Loaded { document with Discard = Discard.Closed }, None
+    Loaded { document with Discard = Confirm.Closed }, None
+
+let private upcomingChangeAvailability (document: Document) =
+  match document.State, document.Save with
+  | (Api.Draft | Api.Published), _ -> Unavailable "Only an upcoming post can move."
+  | _, Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | _, (Unsaved | SaveFailed _) -> Unavailable "Save the post first."
+  | _, Saving _ -> Unavailable "The save runs."
+  | _, Saved when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, and then try again."
+  | _, Saved -> Available
+
+let private unpublishRequested (document: Document) =
+  match upcomingChangeAvailability document with
+  | Available -> Loaded { document with Unpublish = Confirm.Confirming }, None
+  | Unavailable _ -> Loaded document, None
+
+let private unpublishConfirmed (document: Document) =
+  match document.Unpublish with
+  | Confirm.Confirming
+  | Confirm.Failed _ ->
+    Loaded { document with Unpublish = Confirm.Sending },
+    Some(UnpublishPost { Slug = document.Slug; ETag = document.ETag })
+  | Confirm.Closed
+  | Confirm.Sending -> Loaded document, None
+
+let private afterChange (change: Api.UpcomingChange) (document: Document) =
+  { document with
+      State = change.State
+      PublishDate = change.PublishDate
+      Check = None
+      ChangeWarnings = change.Warnings
+      Deploy = Deploy.restart document.Deploy }
+
+let private unpublishAnswered (result: Result<Api.UpcomingChange, Api.Failure>) (document: Document) =
+  match document.Unpublish, result with
+  | Confirm.Sending, Ok change ->
+    Loaded
+      { afterChange change document with
+          ETag = change.ETag
+          PendingEdit = false
+          Published = None
+          Unpublish = Confirm.Closed },
+    Some(ReadDeploy document.Slug)
+  | Confirm.Sending, Error failure -> Loaded { document with Unpublish = Confirm.Failed(Api.reason failure) }, None
+  | _ -> Loaded document, None
+
+let private unpublishClosed (document: Document) =
+  if Confirm.isSending document.Unpublish then
+    Loaded document, None
+  else
+    Loaded { document with Unpublish = Confirm.Closed }, None
+
+let private changeDateRequested (document: Document) =
+  match upcomingChangeAvailability document with
+  | Available ->
+    Loaded { document with ChangeDate = Typed.Typing(ChangeDate.initial document.PublishDate) }, None
+  | Unavailable _ -> Loaded document, None
+
+let private changeDateTyped (typed: string) (document: Document) =
+  match document.ChangeDate with
+  | Typed.Typing _
+  | Typed.Failed _ -> Loaded { document with ChangeDate = Typed.Typing typed }, None
+  | Typed.Closed
+  | Typed.Sending _ -> Loaded document, None
+
+let private changeDateConfirmed (document: Document) =
+  match ChangeDate.canConfirm document.ChangeDate, ChangeDate.iso document.ChangeDate with
+  | true, Some iso ->
+    Loaded { document with ChangeDate = Typed.Sending(Typed.typed document.ChangeDate) },
+    Some(ChangePostDate { Slug = document.Slug; ETag = document.ETag; PublishDate = iso })
+  | _ -> Loaded document, None
+
+let private changeDateAnswered (result: Result<Api.UpcomingChange, Api.Failure>) (document: Document) =
+  match document.ChangeDate, result with
+  | Typed.Sending _, Ok change ->
+    Loaded
+      { afterChange change document with
+          ETag = (if document.PendingEdit then change.ETag else document.ETag)
+          ChangeDate = Typed.Closed },
+    Some(ReadDeploy document.Slug)
+  | Typed.Sending typed, Error failure ->
+    Loaded { document with ChangeDate = Typed.Failed(typed, Api.reason failure) }, None
+  | _ -> Loaded document, None
+
+let private changeDateClosed (document: Document) =
+  if Typed.isSending document.ChangeDate then
+    Loaded document, None
+  else
+    Loaded { document with ChangeDate = Typed.Closed }, None
 
 let private changesOpened (document: Document) =
   match document.State, document.Published with
@@ -544,6 +658,16 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, DiscardConfirmed -> discardConfirmed document
   | Loaded document, DiscardAnswered(slug, result) when slug = document.Slug -> discardAnswered result document
   | Loaded document, DiscardClosed -> discardClosed document
+  | Loaded document, UnpublishRequested -> unpublishRequested document
+  | Loaded document, UnpublishConfirmed -> unpublishConfirmed document
+  | Loaded document, UnpublishAnswered(slug, result) when slug = document.Slug -> unpublishAnswered result document
+  | Loaded document, UnpublishClosed -> unpublishClosed document
+  | Loaded document, ChangeDateRequested -> changeDateRequested document
+  | Loaded document, ChangeDateTyped typed -> changeDateTyped typed document
+  | Loaded document, ChangeDateConfirmed -> changeDateConfirmed document
+  | Loaded document, ChangeDateAnswered(slug, result) when slug = document.Slug -> changeDateAnswered result document
+  | Loaded document, ChangeDateClosed -> changeDateClosed document
+  | Loaded document, ChangeNoticeDismissed -> Loaded { document with ChangeWarnings = [] }, None
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -674,10 +798,9 @@ let private availability (document: Document) (action: MenuAction) =
   | DiscardChanges, _ -> discardAvailability document
   | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can change its date."
   | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
-  | Revisions, Api.Draft -> Unavailable "A draft has no revisions. The first publish makes one."
+  | Revisions, Api.Draft -> Unavailable "Revisions are available after the next publish."
   | SendToSubscribers, Api.Draft -> Unavailable "Publish the post first."
-  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/261): change the date and unpublish an upcoming post
-  | (ChangeDate | Unpublish), Api.Upcoming
+  | (ChangeDate | Unpublish), Api.Upcoming -> upcomingChangeAvailability document
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): list and restore the revisions
   | Revisions, (Api.Published | Api.Upcoming)
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/270): send a post to the subscribers
@@ -704,8 +827,8 @@ let menuMsg (action: MenuAction) =
   | SaveNow -> Some SaveRequested
   | ChangesFromLive -> Some ChangesOpened
   | DiscardChanges -> Some DiscardRequested
-  | ChangeDate
-  | Unpublish
+  | ChangeDate -> Some ChangeDateRequested
+  | Unpublish -> Some UnpublishRequested
   | Revisions
   | SendToSubscribers
   | Delete -> None

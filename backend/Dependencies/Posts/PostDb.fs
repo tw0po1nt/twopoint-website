@@ -257,6 +257,7 @@ type internal IPostDb =
   abstract member GetAllPosts: unit -> CancellableTaskResult<DbPost list, DependencyError>
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
   abstract member UpsertPost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
+  abstract member DeletePost: slug: string -> CancellableTaskResult<unit, DependencyError>
   
   abstract member GetAllCommenters: unit -> CancellableTaskResult<DbCommenter list, DependencyError>
   abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
@@ -390,6 +391,9 @@ module internal PostDb =
 
       member _.UpsertPost post =
         post.ToEntity() |> upsert postsTable PostDbError.validation DbPost.FromEntity
+
+      member _.DeletePost slug =
+        deleteByKeys postsTable PostDbError.validation slug slug
 
       member _.GetAllCommenters () =
         toList commentersTable DbCommenter.FromEntity

@@ -27,8 +27,10 @@
     <Compile Include="Details.fs" />
     <Compile Include="Preview.fs" />
     <Compile Include="Diff.fs" />
-    <Compile Include="Discard.fs" />
+    <Compile Include="Confirm.fs" />
+    <Compile Include="Typed.fs" />
     <Compile Include="Publish.fs" />
+    <Compile Include="ChangeDate.fs" />
     <Compile Include="Editor.fs" />
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />

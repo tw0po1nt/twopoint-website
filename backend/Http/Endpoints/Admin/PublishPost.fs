@@ -38,14 +38,19 @@ type PublishCheckDto = { Problems : ProblemDto list }
 
 module PreconditionResponse =
 
-  let missing<'T> (req : HttpRequestData) : CancellableTask<HttpResponseData> =
+  let missingWith<'T> (message : string) (req : HttpRequestData) : CancellableTask<HttpResponseData> =
     cancellableTask {
       let! ct = CancellableTask.getCancellationToken()
-      let apiResponse : ApiResponse<'T> = { Success = false; Message = Some "Send If-Match with the ETag"; Data = None }
+      let apiResponse : ApiResponse<'T> = { Success = false; Message = Some message; Data = None }
       let response = req.CreateResponse HttpStatusCode.PreconditionRequired
       do! response.WriteAsJsonAsync(apiResponse, ct)
       return response
     }
+
+  let missing<'T> (req : HttpRequestData) = missingWith<'T> "Send If-Match with the ETag" req
+
+  let missingOrNone<'T> (req : HttpRequestData) =
+    missingWith<'T> "Send If-Match with the ETag, or If-None-Match: * when the post has no working blob" req
 
 module PublishMapping =
 
@@ -124,6 +129,13 @@ type PostPublishing(
     member _.DeleteWorkingBlob slug eTag = postStore.DeleteWorkingBlob slug eTag
     member _.DispatchSite () = rebuilder.Dispatch()
     member _.RecordChange change = rebuilder.RecordChange change
+
+  interface UpcomingGate.Dependencies with
+    member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
+
+  interface Unpublish.Dependencies with
+    member _.DeletePublishedBlob slug eTag = postStore.DeletePublishedBlob slug eTag
+    member _.DeletePostRow slug = postDependencies.DeletePost slug
 
 type CheckPublish(
   config : Config,

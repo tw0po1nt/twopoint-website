@@ -72,6 +72,13 @@ module PublishGate =
       | On date when date <= now -> Decision.failure DateInPast
       | On date -> Decision.success date
 
+    let workingMatches (working: StoredBlob option) (ifMatch: string option) =
+      match working, ifMatch with
+      | Some blob, Some eTag -> blob.ETag = eTag
+      | None, None -> true
+      | Some _, None
+      | None, Some _ -> false
+
     let working
       (slug: Slug)
       (published: StoredBlob option)
@@ -277,6 +284,15 @@ module PublishSteps =
           return Result.Error(WriteFailed error)
     }
 
+  let retryOnce (write: unit -> DependencyResult<'a>) : CancellableTask<Result<'a, DependencyError>> =
+    cancellableTask {
+      let! first = write ()
+
+      match first with
+      | Ok _ -> return first
+      | Error _ -> return! write ()
+    }
+
   /// The change is dated before the dispatch, so the run that the dispatch queues includes the change.
   let rebuild (dependencies: GatedDependencies) (slug: Slug) : CancellableTask<Rebuilt> =
     cancellableTask {
@@ -296,12 +312,7 @@ module PublishSteps =
     (publishedAt: DateTime)
     : CancellableTask<Outcome> =
     cancellableTask {
-      let! firstRow = dependencies.UpsertPostRow post
-
-      let! row =
-        match firstRow with
-        | Ok() -> CancellableTask.singleton firstRow
-        | Error _ -> dependencies.UpsertPostRow post
+      let! row = retryOnce (fun () -> dependencies.UpsertPostRow post)
 
       let! deleted = dependencies.DeleteWorkingBlob post.Slug workingETag
       let! rebuilt = rebuild dependencies post.Slug

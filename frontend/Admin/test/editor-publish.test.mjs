@@ -76,7 +76,7 @@ test('the menu shows each action of a draft, and an action that is not available
     { text: 'Discard changesA draft has no pending edit.', disabled: 'true' },
     { text: 'Change the dateOnly an upcoming post can change its date.', disabled: 'true' },
     { text: 'UnpublishYou can unpublish only an upcoming post.', disabled: 'true' },
-    { text: 'RevisionsA draft has no revisions. The first publish makes one.', disabled: 'true' },
+    { text: 'RevisionsRevisions are available after the next publish.', disabled: 'true' },
     { text: 'Send to subscribersPublish the post first.', disabled: 'true' },
     { text: 'DeleteA later version adds this action.', disabled: 'true' },
     { text: 'Add image', disabled: null },

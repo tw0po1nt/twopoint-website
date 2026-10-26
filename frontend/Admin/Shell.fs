@@ -37,6 +37,8 @@ type Call =
   | LoadPostDeploy of slug: string
   | RetryPostDeploy of slug: string
   | DiscardPending of Editor.DiscardRequest
+  | UnpublishPost of Editor.UnpublishRequest
+  | ChangePostDate of Editor.ChangeDateRequest
   | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -171,7 +173,9 @@ let private layerOpenOverEditor (model: Model) =
         document.Details.Open
         || Publish.isOpen document.Publish
         || document.Changes = Editor.ChangesShown
-        || Discard.isOpen document.Discard
+        || Confirm.isOpen document.Discard
+        || Confirm.isOpen document.Unpublish
+        || Typed.isOpen document.ChangeDate
       | _ -> false)
 
 /// The author goes to another page, and the editor has text that the API does not have.
@@ -202,6 +206,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.WaitToPollDeploy _
           | Editor.RetryDeploy _
           | Editor.DiscardPending _
+          | Editor.UnpublishPost _
+          | Editor.ChangePostDate _
           | Editor.Reload _
           | Editor.Focus _
           | Editor.MoveToBodyLine _ -> [])
@@ -305,6 +311,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.PublishAnswered(_, Error Api.Refused), _
       | Editor.DeployMsg(_, Deploy.StatusRead(Error Api.Refused)), _
       | Editor.DeployMsg(_, Deploy.Retried(Error Api.Refused)), _
+      | Editor.UnpublishAnswered(_, Error Api.Refused), _
+      | Editor.ChangeDateAnswered(_, Error Api.Refused), _
       | Editor.DiscardAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
@@ -324,6 +332,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.WaitToPollDeploy(slug, chain) -> WaitToPollDeploy(slug, chain)
           | Editor.RetryDeploy slug -> Send [ RetryPostDeploy slug ]
           | Editor.DiscardPending request -> Send [ DiscardPending request ]
+          | Editor.UnpublishPost request -> Send [ UnpublishPost request ]
+          | Editor.ChangePostDate request -> Send [ ChangePostDate request ]
           | Editor.Reload slug -> Send [ LoadPost slug ]
           | Editor.Focus elementId -> Focus elementId
           | Editor.MoveToBodyLine line -> MoveToBodyLine line)

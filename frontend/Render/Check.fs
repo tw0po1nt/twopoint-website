@@ -41,7 +41,7 @@ let private linkProblems (stage: Stage) (posts: Post list) =
   |> List.map (fun problems -> problems.File, problems)
   |> Map.ofList
 
-let private brokenElsewhere (published: Post list) (post: Post) (before: Map<string, FileProblems>) (after: Map<string, FileProblems>) =
+let private brokenElsewhere (published: Post list) (changedFile: string) (before: Map<string, FileProblems>) (after: Map<string, FileProblems>) =
   let names =
     published
     |> List.map (fun other -> other.File, $"the post '{other.Slug}'")
@@ -49,7 +49,7 @@ let private brokenElsewhere (published: Post list) (post: Post) (before: Map<str
     |> Map.add Privacy.file "the privacy page"
 
   [ for KeyValue(otherFile, problems) in after do
-      if otherFile <> post.File then
+      if otherFile <> changedFile then
         let earlier =
           before.TryFind otherFile
           |> Option.map (fun problems -> problems.Problems |> List.map _.Place |> Set.ofList)
@@ -91,7 +91,7 @@ let private check
         @ ownProblems post
         @ Rules.termTitles published post
         @ own
-        @ brokenElsewhere published post (linkProblems stage published) after }
+        @ brokenElsewhere published post.File (linkProblems stage published) after }
 
 /// Only the parse of the post uses `images`, so a caller can parse each post of `published` with `Check.published`.
 let post
@@ -139,3 +139,7 @@ let draft
   (text: string)
   : CheckedPost =
   check missingCategory (Post.parseDraft images stage series previewTime (file slug) text) stage published slug
+
+let withoutPost (stage: Stage) (published: Post list) (slug: string) : Problem list =
+  let remaining = published |> List.filter (fun other -> other.Slug <> slug)
+  brokenElsewhere published (file slug) (linkProblems stage published) (linkProblems stage remaining)
