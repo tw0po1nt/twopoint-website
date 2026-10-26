@@ -22,6 +22,7 @@
     <Compile Include="PublishTests.fs" />
     <Compile Include="PendingEditTests.fs" />
     <Compile Include="UpcomingChangeTests.fs" />
+    <Compile Include="DeleteTests.fs" />
     <Compile Include="DiffTests.fs" />
     <Compile Include="UploadTests.fs" />
     <Compile Include="PostCommentsTests.fs" />

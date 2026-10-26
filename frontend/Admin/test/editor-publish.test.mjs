@@ -78,7 +78,7 @@ test('the menu shows each action of a draft, and an action that is not available
     { text: 'UnpublishYou can unpublish only an upcoming post.', disabled: 'true' },
     { text: 'RevisionsRevisions are available after the next publish.', disabled: 'true' },
     { text: 'Send to subscribersPublish the post first.', disabled: 'true' },
-    { text: 'DeleteA later version adds this action.', disabled: 'true' },
+    { text: 'Delete', disabled: null },
     { text: 'Add image', disabled: null },
   ]);
 });

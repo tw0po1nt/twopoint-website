@@ -136,3 +136,5 @@ let changeWarningText (warning: Api.ChangeWarning) =
   | Api.PendingDateNotUpdated -> "The pending edit keeps the old publish date. Publish changes sets the right date."
   | Api.PostRowKept ->
     "The post table still has a row for this post. Readers can comment on the post until the row is deleted."
+  | Api.RevisionsKept -> "The revisions of the post are still in the post store. Nobody can see them."
+  | Api.CommentsKept -> "The comments of the post are still in the comment table. Nobody can see them."

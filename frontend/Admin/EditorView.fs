@@ -120,6 +120,21 @@ let private changeDateState (model: Shell.Model) =
   | Some document -> document.ChangeDate
   | None -> Typed.Closed
 
+let private deleteStep (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.deleteStep document
+  | None -> Editor.NoDeleteDialog
+
+let private deleteConfirm (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.deleteConfirm document
+  | None -> Editor.PlainConfirm
+
+let private deleteReason (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.deleteReason document
+  | None -> None
+
 let private changeWarnings (model: Shell.Model) =
   match document model with
   | Some document -> Array.ofList document.ChangeWarnings
@@ -590,6 +605,60 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
   }
 
 [<SolidComponent>]
+let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+  let sending () = deleteStep (model ()) = Editor.DeleteRuns
+
+  dialog(id = "delete-dialog", class' = "dialog", ariaLabelledBy = "delete-dialog-title")
+    .ref(Parts.followOpen (fun () -> deleteStep (model ()) <> Editor.NoDeleteDialog))
+    .on("cancel", fun event ->
+      if sending () then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.DeleteClosed) {
+    h2 (id = "delete-dialog-title") { "Delete the post?" }
+
+    div (class' = "dialog-body") {
+      Show(
+        when' = (deleteConfirm (model ()) = Editor.TypeSlug),
+        fallback = p () { "The admin deletes the draft permanently." }
+      ) {
+        p () { "The admin deletes the post, its pending edit, its revisions, and its comments permanently. The site rebuilds without the post. The delivery records stay." }
+
+        Parts
+          .Field(id = "delete-slug", label = "Type the slug of the post to confirm")
+          .Has(
+            Parts
+              .Input(
+                id = "delete-slug",
+                value = (fun () -> match document (model ()) with Some document -> Typed.typed document.Delete | None -> ""),
+                disabledWhen = sending,
+                onInput = (fun event -> send (Editor.DeleteTyped (event.target :?> HTMLInputElement).value)),
+                onEnter = fun () -> send Editor.DeleteConfirmed
+              )
+              .View()
+          )
+      }
+
+      Show(when' = (deleteReason (model ())).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The admin did not delete the post.").Has(
+          p () { deleteReason (model ()) |> Option.defaultValue "" }
+        )
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = sending (), onClick = fun _ -> send Editor.DeleteClosed).Has(Fragment() { "Keep" })
+
+      Parts.Button(
+        kind = Parts.Danger,
+        disabled = (deleteStep (model ()) <> Editor.ReadyToDelete),
+        onClick = fun _ -> send Editor.DeleteConfirmed
+      )
+        .Has(Fragment() { "Delete" })
+    }
+  }
+
+[<SolidComponent>]
 let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send msg = dispatch (Shell.Editor msg)
   let state () = changeDateState (model ())
@@ -853,4 +922,5 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     discardDialog dispatch model
     unpublishDialog dispatch model
     changeDateDialog dispatch model
+    deleteDialog dispatch model
   }

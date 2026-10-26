@@ -17,6 +17,8 @@ type Model =
     /// The call that makes a draft is in flight.
     Creating: bool
     CreateFailure: string option
+    /// The warnings of the last delete of a post. The author dismisses them.
+    Notice: Api.ChangeWarning list
     /// Counts each load of the list. A timer and a poll answer name the load that they belong to.
     Generation: int }
 
@@ -27,6 +29,7 @@ type Msg =
   | Filtered of Filter
   | NewDraftClicked
   | DraftCreated of Result<Api.CreatedDraft, Api.Failure>
+  | NoticeDismissed
 
 type Effect =
   | CreateDraft
@@ -39,6 +42,7 @@ let init =
     Posts = Waiting
     Creating = false
     CreateFailure = None
+    Notice = []
     Generation = 0 }
 
 let reload (model: Model) =
@@ -70,6 +74,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | Loaded _
     | NotLoaded _ -> model, None
   | Filtered filter -> { model with Filter = filter }, None
+  | NoticeDismissed -> { model with Notice = [] }, None
   | NewDraftClicked when model.Creating -> model, None
   | NewDraftClicked ->
     { model with

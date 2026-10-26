@@ -48,6 +48,8 @@ type Document =
     Changes: ChangesDialog
     Discard: Confirm.State
     Unpublish: Confirm.State
+    Delete: Typed.State
+    DeleteDraft: Confirm.State
     ChangeDate: Typed.State
     ChangeWarnings: Api.ChangeWarning list
     Deploy: Deploy.Model }
@@ -87,6 +89,12 @@ type DiscardRequest = { Slug: string; ETag: string }
 
 /// `ETag` is `None` when the post has no pending edit.
 type UnpublishRequest = { Slug: string; ETag: string option }
+
+/// `ETag` is `None` when the post has no working blob. `ConfirmSlug` is the typed text of a published post, and `None` for a draft.
+type DeleteRequest =
+  { Slug: string
+    ETag: string option
+    ConfirmSlug: string option }
 
 type ChangeDateRequest =
   { Slug: string
@@ -134,6 +142,11 @@ type Msg =
   | ChangeDateAnswered of slug: string * Result<Api.UpcomingChange, Api.Failure>
   | ChangeDateClosed
   | ChangeNoticeDismissed
+  | DeleteRequested
+  | DeleteTyped of string
+  | DeleteConfirmed
+  | DeleteAnswered of slug: string * Result<Api.DeletedPost, Api.Failure>
+  | DeleteClosed
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -147,6 +160,7 @@ type Effect =
   | DiscardPending of DiscardRequest
   | UnpublishPost of UnpublishRequest
   | ChangePostDate of ChangeDateRequest
+  | DeletePost of DeleteRequest
   | Reload of slug: string
   | Focus of elementId: string
   | MoveToBodyLine of line: int
@@ -184,6 +198,8 @@ let private loaded (chain: Deploy.Chain) (post: Api.PostDocument) =
       Changes = ChangesHidden
       Discard = Confirm.Closed
       Unpublish = Confirm.Closed
+      Delete = Typed.Closed
+      DeleteDraft = Confirm.Closed
       ChangeDate = Typed.Closed
       ChangeWarnings = []
       Deploy = Deploy.start chain }
@@ -617,6 +633,94 @@ let private changeDateClosed (document: Document) =
   else
     Loaded { document with ChangeDate = Typed.Closed }, None
 
+/// A published post needs its typed slug. A draft needs a plain confirm.
+type DeleteConfirm =
+  | PlainConfirm
+  | TypeSlug
+
+type DeleteStep =
+  | NoDeleteDialog
+  | WaitingForSlug
+  | ReadyToDelete
+  | DeleteRuns
+
+let deleteConfirm (document: Document) =
+  match document.State with
+  | Api.Draft -> PlainConfirm
+  | Api.Published
+  | Api.Upcoming -> TypeSlug
+
+let isDeleteOpen (document: Document) = Confirm.isOpen document.DeleteDraft || Typed.isOpen document.Delete
+
+let deleteReason (document: Document) =
+  match deleteConfirm document with
+  | PlainConfirm -> Confirm.reason document.DeleteDraft
+  | TypeSlug -> Typed.reason document.Delete
+
+let deleteStep (document: Document) =
+  match deleteConfirm document, document.DeleteDraft, document.Delete with
+  | PlainConfirm, (Confirm.Confirming | Confirm.Failed _), _ -> ReadyToDelete
+  | PlainConfirm, Confirm.Sending, _
+  | TypeSlug, _, Typed.Sending _ -> DeleteRuns
+  | PlainConfirm, Confirm.Closed, _
+  | TypeSlug, _, Typed.Closed -> NoDeleteDialog
+  | TypeSlug, _, (Typed.Typing typed | Typed.Failed(typed, _)) ->
+    if typed = document.Slug then ReadyToDelete else WaitingForSlug
+
+let private deleteAvailability (document: Document) =
+  match document.Save with
+  | Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | Unsaved
+  | SaveFailed _ -> Unavailable "Save the post first."
+  | Saving _ -> Unavailable "The save runs."
+  | Saved when document.ETag.IsNone && (document.State = Api.Draft || document.PendingEdit) ->
+    Unavailable "Reload the page, and then delete the post."
+  | Saved -> Available
+
+let private deleteRequested (document: Document) =
+  match deleteAvailability document with
+  | Unavailable _ -> Loaded document, None
+  | Available ->
+    match deleteConfirm document with
+    | PlainConfirm -> Loaded { document with DeleteDraft = Confirm.Confirming }, None
+    | TypeSlug -> Loaded { document with Delete = Typed.Typing "" }, None
+
+let private deleteTyped (typed: string) (document: Document) =
+  match document.Delete with
+  | Typed.Typing _
+  | Typed.Failed _ -> Loaded { document with Delete = Typed.Typing typed }, None
+  | Typed.Closed
+  | Typed.Sending _ -> Loaded document, None
+
+let private deleteConfirmed (document: Document) =
+  match deleteStep document, deleteConfirm document with
+  | ReadyToDelete, PlainConfirm ->
+    Loaded { document with DeleteDraft = Confirm.Sending },
+    Some(DeletePost { Slug = document.Slug; ETag = document.ETag; ConfirmSlug = None })
+  | ReadyToDelete, TypeSlug ->
+    let typed = Typed.typed document.Delete
+
+    Loaded { document with Delete = Typed.Sending typed },
+    Some(DeletePost { Slug = document.Slug; ETag = document.ETag; ConfirmSlug = Some typed })
+  | (NoDeleteDialog | WaitingForSlug | DeleteRuns), _ -> Loaded document, None
+
+let private deleteAnswered (result: Result<Api.DeletedPost, Api.Failure>) (document: Document) =
+  match deleteStep document, deleteConfirm document, result with
+  | DeleteRuns, PlainConfirm, Ok _ -> Loaded { document with DeleteDraft = Confirm.Closed }, None
+  | DeleteRuns, TypeSlug, Ok _ -> Loaded { document with Delete = Typed.Closed }, None
+  | DeleteRuns, PlainConfirm, Error failure ->
+    Loaded { document with DeleteDraft = Confirm.Failed(Api.reason failure) }, None
+  | DeleteRuns, TypeSlug, Error failure ->
+    Loaded { document with Delete = Typed.Failed(Typed.typed document.Delete, Api.reason failure) }, None
+  | (NoDeleteDialog | WaitingForSlug | ReadyToDelete), _, _ -> Loaded document, None
+
+let private deleteClosed (document: Document) =
+  match deleteStep document with
+  | DeleteRuns -> Loaded document, None
+  | NoDeleteDialog
+  | WaitingForSlug
+  | ReadyToDelete -> Loaded { document with Delete = Typed.Closed; DeleteDraft = Confirm.Closed }, None
+
 let private changesOpened (document: Document) =
   match document.State, document.Published with
   | (Api.Published | Api.Upcoming), Some _ -> Loaded { document with Changes = ChangesShown }, None
@@ -668,6 +772,11 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, ChangeDateAnswered(slug, result) when slug = document.Slug -> changeDateAnswered result document
   | Loaded document, ChangeDateClosed -> changeDateClosed document
   | Loaded document, ChangeNoticeDismissed -> Loaded { document with ChangeWarnings = [] }, None
+  | Loaded document, DeleteRequested -> deleteRequested document
+  | Loaded document, DeleteTyped typed -> deleteTyped typed document
+  | Loaded document, DeleteConfirmed -> deleteConfirmed document
+  | Loaded document, DeleteAnswered(slug, result) when slug = document.Slug -> deleteAnswered result document
+  | Loaded document, DeleteClosed -> deleteClosed document
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -800,13 +909,12 @@ let private availability (document: Document) (action: MenuAction) =
   | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
   | Revisions, Api.Draft -> Unavailable "Revisions are available after the next publish."
   | SendToSubscribers, Api.Draft -> Unavailable "Publish the post first."
+  | Delete, _ -> deleteAvailability document
   | (ChangeDate | Unpublish), Api.Upcoming -> upcomingChangeAvailability document
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): list and restore the revisions
   | Revisions, (Api.Published | Api.Upcoming)
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/270): send a post to the subscribers
-  | SendToSubscribers, (Api.Published | Api.Upcoming)
-  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/262): delete a post
-  | Delete, _ -> laterVersion
+  | SendToSubscribers, (Api.Published | Api.Upcoming) -> laterVersion
 
 let menu (document: Document) : MenuItem list =
   [ SaveNow, "Save"
@@ -830,8 +938,8 @@ let menuMsg (action: MenuAction) =
   | ChangeDate -> Some ChangeDateRequested
   | Unpublish -> Some UnpublishRequested
   | Revisions
-  | SendToSubscribers
-  | Delete -> None
+  | SendToSubscribers -> None
+  | Delete -> Some DeleteRequested
 
 let private detailsText (details: Api.PostDetails) =
   let value = Option.defaultValue ""
