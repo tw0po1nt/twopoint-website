@@ -44,6 +44,12 @@ module SaveDraftHeaders =
     | true, values -> values |> Seq.tryHead
     | _ -> None
 
+  let ifMatch (precondition : SavePrecondition) =
+    match precondition with
+    | IfMatch eTag -> Some eTag
+    | IfNoneMatchAny
+    | Missing -> None
+
   let precondition (req : HttpRequestData) =
     match header req "If-Match", header req "If-None-Match" with
     | Some eTag, _ -> IfMatch eTag

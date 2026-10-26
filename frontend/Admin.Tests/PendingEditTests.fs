@@ -297,22 +297,22 @@ let discardTests =
 
     test "the discard asks first, and Keep closes the dialog with no call" {
       let model, effect = send Editor.DiscardRequested (opened pendingPost)
-      Expect.equal (document' model).Discard Discard.Confirming "The dialog"
+      Expect.equal (document' model).Discard Confirm.Confirming "The dialog"
       Expect.isNone effect "No call"
       let model, effect = send Editor.DiscardClosed model
-      Expect.equal (document' model).Discard Discard.Closed "Closed"
+      Expect.equal (document' model).Discard Confirm.Closed "Closed"
       Expect.isNone effect "No call"
     }
 
     test "a request for a discard that is not available does nothing" {
       let model, _ = send Editor.DiscardRequested (opened cleanPost)
-      Expect.equal (document' model).Discard Discard.Closed "No dialog"
+      Expect.equal (document' model).Discard Confirm.Closed "No dialog"
     }
 
     test "the confirm sends the discard with the ETag of the working blob" {
       let model, _ = send Editor.DiscardRequested (opened pendingPost)
       let model, effect = send Editor.DiscardConfirmed model
-      Expect.equal (document' model).Discard Discard.Sending "Sending"
+      Expect.equal (document' model).Discard Confirm.Sending "Sending"
       Expect.equal effect (Some(Shell.Send [ Shell.DiscardPending { Slug = "my-post"; ETag = "\"w1\"" } ])) "The call"
     }
 
@@ -320,7 +320,7 @@ let discardTests =
       let model, _ = send Editor.DiscardRequested (opened pendingPost)
       let model, _ = send Editor.DiscardConfirmed model
       let model, _ = send Editor.DiscardClosed model
-      Expect.equal (document' model).Discard Discard.Sending "Still sending"
+      Expect.equal (document' model).Discard Confirm.Sending "Still sending"
     }
 
     test "a discard that succeeded loads the post again, so the editor shows the published text" {
@@ -340,7 +340,7 @@ let discardTests =
       let model, _ = send Editor.DiscardRequested (opened pendingPost)
       let model, _ = send Editor.DiscardConfirmed model
       let model, _ = send (Editor.DiscardAnswered("my-post", Error(Api.Failed "The post changed since you opened it"))) model
-      Expect.equal (document' model).Discard (Discard.Failed "The post changed since you opened it") "The reason"
+      Expect.equal (document' model).Discard (Confirm.Failed "The post changed since you opened it") "The reason"
       Expect.isTrue (document' model).PendingEdit "The pending edit stays"
       let _, effect = send Editor.DiscardConfirmed model
       Expect.isSome effect "A second call"

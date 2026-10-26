@@ -173,9 +173,9 @@ let private layerOpenOverEditor (model: Model) =
         document.Details.Open
         || Publish.isOpen document.Publish
         || document.Changes = Editor.ChangesShown
-        || Discard.isOpen document.Discard
-        || Unpublish.isOpen document.Unpublish
-        || ChangeDate.isOpen document.ChangeDate
+        || Confirm.isOpen document.Discard
+        || Confirm.isOpen document.Unpublish
+        || Typed.isOpen document.ChangeDate
       | _ -> false)
 
 /// The author goes to another page, and the editor has text that the API does not have.

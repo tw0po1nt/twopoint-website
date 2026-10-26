@@ -296,7 +296,7 @@ let menuTests =
       Expect.equal (reasonOf Editor.DiscardChanges model) "A draft has no pending edit." "Discard changes"
       Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Change the date"
       Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
-      Expect.equal (reasonOf Editor.Revisions model) "A draft has no revisions. The first publish makes one." "Revisions"
+      Expect.equal (reasonOf Editor.Revisions model) "Revisions are available after the next publish." "Revisions"
       Expect.equal (reasonOf Editor.SendToSubscribers model) "Publish the post first." "Send to subscribers"
       Expect.equal (reasonOf Editor.Delete model) "A later version adds this action." "Delete"
     }

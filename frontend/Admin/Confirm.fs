@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module TwoPoint.Admin.Discard
+module TwoPoint.Admin.Confirm
 
 type State =
   | Closed

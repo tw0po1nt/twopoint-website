@@ -108,21 +108,21 @@ let private isChangesOpen (model: Shell.Model) =
 let private discardState (model: Shell.Model) =
   match document model with
   | Some document -> document.Discard
-  | None -> Discard.Closed
+  | None -> Confirm.Closed
 
 let private unpublishState (model: Shell.Model) =
   match document model with
   | Some document -> document.Unpublish
-  | None -> Unpublish.Closed
+  | None -> Confirm.Closed
 
 let private changeDateState (model: Shell.Model) =
   match document model with
   | Some document -> document.ChangeDate
-  | None -> ChangeDate.Closed
+  | None -> Typed.Closed
 
-let private movedWarnings (model: Shell.Model) =
+let private changeWarnings (model: Shell.Model) =
   match document model with
-  | Some document -> Array.ofList document.Moved
+  | Some document -> Array.ofList document.ChangeWarnings
   | None -> [||]
 
 let private publishIsBusy (model: Shell.Model) =
@@ -526,9 +526,9 @@ let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   let send msg = dispatch (Shell.Editor msg)
 
   dialog(id = "discard-dialog", class' = "dialog", ariaLabelledBy = "discard-dialog-title")
-    .ref(Parts.followOpen (fun () -> Discard.isOpen (discardState (model ()))))
+    .ref(Parts.followOpen (fun () -> Confirm.isOpen (discardState (model ()))))
     .on("cancel", fun event ->
-      if Discard.isSending (discardState (model ())) then
+      if Confirm.isSending (discardState (model ())) then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.DiscardClosed) {
     h2 (id = "discard-dialog-title") { "Discard the changes?" }
@@ -536,19 +536,19 @@ let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
     div (class' = "dialog-body") {
       p () { "The pending edit goes away permanently. The editor shows the published text again." }
 
-      Show(when' = (Discard.reason (discardState (model ()))).IsSome) {
+      Show(when' = (Confirm.reason (discardState (model ()))).IsSome) {
         Parts.Alert(tone = Parts.Bad, title = "The changes are not discarded.").Has(
-          p () { Discard.reason (discardState (model ())) |> Option.defaultValue "" }
+          p () { Confirm.reason (discardState (model ())) |> Option.defaultValue "" }
         )
       }
     }
 
     div (class' = "actions") {
-      Parts.Button(disabled = Discard.isSending (discardState (model ())), onClick = fun _ -> send Editor.DiscardClosed).Has(Fragment() { "Keep" })
+      Parts.Button(disabled = Confirm.isSending (discardState (model ())), onClick = fun _ -> send Editor.DiscardClosed).Has(Fragment() { "Keep" })
 
       Parts.Button(
         kind = Parts.Danger,
-        disabled = Discard.isSending (discardState (model ())),
+        disabled = Confirm.isSending (discardState (model ())),
         onClick = fun _ -> send Editor.DiscardConfirmed
       )
         .Has(Fragment() { "Discard" })
@@ -560,9 +560,9 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
   let send msg = dispatch (Shell.Editor msg)
 
   dialog(id = "unpublish-dialog", class' = "dialog", ariaLabelledBy = "unpublish-dialog-title")
-    .ref(Parts.followOpen (fun () -> Unpublish.isOpen (unpublishState (model ()))))
+    .ref(Parts.followOpen (fun () -> Confirm.isOpen (unpublishState (model ()))))
     .on("cancel", fun event ->
-      if Unpublish.isSending (unpublishState (model ())) then
+      if Confirm.isSending (unpublishState (model ())) then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.UnpublishClosed) {
     h2 (id = "unpublish-dialog-title") { "Unpublish the post?" }
@@ -570,19 +570,19 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
     div (class' = "dialog-body") {
       p () { "The post becomes a draft with no publish date, and the site no longer shows it. The pending edit stays as the draft text." }
 
-      Show(when' = (Unpublish.reason (unpublishState (model ()))).IsSome) {
+      Show(when' = (Confirm.reason (unpublishState (model ()))).IsSome) {
         Parts.Alert(tone = Parts.Bad, title = "The post is not unpublished.").Has(
-          p () { Unpublish.reason (unpublishState (model ())) |> Option.defaultValue "" }
+          p () { Confirm.reason (unpublishState (model ())) |> Option.defaultValue "" }
         )
       }
     }
 
     div (class' = "actions") {
-      Parts.Button(disabled = Unpublish.isSending (unpublishState (model ())), onClick = fun _ -> send Editor.UnpublishClosed).Has(Fragment() { "Keep" })
+      Parts.Button(disabled = Confirm.isSending (unpublishState (model ())), onClick = fun _ -> send Editor.UnpublishClosed).Has(Fragment() { "Keep" })
 
       Parts.Button(
         kind = Parts.Danger,
-        disabled = Unpublish.isSending (unpublishState (model ())),
+        disabled = Confirm.isSending (unpublishState (model ())),
         onClick = fun _ -> send Editor.UnpublishConfirmed
       )
         .Has(Fragment() { "Unpublish" })
@@ -593,10 +593,10 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
 let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send msg = dispatch (Shell.Editor msg)
   let state () = changeDateState (model ())
-  let sending () = ChangeDate.isSending (state ())
+  let sending () = Typed.isSending (state ())
 
   dialog(id = "change-date-dialog", class' = "dialog publish-dialog", ariaLabelledBy = "change-date-dialog-title")
-    .ref(Parts.followOpen (fun () -> ChangeDate.isOpen (state ())))
+    .ref(Parts.followOpen (fun () -> Typed.isOpen (state ())))
     .on("cancel", fun event ->
       if sending () then
         event.preventDefault())
@@ -613,16 +613,16 @@ let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell
             .Input(
               id = "new-publish-date",
               kind = "datetime-local",
-              value = (fun () -> ChangeDate.typed (state ())),
+              value = (fun () -> Typed.typed (state ())),
               disabledWhen = sending,
               onInput = fun event -> send (Editor.ChangeDateTyped (event.target :?> HTMLInputElement).value)
             )
             .View()
         )
 
-      Show(when' = (ChangeDate.reason (state ())).IsSome) {
+      Show(when' = (Typed.reason (state ())).IsSome) {
         Parts.Alert(tone = Parts.Bad, title = "The date is not changed.").Has(
-          p () { ChangeDate.reason (state ()) |> Option.defaultValue "" }
+          p () { Typed.reason (state ()) |> Option.defaultValue "" }
         )
       }
     }
@@ -792,14 +792,14 @@ let private publishNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
-let private movedNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
-  Show(when' = ((movedWarnings (model ())).Length > 0)) {
+let private changeNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  Show(when' = ((changeWarnings (model ())).Length > 0)) {
     Parts.Alert(tone = Parts.Warn, title = "The change is made, and a step after it failed.").Has(
       Fragment() {
-        For(each = movedWarnings (model ())) { yield fun warning _ -> p () { Publish.movedWarningText warning } }
+        For(each = changeWarnings (model ())) { yield fun warning _ -> p () { Publish.changeWarningText warning } }
 
         div (class' = "editor-notice-actions") {
-          Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.MovedNoticeDismissed)).Has(Fragment() { "Dismiss" })
+          Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.ChangeNoticeDismissed)).Has(Fragment() { "Dismiss" })
         }
       }
     )
@@ -840,7 +840,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
       publishNotice dispatch model
-      movedNotice dispatch model
+      changeNotice dispatch model
       h1 (class' = "sr-only") { heading () }
 
       Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }

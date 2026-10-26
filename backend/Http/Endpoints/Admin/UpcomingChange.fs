@@ -26,37 +26,39 @@ open System.Threading
 type ChangeDateJson = { PublishDate : string }
 
 /// `PublishDate` is null after an unpublish. `ETag` is the ETag of the working blob, or null when the post has no working blob.
-type MovedPostDto =
+/// Each warning is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`,
+/// `deploy-tracking`, `pending-date`, or `post-row`.
+type UpcomingChangeDto =
   { PublishDate : string
     State : string
     ETag : string
     ProductionRun : Nullable<int64>
-    /// Each is one of the warnings of `PublishedPostDto`.
     Warnings : string list }
 
-module MoveMapping =
+module UpcomingMapping =
 
-  let moved (moved : Moved) : MovedPostDto =
-    { PublishDate = moved.PublishDate |> Option.map (DateTimeOffset >> TwoPoint.Site.Render.Time.isoTime) |> Option.toObj
+  let warning (warning : ChangeWarning) =
+    match warning with
+    | Step step -> PublishMapping.warning step
+    | PostRowKept _ -> "post-row"
+    | PendingDateNotUpdated _
+    | PendingDateUnreadable _ -> "pending-date"
+
+  let change (change : UpcomingChange) : UpcomingChangeDto =
+    { PublishDate = change.PublishDate |> Option.map (DateTimeOffset >> TwoPoint.Site.Render.Time.isoTime) |> Option.toObj
       State =
-        match moved.State with
+        match change.State with
         | PostState.Upcoming -> "upcoming"
         | PostState.Published -> "published"
         | PostState.Draft -> "draft"
-      ETag = moved.WorkingETag |> Option.toObj
-      ProductionRun = ProductionDispatch.runNumber moved.Production |> Option.map _.Value |> Option.toNullable
-      Warnings = moved.Warnings |> List.map PublishMapping.warning }
+      ETag = change.WorkingETag |> Option.toObj
+      ProductionRun = ProductionDispatch.runNumber change.Production |> Option.map _.Value |> Option.toNullable
+      Warnings = change.Warnings |> List.map warning }
 
   let refusal (refusal : UpcomingGate.Refusal) =
     match refusal with
-    | UpcomingGate.WorkingBlobChanged -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
-    | UpcomingGate.PublishedBlobChanged -> "The published text changed since you opened the post", HttpStatusCode.Conflict
-    | UpcomingGate.PostNotFound missing -> $"Post '{missing}' not found", HttpStatusCode.NotFound
-    | UpcomingGate.NotPublished draft -> $"The post '{draft}' is a draft", HttpStatusCode.Conflict
+    | UpcomingGate.Gate gate -> PendingMapping.refusal gate
     | UpcomingGate.NotUpcoming live -> $"The post '{live}' is not upcoming. Its publish date is in the past", HttpStatusCode.Conflict
-    | UpcomingGate.NoPublishDate undated -> $"The published text of '{undated}' has no publish date", HttpStatusCode.UnprocessableEntity
-    | UpcomingGate.FrontMatterUnreadable reason ->
-      $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity
 
   let errors (problems : TwoPoint.Site.Render.Problem list) =
     problems |> List.map _.Message |> String.concat " "
@@ -94,14 +96,8 @@ type UnpublishPost(
         let response = req.CreateResponse HttpStatusCode.OK
 
         match SaveDraftHeaders.precondition req with
-        | Missing -> return! PreconditionResponse.missing<MovedPostDto> req
+        | Missing -> return! PreconditionResponse.missingOrNone<UpcomingChangeDto> req
         | precondition ->
-          let ifMatch =
-            match precondition with
-            | IfMatch eTag -> Some eTag
-            | IfNoneMatchAny
-            | Missing -> None
-
           let postStore = PostStore(postStoreClient, logger, texts)
 
           let postDependencies =
@@ -111,22 +107,22 @@ type UnpublishPost(
           let gate = PublishGateStore(config, images, parseCache, postStore)
           let unpublish = Unpublish.withDependencies (PostPublishing(gate, postStore, postDependencies, rebuilder))
 
-          let! result = unpublish { Slug = slug; IfMatch = ifMatch }
+          let! result = unpublish { Slug = slug; IfMatch = SaveDraftHeaders.ifMatch precondition }
 
           match result with
-          | Ok(Unpublish.Event.Unpublished moved) ->
-            for warning in moved.Warnings do
+          | Ok(Unpublish.Event.Unpublished change) ->
+            for warning in change.Warnings do
               logger.LogWarning("The post '{slug}' is unpublished, and a step after the write failed: {warning}", slug, warning)
           | Error _ -> ()
 
           let apiResponse, statusCode =
             result
             |> ActionResult.toApiResponse
-              (fun (Unpublish.Event.Unpublished moved) -> Some(MoveMapping.moved moved))
+              (fun (Unpublish.Event.Unpublished change) -> Some(UpcomingMapping.change change))
               (function
-                | Unpublish.Error.Refused refusal -> MoveMapping.refusal refusal
+                | Unpublish.Error.Refused refusal -> UpcomingMapping.refusal refusal
                 | Unpublish.Error.HasErrors problems ->
-                  $"The draft has errors and the post is not unpublished. {MoveMapping.errors problems}", HttpStatusCode.UnprocessableEntity)
+                  $"The unpublish breaks a link in another post and is not done. {UpcomingMapping.errors problems}", HttpStatusCode.UnprocessableEntity)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)
@@ -167,15 +163,9 @@ type ChangePostDate(
         let response = req.CreateResponse HttpStatusCode.OK
 
         match SaveDraftHeaders.precondition req with
-        | Missing -> return! PreconditionResponse.missing<MovedPostDto> req
+        | Missing -> return! PreconditionResponse.missingOrNone<UpcomingChangeDto> req
         | precondition ->
           let! json = req.ReadFromJsonAsync<ChangeDateJson> ct
-
-          let ifMatch =
-            match precondition with
-            | IfMatch eTag -> Some eTag
-            | IfNoneMatchAny
-            | Missing -> None
 
           let publishDate = json |> Option.ofObj |> Option.bind (fun json -> Option.ofObj json.PublishDate) |> Option.defaultValue ""
 
@@ -188,22 +178,19 @@ type ChangePostDate(
           let gate = PublishGateStore(config, images, parseCache, postStore)
           let changeDate = ChangeDate.withDependencies (PostPublishing(gate, postStore, postDependencies, rebuilder))
 
-          let! result = changeDate { Slug = slug; IfMatch = ifMatch; PublishDate = publishDate }
+          let! result = changeDate { Slug = slug; IfMatch = SaveDraftHeaders.ifMatch precondition; PublishDate = publishDate }
 
           match result with
-          | Ok(ChangeDate.Event.DateChanged moved) ->
-            for warning in moved.Warnings do
+          | Ok(ChangeDate.Event.DateChanged change) ->
+            for warning in change.Warnings do
               logger.LogWarning("The date of the post '{slug}' is changed, and a step after the write failed: {warning}", slug, warning)
           | Error _ -> ()
 
           let apiResponse, statusCode =
             result
             |> ActionResult.toApiResponse
-              (fun (ChangeDate.Event.DateChanged moved) -> Some(MoveMapping.moved moved))
-              (function
-                | ChangeDate.Error.Refused refusal -> MoveMapping.refusal refusal
-                | ChangeDate.Error.HasErrors problems ->
-                  $"The post has errors and the date is not changed. {MoveMapping.errors problems}", HttpStatusCode.UnprocessableEntity)
+              (fun (ChangeDate.Event.DateChanged change) -> Some(UpcomingMapping.change change))
+              (fun (ChangeDate.Error.Refused refusal) -> UpcomingMapping.refusal refusal)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

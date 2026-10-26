@@ -202,8 +202,6 @@ type PublishWarning =
   | StagingRebuildFailed
   | SiteNotRebuilt
   | DeployNotTracked
-  | PendingDateNotUpdated
-  | PostRowNotDeleted
 
 /// `PublishDate` is an ISO 8601 UTC time. `State` is `Published` or `Upcoming`.
 type PublishedPost =
@@ -211,12 +209,17 @@ type PublishedPost =
     State: PostState
     Warnings: PublishWarning list }
 
+type ChangeWarning =
+  | PublishStep of PublishWarning
+  | PendingDateNotUpdated
+  | PostRowKept
+
 /// `PublishDate` is `None` after an unpublish. `ETag` is the ETag of the working blob, or `None` when the post has no working blob.
-type MovedPost =
+type UpcomingChange =
   { PublishDate: string option
     State: PostState
     ETag: string option
-    Warnings: PublishWarning list }
+    Warnings: ChangeWarning list }
 
 type Failure =
   /// The API answered 401 or 403.
@@ -342,9 +345,15 @@ let private publishWarning: Decoder<PublishWarning> =
     | "staging-rebuild" -> Decode.succeed StagingRebuildFailed
     | "site-rebuild" -> Decode.succeed SiteNotRebuilt
     | "deploy-tracking" -> Decode.succeed DeployNotTracked
-    | "pending-date" -> Decode.succeed PendingDateNotUpdated
-    | "post-row" -> Decode.succeed PostRowNotDeleted
     | _ -> Decode.fail $"The publish warning '{name}' is not known.")
+
+let private changeWarning: Decoder<ChangeWarning> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "pending-date" -> Decode.succeed PendingDateNotUpdated
+    | "post-row" -> Decode.succeed PostRowKept
+    | _ -> publishWarning |> Decode.map PublishStep)
 
 let private coders =
   Extra.empty
@@ -357,6 +366,7 @@ let private coders =
   |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
   |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check
   |> Extra.withCustom (fun (_: PublishWarning) -> failwith "The admin sends no publish warning.") publishWarning
+  |> Extra.withCustom (fun (_: ChangeWarning) -> failwith "The admin sends no change warning.") changeWarning
 
 type private Payload =
   | Json of string
@@ -674,14 +684,14 @@ let discardPending (api: string) (token: string) (slug: string) (eTag: string) :
       | _ -> Error Invalid)
   )
 
-let private movePrecondition (eTag: string option) =
+/// `eTag` is the ETag of the working blob that the page read. `None` means that the post had no working blob.
+let workingPrecondition (eTag: string option) =
   match eTag with
   | Some eTag -> IfMatch eTag
   | None -> IfNoneMatch "*"
 
-/// `eTag` is the ETag of the working blob that the page read. `None` means that the post had no working blob.
-let unpublishPost (api: string) (token: string) (slug: string) (eTag: string option) : JS.Promise<Result<MovedPost, Failure>> =
-  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "unpublish" ]) (Some(Json "{}")) [ movePrecondition eTag ]
+let unpublishPost (api: string) (token: string) (slug: string) (eTag: string option) : JS.Promise<Result<UpcomingChange, Failure>> =
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "unpublish" ]) (Some(Json "{}")) [ workingPrecondition eTag ]
 
 /// `iso` is an ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
 let changePostDate
@@ -690,9 +700,9 @@ let changePostDate
   (slug: string)
   (eTag: string option)
   (iso: string)
-  : JS.Promise<Result<MovedPost, Failure>> =
+  : JS.Promise<Result<UpcomingChange, Failure>> =
   let json = Encode.object [ "publishDate", Encode.string iso ] |> Encode.toString 0
-  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "date" ]) (Some(Json json)) [ movePrecondition eTag ]
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "date" ]) (Some(Json json)) [ workingPrecondition eTag ]
 
 type private UploadedAsset = { Url: string }
 

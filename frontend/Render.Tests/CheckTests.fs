@@ -215,4 +215,9 @@ let tests =
       Expect.isEmpty (Check.withoutPost Stage.Production [ target; other ] "a-post") "No broken link"
       Expect.isEmpty (Check.withoutPost Stage.Production [ other ] "a-post") "A post that is not published"
     }
+
+    test "withoutPost does not count a link that was already broken" {
+      let other = publishedPost "b-post" "Text.\n\nRead [nothing](/posts/nothing/)."
+      Expect.isEmpty (Check.withoutPost Stage.Production [ target; other ] "a-post") "The link was broken before"
+    }
   ]

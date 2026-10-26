@@ -54,7 +54,7 @@ let private reasonOf action (model: Shell.Model) =
   | Editor.Unavailable reason -> reason
   | Editor.Available -> ""
 
-let private moved state publishDate eTag warnings : Api.MovedPost =
+let private change state publishDate eTag warnings : Api.UpcomingChange =
   { PublishDate = publishDate
     State = state
     ETag = eTag
@@ -95,22 +95,22 @@ let unpublishTests =
   testList "Unpublish" [
     test "the unpublish asks first, and Keep closes the dialog with no call" {
       let model, effect = send Editor.UnpublishRequested (opened upcoming)
-      Expect.equal (document' model).Unpublish Unpublish.Confirming "The dialog"
+      Expect.equal (document' model).Unpublish Confirm.Confirming "The dialog"
       Expect.isNone effect "No call"
       let model, effect = send Editor.UnpublishClosed model
-      Expect.equal (document' model).Unpublish Unpublish.Closed "Closed"
+      Expect.equal (document' model).Unpublish Confirm.Closed "Closed"
       Expect.isNone effect "No call"
     }
 
     test "a request for an unpublish that is not available does nothing" {
       let model, _ = send Editor.UnpublishRequested (opened live)
-      Expect.equal (document' model).Unpublish Unpublish.Closed "No dialog"
+      Expect.equal (document' model).Unpublish Confirm.Closed "No dialog"
     }
 
     test "the confirm sends the unpublish with the ETag of the pending edit" {
       let model, _ = send Editor.UnpublishRequested (opened upcomingPending)
       let model, effect = send Editor.UnpublishConfirmed model
-      Expect.equal (document' model).Unpublish Unpublish.Sending "Sending"
+      Expect.equal (document' model).Unpublish Confirm.Sending "Sending"
       Expect.equal effect (Some(Shell.Send [ Shell.UnpublishPost { Slug = "my-post"; ETag = Some "\"w1\"" } ])) "The call"
     }
 
@@ -124,14 +124,14 @@ let unpublishTests =
       let model, _ = send Editor.UnpublishRequested (opened upcoming)
       let model, _ = send Editor.UnpublishConfirmed model
       let model, _ = send Editor.UnpublishClosed model
-      Expect.equal (document' model).Unpublish Unpublish.Sending "Still sending"
+      Expect.equal (document' model).Unpublish Confirm.Sending "Still sending"
     }
 
     test "an unpublish that succeeded shows a draft with the new ETag, and restarts the deploy reads" {
       let model, _ = send Editor.UnpublishRequested (opened upcomingPending)
       let model, _ = send Editor.UnpublishConfirmed model
       let before = (document' model).Deploy
-      let answer = Ok(moved Api.Draft None (Some "\"w2\"") [])
+      let answer = Ok(change Api.Draft None (Some "\"w2\"") [])
       let model, effect = send (Editor.UnpublishAnswered("my-post", answer)) model
       let document = document' model
 
@@ -140,7 +140,7 @@ let unpublishTests =
       Expect.equal document.ETag (Some "\"w2\"") "The ETag of the draft"
       Expect.isFalse document.PendingEdit "A draft has no pending edit"
       Expect.isNone document.Published "No published text"
-      Expect.equal document.Unpublish Unpublish.Closed "Closed"
+      Expect.equal document.Unpublish Confirm.Closed "Closed"
       Expect.equal document.Fields.Body "Some text.\n" "The text stays"
       Expect.equal document.Deploy.Chain.Number (before.Chain.Number + 1) "A new chain of deploy reads"
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The deploy read"
@@ -151,7 +151,7 @@ let unpublishTests =
     test "the draft can publish with the ETag that the unpublish gave" {
       let model, _ = send Editor.UnpublishRequested (opened upcoming)
       let model, _ = send Editor.UnpublishConfirmed model
-      let model, _ = send (Editor.UnpublishAnswered("my-post", Ok(moved Api.Draft None (Some "\"w1\"") []))) model
+      let model, _ = send (Editor.UnpublishAnswered("my-post", Ok(change Api.Draft None (Some "\"w1\"") []))) model
       let _, effect = send Editor.PublishClicked model
 
       match effect with
@@ -162,17 +162,17 @@ let unpublishTests =
     test "the warnings of an unpublish show until the author dismisses them" {
       let model, _ = send Editor.UnpublishRequested (opened upcoming)
       let model, _ = send Editor.UnpublishConfirmed model
-      let model, _ = send (Editor.UnpublishAnswered("my-post", Ok(moved Api.Draft None (Some "\"w1\"") [ Api.PostRowNotDeleted ]))) model
-      Expect.equal (document' model).Moved [ Api.PostRowNotDeleted ] "The warning"
-      let model, _ = send Editor.MovedNoticeDismissed model
-      Expect.isEmpty (document' model).Moved "Dismissed"
+      let model, _ = send (Editor.UnpublishAnswered("my-post", Ok(change Api.Draft None (Some "\"w1\"") [ Api.PostRowKept ]))) model
+      Expect.equal (document' model).ChangeWarnings [ Api.PostRowKept ] "The warning"
+      let model, _ = send Editor.ChangeNoticeDismissed model
+      Expect.isEmpty (document' model).ChangeWarnings "Dismissed"
     }
 
     test "a refused unpublish shows the reason and lets the author try again" {
       let model, _ = send Editor.UnpublishRequested (opened upcoming)
       let model, _ = send Editor.UnpublishConfirmed model
       let model, _ = send (Editor.UnpublishAnswered("my-post", Error(Api.Failed "The post 'my-post' is not upcoming. Its publish date is in the past"))) model
-      Expect.equal (Unpublish.reason (document' model).Unpublish) (Some "The post 'my-post' is not upcoming. Its publish date is in the past") "The reason"
+      Expect.equal (Confirm.reason (document' model).Unpublish) (Some "The post 'my-post' is not upcoming. Its publish date is in the past") "The reason"
       Expect.equal (document' model).State Api.Upcoming "Still upcoming"
       let _, effect = send Editor.UnpublishConfirmed model
       Expect.isSome effect "A second call"
@@ -198,13 +198,13 @@ let changeDateTests =
   testList "Change the date" [
     test "the dialog starts with the current date in the field" {
       let model, effect = send Editor.ChangeDateRequested (opened upcoming)
-      Expect.equal (document' model).ChangeDate (ChangeDate.Choosing "2099-12-31T00:00") "The field"
+      Expect.equal (document' model).ChangeDate (Typed.Typing "2099-12-31T00:00") "The field"
       Expect.isNone effect "No call"
     }
 
     test "a request for a date change that is not available does nothing" {
       let model, _ = send Editor.ChangeDateRequested (opened live)
-      Expect.equal (document' model).ChangeDate ChangeDate.Closed "No dialog"
+      Expect.equal (document' model).ChangeDate Typed.Closed "No dialog"
     }
 
     test "the confirm needs a complete date" {
@@ -219,7 +219,7 @@ let changeDateTests =
       let model, _ = send Editor.ChangeDateRequested (opened upcomingPending)
       let model, _ = send (Editor.ChangeDateTyped "2099-06-01T08:30") model
       let model, effect = send Editor.ChangeDateConfirmed model
-      Expect.equal (document' model).ChangeDate (ChangeDate.Sending "2099-06-01T08:30") "Sending"
+      Expect.equal (document' model).ChangeDate (Typed.Sending "2099-06-01T08:30") "Sending"
 
       Expect.equal
         effect
@@ -232,13 +232,13 @@ let changeDateTests =
       let model, _ = send (Editor.ChangeDateTyped "2099-06-01T08:30") model
       let model, _ = send Editor.ChangeDateConfirmed model
       let before = (document' model).Deploy
-      let answer = Ok(moved Api.Upcoming (Some "2099-06-01T08:30:00Z") None [])
+      let answer = Ok(change Api.Upcoming (Some "2099-06-01T08:30:00Z") None [])
       let model, effect = send (Editor.ChangeDateAnswered("my-post", answer)) model
       let document = document' model
 
       Expect.equal document.PublishDate (Some "2099-06-01T08:30:00Z") "The new date"
       Expect.equal document.State Api.Upcoming "Upcoming"
-      Expect.equal document.ChangeDate ChangeDate.Closed "Closed"
+      Expect.equal document.ChangeDate Typed.Closed "Closed"
       Expect.isNone document.ETag "No pending edit, so no ETag"
       Expect.equal document.Deploy.Chain.Number (before.Chain.Number + 1) "A new chain of deploy reads"
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The deploy read"
@@ -249,7 +249,7 @@ let changeDateTests =
       let model, _ = send Editor.ChangeDateRequested (opened upcoming)
       let model, _ = send (Editor.ChangeDateTyped "2026-01-01T08:30") model
       let model, _ = send Editor.ChangeDateConfirmed model
-      let answer = Ok(moved Api.Published (Some "2026-01-01T08:30:00Z") None [])
+      let answer = Ok(change Api.Published (Some "2026-01-01T08:30:00Z") None [])
       let model, _ = send (Editor.ChangeDateAnswered("my-post", answer)) model
 
       Expect.equal (document' model).State Api.Published "Published"
@@ -259,7 +259,7 @@ let changeDateTests =
     test "a date change keeps the pending edit and takes its new ETag" {
       let model, _ = send Editor.ChangeDateRequested (opened upcomingPending)
       let model, _ = send Editor.ChangeDateConfirmed model
-      let answer = Ok(moved Api.Upcoming (Some "2099-12-31T00:00:00Z") (Some "\"w2\"") [])
+      let answer = Ok(change Api.Upcoming (Some "2099-12-31T00:00:00Z") (Some "\"w2\"") [])
       let model, _ = send (Editor.ChangeDateAnswered("my-post", answer)) model
 
       Expect.isTrue (document' model).PendingEdit "The pending edit stays"
@@ -270,7 +270,7 @@ let changeDateTests =
       let model, _ = send Editor.ChangeDateRequested (opened upcoming)
       let model, _ = send Editor.ChangeDateConfirmed model
       let model, _ = send (Editor.ChangeDateAnswered("my-post", Error(Api.Failed "The post changed since you opened it"))) model
-      Expect.equal (ChangeDate.reason (document' model).ChangeDate) (Some "The post changed since you opened it") "The reason"
+      Expect.equal (Typed.reason (document' model).ChangeDate) (Some "The post changed since you opened it") "The reason"
       Expect.isTrue (ChangeDate.canConfirm (document' model).ChangeDate) "The author can try again"
     }
 
@@ -285,6 +285,17 @@ let changeDateTests =
       let model, _ = send Editor.ChangeDateRequested (opened upcoming)
       let model, _ = send Editor.ChangeDateConfirmed model
       let model, _ = send Editor.ChangeDateClosed model
-      Expect.equal (document' model).ChangeDate (ChangeDate.Sending "2099-12-31T00:00") "Still sending"
+      Expect.equal (document' model).ChangeDate (Typed.Sending "2099-12-31T00:00") "Still sending"
+    }
+  ]
+
+[<Tests>]
+let warningTests =
+  testList "Change warnings" [
+    test "the text of a kept row says that readers can comment until the row is deleted" {
+      Expect.equal
+        (Publish.changeWarningText Api.PostRowKept)
+        "The post table still has a row for this post. Readers can comment on the post until the row is deleted."
+        "The text"
     }
   ]

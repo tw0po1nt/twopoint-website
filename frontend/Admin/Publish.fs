@@ -126,17 +126,13 @@ let warningText (warning: Api.PublishWarning) =
   | Api.StagingRebuildFailed -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
   | Api.SiteNotRebuilt -> "The site rebuild did not start. Select Rebuild site on the dashboard."
   | Api.DeployNotTracked -> "The admin cannot show the deploy state of this post. The site still builds."
-  | Api.PendingDateNotUpdated -> "The pending edit keeps the old publish date. Publish changes sets the right date."
-  | Api.PostRowNotDeleted -> "The post table still has a row for this post. The row does no harm."
 
-let movedWarningText (warning: Api.PublishWarning) =
+let changeWarningText (warning: Api.ChangeWarning) =
   match warning with
-  | Api.NewerTextKept -> "Another tab saved newer text during the change. That text is a pending edit."
-  | Api.CommentRowMissing
-  | Api.PendingEditKept
-  | Api.ProductionRebuildFailed
-  | Api.StagingRebuildFailed
-  | Api.SiteNotRebuilt
-  | Api.DeployNotTracked
-  | Api.PendingDateNotUpdated
-  | Api.PostRowNotDeleted -> warningText warning
+  | Api.PublishStep Api.NewerTextKept -> "Another tab saved newer text during the change. That text is a pending edit."
+  | Api.PublishStep Api.CommentRowMissing ->
+    "The post table keeps the old date for this post. Readers can comment on the post only after that date."
+  | Api.PublishStep step -> warningText step
+  | Api.PendingDateNotUpdated -> "The pending edit keeps the old publish date. Publish changes sets the right date."
+  | Api.PostRowKept ->
+    "The post table still has a row for this post. Readers can comment on the post until the row is deleted."

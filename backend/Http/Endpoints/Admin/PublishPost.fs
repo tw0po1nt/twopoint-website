@@ -31,21 +31,26 @@ type PublishedPostDto =
   { PublishDate : string
     State : string
     ProductionRun : Nullable<int64>
-    /// Each is `comment-row`, `pending-edit`, `pending-date`, `post-row`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`, or `deploy-tracking`.
+    /// Each is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`, or `deploy-tracking`.
     Warnings : string list }
 
 type PublishCheckDto = { Problems : ProblemDto list }
 
 module PreconditionResponse =
 
-  let missing<'T> (req : HttpRequestData) : CancellableTask<HttpResponseData> =
+  let missingWith<'T> (message : string) (req : HttpRequestData) : CancellableTask<HttpResponseData> =
     cancellableTask {
       let! ct = CancellableTask.getCancellationToken()
-      let apiResponse : ApiResponse<'T> = { Success = false; Message = Some "Send If-Match with the ETag"; Data = None }
+      let apiResponse : ApiResponse<'T> = { Success = false; Message = Some message; Data = None }
       let response = req.CreateResponse HttpStatusCode.PreconditionRequired
       do! response.WriteAsJsonAsync(apiResponse, ct)
       return response
     }
+
+  let missing<'T> (req : HttpRequestData) = missingWith<'T> "Send If-Match with the ETag" req
+
+  let missingOrNone<'T> (req : HttpRequestData) =
+    missingWith<'T> "Send If-Match with the ETag, or If-None-Match: * when the post has no working blob" req
 
 module PublishMapping =
 
@@ -58,8 +63,6 @@ module PublishMapping =
     match warning with
     | PublishSteps.CommentRowNotWritten _ -> "comment-row"
     | PublishSteps.PendingEditKept _ -> "pending-edit"
-    | PublishSteps.PendingDateNotUpdated _ -> "pending-date"
-    | PublishSteps.PostRowNotDeleted _ -> "post-row"
     | PublishSteps.NewerTextKept -> "newer-text"
     | PublishSteps.ProductionRebuildFailed _ -> "production-rebuild"
     | PublishSteps.StagingRebuildFailed _ -> "staging-rebuild"
@@ -127,13 +130,12 @@ type PostPublishing(
     member _.DispatchSite () = rebuilder.Dispatch()
     member _.RecordChange change = rebuilder.RecordChange change
 
-  interface Unpublish.Dependencies with
+  interface UpcomingGate.Dependencies with
     member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
+
+  interface Unpublish.Dependencies with
     member _.DeletePublishedBlob slug eTag = postStore.DeletePublishedBlob slug eTag
     member _.DeletePostRow slug = postDependencies.DeletePost slug
-
-  interface ChangeDate.Dependencies with
-    member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
 
 type CheckPublish(
   config : Config,
