@@ -14,7 +14,7 @@ const post = {
   body: 'Some text.\n',
   details: { author: null, category: null, tags: [], series: null, image: null, showOnHomepage: true },
   text: '',
-  publishedText: null,
+  published: null,
 };
 
 const article = {

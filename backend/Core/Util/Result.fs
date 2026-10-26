@@ -82,6 +82,14 @@ type ActionError<'logicError> =
         $"The following validation errors occurred: {errorsList}"
     | Logic logic -> $"{logic}"
 
+module ActionError =
+
+  let mapLogic (map: 'logicError -> 'error) (error: ActionError<'logicError>) : ActionError<'error> =
+    match error with
+    | Logic logic -> Logic(map logic)
+    | Dependency dependency -> Dependency dependency
+    | Validation messages -> Validation messages
+
 /// <summary>
 /// The result of an action execution.
 /// The <c>Error</c> case indicates that some error occurred interacting with a dependency

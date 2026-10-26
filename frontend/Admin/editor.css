@@ -373,6 +373,47 @@
   margin-top: var(--s-3);
 }
 
+.diff h3 {
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: var(--t-sm);
+}
+
+.diff-lines {
+  max-height: 40vh;
+  overflow: auto;
+  font-family: var(--mono, monospace);
+  font-size: var(--t-sm);
+  border: 1px solid var(--line, currentColor);
+  border-radius: var(--r-2, 6px);
+}
+
+.diff-line {
+  display: flex;
+  gap: var(--s-2);
+  min-height: 1.4em;
+  padding: 0 var(--s-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-mark {
+  flex: none;
+}
+
+.diff-added {
+  background: var(--ok-soft);
+}
+
+.diff-removed {
+  background: var(--bad-soft);
+}
+
+.diff-skip {
+  padding: 0 var(--s-2);
+  color: var(--muted, inherit);
+  font-size: var(--t-sm);
+}
+
 .preview-frame {
   display: block;
   width: 100%;

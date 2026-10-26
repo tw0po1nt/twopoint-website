@@ -3,9 +3,17 @@ module TwoPoint.Admin.Publish
 
 open System.Text.RegularExpressions
 
-type When =
+type Schedule =
   | Now
   | OnDate of typed: string
+
+type UpdateDate =
+  | KeepDate
+  | UpdateOn of typed: string
+
+type When =
+  | Draft of Schedule
+  | Changes of UpdateDate
 
 type State =
   | Closed
@@ -50,8 +58,15 @@ let isoOf (typed: string) =
 
 let target (choice: When) : Api.PublishTarget option =
   match choice with
-  | Now -> Some Api.PublishNow
-  | OnDate typed -> isoOf typed |> Option.map Api.PublishOn
+  | Draft Now -> Some(Api.Publish Api.PublishNow)
+  | Draft(OnDate typed) -> isoOf typed |> Option.map (Api.PublishOn >> Api.Publish)
+  | Changes KeepDate -> Some(Api.PublishChanges Api.KeepUpdateDate)
+  | Changes(UpdateOn typed) -> isoOf typed |> Option.map (Api.SetUpdateDate >> Api.PublishChanges)
+
+let isChanges (choice: When) =
+  match choice with
+  | Draft _ -> false
+  | Changes _ -> true
 
 let hasErrors (problems: Api.Problem list) =
   problems |> List.exists (fun problem -> problem.Severity = Api.Severity.Error)
@@ -89,6 +104,7 @@ let reason (model: Model) =
   | _ -> None
 
 let statusText (model: Model) =
+  let changes = choice model |> Option.exists isChanges
   match model.State with
   | Closed -> ""
   | Saving -> "The post saves first."
@@ -98,8 +114,8 @@ let statusText (model: Model) =
   | Checked(_, []) -> "The check found no problem."
   | Checked _ -> "The check found warnings. A warning does not stop the publish."
   | CheckFailed _ -> "The check did not run."
-  | Sending _ -> "The post publishes."
-  | Failed _ -> "The post is not published."
+  | Sending _ -> if changes then "The changes publish." else "The post publishes."
+  | Failed _ -> if changes then "The changes are not published." else "The post is not published."
 
 let warningText (warning: Api.PublishWarning) =
   match warning with

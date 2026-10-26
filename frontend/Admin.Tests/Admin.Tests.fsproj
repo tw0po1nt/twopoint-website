@@ -20,6 +20,8 @@
     <Compile Include="DetailsTests.fs" />
     <Compile Include="PreviewTests.fs" />
     <Compile Include="PublishTests.fs" />
+    <Compile Include="PendingEditTests.fs" />
+    <Compile Include="DiffTests.fs" />
     <Compile Include="UploadTests.fs" />
     <Compile Include="PostCommentsTests.fs" />
     <Compile Include="CommentersTests.fs" />

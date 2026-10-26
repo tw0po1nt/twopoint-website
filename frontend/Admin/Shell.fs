@@ -36,6 +36,7 @@ type Call =
   | PublishPost of Editor.PublishRequest
   | LoadPostDeploy of slug: string
   | RetryPostDeploy of slug: string
+  | DiscardPending of Editor.DiscardRequest
   | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -166,7 +167,11 @@ let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
 let private layerOpenOverEditor (model: Model) =
   model.Overlay.IsSome
   || (match model.Editor with
-      | Some(Editor.Loaded document) -> document.Details.Open || Publish.isOpen document.Publish
+      | Some(Editor.Loaded document) ->
+        document.Details.Open
+        || Publish.isOpen document.Publish
+        || document.Changes = Editor.ChangesShown
+        || Discard.isOpen document.Discard
       | _ -> false)
 
 /// The author goes to another page, and the editor has text that the API does not have.
@@ -196,6 +201,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.ReadDeploy _
           | Editor.WaitToPollDeploy _
           | Editor.RetryDeploy _
+          | Editor.DiscardPending _
+          | Editor.Reload _
           | Editor.Focus _
           | Editor.MoveToBodyLine _ -> [])
 
@@ -297,7 +304,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.PublishCheckAnswered(_, _, Error Api.Refused), _
       | Editor.PublishAnswered(_, Error Api.Refused), _
       | Editor.DeployMsg(_, Deploy.StatusRead(Error Api.Refused)), _
-      | Editor.DeployMsg(_, Deploy.Retried(Error Api.Refused)), _ -> update (Session Session.AccountRefused) next
+      | Editor.DeployMsg(_, Deploy.Retried(Error Api.Refused)), _
+      | Editor.DiscardAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -315,6 +323,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.ReadDeploy slug -> Send [ LoadPostDeploy slug ]
           | Editor.WaitToPollDeploy(slug, chain) -> WaitToPollDeploy(slug, chain)
           | Editor.RetryDeploy slug -> Send [ RetryPostDeploy slug ]
+          | Editor.DiscardPending request -> Send [ DiscardPending request ]
+          | Editor.Reload slug -> Send [ LoadPost slug ]
           | Editor.Focus elementId -> Focus elementId
           | Editor.MoveToBodyLine line -> MoveToBodyLine line)
   | Upload msg ->

@@ -23,7 +23,7 @@ let private document state pendingEdit publishDate eTag : Api.PostDocument =
     Body = "Some text.\n"
     Details = noDetails
     Text = ""
-    PublishedText = None }
+    Published = None }
 
 let private draft = document Api.Draft false None (Some "\"v1\"")
 let private live = document Api.Published false (Some "2026-02-04T13:00:00Z") None
@@ -62,7 +62,7 @@ let private published state warnings : Api.PublishedPost =
 
 let private ready =
   let model, _ = send Editor.PublishClicked (opened draft)
-  fst (send (Editor.PublishCheckAnswered("my-post", Publish.Now, checkedWith [])) model)
+  fst (send (Editor.PublishCheckAnswered("my-post", (Publish.Draft Publish.Now), checkedWith [])) model)
 
 let private menuItem action (document: Editor.Document) =
   Editor.menu document |> List.find (fun item -> item.Action = action)
@@ -77,8 +77,8 @@ let tests =
   testList "Publish dialog" [
     test "Publish on a saved draft opens the dialog and asks for a check of now" {
       let model, effect = send Editor.PublishClicked (opened draft)
-      Expect.equal (publishState model) (Publish.Checking Publish.Now) "The dialog checks"
-      Expect.equal effect (Some(Shell.Send [ Shell.CheckPublish(checkRequest Api.PublishNow, Publish.Now) ])) "The check call"
+      Expect.equal (publishState model) (Publish.Checking (Publish.Draft Publish.Now)) "The dialog checks"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckPublish(checkRequest (Api.Publish Api.PublishNow), (Publish.Draft Publish.Now)) ])) "The check call"
     }
 
     test "the check after the load asks the API again, because the load has no problems" {
@@ -97,11 +97,11 @@ let tests =
       | Some(Shell.Send [ Shell.SavePost request ]) ->
         let saved: Api.SavedPost = { ETag = "\"v2\""; Check = Api.Found [] }
         let model, effect = send (Editor.SaveAnswered("my-post", request.Version, Ok saved)) model
-        Expect.equal (publishState model) (Publish.Checking Publish.Now) "The check starts"
+        Expect.equal (publishState model) (Publish.Checking (Publish.Draft Publish.Now)) "The check starts"
 
         Expect.equal
           effect
-          (Some(Shell.Send [ Shell.CheckPublish({ checkRequest Api.PublishNow with ETag = "\"v2\"" }, Publish.Now) ]))
+          (Some(Shell.Send [ Shell.CheckPublish({ checkRequest (Api.Publish Api.PublishNow) with ETag = "\"v2\"" }, (Publish.Draft Publish.Now)) ]))
           "The check has the new ETag"
       | other -> failtestf "Expected a save, got %A" other
     }
@@ -124,19 +124,19 @@ let tests =
 
     test "a check with a warning enables the publish" {
       let model, _ = send Editor.PublishClicked (opened draft)
-      let model, _ = send (Editor.PublishCheckAnswered("my-post", Publish.Now, checkedWith [ problem Api.Severity.Warning "Add the tag." ])) model
+      let model, _ = send (Editor.PublishCheckAnswered("my-post", (Publish.Draft Publish.Now), checkedWith [ problem Api.Severity.Warning "Add the tag." ])) model
       Expect.isTrue (Publish.canConfirm (document' model).Publish) "A warning does not block"
     }
 
     test "a check with an error disables the publish and lists the problems" {
       let errors = [ problem Api.Severity.Warning "Add the tag."; problem Api.Severity.Error "Broken link." ]
       let model, _ = send Editor.PublishClicked (opened draft)
-      let model, _ = send (Editor.PublishCheckAnswered("my-post", Publish.Now, checkedWith errors)) model
+      let model, _ = send (Editor.PublishCheckAnswered("my-post", (Publish.Draft Publish.Now), checkedWith errors)) model
       Expect.isFalse (Publish.canConfirm (document' model).Publish) "Disabled"
       Expect.equal (Publish.problems (document' model).Publish) errors "The list"
       let model, effect = send Editor.PublishConfirmed model
       Expect.isNone effect "No publish call"
-      Expect.equal (publishState model) (Publish.Checked(Publish.Now, errors)) "The dialog stays"
+      Expect.equal (publishState model) (Publish.Checked((Publish.Draft Publish.Now), errors)) "The dialog stays"
     }
 
     test "the publish stays disabled until the check answers" {
@@ -148,37 +148,37 @@ let tests =
 
     test "a failed check shows the reason and keeps the publish disabled" {
       let model, _ = send Editor.PublishClicked (opened draft)
-      let model, _ = send (Editor.PublishCheckAnswered("my-post", Publish.Now, Error(Api.Failed "The publish date is in the past"))) model
+      let model, _ = send (Editor.PublishCheckAnswered("my-post", (Publish.Draft Publish.Now), Error(Api.Failed "The publish date is in the past"))) model
       Expect.isFalse (Publish.canConfirm (document' model).Publish) "Disabled"
       Expect.equal (Publish.reason (document' model).Publish) (Some "The publish date is in the past") "The reason"
     }
 
     test "a date choice asks for a check of that date, and an incomplete date asks for none" {
-      let model, effect = send (Editor.PublishChoiceChanged(Publish.OnDate "")) ready
+      let model, effect = send (Editor.PublishChoiceChanged((Publish.Draft(Publish.OnDate "")))) ready
       Expect.isNone effect "No check for an empty date"
-      Expect.equal (publishState model) (Publish.Choosing(Publish.OnDate "")) "Waiting for a date"
+      Expect.equal (publishState model) (Publish.Choosing((Publish.Draft(Publish.OnDate "")))) "Waiting for a date"
       Expect.isFalse (Publish.canConfirm (document' model).Publish) "Disabled"
 
-      let model, effect = send (Editor.PublishChoiceChanged(Publish.OnDate "2099-12-31T13:00")) model
+      let model, effect = send (Editor.PublishChoiceChanged((Publish.Draft(Publish.OnDate "2099-12-31T13:00")))) model
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.CheckPublish(checkRequest (Api.PublishOn "2099-12-31T13:00:00Z"), Publish.OnDate "2099-12-31T13:00") ]))
+        (Some(Shell.Send [ Shell.CheckPublish(checkRequest ((Api.Publish(Api.PublishOn "2099-12-31T13:00:00Z"))), (Publish.Draft(Publish.OnDate "2099-12-31T13:00"))) ]))
         "The date goes to the API as a UTC time"
 
-      Expect.equal (publishState model) (Publish.Checking(Publish.OnDate "2099-12-31T13:00")) "Checking"
+      Expect.equal (publishState model) (Publish.Checking((Publish.Draft(Publish.OnDate "2099-12-31T13:00")))) "Checking"
     }
 
     test "the answer of an earlier choice is ignored" {
-      let model, _ = send (Editor.PublishChoiceChanged(Publish.OnDate "2099-12-31T13:00")) ready
-      let model, _ = send (Editor.PublishCheckAnswered("my-post", Publish.Now, checkedWith [])) model
-      Expect.equal (publishState model) (Publish.Checking(Publish.OnDate "2099-12-31T13:00")) "Still checking the date"
+      let model, _ = send (Editor.PublishChoiceChanged((Publish.Draft(Publish.OnDate "2099-12-31T13:00")))) ready
+      let model, _ = send (Editor.PublishCheckAnswered("my-post", (Publish.Draft Publish.Now), checkedWith [])) model
+      Expect.equal (publishState model) (Publish.Checking((Publish.Draft(Publish.OnDate "2099-12-31T13:00")))) "Still checking the date"
     }
 
     test "Publish after a check sends the publish call with the ETag and the date" {
       let model, effect = send Editor.PublishConfirmed ready
-      Expect.equal (publishState model) (Publish.Sending Publish.Now) "Sending"
-      Expect.equal effect (Some(Shell.Send [ Shell.PublishPost(checkRequest Api.PublishNow) ])) "The publish call"
+      Expect.equal (publishState model) (Publish.Sending (Publish.Draft Publish.Now)) "Sending"
+      Expect.equal effect (Some(Shell.Send [ Shell.PublishPost(checkRequest (Api.Publish Api.PublishNow)) ])) "The publish call"
     }
 
     test "a published draft shows its state and closes the dialog" {
@@ -243,7 +243,7 @@ let tests =
     test "the dialog stays open while the publish is in flight" {
       let model, _ = send Editor.PublishConfirmed ready
       let model, _ = send Editor.PublishClosed model
-      Expect.equal (publishState model) (Publish.Sending Publish.Now) "Still sending"
+      Expect.equal (publishState model) (Publish.Sending (Publish.Draft Publish.Now)) "Still sending"
     }
 
     test "the dialog is a layer over the editor, so Esc does not close the preview" {
@@ -278,9 +278,9 @@ let tests =
 [<Tests>]
 let menuTests =
   testList "Editor menu" [
-    test "the primary action of a draft is available, and the primary action of a published post waits for a later version" {
+    test "the primary action of a draft is available, and the primary action of a published post with no pending edit is not" {
       Expect.equal (Editor.primaryAvailability (document' (opened draft))) Editor.Available "Draft"
-      Expect.equal (Editor.primaryAvailability (document' (opened live))) (Editor.Unavailable "A later version adds this action.") "Published"
+      Expect.equal (Editor.primaryAvailability (document' (opened live))) (Editor.Unavailable "The post has no changes to publish.") "Published"
     }
 
     test "the menu of a draft lists each action of the state, with the reason of each one that is not available" {

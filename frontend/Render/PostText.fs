@@ -171,6 +171,12 @@ let compose (baseText: string) (fields: Fields) : Result<string, string> =
 let composeWithDetails (baseText: string) (fields: Fields) (details: Details) : Result<string, string> =
   rewrite baseText (fun root -> setFields fields root; setDetails details root) fields.Body
 
+let private withDate (key: string) (baseText: string) (date: DateTimeOffset) : Result<string, string> =
+  rewrite baseText (fun root -> setText root key (Some(Time.isoTime date))) (split baseText).Body
+
 /// Front matter that the YAML parser cannot read gives the reason, as `compose` does.
 let withPublishDate (baseText: string) (publishDate: DateTimeOffset) : Result<string, string> =
-  rewrite baseText (fun root -> setText root "publishDate" (Some(Time.isoTime publishDate))) (split baseText).Body
+  withDate "publishDate" baseText publishDate
+
+let withUpdateDate (baseText: string) (updateDate: DateTimeOffset) : Result<string, string> =
+  withDate "updateDate" baseText updateDate

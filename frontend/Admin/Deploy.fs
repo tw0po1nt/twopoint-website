@@ -35,14 +35,19 @@ type Effect =
   | WaitToPoll of Chain
   | Rebuild
 
-let init (page: int) : Model =
+let firstChain (page: int) : Chain = { Page = page; Number = 0 }
+
+let nextChain (model: Model) : Chain =
+  { model.Chain with Number = model.Chain.Number + 1 }
+
+let start (chain: Chain) : Model =
   { Status = Unread
     Retry = Progress.Ready
-    Chain = { Page = page; Number = 0 } }
+    Chain = chain }
 
-let restart (model: Model) : Model =
-  { init model.Chain.Page with
-      Chain = { model.Chain with Number = model.Chain.Number + 1 } }
+let init (page: int) : Model = start (firstChain page)
+
+let restart (model: Model) : Model = start (nextChain model)
 
 let canRetry (model: Model) =
   model.Status = Known Api.DeployState.DeployFailed && not (Progress.isSending model.Retry)

@@ -16,7 +16,7 @@ const post = {
   body: 'Some text.\n',
   details: noDetails,
   text: '',
-  publishedText: null,
+  published: null,
 };
 
 const ok = (data) => answer(200, { success: true, message: null, data });
@@ -144,7 +144,7 @@ test('Publish sends the ETag and the date, closes the dialog, and shows the new 
   assert.ok(!dialog().open, 'The dialog closes');
   assert.equal(status(), 'Upcoming Dec 31, 2099 · deployed');
   assert.match(document.querySelector('main .alert').textContent, /The site rebuild did not start/);
-  assert.equal(bar().querySelector('.editor-primary').disabled, true, 'Publish changes comes in a later version');
+  assert.equal(bar().querySelector('.editor-primary').disabled, true, 'The published post has no pending edit');
   assert.equal(bar().querySelector('.editor-primary').textContent.trim(), 'Publish changes');
 
   press('Dismiss', document.querySelector('main'));

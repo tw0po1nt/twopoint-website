@@ -16,7 +16,7 @@ const post = (slug) => ({
   body: 'Some text.\n',
   details: noDetails,
   text: '',
-  publishedText: null,
+  published: null,
 });
 
 const terms = {
