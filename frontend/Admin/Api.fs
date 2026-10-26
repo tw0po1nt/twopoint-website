@@ -202,11 +202,20 @@ type PublishWarning =
   | StagingRebuildFailed
   | SiteNotRebuilt
   | DeployNotTracked
+  | PendingDateNotUpdated
+  | PostRowNotDeleted
 
 /// `PublishDate` is an ISO 8601 UTC time. `State` is `Published` or `Upcoming`.
 type PublishedPost =
   { PublishDate: string
     State: PostState
+    Warnings: PublishWarning list }
+
+/// `PublishDate` is `None` after an unpublish. `ETag` is the ETag of the working blob, or `None` when the post has no working blob.
+type MovedPost =
+  { PublishDate: string option
+    State: PostState
+    ETag: string option
     Warnings: PublishWarning list }
 
 type Failure =
@@ -333,6 +342,8 @@ let private publishWarning: Decoder<PublishWarning> =
     | "staging-rebuild" -> Decode.succeed StagingRebuildFailed
     | "site-rebuild" -> Decode.succeed SiteNotRebuilt
     | "deploy-tracking" -> Decode.succeed DeployNotTracked
+    | "pending-date" -> Decode.succeed PendingDateNotUpdated
+    | "post-row" -> Decode.succeed PostRowNotDeleted
     | _ -> Decode.fail $"The publish warning '{name}' is not known.")
 
 let private coders =
@@ -662,6 +673,26 @@ let discardPending (api: string) (token: string) (slug: string) (eTag: string) :
       | { Success = true } -> Ok()
       | _ -> Error Invalid)
   )
+
+let private movePrecondition (eTag: string option) =
+  match eTag with
+  | Some eTag -> IfMatch eTag
+  | None -> IfNoneMatch "*"
+
+/// `eTag` is the ETag of the working blob that the page read. `None` means that the post had no working blob.
+let unpublishPost (api: string) (token: string) (slug: string) (eTag: string option) : JS.Promise<Result<MovedPost, Failure>> =
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "unpublish" ]) (Some(Json "{}")) [ movePrecondition eTag ]
+
+/// `iso` is an ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
+let changePostDate
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string option)
+  (iso: string)
+  : JS.Promise<Result<MovedPost, Failure>> =
+  let json = Encode.object [ "publishDate", Encode.string iso ] |> Encode.toString 0
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "date" ]) (Some(Json json)) [ movePrecondition eTag ]
 
 type private UploadedAsset = { Url: string }
 

@@ -110,6 +110,21 @@ let private discardState (model: Shell.Model) =
   | Some document -> document.Discard
   | None -> Discard.Closed
 
+let private unpublishState (model: Shell.Model) =
+  match document model with
+  | Some document -> document.Unpublish
+  | None -> Unpublish.Closed
+
+let private changeDateState (model: Shell.Model) =
+  match document model with
+  | Some document -> document.ChangeDate
+  | None -> ChangeDate.Closed
+
+let private movedWarnings (model: Shell.Model) =
+  match document model with
+  | Some document -> Array.ofList document.Moved
+  | None -> [||]
+
 let private publishIsBusy (model: Shell.Model) =
   match (publishModel model).State with
   | Publish.Saving
@@ -541,6 +556,90 @@ let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
+let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+
+  dialog(id = "unpublish-dialog", class' = "dialog", ariaLabelledBy = "unpublish-dialog-title")
+    .ref(Parts.followOpen (fun () -> Unpublish.isOpen (unpublishState (model ()))))
+    .on("cancel", fun event ->
+      if Unpublish.isSending (unpublishState (model ())) then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.UnpublishClosed) {
+    h2 (id = "unpublish-dialog-title") { "Unpublish the post?" }
+
+    div (class' = "dialog-body") {
+      p () { "The post becomes a draft with no publish date, and the site no longer shows it. The pending edit stays as the draft text." }
+
+      Show(when' = (Unpublish.reason (unpublishState (model ()))).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The post is not unpublished.").Has(
+          p () { Unpublish.reason (unpublishState (model ())) |> Option.defaultValue "" }
+        )
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = Unpublish.isSending (unpublishState (model ())), onClick = fun _ -> send Editor.UnpublishClosed).Has(Fragment() { "Keep" })
+
+      Parts.Button(
+        kind = Parts.Danger,
+        disabled = Unpublish.isSending (unpublishState (model ())),
+        onClick = fun _ -> send Editor.UnpublishConfirmed
+      )
+        .Has(Fragment() { "Unpublish" })
+    }
+  }
+
+[<SolidComponent>]
+let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+  let state () = changeDateState (model ())
+  let sending () = ChangeDate.isSending (state ())
+
+  dialog(id = "change-date-dialog", class' = "dialog publish-dialog", ariaLabelledBy = "change-date-dialog-title")
+    .ref(Parts.followOpen (fun () -> ChangeDate.isOpen (state ())))
+    .on("cancel", fun event ->
+      if sending () then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.ChangeDateClosed) {
+    h2 (id = "change-date-dialog-title") { "Change the date" }
+
+    div (class' = "dialog-body") {
+      p (class' = "muted small", role = "status") { ChangeDate.statusText (state ()) }
+
+      Parts
+        .Field(id = "new-publish-date", label = "Date and time in UTC", hint = "Until then, the site shows the post with the Upcoming badge.")
+        .Has(
+          Parts
+            .Input(
+              id = "new-publish-date",
+              kind = "datetime-local",
+              value = (fun () -> ChangeDate.typed (state ())),
+              disabledWhen = sending,
+              onInput = fun event -> send (Editor.ChangeDateTyped (event.target :?> HTMLInputElement).value)
+            )
+            .View()
+        )
+
+      Show(when' = (ChangeDate.reason (state ())).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The date is not changed.").Has(
+          p () { ChangeDate.reason (state ()) |> Option.defaultValue "" }
+        )
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = sending (), onClick = fun _ -> send Editor.ChangeDateClosed).Has(Fragment() { "Cancel" })
+
+      Parts.Button(
+        kind = Parts.Primary,
+        disabled = not (ChangeDate.canConfirm (state ())),
+        onClick = fun _ -> send Editor.ChangeDateConfirmed
+      )
+        .Has(Fragment() { "Change the date" })
+    }
+  }
+
+[<SolidComponent>]
 let private publishProblems (model: unit -> Shell.Model) =
   Show(when' = not (List.isEmpty (Publish.problems (publishModel (model ()))))) {
     ul (class' = "preview-problems", ariaLabel = "Problems") {
@@ -693,6 +792,20 @@ let private publishNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
+let private movedNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  Show(when' = ((movedWarnings (model ())).Length > 0)) {
+    Parts.Alert(tone = Parts.Warn, title = "The change is made, and a step after it failed.").Has(
+      Fragment() {
+        For(each = movedWarnings (model ())) { yield fun warning _ -> p () { Publish.movedWarningText warning } }
+
+        div (class' = "editor-notice-actions") {
+          Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.MovedNoticeDismissed)).Has(Fragment() { "Dismiss" })
+        }
+      }
+    )
+  }
+
+[<SolidComponent>]
 let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: MouseEvent -> unit) (heading: unit -> string) =
   let listen (name: string) (handler: Event -> unit) =
     window.addEventListener (name, handler)
@@ -727,6 +840,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     main (class' = "screen editor-screen") {
       Banner.view dispatch (model ()).Session
       publishNotice dispatch model
+      movedNotice dispatch model
       h1 (class' = "sr-only") { heading () }
 
       Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }
@@ -737,4 +851,6 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     publishDialog dispatch model
     changesDialog dispatch model
     discardDialog dispatch model
+    unpublishDialog dispatch model
+    changeDateDialog dispatch model
   }

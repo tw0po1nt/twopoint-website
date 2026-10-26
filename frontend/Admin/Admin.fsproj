@@ -29,6 +29,8 @@
     <Compile Include="Diff.fs" />
     <Compile Include="Discard.fs" />
     <Compile Include="Publish.fs" />
+    <Compile Include="Unpublish.fs" />
+    <Compile Include="ChangeDate.fs" />
     <Compile Include="Editor.fs" />
     <Compile Include="PostComments.fs" />
     <Compile Include="Commenters.fs" />
