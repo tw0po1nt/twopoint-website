@@ -139,3 +139,11 @@ let draft
   (text: string)
   : CheckedPost =
   check missingCategory (Post.parseDraft images stage series previewTime (file slug) text) stage published slug
+
+/// The links that break in the other posts when the post `slug` leaves the site.
+let withoutPost (stage: Stage) (published: Post list) (slug: string) : Problem list =
+  match published |> List.tryFind (fun other -> other.Slug = slug) with
+  | None -> []
+  | Some removed ->
+    let remaining = published |> List.filter (fun other -> other.Slug <> slug)
+    brokenElsewhere published removed (linkProblems stage published) (linkProblems stage remaining)

@@ -41,6 +41,7 @@
     <Compile Include="Deploys\DeployQueries.fs" />
     <Compile Include="Posts\PostPublish.fs" />
     <Compile Include="Posts\PostChanges.fs" />
+    <Compile Include="Posts\PostMove.fs" />
   </ItemGroup>
 
   <ItemGroup>

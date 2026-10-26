@@ -109,6 +109,8 @@ type PostDependencies(
     return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
   }
 
+  member _.DeletePost (slug : Slug) = postDb.DeletePost(Slug.value slug)
+
   member _.GetAllCommenters () = cancellableTaskResult {
     let! dbCommenters = postDb.GetAllCommenters()
     return!

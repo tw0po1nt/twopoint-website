@@ -176,6 +176,8 @@ module PublishSteps =
   type Warning =
     | CommentRowNotWritten of DependencyError
     | PendingEditKept of DependencyError
+    | PendingDateNotUpdated of DependencyError
+    | PostRowNotDeleted of DependencyError
     | NewerTextKept
     | ProductionRebuildFailed of DependencyError
     | StagingRebuildFailed of DependencyError

@@ -177,6 +177,22 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
         return DeleteConditionFailed
     }
 
+  /// A blob that is gone or has another ETag gives <c>DeleteConditionFailed</c>.
+  member _.DeletePublishedBlob (slug : Slug) (eTag : string) : DependencyResult<DeleteOutcome> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeletePublishedBlob({slug})"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let conditions = BlobRequestConditions(IfMatch = ETag eTag)
+
+      try
+        let! _ =
+          service.GetBlobContainerClient("published").GetBlobClient(blobName slug).DeleteAsync(DeleteSnapshotsOption.None, conditions, ct)
+
+        return Deleted
+      with :? RequestFailedException as error when error.Status = 412 || notFound error ->
+        return DeleteConditionFailed
+    }
+
   member _.GetPublishedPosts () = read "published"
 
   member _.GetWorkingPosts () = read "working"

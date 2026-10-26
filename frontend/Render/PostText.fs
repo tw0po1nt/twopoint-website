@@ -180,3 +180,6 @@ let withPublishDate (baseText: string) (publishDate: DateTimeOffset) : Result<st
 
 let withUpdateDate (baseText: string) (updateDate: DateTimeOffset) : Result<string, string> =
   withDate "updateDate" baseText updateDate
+
+let withoutPublishDate (baseText: string) : Result<string, string> =
+  rewrite baseText (fun root -> setText root "publishDate" None) (split baseText).Body

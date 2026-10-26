@@ -31,7 +31,7 @@ type PublishedPostDto =
   { PublishDate : string
     State : string
     ProductionRun : Nullable<int64>
-    /// Each is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`, or `deploy-tracking`.
+    /// Each is `comment-row`, `pending-edit`, `pending-date`, `post-row`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`, or `deploy-tracking`.
     Warnings : string list }
 
 type PublishCheckDto = { Problems : ProblemDto list }
@@ -58,6 +58,8 @@ module PublishMapping =
     match warning with
     | PublishSteps.CommentRowNotWritten _ -> "comment-row"
     | PublishSteps.PendingEditKept _ -> "pending-edit"
+    | PublishSteps.PendingDateNotUpdated _ -> "pending-date"
+    | PublishSteps.PostRowNotDeleted _ -> "post-row"
     | PublishSteps.NewerTextKept -> "newer-text"
     | PublishSteps.ProductionRebuildFailed _ -> "production-rebuild"
     | PublishSteps.StagingRebuildFailed _ -> "staging-rebuild"
@@ -124,6 +126,14 @@ type PostPublishing(
     member _.DeleteWorkingBlob slug eTag = postStore.DeleteWorkingBlob slug eTag
     member _.DispatchSite () = rebuilder.Dispatch()
     member _.RecordChange change = rebuilder.RecordChange change
+
+  interface Unpublish.Dependencies with
+    member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
+    member _.DeletePublishedBlob slug eTag = postStore.DeletePublishedBlob slug eTag
+    member _.DeletePostRow slug = postDependencies.DeletePost slug
+
+  interface ChangeDate.Dependencies with
+    member _.WriteWorkingBlob slug text condition = postStore.WriteWorkingBlob slug text condition
 
 type CheckPublish(
   config : Config,

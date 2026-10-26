@@ -65,6 +65,23 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable changes : PostChange list = []
   let mutable recordFails = false
 
+  let writeWorking (slug : Slug) (text : string) (condition : WriteCondition) : DependencyResult<WriteOutcome> =
+    let name = Slug.value slug
+
+    let allowed =
+      match condition, working |> Map.tryFind name with
+      | MustNotExist, None -> true
+      | MatchesETag eTag, Some _ -> eTag = $"w{version}"
+      | _ -> false
+
+    if allowed then
+      log.Add "working"
+      version <- version + 1
+      working <- working |> Map.add name text
+      CancellableTaskResult.singleton (Written $"w{version}")
+    else
+      CancellableTaskResult.singleton ConditionFailed
+
   member _.Log = List.ofSeq log
   member _.Published = published
   member _.Working = working
@@ -185,6 +202,34 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       | BothSucceed -> CancellableTaskResult.singleton { Production = dispatched; Staging = dispatched }
       | StagingFails -> CancellableTaskResult.singleton { Production = dispatched; Staging = Error(down "The staging repo") }
       | ProductionFails -> CancellableTaskResult.singleton { Production = Error(down "The production repo"); Staging = dispatched }
+
+  member _.AddRow (row : PostRow) = rows <- rows |> Map.add (Slug.value row.Slug) row
+
+  interface Unpublish.Dependencies with
+    member _.WriteWorkingBlob slug text condition = writeWorking slug text condition
+
+    member _.DeletePublishedBlob slug eTag =
+      beforePublishedWrite ()
+      log.Add "delete published"
+
+      match published |> Map.tryFind (Slug.value slug) with
+      | Some _ when eTag = $"p{publishedVersion}" ->
+        published <- published |> Map.remove (Slug.value slug)
+        CancellableTaskResult.singleton Deleted
+      | _ -> CancellableTaskResult.singleton DeleteConditionFailed
+
+    member _.DeletePostRow slug =
+      log.Add "delete row"
+
+      if rowFailures > 0 then
+        rowFailures <- rowFailures - 1
+        CancellableTaskResult.error (down "The post table")
+      else
+        rows <- rows |> Map.remove (Slug.value slug)
+        CancellableTaskResult.singleton ()
+
+  interface ChangeDate.Dependencies with
+    member _.WriteWorkingBlob slug text condition = writeWorking slug text condition
 
 let private store published working = FakeStore(Map.ofList published, Map.ofList working)
 
@@ -927,5 +972,286 @@ let discardTests =
       | other -> failtestf "Expected WorkingBlobChanged, got %A" other
 
       Expect.equal fake.Working["live"] "newer text" "The newer text stays"
+    }
+  ]
+
+let private soonDate = DateTime(2026, 4, 1, 13, 0, 0, DateTimeKind.Utc)
+
+let private upcomingPost =
+  livePost.Replace("2026-01-01T00:00:00Z", "2026-04-01T13:00:00Z")
+
+let private upcomingEdit =
+  pendingEdit.Replace("2026-01-01T00:00:00Z", "2026-04-01T13:00:00Z").Replace("Edited.", "Edited for the move.")
+
+let private upcomingRow : PostRow =
+  { Title = NonEmptyString.create (Some "Title") "Live" |> ok
+    Slug = slug "soon"
+    CreatedDate = soonDate }
+
+let private upcomingStore published working =
+  let fake = store published working
+  fake.AddRow upcomingRow
+  fake
+
+let private unpublish (fake : FakeStore) name ifMatch =
+  run (Unpublish.withDependencies fake { Slug = name; IfMatch = ifMatch })
+
+let private changeDate (fake : FakeStore) name ifMatch date =
+  run (ChangeDate.withDependencies fake { Slug = name; IfMatch = ifMatch; PublishDate = date })
+
+let private unpublishedOf result =
+  match result with
+  | Ok(Unpublish.Event.Unpublished moved) -> moved
+  | Error error -> failtestf "Expected an unpublish, got %A" error
+
+let private dateChangedOf result =
+  match result with
+  | Ok(ChangeDate.Event.DateChanged moved) -> moved
+  | Error error -> failtestf "Expected a date change, got %A" error
+
+let private unpublishRefusedWith expected result =
+  match result with
+  | Error(ActionError.Logic(Unpublish.Refused refusal)) -> Expect.equal refusal expected "The refusal"
+  | other -> failtestf "Expected %A, got %A" expected other
+
+let private dateRefusedWith expected result =
+  match result with
+  | Error(ActionError.Logic(ChangeDate.Refused refusal)) -> Expect.equal refusal expected "The refusal"
+  | other -> failtestf "Expected %A, got %A" expected other
+
+[<Tests>]
+let unpublishTests =
+  testList "Unpublish an upcoming post" [
+    test "an unpublish with a pending edit keeps the pending edit as the draft text, and deletes the row" {
+      let fake = upcomingStore [ "soon", upcomingPost ] [ "soon", upcomingEdit ]
+      let moved = unpublish fake "soon" (Some "w1") |> unpublishedOf
+
+      Expect.equal fake.Log [ "working"; "delete published"; "delete row"; "dispatch" ] "The steps, in order"
+      Expect.isEmpty fake.Published "The published blob is gone"
+      Expect.isEmpty fake.Rows "The row is gone"
+      Expect.stringContains fake.Working["soon"] "Edited for the move." "The pending edit is the draft text"
+      Expect.equal (Post.summary fake.Working["soon"]).PublishDate None "The publish date is removed"
+
+      Expect.equal
+        moved
+        { PublishDate = None
+          State = TwoPoint.Core.Posts.PostState.Draft
+          WorkingETag = Some "w2"
+          Production = Dispatched(Queued(RunNumber 7L))
+          Warnings = [] }
+        "The outcome has the ETag of the draft and the production run"
+    }
+
+    test "an unpublish with no pending edit makes the published content the draft text" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      unpublish fake "soon" None |> unpublishedOf |> ignore
+
+      Expect.stringContains fake.Working["soon"] "Live body." "The published content"
+      Expect.equal (Post.summary fake.Working["soon"]).PublishDate None "The publish date is removed"
+      Expect.isEmpty fake.Published "The published blob is gone"
+    }
+
+    test "an unpublish keeps the revisions" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.AddRevision "soon" "2026-02-01T00:00:00Z"
+      unpublish fake "soon" None |> unpublishedOf |> ignore
+      Expect.equal (fake.Revisions |> Map.keys |> List.ofSeq) [ "soon/2026-02-01T00:00:00Z" ] "The revision stays"
+    }
+
+    test "an unpublish records the change with the production run number" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      unpublish fake "soon" None |> unpublishedOf |> ignore
+
+      Expect.equal
+        fake.Changes
+        [ { Slug = slug "soon"
+            Change = { ChangedDate = utcNow; Production = Dispatched(Queued(RunNumber 7L)) } } ]
+        "The change has the run number of the dispatch"
+    }
+
+    test "an unpublish of a post with a past date is refused, and the store does not change" {
+      let fake = store [ "live", livePost ] []
+      unpublish fake "live" None |> unpublishRefusedWith (UpcomingGate.NotUpcoming(slug "live"))
+      Expect.isEmpty fake.Log "No write and no dispatch"
+      Expect.equal fake.Published["live"] livePost "The published text stays"
+    }
+
+    test "an unpublish of a draft is refused" {
+      let fake = store [] [ "my-draft", draftText ]
+      unpublish fake "my-draft" (Some "w1") |> unpublishRefusedWith (UpcomingGate.NotPublished(slug "my-draft"))
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "an unpublish of a post that does not exist is refused" {
+      let fake = store [] []
+      unpublish fake "nothing" None |> unpublishRefusedWith (UpcomingGate.PostNotFound(slug "nothing"))
+    }
+
+    test "an old ETag is refused, and a missing ETag is refused when a pending edit exists" {
+      let fake = upcomingStore [ "soon", upcomingPost ] [ "soon", upcomingEdit ]
+      unpublish fake "soon" (Some "w0") |> unpublishRefusedWith UpcomingGate.WorkingBlobChanged
+      unpublish fake "soon" None |> unpublishRefusedWith UpcomingGate.WorkingBlobChanged
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "an ETag for a post with no pending edit is refused" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      unpublish fake "soon" (Some "w1") |> unpublishRefusedWith UpcomingGate.WorkingBlobChanged
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "a pending edit with an error in its draft check is refused, and the store does not change" {
+      let broken = upcomingEdit.Replace("Edited for the move.", "See [nothing](/posts/nothing/).")
+      let fake = upcomingStore [ "soon", upcomingPost ] [ "soon", broken ]
+
+      match unpublish fake "soon" (Some "w1") with
+      | Error(ActionError.Logic(Unpublish.HasErrors problems)) -> Expect.isNonEmpty problems "The problems"
+      | other -> failtestf "Expected HasErrors, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "a link from another post to the post is an error, because the link would break" {
+      let linking = livePost.Replace("Live body.", "Read [it](/posts/soon/).")
+      let fake = upcomingStore [ "soon", upcomingPost; "other", linking ] []
+
+      match unpublish fake "soon" None with
+      | Error(ActionError.Logic(Unpublish.HasErrors problems)) ->
+        Expect.isTrue (problems |> List.exists (fun problem -> problem.Message.Contains "other")) "The problem names the other post"
+      | other -> failtestf "Expected HasErrors, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "a published blob that changes before the delete is refused, and no row is deleted and no site is built" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.BeforePublishedWrite <- fun () -> fake.Publish "soon" upcomingPost
+
+      unpublish fake "soon" None |> unpublishRefusedWith UpcomingGate.PublishedBlobChanged
+      Expect.equal fake.Log [ "working"; "delete published" ] "The steps before the refusal"
+      Expect.equal (fake.Rows |> Map.count) 1 "The row stays"
+    }
+
+    test "a row delete that fails once is tried again, and the unpublish has no warning" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.RowFailures <- 1
+      let moved = unpublish fake "soon" None |> unpublishedOf
+      Expect.isEmpty moved.Warnings "No warning"
+      Expect.isEmpty fake.Rows "The row is gone"
+    }
+
+    test "a row delete that fails twice is a warning, and the site still builds" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.RowFailures <- 2
+      let moved = unpublish fake "soon" None |> unpublishedOf
+
+      match moved.Warnings with
+      | [ PublishSteps.PostRowNotDeleted _ ] -> ()
+      | other -> failtestf "Expected PostRowNotDeleted, got %A" other
+
+      Expect.equal (List.last fake.Log) "dispatch" "The dispatch runs"
+    }
+  ]
+
+[<Tests>]
+let changeDateTests =
+  testList "Change the date of an upcoming post" [
+    test "a date change updates the publish date and the created date of the row" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      let moved = changeDate fake "soon" None "2026-05-02T08:00:00Z" |> dateChangedOf
+      let date = DateTime(2026, 5, 2, 8, 0, 0, DateTimeKind.Utc)
+
+      Expect.equal (Post.summary fake.Published["soon"]).PublishDate (Some(DateTimeOffset date)) "The text has the date"
+      Expect.equal fake.Rows["soon"].CreatedDate date "The row has the date"
+      Expect.stringContains fake.Published["soon"] "Live body." "The body stays"
+
+      Expect.equal
+        moved
+        { PublishDate = Some date
+          State = TwoPoint.Core.Posts.PostState.Upcoming
+          WorkingETag = None
+          Production = Dispatched(Queued(RunNumber 7L))
+          Warnings = [] }
+        "The outcome has the date and the production run"
+    }
+
+    test "a date change writes the published blob, the row, and then dispatches, with no revision" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      changeDate fake "soon" None "2026-05-02T08:00:00Z" |> dateChangedOf |> ignore
+      Expect.equal fake.Log [ "published"; "row"; "dispatch" ] "The steps, in order"
+      Expect.isEmpty fake.Revisions "No revision"
+    }
+
+    test "a date change moves the publish date of the pending edit, and gives its new ETag" {
+      let fake = upcomingStore [ "soon", upcomingPost ] [ "soon", upcomingEdit ]
+      let moved = changeDate fake "soon" (Some "w1") "2026-05-02T08:00:00Z" |> dateChangedOf
+      let date = DateTime(2026, 5, 2, 8, 0, 0, DateTimeKind.Utc)
+
+      Expect.equal fake.Log [ "published"; "row"; "working"; "dispatch" ] "The steps, in order"
+      Expect.equal (Post.summary fake.Working["soon"]).PublishDate (Some(DateTimeOffset date)) "The pending edit has the date"
+      Expect.stringContains fake.Working["soon"] "Edited for the move." "The pending edit text stays"
+      Expect.equal moved.WorkingETag (Some "w2") "The new ETag of the pending edit"
+    }
+
+    test "a new date in the past gives a published post" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      let moved = changeDate fake "soon" None "2026-02-01T08:00:00Z" |> dateChangedOf
+
+      Expect.equal moved.State TwoPoint.Core.Posts.PostState.Published "Not upcoming"
+      Expect.equal fake.Rows["soon"].CreatedDate (DateTime(2026, 2, 1, 8, 0, 0, DateTimeKind.Utc)) "The row has the date"
+    }
+
+    test "a date change of a post with a past date is refused, and the store does not change" {
+      let fake = store [ "live", livePost ] []
+      changeDate fake "live" None "2026-05-02T08:00:00Z" |> dateRefusedWith (UpcomingGate.NotUpcoming(slug "live"))
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "a date that is not a UTC time is a validation error before any store read" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+
+      match changeDate fake "soon" None "next week" with
+      | Error(ActionError.Validation _) -> ()
+      | other -> failtestf "Expected a validation error, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "an old ETag of the pending edit is refused" {
+      let fake = upcomingStore [ "soon", upcomingPost ] [ "soon", upcomingEdit ]
+      changeDate fake "soon" (Some "w0") "2026-05-02T08:00:00Z" |> dateRefusedWith UpcomingGate.WorkingBlobChanged
+      Expect.isEmpty fake.Log "No write"
+    }
+
+    test "a published blob that changes before the write is refused, and the row stays" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.BeforePublishedWrite <- fun () -> fake.Publish "soon" upcomingPost
+
+      changeDate fake "soon" None "2026-05-02T08:00:00Z" |> dateRefusedWith UpcomingGate.PublishedBlobChanged
+      Expect.equal fake.Rows["soon"].CreatedDate soonDate "The created date stays"
+      Expect.isEmpty fake.Log "No dispatch"
+    }
+
+    test "a pending edit that changes during the date change stays, with a warning and no ETag" {
+      let fake = upcomingStore [ "soon", upcomingPost ] [ "soon", upcomingEdit ]
+      fake.BeforePublishedWrite <- fun () -> fake.Overwrite "soon" "newer text"
+
+      let moved = changeDate fake "soon" (Some "w1") "2026-05-02T08:00:00Z" |> dateChangedOf
+
+      Expect.equal moved.Warnings [ PublishSteps.NewerTextKept ] "The warning"
+      Expect.equal moved.WorkingETag None "No ETag"
+      Expect.equal fake.Working["soon"] "newer text" "The newer text stays"
+    }
+
+    test "a row that fails to write once is tried again, and a second failure is a warning" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.RowFailures <- 2
+      let moved = changeDate fake "soon" None "2026-05-02T08:00:00Z" |> dateChangedOf
+
+      match moved.Warnings with
+      | [ PublishSteps.CommentRowNotWritten _ ] -> ()
+      | other -> failtestf "Expected CommentRowNotWritten, got %A" other
+
+      Expect.equal (List.last fake.Log) "dispatch" "The dispatch runs"
     }
   ]
