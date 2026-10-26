@@ -213,6 +213,8 @@ type ChangeWarning =
   | PublishStep of PublishWarning
   | PendingDateNotUpdated
   | PostRowKept
+  | RevisionsKept
+  | CommentsKept
 
 /// `PublishDate` is `None` after an unpublish. `ETag` is the ETag of the working blob, or `None` when the post has no working blob.
 type UpcomingChange =
@@ -220,6 +222,8 @@ type UpcomingChange =
     State: PostState
     ETag: string option
     Warnings: ChangeWarning list }
+
+type DeletedPost = { Warnings: ChangeWarning list }
 
 type Failure =
   /// The API answered 401 or 403.
@@ -353,6 +357,8 @@ let private changeWarning: Decoder<ChangeWarning> =
     match name with
     | "pending-date" -> Decode.succeed PendingDateNotUpdated
     | "post-row" -> Decode.succeed PostRowKept
+    | "revisions" -> Decode.succeed RevisionsKept
+    | "comments" -> Decode.succeed CommentsKept
     | _ -> publishWarning |> Decode.map PublishStep)
 
 let private coders =
@@ -703,6 +709,22 @@ let changePostDate
   : JS.Promise<Result<UpcomingChange, Failure>> =
   let json = Encode.object [ "publishDate", Encode.string iso ] |> Encode.toString 0
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "date" ]) (Some(Json json)) [ workingPrecondition eTag ]
+
+/// `confirmSlug` is the text that the author typed, and `None` for a draft.
+let deletePost
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string option)
+  (confirmSlug: string option)
+  : JS.Promise<Result<DeletedPost, Failure>> =
+  let confirmation =
+    match confirmSlug with
+    | Some typed -> Encode.string typed
+    | None -> Encode.nil
+
+  let json = Encode.object [ "confirmSlug", confirmation ] |> Encode.toString 0
+  sendWith HttpMethod.DELETE api token (internalPath [ "posts"; slug ]) (Some(Json json)) [ workingPrecondition eTag ]
 
 type private UploadedAsset = { Url: string }
 

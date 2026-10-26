@@ -137,6 +137,13 @@ type PostPublishing(
     member _.DeletePublishedBlob slug eTag = postStore.DeletePublishedBlob slug eTag
     member _.DeletePostRow slug = postDependencies.DeletePost slug
 
+  interface DeletePost.Dependencies with
+    member _.DeletePublishedBlob slug eTag = postStore.DeletePublishedBlob slug eTag
+    member _.DeleteRevisionBlobs slug = postStore.DeleteRevisionBlobs slug
+    member _.DeletePostComments slug = postDependencies.DeleteCommentsOfPost slug
+    member _.DeletePostRow slug = postDependencies.DeletePost slug
+    member _.HasPostRecords slug = postDependencies.HasPostRecords slug
+
 type CheckPublish(
   config : Config,
   images : TwoPoint.Site.Render.IImageSize,

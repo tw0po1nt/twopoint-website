@@ -39,6 +39,7 @@ type Call =
   | DiscardPending of Editor.DiscardRequest
   | UnpublishPost of Editor.UnpublishRequest
   | ChangePostDate of Editor.ChangeDateRequest
+  | DeletePost of Editor.DeleteRequest
   | UploadAsset of id: int * file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
@@ -176,6 +177,7 @@ let private layerOpenOverEditor (model: Model) =
         || Confirm.isOpen document.Discard
         || Confirm.isOpen document.Unpublish
         || Typed.isOpen document.ChangeDate
+        || Editor.isDeleteOpen document
       | _ -> false)
 
 /// The author goes to another page, and the editor has text that the API does not have.
@@ -208,6 +210,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.DiscardPending _
           | Editor.UnpublishPost _
           | Editor.ChangePostDate _
+          | Editor.DeletePost _
           | Editor.Reload _
           | Editor.Focus _
           | Editor.MoveToBodyLine _ -> [])
@@ -285,6 +288,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Posts.PollElapsed _
     | Posts.DraftCreated _
     | Posts.Filtered _
+    | Posts.NoticeDismissed
     | Posts.NewDraftClicked ->
       next,
       effect
@@ -313,7 +317,11 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.DeployMsg(_, Deploy.Retried(Error Api.Refused)), _
       | Editor.UnpublishAnswered(_, Error Api.Refused), _
       | Editor.ChangeDateAnswered(_, Error Api.Refused), _
+      | Editor.DeleteAnswered(_, Error Api.Refused), _
       | Editor.DiscardAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
+      | Editor.DeleteAnswered(_, Ok deleted), _ ->
+        let notice = { next with Posts = { next.Posts with Notice = deleted.Warnings } }
+        update (Router(Router.LinkFollowed(Route.path Route.Posts))) notice
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -334,6 +342,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.DiscardPending request -> Send [ DiscardPending request ]
           | Editor.UnpublishPost request -> Send [ UnpublishPost request ]
           | Editor.ChangePostDate request -> Send [ ChangePostDate request ]
+          | Editor.DeletePost request -> Send [ DeletePost request ]
           | Editor.Reload slug -> Send [ LoadPost slug ]
           | Editor.Focus elementId -> Focus elementId
           | Editor.MoveToBodyLine line -> MoveToBodyLine line)

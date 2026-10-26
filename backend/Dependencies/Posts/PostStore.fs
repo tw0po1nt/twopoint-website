@@ -193,6 +193,21 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
         return DeleteConditionFailed
     }
 
+  member _.DeleteRevisionBlobs (slug : Slug) : DependencyResult<unit> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteRevisionBlobs({slug})"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let revisions = service.GetBlobContainerClient "revisions"
+
+      try
+        let! blobs = revisions.GetBlobsAsync(BlobTraits.None, BlobStates.None, $"{Slug.value slug}/", ct) |> TaskSeq.toListAsync
+
+        for blob in blobs do
+          do! revisions.GetBlobClient(blob.Name).DeleteIfExistsAsync(cancellationToken = ct) |> Task.ignore
+      with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
+        ()
+    }
+
   member _.GetPublishedPosts () = read "published"
 
   member _.GetWorkingPosts () = read "working"

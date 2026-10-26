@@ -298,7 +298,7 @@ let menuTests =
       Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
       Expect.equal (reasonOf Editor.Revisions model) "Revisions are available after the next publish." "Revisions"
       Expect.equal (reasonOf Editor.SendToSubscribers model) "Publish the post first." "Send to subscribers"
-      Expect.equal (reasonOf Editor.Delete model) "A later version adds this action." "Delete"
+      Expect.equal (reasonOf Editor.Delete model) "" "Delete"
     }
 
     test "Save is available when the post has unsaved changes, and it sends the save message" {
@@ -315,6 +315,7 @@ let menuTests =
 
     test "the menu of an upcoming post has a reason for each action that a later version brings" {
       let model = opened upcoming
-      Expect.equal (reasonOf Editor.Delete model) "A later version adds this action." "Delete"
+      Expect.equal (reasonOf Editor.Revisions model) "A later version adds this action." "Revisions"
+      Expect.equal (reasonOf Editor.SendToSubscribers model) "A later version adds this action." "Send to subscribers"
     }
   ]

@@ -258,6 +258,8 @@ type internal IPostDb =
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
   abstract member UpsertPost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
   abstract member DeletePost: slug: string -> CancellableTaskResult<unit, DependencyError>
+  abstract member HasCommentsOfPost: slug: string -> CancellableTaskResult<bool, DependencyError>
+  abstract member DeleteCommentsOfPost: slug: string -> CancellableTaskResult<unit, DependencyError>
   
   abstract member GetAllCommenters: unit -> CancellableTaskResult<DbCommenter list, DependencyError>
   abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
@@ -394,6 +396,19 @@ module internal PostDb =
 
       member _.DeletePost slug =
         deleteByKeys postsTable PostDbError.validation slug slug
+
+      member _.HasCommentsOfPost slug = cancellableTaskResult {
+        let! (dbComments: DbComment list) = eq "PartitionKey" slug |> where commentsTable DbComment.FromEntity
+        return not (List.isEmpty dbComments)
+      }
+
+      member _.DeleteCommentsOfPost slug = cancellableTaskResult {
+        let! (dbComments: DbComment list) = eq "PartitionKey" slug |> where commentsTable DbComment.FromEntity
+
+        for (comment: DbComment) in dbComments do
+          do! eq "PartitionKey" comment.Id |> delete commentStatusesTable PostDbError.validation
+          do! deleteByKeys commentsTable PostDbError.validation slug comment.Id
+      }
 
       member _.GetAllCommenters () =
         toList commentersTable DbCommenter.FromEntity

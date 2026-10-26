@@ -49,6 +49,7 @@ let private fail (call: Shell.Call) =
   | Shell.DiscardPending request -> Shell.Editor(Editor.DiscardAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UnpublishPost request -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, Error Api.Unanswered))
   | Shell.ChangePostDate request -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.DeletePost request -> Shell.Editor(Editor.DeleteAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -193,6 +194,9 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.ChangePostDate request ->
     Api.changePostDate (Config.api ()) token request.Slug request.ETag request.PublishDate
     |> Promise.map (fun result -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, result)))
+  | Shell.DeletePost request ->
+    Api.deletePost (Config.api ()) token request.Slug request.ETag request.ConfirmSlug
+    |> Promise.map (fun result -> Shell.Editor(Editor.DeleteAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))
@@ -812,6 +816,18 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
       Parts
         .Alert(tone = Parts.Bad, title = "The draft was not made.")
         .Has(p () { model.CreateFailure |> Option.defaultValue "" })
+    }
+
+    Show(when' = not (List.isEmpty model.Notice)) {
+      Parts.Alert(tone = Parts.Warn, title = "The post is deleted, and a step after the delete failed.").Has(
+        Fragment() {
+          For(each = Array.ofList model.Notice) { yield fun warning _ -> p () { Publish.changeWarningText warning } }
+
+          div (class' = "editor-notice-actions") {
+            Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Posts Posts.NoticeDismissed)).Has(Fragment() { "Dismiss" })
+          }
+        }
+      )
     }
 
     postList dispatch model

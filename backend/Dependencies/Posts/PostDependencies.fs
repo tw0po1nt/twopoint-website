@@ -111,6 +111,16 @@ type PostDependencies(
 
   member _.DeletePost (slug : Slug) = postDb.DeletePost(Slug.value slug)
 
+  member _.DeleteCommentsOfPost (slug : Slug) = postDb.DeleteCommentsOfPost(Slug.value slug)
+
+  member _.HasPostRecords (slug : Slug) = cancellableTaskResult {
+    let! row = postDb.GetPostBySlug(Slug.value slug)
+    return!
+      match row with
+      | Some _ -> CancellableTaskResult.singleton true
+      | None -> postDb.HasCommentsOfPost(Slug.value slug)
+  }
+
   member _.GetAllCommenters () = cancellableTaskResult {
     let! dbCommenters = postDb.GetAllCommenters()
     return!

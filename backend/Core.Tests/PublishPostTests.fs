@@ -64,6 +64,9 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable now = utcNow
   let mutable changes : PostChange list = []
   let mutable recordFails = false
+  let mutable comments = Map.empty<string, string list>
+  let mutable deliveries = Map.empty<string, string list>
+  let mutable commentDeleteFails = false
 
   let writeWorking (slug : Slug) (text : string) (condition : WriteCondition) : DependencyResult<WriteOutcome> =
     let name = Slug.value slug
@@ -87,6 +90,11 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   member _.Working = working
   member _.Revisions = revisions
   member _.Rows = rows
+  member _.Comments = comments
+  member _.Deliveries = deliveries
+  member _.CommentDeleteFails with set value = commentDeleteFails <- value
+  member _.AddComments (name : string) (ids : string list) = comments <- comments |> Map.add name ids
+  member _.AddDeliveries (name : string) (ids : string list) = deliveries <- deliveries |> Map.add name ids
   member _.Changes = changes
   member _.RecordFails with set value = recordFails <- value
 
@@ -228,6 +236,27 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       else
         rows <- rows |> Map.remove (Slug.value slug)
         CancellableTaskResult.singleton ()
+
+  interface DeletePost.Dependencies with
+    member this.DeletePublishedBlob slug eTag = (this :> Unpublish.Dependencies).DeletePublishedBlob slug eTag
+    member this.DeletePostRow slug = (this :> Unpublish.Dependencies).DeletePostRow slug
+
+    member _.DeleteRevisionBlobs slug =
+      log.Add "delete revisions"
+      revisions <- revisions |> Map.filter (fun key _ -> not (key.StartsWith $"{Slug.value slug}/"))
+      CancellableTaskResult.singleton ()
+
+    member _.DeletePostComments slug =
+      log.Add "delete comments"
+
+      if commentDeleteFails then
+        CancellableTaskResult.error (down "The comment table")
+      else
+        comments <- comments |> Map.remove (Slug.value slug)
+        CancellableTaskResult.singleton ()
+
+    member _.HasPostRecords slug =
+      CancellableTaskResult.singleton (rows.ContainsKey(Slug.value slug) || comments.ContainsKey(Slug.value slug))
 
 
 let private store published working = FakeStore(Map.ofList published, Map.ofList working)
@@ -1273,5 +1302,191 @@ let changeDateTests =
       | other -> failtestf "Expected CommentRowNotWritten, got %A" other
 
       Expect.equal (List.last fake.Log) "dispatch" "The dispatch runs"
+    }
+  ]
+
+let private deletePost (fake : FakeStore) name ifMatch confirm =
+  run (DeletePost.withDependencies fake { Slug = name; IfMatch = ifMatch; ConfirmSlug = confirm })
+
+let private deletedOf result =
+  match result with
+  | Ok(DeletePost.Event.PostDeleted outcome) -> outcome
+  | Error error -> failtestf "Expected a delete, got %A" error
+
+let private deleteRefusedWith expected result =
+  match result with
+  | Error(ActionError.Logic error) -> Expect.equal error expected "The refusal"
+  | other -> failtestf "Expected %A, got %A" expected other
+
+let private deleteWarningsOf outcome =
+  match outcome with
+  | DeletePost.DraftDeleted warnings -> warnings
+  | DeletePost.PublishedDeleted(_, warnings) -> warnings
+
+let private otherPost =
+  "---\npublishDate: 2026-01-02T00:00:00Z\nauthor: A\ntitle: Other\nexcerpt: E\ncategory: One-offs\n---\n\nOther body.\n"
+
+let private linkingPost = otherPost.Replace("Other body.", "See [live](/posts/live/).")
+
+let private liveRow : PostRow =
+  { Title = NonEmptyString.create (Some "Title") "Live" |> ok
+    Slug = slug "live"
+    CreatedDate = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
+
+let private liveStore () =
+  let fake = store [ "live", livePost; "other", otherPost ] [ "live", changedText ]
+  fake.AddRevision "live" "2026-01-01T00:00:00Z"
+  fake.AddRow liveRow
+  fake.AddComments "live" [ "c1"; "c2" ]
+  fake.AddComments "other" [ "c3" ]
+  fake.AddDeliveries "live" [ "d1" ]
+  fake
+
+let private dispatched = ProductionDispatch.Dispatched(Queued(RunNumber 7L))
+
+[<Tests>]
+let deleteTests =
+  testList "Delete a post" [
+    test "a published post loses its blobs, its row, and its comments, keeps its deliveries, and then dispatches" {
+      let fake = liveStore ()
+      let outcome = deletePost fake "live" (Some "w1") (Some "live") |> deletedOf
+
+      Expect.equal
+        fake.Log
+        [ "delete published"; "delete working"; "delete revisions"; "delete row"; "delete comments"; "dispatch" ]
+        "The row goes before the comments, so that no comment arrives after the delete of the comments"
+
+      Expect.isFalse (fake.Published.ContainsKey "live") "The published blob is gone"
+      Expect.isFalse (fake.Working.ContainsKey "live") "The working blob is gone"
+      Expect.isEmpty fake.Revisions "No revision"
+      Expect.isFalse (fake.Rows.ContainsKey "live") "The row is gone"
+      Expect.isFalse (fake.Comments.ContainsKey "live") "The comments are gone"
+      Expect.equal fake.Comments["other"] [ "c3" ] "The comments of another post stay"
+      Expect.equal fake.Deliveries["live"] [ "d1" ] "The deliveries stay"
+      Expect.equal fake.Published["other"] otherPost "Another post stays"
+      Expect.equal outcome (DeletePost.PublishedDeleted(dispatched, [])) "The outcome"
+      Expect.equal (fake.Changes |> List.map _.Slug) [ slug "live" ] "The change is recorded"
+    }
+
+    test "a published post with no pending edit needs the absence of a working blob" {
+      let fake = store [ "live", livePost ] []
+      deletePost fake "live" None (Some "live") |> deletedOf |> ignore
+      Expect.isEmpty fake.Published "The published blob is gone"
+    }
+
+    test "a published post needs its typed slug, and nothing changes without it" {
+      for confirm in [ None; Some ""; Some "other"; Some "Live" ] do
+        let fake = liveStore ()
+        deletePost fake "live" (Some "w1") confirm |> deleteRefusedWith (DeletePost.SlugNotConfirmed(slug "live"))
+        Expect.isEmpty fake.Log "No step ran"
+    }
+
+    test "a delete that breaks a link in another post is refused, and nothing changes" {
+      let fake = store [ "live", livePost; "other", linkingPost ] []
+
+      match deletePost fake "live" None (Some "live") with
+      | Error(ActionError.Logic(DeletePost.BreaksLinks problems)) ->
+        Expect.isNonEmpty problems "The broken links"
+        Expect.isTrue (problems |> List.forall Problem.isError) "Only errors"
+        Expect.isTrue (problems |> List.exists (fun problem -> problem.Message.Contains "other")) "The post with the link"
+      | other -> failtestf "Expected BreaksLinks, got %A" other
+
+      Expect.isEmpty fake.Log "No step ran"
+      Expect.equal fake.Published["live"] livePost "The post stays"
+    }
+
+    test "a link that was broken before the delete does not block it" {
+      let brokenBefore = otherPost.Replace("Other body.", "See [it](/posts/nowhere/).")
+      let fake = store [ "live", livePost; "other", brokenBefore ] []
+      deletePost fake "live" None (Some "live") |> deletedOf |> ignore
+    }
+
+    test "a published blob that changes between the read and the delete is refused, and nothing is lost" {
+      let fake = liveStore ()
+      fake.BeforePublishedWrite <- fun () -> fake.Publish "live" "newer"
+      deletePost fake "live" (Some "w1") (Some "live") |> deleteRefusedWith DeletePost.PublishedBlobChanged
+      Expect.equal fake.Log [ "delete published" ] "Only the refused step"
+      Expect.isTrue (fake.Working.ContainsKey "live") "The pending edit stays"
+    }
+
+    test "a wrong working ETag, and an absent one for a pending edit, are refused" {
+      for ifMatch in [ Some "w0"; None ] do
+        let fake = liveStore ()
+        deletePost fake "live" ifMatch (Some "live") |> deleteRefusedWith DeletePost.WorkingBlobChanged
+        Expect.isEmpty fake.Log "No step ran"
+    }
+
+    test "a failed comment delete is a warning, and the dispatch still runs" {
+      let fake = liveStore ()
+      fake.CommentDeleteFails <- true
+      let outcome = deletePost fake "live" (Some "w1") (Some "live") |> deletedOf
+
+      Expect.exists (deleteWarningsOf outcome) (function CommentsKept _ -> true | _ -> false) "The warning"
+      Expect.isFalse (fake.Rows.ContainsKey "live") "The row is gone"
+      Expect.equal (List.last fake.Log) "dispatch" "The dispatch ran"
+    }
+
+    test "a row that stays after two tries is a warning" {
+      let fake = liveStore ()
+      fake.RowFailures <- 2
+      let outcome = deletePost fake "live" (Some "w1") (Some "live") |> deletedOf
+      Expect.exists (deleteWarningsOf outcome) (function PostRowKept _ -> true | _ -> false) "The warning"
+    }
+
+    test "a failed dispatch is a warning, and the post stays deleted" {
+      let fake = liveStore ()
+      fake.Dispatch <- WholeCallFails
+      let outcome = deletePost fake "live" (Some "w1") (Some "live") |> deletedOf
+
+      Expect.exists (deleteWarningsOf outcome) (function Step(PublishSteps.SiteNotRebuilt _) -> true | _ -> false) "The warning"
+      Expect.isFalse (fake.Published.ContainsKey "live") "The post is deleted"
+    }
+
+    test "a draft loses its working blob, its revisions, its row, and its comments, and dispatches nothing" {
+      let fake = store [] [ "my-draft", draftText ]
+      fake.AddRevision "my-draft" "2026-01-01T00:00:00Z"
+      fake.AddRow { liveRow with Slug = slug "my-draft" }
+      fake.AddComments "my-draft" [ "c1" ]
+      let outcome = deletePost fake "my-draft" (Some "w1") None |> deletedOf
+
+      Expect.equal fake.Log [ "delete working"; "delete revisions"; "delete row"; "delete comments" ] "No dispatch"
+      Expect.isEmpty fake.Working "The draft is gone"
+      Expect.isEmpty fake.Revisions "No revision"
+      Expect.isEmpty fake.Rows "No row"
+      Expect.isEmpty fake.Comments "No comment"
+      Expect.equal outcome (DeletePost.DraftDeleted []) "No dispatch"
+      Expect.isEmpty fake.Changes "No change recorded"
+    }
+
+    test "a draft needs its working ETag" {
+      let fake = store [] [ "my-draft", draftText ]
+      deletePost fake "my-draft" None None |> deleteRefusedWith DeletePost.WorkingBlobChanged
+      deletePost fake "my-draft" (Some "w0") None |> deleteRefusedWith DeletePost.WorkingBlobChanged
+      Expect.isEmpty fake.Log "No step ran"
+    }
+
+    test "a post with no blob and a row is cleaned up, and the site rebuilds" {
+      let fake = store [] []
+      fake.AddRow liveRow
+      fake.AddComments "live" [ "c1" ]
+      let outcome = deletePost fake "live" None None |> deletedOf
+
+      Expect.isEmpty fake.Rows "No row"
+      Expect.isEmpty fake.Comments "No comment"
+      Expect.equal (List.last fake.Log) "dispatch" "The dispatch ran"
+      Expect.equal outcome (DeletePost.PublishedDeleted(dispatched, [])) "The outcome"
+    }
+
+    test "a post with no blob and comments only is cleaned up" {
+      let fake = store [] []
+      fake.AddComments "live" [ "c1" ]
+      deletePost fake "live" None None |> deletedOf |> ignore
+      Expect.isEmpty fake.Comments "No comment"
+    }
+
+    test "a post with no blob, no row, and no comment is not found" {
+      let fake = store [] []
+      deletePost fake "nothing" None None |> deleteRefusedWith (DeletePost.PostNotFound(slug "nothing"))
+      Expect.isEmpty fake.Log "No step ran"
     }
   ]

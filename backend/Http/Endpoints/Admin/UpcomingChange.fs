@@ -27,7 +27,7 @@ type ChangeDateJson = { PublishDate : string }
 
 /// `PublishDate` is null after an unpublish. `ETag` is the ETag of the working blob, or null when the post has no working blob.
 /// Each warning is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`,
-/// `deploy-tracking`, `pending-date`, or `post-row`.
+/// `deploy-tracking`, `pending-date`, `post-row`, `revisions`, or `comments`.
 type UpcomingChangeDto =
   { PublishDate : string
     State : string
@@ -41,6 +41,8 @@ module UpcomingMapping =
     match warning with
     | Step step -> PublishMapping.warning step
     | PostRowKept _ -> "post-row"
+    | RevisionsKept _ -> "revisions"
+    | CommentsKept _ -> "comments"
     | PendingDateNotUpdated _
     | PendingDateUnreadable _ -> "pending-date"
 

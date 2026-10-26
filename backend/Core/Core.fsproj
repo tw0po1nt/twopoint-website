@@ -42,6 +42,7 @@
     <Compile Include="Posts\PostPublish.fs" />
     <Compile Include="Posts\PostChanges.fs" />
     <Compile Include="Posts\PostUpcoming.fs" />
+    <Compile Include="Posts\PostDelete.fs" />
   </ItemGroup>
 
   <ItemGroup>

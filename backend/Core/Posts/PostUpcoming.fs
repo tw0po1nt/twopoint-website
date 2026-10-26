@@ -13,6 +13,8 @@ open System
 type ChangeWarning =
   | Step of PublishSteps.Warning
   | PostRowKept of DependencyError
+  | RevisionsKept of DependencyError
+  | CommentsKept of DependencyError
   | PendingDateNotUpdated of DependencyError
   | PendingDateUnreadable of reason: string
 
