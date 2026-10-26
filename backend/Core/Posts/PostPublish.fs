@@ -206,18 +206,17 @@ module PublishSteps =
     | PublishedConditionFailed
     | WriteFailed of DependencyError
 
+  type Rebuilt =
+    { Production: ProductionDispatch
+      Warnings: Warning list }
+
   [<RequireQualifiedAccess>]
   module Logic =
 
     let state (publishedAt: DateTime) (publishDate: DateTime) =
       if publishDate > publishedAt then PostState.Upcoming else PostState.Published
 
-    let warnings
-      (row: Result<unit, DependencyError>)
-      (deleted: Result<DeleteOutcome, DependencyError>)
-      (dispatched: Result<SiteDispatch, DependencyError>)
-      (tracked: Result<unit, DependencyError>)
-      : Warning list =
+    let rowWarnings (row: Result<unit, DependencyError>) (deleted: Result<DeleteOutcome, DependencyError>) : Warning list =
       [ match row with
         | Error error -> CommentRowNotWritten error
         | Ok() -> ()
@@ -225,9 +224,13 @@ module PublishSteps =
         match deleted with
         | Error error -> PendingEditKept error
         | Ok DeleteConditionFailed -> NewerTextKept
-        | Ok Deleted -> ()
+        | Ok Deleted -> () ]
 
-        match dispatched with
+    let rebuildWarnings
+      (dispatched: Result<SiteDispatch, DependencyError>)
+      (tracked: Result<unit, DependencyError>)
+      : Warning list =
+      [ match dispatched with
         | Error error -> SiteNotRebuilt error
         | Ok site ->
           match site.Production with
@@ -274,6 +277,18 @@ module PublishSteps =
           return Result.Error(WriteFailed error)
     }
 
+  /// The change is dated before the dispatch, so the run that the dispatch queues includes the change.
+  let rebuild (dependencies: GatedDependencies) (slug: Slug) : CancellableTask<Rebuilt> =
+    cancellableTask {
+      let changedDate = dependencies.GetUtcNow()
+      let! dispatched = dependencies.DispatchSite()
+      let! tracked = dependencies.RecordChange(PostChange.ofDispatch slug changedDate dispatched)
+
+      return
+        { Production = SiteDispatch.production dispatched
+          Warnings = Logic.rebuildWarnings dispatched tracked }
+    }
+
   let complete
     (dependencies: GatedDependencies)
     (post: PostRow)
@@ -289,15 +304,13 @@ module PublishSteps =
         | Error _ -> dependencies.UpsertPostRow post
 
       let! deleted = dependencies.DeleteWorkingBlob post.Slug workingETag
-      let changedDate = dependencies.GetUtcNow()
-      let! dispatched = dependencies.DispatchSite()
-      let! tracked = dependencies.RecordChange(PostChange.ofDispatch post.Slug changedDate dispatched)
+      let! rebuilt = rebuild dependencies post.Slug
 
       return
         { PublishDate = post.CreatedDate
           State = Logic.state publishedAt post.CreatedDate
-          Production = SiteDispatch.production dispatched
-          Warnings = Logic.warnings row deleted dispatched tracked }
+          Production = rebuilt.Production
+          Warnings = Logic.rowWarnings row deleted @ rebuilt.Warnings }
     }
 
 // ====================================================================================================================
