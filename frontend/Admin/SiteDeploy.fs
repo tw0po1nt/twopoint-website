@@ -54,23 +54,31 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
 let private failedRun (run: Api.SiteRun option) =
   run |> Option.filter (fun run -> run.State = Api.RunState.Failed)
 
-let state (model: Model) =
+let notDeployedTitle = "The latest change did not deploy."
+
+let notDeployedText =
+  "No production run failed: the rebuild did not start, or GitHub canceled the run. Select Rebuild site to deploy it again."
+
+let private ofLoaded (read: Api.SiteDeploy -> 'T option) (model: Model) =
   match model.Status with
-  | Loaded deploy -> Some deploy.Deploy
+  | Loaded deploy -> read deploy
   | Waiting
   | NotLoaded _ -> None
+
+let state (model: Model) =
+  model |> ofLoaded (fun deploy -> Some deploy.Deploy)
 
 let productionFailure (model: Model) =
-  match model.Status with
-  | Loaded deploy -> failedRun deploy.Production
-  | Waiting
-  | NotLoaded _ -> None
+  model |> ofLoaded (fun deploy -> failedRun deploy.Production)
+
+/// The rebuild did not start, or GitHub canceled the run, so the site did not deploy and no production run failed.
+let notDeployed (model: Model) =
+  model
+  |> ofLoaded (fun deploy -> Some(deploy.Deploy = Api.DeployState.DeployFailed && (failedRun deploy.Production).IsNone))
+  |> Option.defaultValue false
 
 let stagingWarning (model: Model) =
-  match model.Status with
-  | Loaded deploy -> failedRun deploy.Staging
-  | Waiting
-  | NotLoaded _ -> None
+  model |> ofLoaded (fun deploy -> failedRun deploy.Staging)
 
 let reason (model: Model) =
   match model.Status with

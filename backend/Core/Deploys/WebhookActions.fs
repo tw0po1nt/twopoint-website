@@ -41,13 +41,13 @@ module ReceiveWorkflowRun =
     | UnknownRepo
     | UnknownRunEvent
 
-  type Notice =
-    | NoNotice
+  type Notification =
+    | NoNotification
     | Notified of Pushed
     | DevicesNotRead of DependencyError
 
   type Event =
-    | Recorded of SiteRun * Notice
+    | Recorded of SiteRun * Notification
     | Skipped of Skipped
     | OlderThanStored
 
@@ -72,6 +72,8 @@ module ReceiveWorkflowRun =
   type WorkflowRunJson =
     { [<JsonPropertyName "run_number">]
       RunNumber : int64
+      [<JsonPropertyName "run_attempt">]
+      RunAttempt : int
       Event : string
       Status : string
       Conclusion : string
@@ -88,6 +90,20 @@ module ReceiveWorkflowRun =
     { [<JsonPropertyName "workflow_run">]
       WorkflowRun : WorkflowRunJson
       Repository : RepositoryJson }
+
+  type DeployFailedPayload = { Run : RunNumber }
+
+  [<RequireQualifiedAccess>]
+  module DeployFailedPayload =
+
+    /// The worker `sw.js` builds the notification of a failed deploy from a payload of this case.
+    [<Literal>]
+    let Case = "deploy-failed"
+
+    let ofRun (run : SiteRun) : DeployFailedPayload = { Run = run.Number }
+
+    let toBytes (payload : DeployFailedPayload) : byte array =
+      JsonSerializer.SerializeToUtf8Bytes {| ``case`` = Case; runNumber = payload.Run.Value |}
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -129,6 +145,7 @@ module ReceiveWorkflowRun =
         Run
           { Repo = repo
             Number = RunNumber json.RunNumber
+            Attempt = RunAttempt json.RunAttempt
             Event = event
             State = state json.Status (json.Conclusion |> Option.ofObj |> Option.defaultValue "")
             CreatedDate = json.CreatedAt.UtcDateTime
@@ -157,11 +174,13 @@ module ReceiveWorkflowRun =
             elif json.Path.Split('@')[0] <> siteWorkflowPath then
               Ok (Skip NotSiteWorkflow)
             else
-              match Repo.tryParse payload.Repository.FullName, Uri.TryCreate(json.HtmlUrl, UriKind.Absolute) with
-              | (false, _), _ -> Error NoRepoName
-              | _, (false, _) -> Error (MissingField "html_url")
-              | (true, repo), (true, url) when repo = repos.Production || repo = repos.Staging -> Ok (run repo url json)
-              | (true, _), _ -> Ok (Skip UnknownRepo)
+              match Repo.tryParse payload.Repository.FullName with
+              | false, _ -> Error NoRepoName
+              | true, repo when repo <> repos.Production && repo <> repos.Staging -> Ok (Skip UnknownRepo)
+              | true, repo ->
+                match Uri.TryCreate(json.HtmlUrl, UriKind.Absolute) with
+                | true, url -> Ok (run repo url json)
+                | false, _ -> Error (MissingField "html_url")
         with :? JsonException as ex ->
           Error (BadJson ex)
 
@@ -173,20 +192,20 @@ module ReceiveWorkflowRun =
       | RunState.Failed
       | RunState.Canceled -> 2
 
-    /// GitHub sends the webhooks of a run in no fixed order, so a stored run never goes back to an earlier state.
+    /// GitHub sends the webhooks of a run in no fixed order, so a stored run never goes back to an earlier state or
+    /// an earlier attempt. A later attempt starts again from no state.
     let next (stored : SiteRun option) (incoming : SiteRun) : Next =
       match stored with
+      | Some stored when stored.Attempt.Value > incoming.Attempt.Value -> Next.OlderThanStored
+      | Some stored when stored.Attempt.Value < incoming.Attempt.Value -> Newer(incoming, None)
       | Some stored when rank stored.State > rank incoming.State -> Next.OlderThanStored
       | Some stored when rank stored.State = rank incoming.State && stored.UpdatedDate > incoming.UpdatedDate ->
         Next.OlderThanStored
       | _ -> Newer(incoming, stored |> Option.map _.State)
 
     /// GitHub can send the webhook of a finished run more than one time.
-    let needsNotice (repos : SiteRepos) (run : SiteRun) (before : RunState option) =
+    let needsNotification (repos : SiteRepos) (run : SiteRun) (before : RunState option) =
       run.Repo = repos.Production && run.State = RunState.Failed && before <> Some RunState.Failed
-
-    let noticeOf (run : SiteRun) : byte array =
-      JsonSerializer.SerializeToUtf8Bytes {| ``case`` = "deploy-failed"; runNumber = run.Number.Value |}
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
@@ -201,11 +220,11 @@ module ReceiveWorkflowRun =
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let notify (run : SiteRun) : CancellableTask<Notice> = cancellableTask {
+    let notify (run : SiteRun) : CancellableTask<Notification> = cancellableTask {
       match! dependencies.GetDevicesOfAuthor() with
       | Error error -> return DevicesNotRead error
       | Ok devices ->
-        let payload = Logic.noticeOf run
+        let payload = DeployFailedPayload.ofRun run |> DeployFailedPayload.toBytes
 
         let! pushed =
           devices
@@ -228,9 +247,9 @@ module ReceiveWorkflowRun =
         | Ok (Skip skipped) -> return Skipped skipped
         | Ok (Run run) ->
           match! dependencies.SaveRun run |> CancellableTaskResult.mapError ActionError<Error>.Dependency with
-          | Newer(saved, before) when Logic.needsNotice (dependencies.GetSiteRepos()) saved before ->
-            let! notice = notify saved |> CancellableTask.map Ok
-            return Recorded(saved, notice)
-          | Newer(saved, _) -> return Recorded(saved, NoNotice)
+          | Newer(saved, before) when Logic.needsNotification (dependencies.GetSiteRepos()) saved before ->
+            let! notification = notify saved |> CancellableTask.map Ok
+            return Recorded(saved, notification)
+          | Newer(saved, _) -> return Recorded(saved, NoNotification)
           | Next.OlderThanStored -> return Event.OlderThanStored
     }

@@ -122,11 +122,11 @@ type ReceiveGitHubWebhook(
 
         let statusCode =
           match result with
-          | Ok (ReceiveWorkflowRun.Recorded(run, notice)) ->
+          | Ok (ReceiveWorkflowRun.Recorded(run, notification)) ->
             logger.LogInformation("Recorded run {number} of site.yml in {repo}: {state}", run.Number.Value, run.Repo, run.State)
 
-            match notice with
-            | ReceiveWorkflowRun.NoNotice -> ()
+            match notification with
+            | ReceiveWorkflowRun.NoNotification -> ()
             | ReceiveWorkflowRun.Notified pushed ->
               logger.LogInformation(
                 "Notified the author of the failed run {number}: {sent} sent, {removed} removed",

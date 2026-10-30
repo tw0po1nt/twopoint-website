@@ -7,7 +7,6 @@ const run = (repo, number) => ({
   number,
   state: 'failed',
   url: `https://github.com/tw0po1nt/${repo}/actions/runs/${number}`,
-  updatedDate: '2026-02-04T00:00:00Z',
 });
 
 const respond = (url, init) =>

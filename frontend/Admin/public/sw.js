@@ -35,7 +35,7 @@ const targetOf = (data) =>
     ? `/posts/${encodeURIComponent(data.slug)}/comments#${encodeURIComponent(data.commentId)}`
     : `/comments#${encodeURIComponent(data.commentId)}`;
 
-const noticeOf = (data) => ({
+const commentNoticeOf = (data) => ({
   title: `${data.case === 'approved' ? 'Comment posted on' : 'New comment on'} ${data.postTitle}`,
   options: {
     body: `${data.commenter}: ${[...String(data.text)].slice(0, bodyLength).join('')}`,
@@ -81,7 +81,7 @@ const show = async (event) => {
     return;
   }
 
-  const { title, options } = data ? noticeOf(data) : fallbackNotice;
+  const { title, options } = data ? commentNoticeOf(data) : fallbackNotice;
 
   await self.registration.showNotification(title, options);
 

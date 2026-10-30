@@ -484,6 +484,10 @@ let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) (siteDe
       yield fun run _ -> runAlert Parts.Bad (SiteDeploy.productionFailureTitle run) SiteDeploy.productionFailureText run
     }
 
+    Show(when' = SiteDeploy.notDeployed siteDeploy) {
+      Parts.Alert(tone = Parts.Bad, title = SiteDeploy.notDeployedTitle).Has(p () { SiteDeploy.notDeployedText })
+    }
+
     For(each = Array.ofList (Option.toList (SiteDeploy.stagingWarning siteDeploy))) {
       yield fun run _ -> runAlert Parts.Warn (SiteDeploy.stagingWarningTitle run) SiteDeploy.stagingWarningText run
     }

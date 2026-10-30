@@ -21,8 +21,7 @@ module GetSiteDeployQuery = TwoPoint.Core.Deploys.Queries.GetSiteDeploy
 type SiteRunDto =
   { Number : int64
     State : string
-    Url : string
-    UpdatedDate : string }
+    Url : string }
 
 type SiteDeployDto =
   { Deploy : string
@@ -34,8 +33,7 @@ module SiteDeployDto =
   let private run (run : SiteRun) =
     { Number = run.Number.Value
       State = DeployRows.stateName run.State
-      Url = string run.Url
-      UpdatedDate = ChangeColumns.dateText run.UpdatedDate }
+      Url = string run.Url }
 
   let ofSiteDeploy (deploy : GetSiteDeployQuery.SiteDeploy) =
     { Deploy = deploy.State.Name

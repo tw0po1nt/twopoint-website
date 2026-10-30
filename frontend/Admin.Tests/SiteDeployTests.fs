@@ -7,8 +7,7 @@ open Expecto
 let private run number state : Api.SiteRun =
   { Number = number
     State = state
-    Url = $"https://github.com/tw0po1nt/twopoint-website/actions/runs/{number}"
-    UpdatedDate = "2026-10-30T09:00:00Z" }
+    Url = $"https://github.com/tw0po1nt/twopoint-website/actions/runs/{number}" }
 
 let private site deploy production staging : Api.SiteDeploy =
   { Deploy = deploy
@@ -59,6 +58,18 @@ let tests =
       Expect.equal (SiteDeploy.productionFailureTitle failed) "The production run #41 failed." "The title"
       Expect.equal failed.Url "https://github.com/tw0po1nt/twopoint-website/actions/runs/41" "The link"
       Expect.isNone (SiteDeploy.stagingWarning model.SiteDeploy) "No staging warning"
+      Expect.isFalse (SiteDeploy.notDeployed model.SiteDeploy) "The failed run explains the state"
+    }
+
+    test "a site that did not deploy with no failed production run shows why" {
+      let canceled = site Api.DeployState.DeployFailed (Some(run 41 Api.RunState.Canceled)) None
+      let model, _ = answered (Ok canceled) (started "/")
+
+      Expect.isTrue (SiteDeploy.notDeployed model.SiteDeploy) "The reason shows"
+      Expect.isNone (SiteDeploy.productionFailure model.SiteDeploy) "No failed run"
+
+      let model, _ = answered (Ok(site Api.DeployState.DeployFailed None None)) (started "/")
+      Expect.isTrue (SiteDeploy.notDeployed model.SiteDeploy) "A rebuild that did not start"
     }
 
     test "a failed staging run shows only as a warning" {
@@ -76,6 +87,7 @@ let tests =
 
       Expect.isNone (SiteDeploy.productionFailure model.SiteDeploy) "No production failure"
       Expect.isNone (SiteDeploy.stagingWarning model.SiteDeploy) "No staging warning"
+      Expect.isFalse (SiteDeploy.notDeployed model.SiteDeploy) "Nothing to explain"
     }
 
     test "a deploying site polls until the deploy ends" {

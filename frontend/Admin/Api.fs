@@ -253,8 +253,7 @@ type RunState =
 type SiteRun =
   { Number: int
     State: RunState
-    Url: string
-    UpdatedDate: string }
+    Url: string }
 
 /// The latest run of each repo. The production run deploys the site of record.
 type SiteDeploy =

@@ -33,6 +33,14 @@ type RunNumber =
     let (RunNumber number) = this
     number
 
+/// A re-run keeps the run number. GitHub numbers the attempts of each run from 1.
+type RunAttempt =
+  | RunAttempt of int
+
+  member this.Value =
+    let (RunAttempt attempt) = this
+    attempt
+
 type Dispatch =
   | Queued of RunNumber
   | QueuedWithoutRunNumber
@@ -120,6 +128,7 @@ type RunState =
 type SiteRun =
   { Repo : Repo
     Number : RunNumber
+    Attempt : RunAttempt
     Event : RunEvent
     State : RunState
     CreatedDate : DateTime

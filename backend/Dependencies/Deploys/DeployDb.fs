@@ -43,6 +43,7 @@ module DeployRows =
   let runEntity (run : SiteRun) =
     let entity = TableEntity(partitionKey = runPartition run.Repo, rowKey = runRow run.Number)
     entity["Number"] <- run.Number.Value
+    entity["Attempt"] <- run.Attempt.Value
     entity["Event"] <- RunEvent.name run.Event
     entity["State"] <- stateName run.State
     entity["CreatedDate"] <- ChangeColumns.dateText run.CreatedDate
@@ -61,6 +62,8 @@ module DeployRows =
       return
         { Repo = repo
           Number = RunNumber number
+          // A row that was written before the column existed is of the first attempt.
+          Attempt = entity.GetInt32 "Attempt" |> Option.ofNullable |> Option.defaultValue 1 |> RunAttempt
           Event = event
           State = state
           CreatedDate = ChangeColumns.parseDate created
@@ -99,14 +102,17 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
     return tableServiceClient.GetTableClient name
   }
 
-  let runs (repo : Repo) extraFilter = cancellableTask {
+  let firstRun (repo : Repo) (filter : string) = cancellableTask {
     let! ct = CancellableTask.getCancellationToken()
     let! runs = table RunsTable
-    let partition = DeployRows.runPartition repo
-    let filter = $"PartitionKey eq '{partition}'{extraFilter}"
     let! first = runs.QueryAsync<TableEntity>(filter, maxPerPage = 1, cancellationToken = ct) |> TaskSeq.tryHead
     return first |> Option.bind (DeployRows.tryRun repo)
   }
+
+  let latestRun (repo : Repo) = firstRun repo $"PartitionKey eq '{DeployRows.runPartition repo}'"
+
+  let latestSucceededRun (repo : Repo) =
+    firstRun repo $"PartitionKey eq '{DeployRows.runPartition repo}' and State eq '{DeployRows.stateName RunState.Succeeded}'"
 
   member _.SaveRun (incoming : SiteRun) : DependencyResult<ReceiveWorkflowRun.Next> =
     runDependencyWithLogging Dependency.Database logger $"{nameof DeployDb}.SaveRun"
@@ -143,10 +149,7 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
 
   member _.GetLatestRun (repo : Repo) : DependencyResult<SiteRun option> =
     runDependencyWithLogging Dependency.Database logger $"{nameof DeployDb}.GetLatestRun"
-    <| cancellableTaskResult {
-      let! latest = runs repo ""
-      return latest
-    }
+    <| cancellableTaskResult { return! latestRun repo }
 
   member _.RecordChange (change : PostChange) : DependencyResult<unit> =
     runDependencyWithLogging Dependency.Database logger $"{nameof DeployDb}.RecordChange"
@@ -166,8 +169,8 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
 
       let! entities = changes.QueryAsync<TableEntity>("PartitionKey eq 'post'", cancellationToken = ct) |> TaskSeq.toListAsync
       let! rebuild = rebuilds.GetEntityIfExistsAsync<TableEntity>("site", "latest", cancellationToken = ct)
-      let! latest = runs production ""
-      let! succeeded = runs production $" and State eq '{DeployRows.stateName RunState.Succeeded}'"
+      let! latest = latestRun production
+      let! succeeded = latestSucceededRun production
 
       return
         { Changes = entities |> List.choose DeployRows.tryChange |> Map.ofList

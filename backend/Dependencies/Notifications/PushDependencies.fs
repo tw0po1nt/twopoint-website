@@ -58,4 +58,4 @@ type PushDependencies(
   member _.RecordCommentPush (device : RegisteredDevice) (commentId : CommentId) = record device (commentId.ToString())
 
   member _.RecordRunPush (device : RegisteredDevice) (run : SiteRun) =
-    record device $"site-run:{DeployRows.runPartition run.Repo}:{run.Number.Value}"
+    record device $"site-run:{DeployRows.runPartition run.Repo}:{run.Number.Value}:{run.Attempt.Value}"

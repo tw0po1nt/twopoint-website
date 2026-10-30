@@ -19,6 +19,7 @@ let private production = { Owner = "tw0po1nt"; Name = "twopoint-website" }
 let private run number state event created =
   { Repo = production
     Number = RunNumber number
+    Attempt = RunAttempt 1
     Event = event
     State = state
     CreatedDate = at created
