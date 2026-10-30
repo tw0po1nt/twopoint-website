@@ -22,6 +22,10 @@ let private pickImage (onPicked: File -> unit) =
 
 let private inputText (event: Event) = (event.target :?> HTMLInputElement).value
 
+// A read of the form in the body of a component would build the form again at each change, and an input would lose its focus.
+let read (form: unit -> SeriesForm.Form option) (get: SeriesForm.Form -> 'T) (fallback: 'T) () =
+  form () |> Option.map get |> Option.defaultValue fallback
+
 [<SolidComponent>]
 let private error (text: unit -> string) =
   Show(when' = (text () <> "")) { p (class' = "err", role = "alert") { text () } }
@@ -34,8 +38,7 @@ let fields
   (form: unit -> SeriesForm.Form option)
   (others: unit -> string list)
   =
-  // A read of the form in the body of a component would build the form again at each change, and an input would lose its focus.
-  let read (get: SeriesForm.Form -> 'T) (fallback: 'T) () = form () |> Option.map get |> Option.defaultValue fallback
+  let read get fallback = read form get fallback
 
   let problem field () =
     form ()

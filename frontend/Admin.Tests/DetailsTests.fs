@@ -269,6 +269,30 @@ let tests =
       Expect.isNone effect "No save of the post"
     }
 
+    test "a choice in the picker during the save of a new series does not lose the answer" {
+      let newSeries msg = detail (Details.NewSeriesMsg msg)
+      let model, _ = detail Details.NewSeriesClicked (withSheet draft)
+      let model, _ = newSeries (SeriesForm.TitleTyped "F# for fun") model
+      let model, _ = newSeries (SeriesForm.ExcerptTyped "Small programs in F#.") model
+      let model, _ = newSeries SeriesForm.SaveClicked model
+
+      let model, effect = detail (Details.SeriesChosen "my-series") model
+      Expect.isNone effect "No call"
+      let model, _ = detail Details.SeriesRemoved model
+      Expect.isTrue (Details.newSeriesSaving (document' model).Details) "The form waits for the answer"
+
+      let answer: Api.SavedSeries = { Slug = "f-for-fun"; ETag = "\"f-1\""; Warnings = [] }
+      let model, _ = detail (Details.NewSeriesAnswered(Ok answer)) model
+
+      Expect.equal (values model).Series (Some "f-for-fun") "The picker selects the new series"
+      Expect.equal (document' model).Details.NewSeries (Details.Made answer) "The saved notice"
+
+      match (document' model).Details.Options with
+      | Details.Ready choices ->
+        Expect.contains choices.Series ({ Slug = "f-for-fun"; Title = "F# for fun" }: Api.SeriesListing) "The picker lists it"
+      | other -> failtestf "Expected the choices, got %A" other
+    }
+
     test "an image upload of the new series goes to the upload endpoint, and a refused token offers another account" {
       let model, _ = detail Details.NewSeriesClicked (withSheet draft)
       let file = Unchecked.defaultof<Browser.Types.File>

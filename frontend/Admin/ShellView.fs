@@ -1177,10 +1177,9 @@ let private seriesPage (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
 
 [<SolidComponent>]
 let private seriesForm (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
-  // A read of the model in the body of a component would build the form again at each change, and an input would lose its focus.
   let page () = (model ()).Series
   let form () = (page ()).Form
-  let read (get: SeriesForm.Form -> 'T) (fallback: 'T) () = form () |> Option.map get |> Option.defaultValue fallback
+  let read get fallback = SeriesFormView.read form get fallback
 
   Fragment() {
     SeriesFormView.fields
@@ -1232,7 +1231,7 @@ let private seriesSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
           Parts
             .Button(
               kind = Parts.Primary,
-              disabled = (form () |> Option.exists (fun form -> SeriesForm.isSaving form || SeriesForm.isUploading form)),
+              disabled = (form () |> Option.exists SeriesForm.isBusy),
               onClick = fun _ -> dispatch (Shell.Series(Series.FormMsg SeriesForm.SaveClicked))
             )
             .Has(Fragment() { "Save" })

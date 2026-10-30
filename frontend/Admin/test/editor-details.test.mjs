@@ -30,6 +30,7 @@ const saves = [];
 const slugChanges = [];
 const seriesSaves = [];
 let saved = 0;
+let answerSeries = () => {};
 
 const ok = (data) => answer(200, { success: true, message: null, data });
 
@@ -41,7 +42,9 @@ const respond = (url, init = {}) => {
 
   if (url.endsWith('/api/internal/series/f-for-fun')) {
     seriesSaves.push({ method: init.method, ifNoneMatch: headers.get('If-None-Match'), body: JSON.parse(init.body) });
-    return ok({ slug: 'f-for-fun', eTag: '"f-1"', warnings: [] });
+    return new Promise((resolve) => {
+      answerSeries = () => resolve(ok({ slug: 'f-for-fun', eTag: '"f-1"', warnings: [] }));
+    });
   }
 
   if (url.endsWith('/api/internal/posts/my-post/slug')) {
@@ -180,6 +183,10 @@ test('New series in the picker saves a series and selects it, and the editor sta
   await settle();
   saveSeries().click();
   await settle();
+  assert.equal(field('details-series').disabled, true, 'No other choice in the picker during the save');
+  answerSeries();
+  await settle();
+  assert.equal(field('details-series').disabled, false, 'The picker works after the save');
 
   assert.deepEqual(seriesSaves, [
     {

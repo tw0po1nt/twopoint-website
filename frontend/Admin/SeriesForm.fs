@@ -129,6 +129,11 @@ let private request (form: Form) : SaveRequest =
         Excerpt = form.Excerpt.Trim()
         Image = if image = "" then None else Some image } }
 
+/// The entry of a saved series in a series picker.
+let listing (saved: Api.SavedSeries) (form: Form) : Api.SeriesListing =
+  { Slug = saved.Slug
+    Title = (request form).Fields.Title }
+
 let isBusy (form: Form) =
   Progress.isSending form.State || form.Upload = Uploading
 

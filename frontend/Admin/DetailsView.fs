@@ -269,6 +269,7 @@ let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
           .Select(
             id = "details-series",
             value = current,
+            disabled = Details.newSeriesSaving (details (model ())),
             onChange =
               fun event ->
                 match (event.target :?> HTMLSelectElement).value with

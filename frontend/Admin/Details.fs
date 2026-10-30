@@ -85,6 +85,13 @@ let otherSeries (model: Model) =
   | Waiting
   | NotLoaded _ -> []
 
+/// While the new series saves, the picker keeps the form, so that the answer can select the series.
+let newSeriesSaving (model: Model) =
+  match model.NewSeries with
+  | Writing form -> SeriesForm.isSaving form
+  | NoNewSeries
+  | Made _ -> false
+
 /// A text with no letter or digit gives `None`.
 let resolve (terms: Api.Term list) (typed: string) : string option =
   match Slug.term typed with
@@ -163,6 +170,9 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | None -> { model with TagInput = "" }, None
   | TagRemoved slug ->
     { model with Values = { values with Tags = values.Tags |> List.filter (fun tag -> Slug.term tag <> slug) } }, None
+  | SeriesChosen _
+  | SeriesRemoved
+  | NewSeriesClosed when newSeriesSaving model -> model, None
   | SeriesChosen slug -> { withSeries slug model with NewSeries = NoNewSeries }, None
   | SeriesRemoved ->
     { model with
@@ -177,12 +187,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | Writing _ -> model, None
     | NoNewSeries
     | Made _ -> { model with NewSeries = Writing SeriesForm.blank }, None
-  | NewSeriesClosed ->
-    match model.NewSeries with
-    | Writing form when SeriesForm.isSaving form -> model, None
-    | Writing _
-    | Made _
-    | NoNewSeries -> { model with NewSeries = NoNewSeries }, None
+  | NewSeriesClosed -> { model with NewSeries = NoNewSeries }, None
   | NewSeriesMsg msg ->
     match model.NewSeries with
     | Writing form ->
@@ -199,7 +204,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     match model.NewSeries, answer with
     | Writing form, Ok saved when SeriesForm.isSaving form ->
       { withSeries saved.Slug model with
-          Options = withListing { Slug = saved.Slug; Title = form.Title.Trim() } model.Options
+          Options = withListing (SeriesForm.listing saved form) model.Options
           NewSeries = Made saved },
       None
     | Writing form, Error failure when SeriesForm.isSaving form ->
