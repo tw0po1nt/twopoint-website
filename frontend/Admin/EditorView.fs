@@ -110,6 +110,16 @@ let private discardState (model: Shell.Model) =
   | Some document -> document.Discard
   | None -> Confirm.Closed
 
+let private revisionsState (model: Shell.Model) =
+  match document model with
+  | Some document -> document.Revisions
+  | None -> Revisions.Closed
+
+let private hasPendingEdit (model: Shell.Model) =
+  match document model with
+  | Some document -> document.PendingEdit
+  | None -> false
+
 let private unpublishState (model: Shell.Model) =
   match document model with
   | Some document -> document.Unpublish
@@ -571,6 +581,80 @@ let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
   }
 
 [<SolidComponent>]
+let private revisionEntry (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (revision: Api.Revision) =
+  let restoring () = Revisions.isRestoring (revisionsState (model ()))
+  let publishedText = $"{Editor.longDateText revision.PublishedAt}, {Revisions.timeText revision.PublishedAt}"
+
+  li (class' = "revision") {
+    div (class' = "grow") {
+      p (class' = "revision-title") { revision.Title |> Option.defaultValue "No title" }
+      p (class' = "muted small") { $"Published {publishedText}" }
+    }
+
+    Parts.Button(
+      disabled = restoring (),
+      label = $"Restore the revision of {publishedText}",
+      onClick = fun _ -> dispatch (Shell.Editor(Editor.RestoreChosen revision.Name))
+    )
+      .Has(
+        Fragment() {
+          if Revisions.restoringName (revisionsState (model ())) = Some revision.Name then
+            "Restoring…"
+          else
+            "Restore"
+        }
+      )
+  }
+
+[<SolidComponent>]
+let private revisionsDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+  let state () = revisionsState (model ())
+
+  dialog(id = "revisions-dialog", class' = "dialog", ariaLabelledBy = "revisions-dialog-title")
+    .ref(Parts.followOpen (fun () -> Revisions.isOpen (state ())))
+    .on("cancel", fun event ->
+      if Revisions.isRestoring (state ()) then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.RevisionsClosed) {
+    h2 (id = "revisions-dialog-title") { "Revisions" }
+
+    div (class' = "dialog-body") {
+      p () {
+        if hasPendingEdit (model ()) then
+          "Each publish keeps a revision. A restore replaces the pending edit with the revision text. The site changes only at the next publish."
+        else
+          "Each publish keeps a revision. A restore makes the revision text a pending edit. The site changes only at the next publish."
+      }
+
+      Show(when' = (state () = Revisions.Loading)) { p (class' = "muted small") { "Loading the revisions…" } }
+
+      Show(when' = (match state () with Revisions.Listed [] -> true | _ -> false)) {
+        p (class' = "muted small") { "The post has no revision." }
+      }
+
+      ul (class' = "revision-list") {
+        For(each = Array.ofList (Revisions.revisions (state ()))) { yield fun revision _ -> revisionEntry dispatch model revision }
+      }
+
+      Show(when' = (Revisions.reason (state ())).IsSome) {
+        Parts.Alert(
+          tone = Parts.Bad,
+          title =
+            (match state () with
+             | Revisions.LoadFailed _ -> "The revisions did not load."
+             | _ -> "The revision is not restored.")
+        )
+          .Has(p () { Revisions.reason (state ()) |> Option.defaultValue "" })
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = Revisions.isRestoring (state ()), onClick = fun _ -> send Editor.RevisionsClosed).Has(Fragment() { "Close" })
+    }
+  }
+
+[<SolidComponent>]
 let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send msg = dispatch (Shell.Editor msg)
 
@@ -920,6 +1004,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     publishDialog dispatch model
     changesDialog dispatch model
     discardDialog dispatch model
+    revisionsDialog dispatch model
     unpublishDialog dispatch model
     changeDateDialog dispatch model
     deleteDialog dispatch model

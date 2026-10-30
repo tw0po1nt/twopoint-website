@@ -211,3 +211,75 @@ module DiscardChanges =
       | Deleted -> return Discarded
       | DeleteConditionFailed -> return! Result.Error(ActionError.Logic(Refused PendingGate.WorkingBlobChanged))
     }
+
+[<RequireQualifiedAccess>]
+module RestoreRevision =
+
+  /// `IfMatch` is the ETag of the working blob that the editor read. `None` means that the editor read no working blob.
+  type Dto =
+    { Slug: string
+      Revision: string
+      IfMatch: string option }
+
+  type Error =
+    | PostNotFound of Slug
+    | NotPublished of Slug
+    | RevisionNotFound of Slug * RevisionName
+    /// The working blob changed after the editor read it, or the editor read a blob that no longer exists.
+    | Stale
+
+  type Event = Restored of eTag: string
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    let condition
+      (slug: Slug)
+      (published: StoredBlob option)
+      (working: StoredBlob option)
+      (ifMatch: string option)
+      : Decision<WriteCondition, Error> =
+      match published, working, ifMatch with
+      | None, None, _ -> Decision.failure (PostNotFound slug)
+      | None, Some _, _ -> Decision.failure (NotPublished slug)
+      | Some _, Some blob, Some eTag when blob.ETag = eTag -> Decision.success (MatchesETag eTag)
+      | Some _, Some _, _
+      | Some _, None, Some _ -> Decision.failure Stale
+      | Some _, None, None -> Decision.success MustNotExist
+
+  type Dependencies =
+    abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member GetRevisionBlob: slug: Slug -> name: RevisionName -> DependencyResult<string option>
+    abstract member WriteWorkingBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
+
+  type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  let withDependencies (dependencies: Dependencies) : Action =
+    fun dto -> cancellableTaskResult {
+      let! slug = dto.Slug |> Slug.create |> Result.mapError ActionError<Error>.Validation
+      let! name = dto.Revision |> RevisionName.create |> Result.mapError ActionError<Error>.Validation
+
+      let! published, working =
+        CancellableTaskResult.parallelZip (dependencies.GetPublishedBlob slug) (dependencies.GetWorkingBlob slug)
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! condition =
+        Logic.condition slug published working dto.IfMatch
+        |> Result.mapError ActionError<Error>.Logic
+
+      let! revision =
+        dependencies.GetRevisionBlob slug name
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      match revision with
+      | None -> return! Result.Error(ActionError.Logic(RevisionNotFound(slug, name)))
+      | Some text ->
+        let! outcome =
+          dependencies.WriteWorkingBlob slug text condition
+          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+        match outcome with
+        | Written eTag -> return Restored eTag
+        | ConditionFailed -> return! Result.Error(ActionError.Logic Stale)
+    }

@@ -315,7 +315,6 @@ let menuTests =
 
     test "the menu of an upcoming post has a reason for each action that a later version brings" {
       let model = opened upcoming
-      Expect.equal (reasonOf Editor.Revisions model) "A later version adds this action." "Revisions"
       Expect.equal (reasonOf Editor.SendToSubscribers model) "A later version adds this action." "Send to subscribers"
     }
   ]
