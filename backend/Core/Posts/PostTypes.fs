@@ -244,8 +244,6 @@ type TermCount = { Slug : Slug; Title : string; Value : string; Posts : int }
 
 type TermSuggestions = { Categories : TermCount list; Tags : TermCount list }
 
-type SeriesListing = { Slug : Slug; Title : string }
-
 /// The blob `<slug>/<name>.md` in `revisions`. A migrated post has a name in the round-trip form of its publish date,
 /// such as `2024-01-15T00:00:00.0000000Z`. The name is the exact blob name, so a restore finds the blob.
 type RevisionName =

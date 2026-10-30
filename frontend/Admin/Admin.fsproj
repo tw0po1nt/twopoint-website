@@ -26,6 +26,7 @@
     <Compile Include="SiteDeploy.fs" />
     <Compile Include="Posts.fs" />
     <Compile Include="Details.fs" />
+    <Compile Include="Series.fs" />
     <Compile Include="Preview.fs" />
     <Compile Include="Diff.fs" />
     <Compile Include="Confirm.fs" />

@@ -23,7 +23,10 @@ type private FakeStore(published : StoredPost list, series : StoredSeries list) 
     member _.GetPublishedPosts () = CancellableTaskResult.singleton published
 
   interface GetSeries.Dependencies with
+    member _.GetUtcNow () = System.DateTime.UtcNow
     member _.GetSeriesRecords () = CancellableTaskResult.singleton series
+    member _.GetPublishedPosts () = CancellableTaskResult.singleton published
+    member _.GetWorkingPosts () = CancellableTaskResult.singleton []
 
 let private terms published =
   match (GetTerms.withDependencies (FakeStore(published, [])) () CancellationToken.None).Result with
@@ -96,6 +99,6 @@ let tests =
             { Slug = "alpha"; Text = "title: Alpha\nexcerpt: First.\n"; ETag = "v1" }
             { Slug = "broken"; Text = "title: [\n"; ETag = "v1" } ]
 
-      Expect.equal listing [ { Slug = slug "alpha"; Title = "Alpha" }; { Slug = slug "zeta"; Title = "Zeta" } ] "The list"
+      Expect.equal (listing |> List.map (fun series -> series.Slug, series.Title)) [ slug "alpha", "Alpha"; slug "zeta", "Zeta" ] "The list"
     }
   ]

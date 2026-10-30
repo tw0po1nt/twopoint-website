@@ -30,6 +30,7 @@
     <Compile Include="PostCommentsTests.fs" />
     <Compile Include="CommentersTests.fs" />
     <Compile Include="SubscriptionsTests.fs" />
+    <Compile Include="SeriesTests.fs" />
     <Compile Include="NotificationsTests.fs" />
     <Compile Include="MenuTests.fs" />
     <Compile Include="PartsTests.fs" />

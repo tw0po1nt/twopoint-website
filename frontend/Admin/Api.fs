@@ -51,6 +51,30 @@ type Terms = { Categories: Term list; Tags: Term list }
 
 type SeriesListing = { Slug: string; Title: string }
 
+[<RequireQualifiedAccess>]
+type SeriesPostState =
+  | Published
+  | Upcoming
+  | Draft
+  /// Only the pending edit of a published post puts it in the series.
+  | PendingEdit
+
+/// `PublishDate` is an ISO 8601 UTC time, and `None` for a draft and a pending edit.
+type SeriesPost =
+  { Slug: string
+    Title: string
+    State: SeriesPostState
+    PublishDate: string option }
+
+/// `Image` is the https URL of the image.
+type SeriesRecord =
+  { Slug: string
+    Title: string
+    Excerpt: string
+    Image: string option
+    ETag: string
+    Posts: SeriesPost list }
+
 type ChangedSlug = { Slug: string; ETag: string }
 
 type PublishedFields =
@@ -224,6 +248,23 @@ type UpcomingChange =
     Warnings: ChangeWarning list }
 
 type DeletedPost = { Warnings: ChangeWarning list }
+
+type SeriesWarning =
+  | SeriesRebuild of PublishWarning
+  /// The rename wrote the new record, and the record at the old slug stays.
+  | OldRecordKept
+
+type SavedSeries =
+  { Slug: string
+    ETag: string
+    Warnings: SeriesWarning list }
+
+/// The fields of the series form. `Image` is an https URL, or `None`.
+type SeriesFields =
+  { Slug: string
+    Title: string
+    Excerpt: string
+    Image: string option }
 
 /// `Name` names the revision in a restore. `PublishedAt` is an ISO 8601 UTC time.
 type Revision =
@@ -399,6 +440,23 @@ let private changeWarning: Decoder<ChangeWarning> =
     | "comments" -> Decode.succeed CommentsKept
     | _ -> publishWarning |> Decode.map PublishStep)
 
+let private seriesPostState: Decoder<SeriesPostState> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "published" -> Decode.succeed SeriesPostState.Published
+    | "upcoming" -> Decode.succeed SeriesPostState.Upcoming
+    | "draft" -> Decode.succeed SeriesPostState.Draft
+    | "pending-edit" -> Decode.succeed SeriesPostState.PendingEdit
+    | _ -> Decode.fail $"The series post state '{name}' is not known.")
+
+let private seriesWarning: Decoder<SeriesWarning> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "old-record" -> Decode.succeed OldRecordKept
+    | _ -> publishWarning |> Decode.map SeriesRebuild)
+
 let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
@@ -412,6 +470,8 @@ let private coders =
   |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check
   |> Extra.withCustom (fun (_: PublishWarning) -> failwith "The admin sends no publish warning.") publishWarning
   |> Extra.withCustom (fun (_: ChangeWarning) -> failwith "The admin sends no change warning.") changeWarning
+  |> Extra.withCustom (fun (_: SeriesPostState) -> failwith "The admin sends no series post state.") seriesPostState
+  |> Extra.withCustom (fun (_: SeriesWarning) -> failwith "The admin sends no series warning.") seriesWarning
 
 type private Payload =
   | Json of string
@@ -654,6 +714,42 @@ let getTerms (api: string) (token: string) : JS.Promise<Result<Terms, Failure>> 
 
 let getSeries (api: string) (token: string) : JS.Promise<Result<SeriesListing list, Failure>> =
   send HttpMethod.GET api token (internalPath [ "series" ])
+
+let getSeriesRecords (api: string) (token: string) : JS.Promise<Result<SeriesRecord list, Failure>> =
+  send HttpMethod.GET api token (internalPath [ "series" ])
+
+/// `slug` is the slug of the stored record, or the slug of a new series. `eTag` is `None` for a new series.
+let saveSeries
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string option)
+  (fields: SeriesFields)
+  : JS.Promise<Result<SavedSeries, Failure>> =
+  let json =
+    Encode.object [
+      "slug", Encode.string fields.Slug
+      "title", Encode.string fields.Title
+      "excerpt", Encode.string fields.Excerpt
+      "image", (fields.Image |> Option.map Encode.string |> Option.defaultValue Encode.nil)
+    ]
+    |> Encode.toString 0
+
+  let precondition =
+    match eTag with
+    | Some eTag -> IfMatch eTag
+    | None -> IfNoneMatch "*"
+
+  sendWith HttpMethod.PUT api token (internalPath [ "series"; slug ]) (Some(Json json)) [ precondition ]
+
+let deleteSeries (api: string) (token: string) (slug: string) (eTag: string) : JS.Promise<Result<unit, Failure>> =
+  request<unit> HttpMethod.DELETE api token (internalPath [ "series"; slug ]) None [ IfMatch eTag ]
+  |> Promise.map (
+    Result.bind (fun answer ->
+      match answer with
+      | { Success = true } -> Ok()
+      | _ -> Error Invalid)
+  )
 
 let changeSlug (api: string) (token: string) (slug: string) (eTag: string) (newSlug: string) : JS.Promise<Result<ChangedSlug, Failure>> =
   let json = Encode.object [ "slug", Encode.string newSlug ] |> Encode.toString 0

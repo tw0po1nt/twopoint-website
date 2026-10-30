@@ -75,6 +75,13 @@ It then writes the `revisions` blob, the `published` blob, and the post-table ro
 that fails gives a warning, and the post stays published. `Admin-Posts-CheckPublish` gives the
 problems for the dialog before the author confirms.
 
+The Series page lists, makes, and edits each series record. `GET internal/series` gives each record
+with its posts. `PUT internal/series/{slug}` saves a record and dispatches `site.yml` as "Rebuild
+site" does, and the page shows the deploy state of the site. A series save stores no change in
+`postChanges`, because a change in that table is for one post. The slug is locked while a post, a
+draft, or a pending edit refers to the series. `DELETE internal/series/{slug}` deletes only a series
+that no post, draft, or pending edit refers to.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

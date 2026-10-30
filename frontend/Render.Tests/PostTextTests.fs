@@ -3,6 +3,7 @@ module TwoPoint.Site.Render.Tests.PostTextTests
 open TwoPoint.Site.Render
 
 open Expecto
+open System
 
 let private text = "---\ntitle: Old title\nexcerpt: 'An excerpt.'\ntags:\n  - FSharp\n---\n\n## Body\n\nSome text.\n"
 
@@ -182,5 +183,29 @@ let detailsTests =
         Expect.stringContains undated "author: A" "The author stays"
         Expect.equal (PostText.split undated) (PostText.split dated) "The fields and the body"
       | Error reason -> failtestf "Expected a text, got the reason '%s'" reason
+    }
+  ]
+
+let private roundTrip (series: Series) =
+  FrontMatter.parseSeries $"{series.Slug}.yml" (PostText.seriesRecord series)
+
+[<Tests>]
+let seriesRecordTests =
+  testList "Series record text" [
+    test "a series record reads back to the same series" {
+      let series =
+        { Slug = "footguns"
+          Title = "Matt's Footgun Collection: #1"
+          Excerpt = "- 'Quoted', \"double\", yes, and null"
+          Image = Some(Uri "https://twopointwebsite.blob.core.windows.net/assets/823d1b141eaed748.jpg") }
+
+      Expect.equal (roundTrip series) (Ok series) "Each field reads back"
+    }
+
+    test "a series record with no image has no image field" {
+      let series = { Slug = "notes"; Title = "Notes"; Excerpt = "Short notes"; Image = None }
+
+      Expect.equal (roundTrip series) (Ok series) "The series reads back"
+      Expect.isFalse ((PostText.seriesRecord series).Contains "image") "No image field"
     }
   ]

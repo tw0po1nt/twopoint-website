@@ -161,6 +161,27 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
         return []
     }
 
+  /// A failed condition gives <c>ConditionFailed</c> and leaves the record as it was.
+  member _.WriteSeriesBlob (slug : Slug) (text : string) (condition : WriteCondition) : DependencyResult<WriteOutcome> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.WriteSeriesBlob({slug})"
+    <| writeBlob "series" $"{Slug.value slug}.yml" text (conditionsOf condition)
+
+  /// A blob that is gone or has another ETag gives <c>DeleteConditionFailed</c>.
+  member _.DeleteSeriesBlob (slug : Slug) (eTag : string) : DependencyResult<DeleteOutcome> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteSeriesBlob({slug})"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let conditions = BlobRequestConditions(IfMatch = ETag eTag)
+
+      try
+        let! _ =
+          service.GetBlobContainerClient("series").GetBlobClient($"{Slug.value slug}.yml").DeleteAsync(DeleteSnapshotsOption.None, conditions, ct)
+
+        return Deleted
+      with :? RequestFailedException as error when error.Status = 412 || notFound error ->
+        return DeleteConditionFailed
+    }
+
   /// A blob that is gone or has another ETag gives <c>DeleteConditionFailed</c>.
   member _.DeleteWorkingBlob (slug : Slug) (eTag : string) : DependencyResult<DeleteOutcome> =
     runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.DeleteWorkingBlob({slug})"

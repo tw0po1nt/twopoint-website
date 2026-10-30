@@ -183,3 +183,17 @@ let withUpdateDate (baseText: string) (updateDate: DateTimeOffset) : Result<stri
 
 let withoutPublishDate (baseText: string) : Result<string, string> =
   rewrite baseText (fun root -> setText root "publishDate" None) (split baseText).Body
+
+/// The YAML text of a series record. `FrontMatter.parseSeries` reads it back to the same series.
+let seriesRecord (series: Series) : string =
+  let root = YamlMappingNode()
+  root.Children[YamlScalarNode "title"] <- YamlScalarNode series.Title
+  root.Children[YamlScalarNode "excerpt"] <- YamlScalarNode series.Excerpt
+
+  match series.Image with
+  | Some image -> root.Children[YamlScalarNode "image"] <- YamlScalarNode(string image)
+  | None -> ()
+
+  use writer = new StringWriter()
+  YamlStream(YamlDocument root).Save(writer, false)
+  writer.ToString().Replace("\r\n", "\n").Replace("\n...\n", "\n").TrimEnd '\n' + "\n"
