@@ -48,7 +48,8 @@ module SeriesPosts =
 
   /// Each post whose published text or working text refers to the series: the live posts in publish date order, then
   /// the drafts and the pending edits by title.
-  let inSeries (utcNow : DateTime) (published : StoredPost list) (working : StoredPost list) (series : string) : SeriesPost list =
+  let inSeries (utcNow : DateTime) (published : StoredPost list) (working : StoredPost list) (series : Slug) : SeriesPost list =
+    let series = Slug.value series
     let publishedSlugs = published |> List.map _.Slug |> Set.ofList
 
     let live =
@@ -78,13 +79,8 @@ module SeriesPosts =
 
     live @ others
 
-  let live (posts : SeriesPost list) =
-    posts
-    |> List.filter (fun post ->
-      match post.Reference with
-      | LivePost _ -> true
-      | DraftPost
-      | PendingEditOnly -> false)
+  let tryRecord (slug : Slug) (store : SeriesStore) =
+    store.Records |> List.tryFind (fun record -> record.Slug = Slug.value slug)
 
   let read (reads : SeriesReads) : DependencyResult<SeriesStore> =
     cancellableTaskResult {

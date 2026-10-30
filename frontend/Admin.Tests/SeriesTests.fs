@@ -110,7 +110,7 @@ let tests =
     }
 
     test "a save with no problem sends the fields, and its answer reloads the list and polls the deploy" {
-      let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.TitleTyped " Notes, again "; Series.SlugTyped "notes-again" ]
+      let model, _ = listed () |> sendAll [ Series.Opened "empty"; Series.TitleTyped " Empty, again "; Series.SlugTyped "empty-again" ]
       let model, effect = model |> send Series.SaveClicked
 
       Expect.equal
@@ -118,38 +118,54 @@ let tests =
         (Some(
           Shell.Send
             [ Shell.SaveSeries
-                { Slug = "notes"
-                  ETag = Some "\"notes-1\""
+                { Slug = "empty"
+                  ETag = Some "\"empty-1\""
                   Fields =
-                    { Slug = "notes-again"
-                      Title = "Notes, again"
-                      Excerpt = "Posts about Notes"
+                    { Slug = "empty-again"
+                      Title = "Empty, again"
+                      Excerpt = "Posts about Empty"
                       Image = None } } ]
         ))
         "The save"
 
-      let saved: Api.SavedSeries = { Slug = "notes-again"; ETag = "\"notes-2\""; Warnings = [] }
+      let saved: Api.SavedSeries = { Slug = "empty-again"; ETag = "\"empty-2\""; Warnings = [] }
       let model, effect = model |> send (Series.SaveAnswered(Ok saved))
 
       Expect.isNone model.Series.Form "The form closes"
       Expect.equal effect (Some(Shell.Send [ Shell.LoadSeries; Shell.PollSiteDeploy model.SiteDeploy.Generation ])) "Reload and poll"
-      Expect.equal (Series.noticeText model.Series.Notice) (Some "The series 'notes-again' is saved, and the site rebuilds.") "The notice"
+      Expect.equal (Series.noticeText model.Series.Notice) (Some "The series 'empty-again' is saved, and the site rebuilds.") "The notice"
     }
 
-    test "the slug is locked while a published or an upcoming post is in the series" {
+    test "the slug is locked while a published post, a draft, or a pending edit refers to the series" {
       let model, _ = listed () |> sendAll [ Series.Opened "fable"; Series.SlugTyped "other" ]
       Expect.isTrue (Series.slugLocked (form model)) "Locked"
       Expect.equal (form model).Slug "fable" "The slug stays"
 
       let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.SlugTyped "other" ]
-      Expect.isFalse (Series.slugLocked (form model)) "A draft does not lock the slug"
+      Expect.isTrue (Series.slugLocked (form model)) "A draft locks the slug"
+      Expect.equal (form model).Slug "notes" "The slug stays"
+
+      let model, _ = listed () |> sendAll [ Series.Opened "empty"; Series.SlugTyped "other" ]
+      Expect.isFalse (Series.slugLocked (form model)) "No post, no lock"
       Expect.equal (form model).Slug "other" "The slug changes"
     }
 
     test "a series with a post cannot be deleted, and the form gives the reason" {
       let model, _ = listed () |> send (Series.Opened "notes")
       Expect.isFalse (Series.canDelete (form model)) "No delete"
-      Expect.isSome (Series.deleteReason (form model)) "The reason"
+
+      Expect.equal
+        (Series.deleteReason (form model))
+        (Some "The series has 1 draft. Remove the series from each post first, and then delete the series.")
+        "The reason"
+
+      let model, _ = listed () |> send (Series.Opened "fable")
+
+      Expect.equal
+        (Series.deleteReason (form model))
+        (Some
+          "The series has 1 published post, 1 upcoming post, 2 drafts and 1 pending edit. Remove the series from each post first, and then delete the series.")
+        "Each kind of post, with its count"
 
       let model, _ = Shell.update (Shell.Opened Shell.DeleteSeriesDialog) model
       Expect.isNone (Shell.deleteSeriesChosen model) "The dialog does not confirm a delete"

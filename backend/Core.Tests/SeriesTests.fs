@@ -202,8 +202,18 @@ let saveTests =
       | other -> failtestf "Expected SlugLocked, got %A" other
     }
 
-    test "a slug change of a series with only a draft writes the new record and deletes the old one" {
+    test "a slug change of a series with only a draft is refused, and names the draft" {
       let fake = FakeStore([ "fable", record "Fable" ], [], [ "a-draft", postText "A draft" None (Some "fable") ])
+
+      match save fake { dto "fable" (Some "s1") with NewSlug = Some "fable-notes" } with
+      | Error(ActionError.Logic(SaveSeries.SlugLocked posts)) -> Expect.equal (slugs posts) [ "a-draft" ] "The draft"
+      | other -> failtestf "Expected SlugLocked, got %A" other
+
+      Expect.isEmpty fake.Log "No write and no dispatch"
+    }
+
+    test "a slug change of a series with no post writes the new record and deletes the old one" {
+      let fake = FakeStore([ "fable", record "Fable" ], [], [])
 
       match save fake { dto "fable" (Some "s1") with NewSlug = Some "fable-notes" } with
       | Ok(SaveSeries.SeriesSaved saved) ->

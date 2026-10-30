@@ -110,16 +110,9 @@ let orderedPosts (series: Api.SeriesRecord) =
   |> List.sortBy (fun post ->
     stateOrder post, post.PublishDate |> Option.defaultValue "", post.Title.ToLowerInvariant(), post.Slug)
 
-/// The site has a page for the series at its slug while a published or an upcoming post is in the series.
-let isLive (post: Api.SeriesPost) =
-  match post.State with
-  | Api.SeriesPostState.Published
-  | Api.SeriesPostState.Upcoming -> true
-  | Api.SeriesPostState.Draft
-  | Api.SeriesPostState.PendingEdit -> false
-
+/// The slug stays while a published post, a draft, or a pending edit refers to the series.
 let slugLocked (form: Form) =
-  form.Original |> Option.exists (fun series -> series.Posts |> List.exists isLive)
+  form.Original |> Option.exists (fun series -> not (List.isEmpty series.Posts))
 
 let private records (model: Model) =
   match model.Records with
@@ -310,15 +303,34 @@ let formTitle (form: Form) =
 
 let slugHint (form: Form) =
   if slugLocked form then
-    "The slug stays while a published post is in the series, so the series page keeps its address."
+    "The slug stays while a post refers to the series, so each post keeps its series."
   else
     "The address of the series page is /series/<slug>/."
 
+let private stateName (state: Api.SeriesPostState) =
+  match state with
+  | Api.SeriesPostState.Published -> "published post"
+  | Api.SeriesPostState.Upcoming -> "upcoming post"
+  | Api.SeriesPostState.Draft -> "draft"
+  | Api.SeriesPostState.PendingEdit -> "pending edit"
+
+let private andList (items: string list) =
+  match List.rev items with
+  | [] -> ""
+  | [ only ] -> only
+  | last :: rest -> $"""{String.concat ", " (List.rev rest)} and {last}"""
+
 let deleteReason (form: Form) =
-  match form.Original with
-  | Some series when not (List.isEmpty series.Posts) ->
-    Some "Posts refer to this series. Remove the series from each post first, and then delete the series."
-  | Some _
+  match form.Original |> Option.map _.Posts with
+  | Some [] -> None
+  | Some posts ->
+    let counts =
+      posts
+      |> List.countBy _.State
+      |> List.sortBy fst
+      |> List.map (fun (state, count) -> if count = 1 then $"1 {stateName state}" else $"{count} {stateName state}s")
+
+    Some $"The series has {andList counts}. Remove the series from each post first, and then delete the series."
   | None -> None
 
 let stateText (post: Api.SeriesPost) =

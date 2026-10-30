@@ -233,10 +233,7 @@ module PublishSteps =
         | Ok DeleteConditionFailed -> NewerTextKept
         | Ok Deleted -> () ]
 
-    let rebuildWarnings
-      (dispatched: Result<SiteDispatch, DependencyError>)
-      (tracked: Result<unit, DependencyError>)
-      : Warning list =
+    let dispatchWarnings (dispatched: Result<SiteDispatch, DependencyError>) : Warning list =
       [ match dispatched with
         | Error error -> SiteNotRebuilt error
         | Ok site ->
@@ -246,11 +243,16 @@ module PublishSteps =
 
           match site.Staging with
           | Error error -> StagingRebuildFailed error
-          | Ok _ -> ()
+          | Ok _ -> () ]
 
-        match tracked with
-        | Error error -> DeployNotTracked error
-        | Ok() -> () ]
+    let rebuildWarnings
+      (dispatched: Result<SiteDispatch, DependencyError>)
+      (tracked: Result<unit, DependencyError>)
+      : Warning list =
+      dispatchWarnings dispatched
+      @ [ match tracked with
+          | Error error -> DeployNotTracked error
+          | Ok() -> () ]
 
   let row (slug: Slug) (publishDate: DateTime) (text: string) : Result<PostRow, string list> =
     NonEmptyString.create (Some "Title") (TwoPoint.Site.Render.PostText.split text).Title

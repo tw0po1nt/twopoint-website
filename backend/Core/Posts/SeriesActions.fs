@@ -38,8 +38,8 @@ module SaveSeries =
     | SeriesNotFound of Slug
     | SeriesChanged
     | SlugTaken of Slug
-    /// The site has a page for the series at its slug while a live post is in the series.
-    | SlugLocked of live: SeriesPost list
+    /// The slug stays while a published post, a draft, or a pending edit refers to the series.
+    | SlugLocked of posts: SeriesPost list
 
   type Warning =
     | Rebuild of PublishSteps.Warning
@@ -114,20 +114,17 @@ module SaveSeries =
       (ifMatch: string option)
       (target: Slug)
       : Decision<Plan, Error> =
-      let record (slug: Slug) =
-        store.Records |> List.tryFind (fun record -> record.Slug = Slug.value slug)
-
-      match ifMatch, record slug with
-      | None, _ when (record target).IsSome -> Decision.failure (SlugTaken target)
+      match ifMatch, SeriesPosts.tryRecord slug store with
+      | None, _ when (SeriesPosts.tryRecord target store).IsSome -> Decision.failure (SlugTaken target)
       | None, _ -> Decision.success (Create target)
       | Some _, None -> Decision.failure (SeriesNotFound slug)
       | Some eTag, Some stored when stored.ETag <> eTag -> Decision.failure SeriesChanged
       | Some eTag, Some _ when target = slug -> Decision.success (Update(slug, eTag))
-      | Some _, Some _ when (record target).IsSome -> Decision.failure (SlugTaken target)
+      | Some _, Some _ when (SeriesPosts.tryRecord target store).IsSome -> Decision.failure (SlugTaken target)
       | Some eTag, Some _ ->
-        match SeriesPosts.live (SeriesPosts.inSeries utcNow store.Published store.Working (Slug.value slug)) with
+        match SeriesPosts.inSeries utcNow store.Published store.Working slug with
         | [] -> Decision.success (Rename(slug, eTag, target))
-        | live -> Decision.failure (SlugLocked live)
+        | posts -> Decision.failure (SlugLocked posts)
 
     let renameWarnings (deleted: Result<DeleteOutcome, DependencyError>) : Warning list =
       match deleted with
@@ -184,7 +181,7 @@ module SaveSeries =
           { Slug = target
             ETag = eTag
             Production = SiteDispatch.production dispatched
-            Warnings = renamed @ (PublishSteps.Logic.rebuildWarnings dispatched (Ok()) |> List.map Rebuild) }
+            Warnings = renamed @ (PublishSteps.Logic.dispatchWarnings dispatched |> List.map Rebuild) }
     }
 
 // ====================================================================================================================
@@ -212,13 +209,12 @@ module DeleteSeries =
   [<RequireQualifiedAccess>]
   module Logic =
 
-    /// The site shows a series only while a live post is in it, and a deleted series has no post, so the site stays.
     let decide (utcNow: DateTime) (store: SeriesStore) (slug: Slug) (ifMatch: string) : Decision<unit, Error> =
-      match store.Records |> List.tryFind (fun record -> record.Slug = Slug.value slug) with
+      match SeriesPosts.tryRecord slug store with
       | None -> Decision.failure (SeriesNotFound slug)
       | Some record when record.ETag <> ifMatch -> Decision.failure SeriesChanged
       | Some _ ->
-        match SeriesPosts.inSeries utcNow store.Published store.Working (Slug.value slug) with
+        match SeriesPosts.inSeries utcNow store.Published store.Working slug with
         | [] -> Decision.success ()
         | posts -> Decision.failure (SeriesInUse posts)
 

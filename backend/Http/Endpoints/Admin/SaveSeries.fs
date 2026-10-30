@@ -63,8 +63,8 @@ module SaveSeriesMapping =
     | SaveSeries.SeriesNotFound slug -> $"Series '{slug}' not found", HttpStatusCode.NotFound
     | SaveSeries.SeriesChanged -> "The series changed since you opened it", HttpStatusCode.PreconditionFailed
     | SaveSeries.SlugTaken slug -> $"Another series has the slug '{slug}'.", HttpStatusCode.Conflict
-    | SaveSeries.SlugLocked live ->
-      $"The slug stays while a published post is in the series: {SeriesMapping.titles live}.", HttpStatusCode.Conflict
+    | SaveSeries.SlugLocked posts ->
+      $"The slug stays while a post refers to the series: {SeriesMapping.titles posts}.", HttpStatusCode.Conflict
 
 type SaveSeries(
   config : Config,

@@ -228,7 +228,7 @@ module GetSeries =
               Excerpt = series.Excerpt
               Image = series.Image
               ETag = record.ETag
-              Posts = SeriesPosts.inSeries utcNow store.Published store.Working series.Slug }
+              Posts = SeriesPosts.inSeries utcNow store.Published store.Working slug }
         | _ -> None)
       |> List.sortBy (fun series -> series.Title.ToLowerInvariant(), Slug.value series.Slug)
 

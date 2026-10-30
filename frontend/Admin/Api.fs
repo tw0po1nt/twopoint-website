@@ -66,7 +66,7 @@ type SeriesPost =
     State: SeriesPostState
     PublishDate: string option }
 
-/// `ETag` is the ETag of the record. `Image` is the https URL of the image.
+/// `Image` is the https URL of the image.
 type SeriesRecord =
   { Slug: string
     Title: string
