@@ -211,27 +211,31 @@ module GetSeries =
 
   type Query = unit -> CancellableTask<QueryResult<SeriesListing list>>
 
-  type Dependencies =
-    abstract member GetSeriesRecords: unit -> DependencyResult<StoredSeries list>
+  type Dependencies = SeriesReads
 
   [<RequireQualifiedAccess>]
   module Logic =
 
-    let listing (records : StoredSeries list) : SeriesListing list =
-      StoredSeries.parse records
-      |> List.choose (fun series ->
-        Slug.create series.Slug
-        |> Result.toOption
-        |> Option.map (fun slug -> { Slug = slug; Title = series.Title }))
+    /// A record that the parser cannot read is not in the list.
+    let listing (utcNow : DateTime) (store : SeriesStore) : SeriesListing list =
+      store.Records
+      |> List.choose (fun record ->
+        match StoredSeries.parseOne record, Slug.create record.Slug with
+        | Some series, Ok slug ->
+          Some
+            { Slug = slug
+              Title = series.Title
+              Excerpt = series.Excerpt
+              Image = series.Image
+              ETag = record.ETag
+              Posts = SeriesPosts.inSeries utcNow store.Published store.Working series.Slug }
+        | _ -> None)
       |> List.sortBy (fun series -> series.Title.ToLowerInvariant(), Slug.value series.Slug)
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun () -> cancellableTaskResult {
-      let! records =
-        dependencies.GetSeriesRecords()
-        |> CancellableTaskResult.mapError QueryError.Dependency
-
-      return Logic.listing records
+      let! store = SeriesPosts.read dependencies |> CancellableTaskResult.mapError QueryError.Dependency
+      return Logic.listing (dependencies.GetUtcNow()) store
     }
 
 // ====================================================================================================================

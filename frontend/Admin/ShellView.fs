@@ -55,6 +55,10 @@ let private fail (call: Shell.Call) =
   | Shell.LoadRevisions slug -> Shell.Editor(Editor.RevisionsAnswered(slug, Error Api.Unanswered))
   | Shell.RestoreRevision request -> Shell.Editor(Editor.RestoreAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
+  | Shell.LoadSeries -> Shell.Series(Series.Answered(Error Api.Unanswered))
+  | Shell.SaveSeries _ -> Shell.Series(Series.SaveAnswered(Error Api.Unanswered))
+  | Shell.DeleteSeries(slug, _) -> Shell.Series(Series.DeleteAnswered(slug, Error Api.Unanswered))
+  | Shell.UploadSeriesImage _ -> Shell.Series(Series.ImageUploaded(Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
@@ -215,6 +219,15 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))
+  | Shell.LoadSeries -> Api.getSeriesRecords (Config.api ()) token |> Promise.map (Series.Answered >> Shell.Series)
+  | Shell.SaveSeries request ->
+    Api.saveSeries (Config.api ()) token request.Slug request.ETag request.Fields
+    |> Promise.map (Series.SaveAnswered >> Shell.Series)
+  | Shell.DeleteSeries(slug, eTag) ->
+    Api.deleteSeries (Config.api ()) token slug eTag
+    |> Promise.map (fun result -> Shell.Series(Series.DeleteAnswered(slug, result)))
+  | Shell.UploadSeriesImage file ->
+    Api.uploadAsset (Config.api ()) token file |> Promise.map (Series.ImageUploaded >> Shell.Series)
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()
@@ -458,28 +471,8 @@ let private runAlert (tone: Parts.Tone) (title: string) (text: string) (run: Api
     )
 
 [<SolidComponent>]
-let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) (siteDeploy: SiteDeploy.Model) =
-  div (class' = "card card-body rebuild") {
-    div (class' = "rebuild-row") {
-      div (class' = "grow") {
-        h3 () {
-          "Site "
-
-          For(each = Array.ofList (Option.toList (SiteDeploy.state siteDeploy))) {
-            yield fun state _ -> Parts.badge (deployTone state) (Deploy.badgeText state)
-          }
-        }
-
-        p (class' = "muted small rebuild-text", ariaLive = "polite") { Rebuild.text model }
-      }
-
-      Parts
-        .Button(disabled = Rebuild.isSending model, onClick = fun _ -> dispatch (Shell.Rebuild Rebuild.Clicked))
-        .Has(Fragment() { "Rebuild site" })
-    }
-
-    Show(when' = Rebuild.failed model) { Parts.Alert(tone = Parts.Bad).Has(p () { Rebuild.reason model }) }
-
+let private deployAlerts (siteDeploy: SiteDeploy.Model) =
+  Fragment() {
     For(each = Array.ofList (Option.toList (SiteDeploy.productionFailure siteDeploy))) {
       yield fun run _ -> runAlert Parts.Bad (SiteDeploy.productionFailureTitle run) SiteDeploy.productionFailureText run
     }
@@ -497,6 +490,35 @@ let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) (siteDe
         .Alert(tone = Parts.Bad, title = "The deploy state did not load.")
         .Has(p () { SiteDeploy.reason siteDeploy |> Option.defaultValue "" })
     }
+  }
+
+[<SolidComponent>]
+let private siteBadge (siteDeploy: SiteDeploy.Model) =
+  For(each = Array.ofList (Option.toList (SiteDeploy.state siteDeploy))) {
+    yield fun state _ -> Parts.badge (deployTone state) (Deploy.badgeText state)
+  }
+
+[<SolidComponent>]
+let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) (siteDeploy: SiteDeploy.Model) =
+  div (class' = "card card-body rebuild") {
+    div (class' = "rebuild-row") {
+      div (class' = "grow") {
+        h3 () {
+          "Site "
+          siteBadge siteDeploy
+        }
+
+        p (class' = "muted small rebuild-text", ariaLive = "polite") { Rebuild.text model }
+      }
+
+      Parts
+        .Button(disabled = Rebuild.isSending model, onClick = fun _ -> dispatch (Shell.Rebuild Rebuild.Clicked))
+        .Has(Fragment() { "Rebuild site" })
+    }
+
+    Show(when' = Rebuild.failed model) { Parts.Alert(tone = Parts.Bad).Has(p () { Rebuild.reason model }) }
+
+    deployAlerts siteDeploy
   }
 
 let private statusTone (status: Api.CommenterStatus) =
@@ -1060,6 +1082,262 @@ let private subscriptionSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shel
       Parts.sheetBody (subscriptionDetails dispatch (model ()).Subscriptions)
     })
 
+let private seriesPostTone (post: Api.SeriesPost) =
+  match post.State with
+  | Api.SeriesPostState.Published -> Parts.Good
+  | Api.SeriesPostState.Upcoming -> Parts.Info
+  | Api.SeriesPostState.Draft -> Parts.Plain
+  | Api.SeriesPostState.PendingEdit -> Parts.Warn
+
+[<SolidComponent>]
+let private seriesPostRow (dispatch: Shell.Msg -> unit) (post: Api.SeriesPost) =
+  li (class' = "series-post") {
+    routeLink (Shell.Router >> dispatch) (Post post.Slug) post.Title
+    " "
+    Parts.badge (seriesPostTone post) (Series.postText post)
+  }
+
+[<SolidComponent>]
+let private seriesPosts (dispatch: Shell.Msg -> unit) (series: Api.SeriesRecord) =
+  match Series.orderedPosts series with
+  | [] -> Fragment() { p (class' = "muted small") { "No post is in the series." } }
+  | posts ->
+    Fragment() {
+      ol (class' = "series-posts") { For(each = Array.ofList posts) { yield fun post _ -> seriesPostRow dispatch post } }
+    }
+
+[<SolidComponent>]
+let private seriesRow (dispatch: Shell.Msg -> unit) (series: Api.SeriesRecord) =
+  article (id = $"series-{series.Slug}", class' = "card card-body queue-row") {
+    div (class' = "row-top") {
+      div (class' = "grow") {
+        p (class' = "strong") { series.Title }
+        p (class' = "muted small mono") { $"/series/{series.Slug}/" }
+      }
+
+      Parts
+        .Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Series(Series.Opened series.Slug)))
+        .Has(Fragment() { "Edit" })
+    }
+
+    p (class' = "small") { series.Excerpt }
+    seriesPosts dispatch series
+  }
+
+[<SolidComponent>]
+let private seriesList (dispatch: Shell.Msg -> unit) (model: Series.Model) =
+  match model.Records with
+  | Series.Waiting ->
+    Fragment() {
+      div (class' = "card card-body", ariaBusy = true) {
+        Parts.skeleton "40%"
+        Parts.skeleton "80%"
+      }
+    }
+  | Series.Loaded [] ->
+    Fragment() { Parts.emptyState Icon.Inbox Series.emptyText (p () { "Select New series to make one." }) }
+  | Series.Loaded records ->
+    Fragment() {
+      div (class' = "queue") { For(each = Array.ofList records) { yield fun series _ -> seriesRow dispatch series } }
+    }
+  | Series.NotLoaded reason ->
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The series did not load.").Has(p () { reason }) }
+
+[<SolidComponent>]
+let private seriesPage (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
+  Fragment() {
+    div (class' = "filter-bar toolbar") {
+      span (class' = "grow") {
+        "Site "
+        siteBadge model.SiteDeploy
+      }
+
+      Parts
+        .Button(kind = Parts.Primary, size = Parts.Small, onClick = fun _ -> dispatch (Shell.Series Series.NewClicked))
+        .Has(Fragment() { "New series" })
+    }
+
+    For(each = Array.ofList (Option.toList (Series.noticeText model.Series.Notice))) {
+      yield fun text _ -> Parts.Alert(tone = Parts.Good).Has(p (role = "status") { text })
+    }
+
+    deployAlerts model.SiteDeploy
+    seriesList dispatch model.Series
+  }
+
+let private pickImage (onPicked: File -> unit) =
+  let input = document.createElement "input" :?> HTMLInputElement
+  input.``type`` <- "file"
+  input.accept <- "image/jpeg,image/png,image/webp,image/gif"
+
+  input.addEventListener (
+    "change",
+    fun _ ->
+      if input.files.length > 0 then
+        onPicked input.files[0]
+  )
+
+  input.click ()
+
+let private inputText (event: Event) = (event.target :?> HTMLInputElement).value
+
+[<SolidComponent>]
+let private seriesError (text: unit -> string) =
+  Show(when' = (text () <> "")) { p (class' = "err", role = "alert") { text () } }
+
+[<SolidComponent>]
+let private seriesForm (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  // A read of the model in the body of a component would build the form again at each change, and an input would lose its focus.
+  let send msg = dispatch (Shell.Series msg)
+  let page () = (model ()).Series
+  let read (get: Series.Form -> 'T) (fallback: 'T) () = (page ()).Form |> Option.map get |> Option.defaultValue fallback
+  let problem field () = Series.fieldProblem (page ()) field |> Option.defaultValue ""
+
+  Fragment() {
+    Parts
+      .Field(id = "series-title", label = "Title")
+      .Has(
+        Fragment() {
+          Parts
+            .Input(id = "series-title", value = read _.Title "", onInput = fun event -> send (Series.TitleTyped(inputText event)))
+            .View()
+
+          seriesError (problem Series.TitleField)
+        }
+      )
+
+    Parts
+      .Field(id = "series-slug", label = "Slug")
+      .Has(
+        Fragment() {
+          Parts
+            .Input(
+              id = "series-slug",
+              value = read _.Slug "",
+              disabledWhen = read Series.slugLocked false,
+              onInput = fun event -> send (Series.SlugTyped(inputText event))
+            )
+            .View()
+
+          p (class' = "hint") { read Series.slugHint "" () }
+          seriesError (problem Series.SlugField)
+        }
+      )
+
+    Parts
+      .Field(id = "series-excerpt", label = "Excerpt")
+      .Has(
+        Fragment() {
+          Parts
+            .Textarea(id = "series-excerpt", value = read _.Excerpt "", onInput = fun event -> send (Series.ExcerptTyped(inputText event)))
+            .View()
+
+          seriesError (problem Series.ExcerptField)
+        }
+      )
+
+    Parts
+      .Field(id = "series-image", label = "Image")
+      .Has(
+        Fragment() {
+          div (class' = "row") {
+            Parts
+              .Input(
+                id = "series-image",
+                kind = "url",
+                value = read _.Image "",
+                disabledWhen = read Series.isUploading false,
+                onInput = fun event -> send (Series.ImageTyped(inputText event))
+              )
+              .View()
+
+            button (
+              type' = "button",
+              class' = Parts.buttonClass Parts.Secondary Parts.Medium,
+              disabled = read Series.isUploading false (),
+              onClick = fun _ -> pickImage (Series.ImagePicked >> send)
+            ) {
+              if read Series.isUploading false () then "Uploading…" else "Upload"
+            }
+          }
+
+          p (class' = "hint") { "The https URL of the image, or upload an image." }
+          seriesError (problem Series.ImageField)
+          seriesError (fun () -> read Series.uploadFailure None () |> Option.defaultValue "")
+        }
+      )
+
+    Show(when' = (read Series.failure None ()).IsSome) {
+      Parts.Alert(tone = Parts.Bad).Has(p () { read Series.failure None () |> Option.defaultValue "" })
+    }
+
+    For(each = Array.ofList (read _.Original None () |> Option.toList)) {
+      yield
+        fun series _ ->
+          div (class' = "field") {
+            h3 () { "Posts" }
+            seriesPosts dispatch series
+
+            Show(when' = (read Series.deleteReason None ()).IsSome) {
+              p (class' = "hint") { read Series.deleteReason None () |> Option.defaultValue "" }
+            }
+          }
+    }
+  }
+
+[<SolidComponent>]
+let private seriesSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Series Series.Closed)
+  let form () = (model ()).Series.Form
+
+  Parts.sheet
+    "series-sheet"
+    (fun () -> (form ()).IsSome)
+    close
+    "Series"
+    (Fragment() {
+      Parts.sheetHead (form () |> Option.map Series.formTitle |> Option.defaultValue "Series") close
+      Parts.sheetBody (seriesForm dispatch model)
+
+      Parts.sheetFoot (
+        Fragment() {
+          Show(when' = (form () |> Option.bind _.Original).IsSome) {
+            Parts
+              .Button(
+                kind = Parts.Ghost,
+                disabled = not (form () |> Option.exists Series.canDelete),
+                onClick = fun _ -> dispatch (Shell.Opened Shell.DeleteSeriesDialog)
+              )
+              .Has(Fragment() { "Delete" })
+          }
+
+          Parts
+            .Button(
+              kind = Parts.Primary,
+              disabled = (form () |> Option.exists (fun form -> Series.isSaving form || Series.isUploading form)),
+              onClick = fun _ -> dispatch (Shell.Series Series.SaveClicked)
+            )
+            .Has(Fragment() { "Save" })
+        }
+      )
+    })
+
+[<SolidComponent>]
+let private deleteSeriesDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let close () = dispatch (Shell.Closed Shell.DeleteSeriesDialog)
+  let confirm () = Shell.deleteSeriesChosen (model ()) |> Option.iter dispatch
+
+  Parts.modalDialog
+    "delete-series"
+    (fun () -> (Shell.deleteSeriesChosen (model ())).IsSome)
+    close
+    "Delete the series?"
+    (p () { "The series record goes away permanently. No post is in the series, so the site does not change." })
+    (Fragment() {
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Keep" })
+      Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
+    })
+
 [<SolidComponent>]
 let private deviceRow (dispatch: Shell.Msg -> unit) (removing: string list) (device: Api.Device) =
   article (id = device.Id, class' = "card card-body queue-row device-row") {
@@ -1179,10 +1457,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   | Subscriptions -> Fragment() { subscriptionList dispatch model.Subscriptions }
   // The editor has its own page.
   | Post _ -> Fragment() { "" }
-  | Series as route ->
-    Fragment() {
-      Parts.emptyState (Icon.ofRoute route) "This page is empty." (p () { "Its content comes in a later version." })
-    }
+  | Series -> Fragment() { seriesPage dispatch model }
 
 [<SolidComponent>]
 let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
@@ -1191,6 +1466,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     | Some(Shell.DeleteDialog _ as overlay) -> dispatch (Shell.Closed overlay)
     | Some Shell.DeleteCommenterDialog
     | Some Shell.DeleteSubscriptionDialog
+    | Some Shell.DeleteSeriesDialog
     | Some Shell.MoreSheet
     | Some Shell.SignOutDialog
     | None -> ()
@@ -1428,4 +1704,6 @@ let view (signIn: SignIn) (push: Push) =
     deleteCommenterDialog dispatch model
     deleteSubscriptionDialog dispatch model
     subscriptionSheet dispatch model
+    seriesSheet dispatch model
+    deleteSeriesDialog dispatch model
   }

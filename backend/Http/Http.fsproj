@@ -34,6 +34,7 @@
     <Compile Include="Endpoints\Admin\Revisions.fs" />
     <Compile Include="Endpoints\Admin\GetTerms.fs" />
     <Compile Include="Endpoints\Admin\GetSeries.fs" />
+    <Compile Include="Endpoints\Admin\SaveSeries.fs" />
     <Compile Include="Endpoints\Admin\PreviewPost.fs" />
     <Compile Include="Endpoints\Admin\UploadAsset.fs" />
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />

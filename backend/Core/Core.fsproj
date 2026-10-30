@@ -26,6 +26,7 @@
     <Compile Include="Posts\PostTypes.fs" />
     <Compile Include="Deploys\DeployTypes.fs" />
     <Compile Include="Deploys\DeployRule.fs" />
+    <Compile Include="Posts\SeriesTypes.fs" />
     <Compile Include="Posts\PostCheck.fs" />
     <Compile Include="Posts\Newsletter.fs" />
     <Compile Include="Posts\PostActions.fs" />
@@ -44,6 +45,7 @@
     <Compile Include="Posts\PostChanges.fs" />
     <Compile Include="Posts\PostUpcoming.fs" />
     <Compile Include="Posts\PostDelete.fs" />
+    <Compile Include="Posts\SeriesActions.fs" />
   </ItemGroup>
 
   <ItemGroup>

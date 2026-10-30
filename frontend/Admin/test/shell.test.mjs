@@ -125,6 +125,8 @@ test('a change of page calls the API only for a page with a list of its own', ()
       `${config.api}/api/internal/subscriptions`,
       `${config.api}/api/internal/notifications/devices`,
       `${config.api}/api/internal/deploys`,
+      `${config.api}/api/internal/series`,
+      `${config.api}/api/internal/deploys`,
     ],
   );
 });

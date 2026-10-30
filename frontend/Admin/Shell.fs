@@ -45,6 +45,10 @@ type Call =
   | LoadRevisions of slug: string
   | RestoreRevision of Editor.RestoreRequest
   | UploadAsset of id: int * file: Browser.Types.File
+  | LoadSeries
+  | SaveSeries of Series.SaveRequest
+  | DeleteSeries of slug: string * eTag: string
+  | UploadSeriesImage of file: Browser.Types.File
 
 /// A sheet or a dialog over the page. One at a time is open.
 type Overlay =
@@ -53,6 +57,7 @@ type Overlay =
   | DeleteDialog of commentId: string
   | DeleteCommenterDialog
   | DeleteSubscriptionDialog
+  | DeleteSeriesDialog
 
 type Model =
   { Router: Router.Model
@@ -68,6 +73,7 @@ type Model =
     Commenters: Commenters.Model
     Commenter: Commenter.Model option
     Subscriptions: Subscriptions.Model
+    Series: Series.Model
     Notifications: Notifications.Model
     /// Counts each opened editor page. A deploy timer names the page that started it.
     Pages: int
@@ -87,6 +93,7 @@ type Msg =
   | Commenters of Commenters.Msg
   | Commenter of Commenter.Msg
   | Subscriptions of Subscriptions.Msg
+  | Series of Series.Msg
   | Notifications of Notifications.Msg
   | NewCommentAnnounced
   | OpenRequested of target: string
@@ -133,8 +140,12 @@ let private enter (route: Route) (model: Model) =
     { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
   | Route.Settings -> { left with Notifications = Notifications.reload model.Notifications }, [ LoadDevices ]
   | Route.Dashboard -> { left with SiteDeploy = SiteDeploy.reload model.SiteDeploy }, [ LoadSiteDeploy ]
+  | Route.Series ->
+    { left with
+        Series = Series.reload model.Series
+        SiteDeploy = SiteDeploy.reload model.SiteDeploy },
+    [ LoadSeries; LoadSiteDeploy ]
   | Route.ModerationQueue
-  | Route.Series
   | Route.NotFound _ -> left, []
 
 let init (path: string) : Model * Effect option =
@@ -154,6 +165,7 @@ let init (path: string) : Model * Effect option =
     Commenters = Commenters.init
     Commenter = None
     Subscriptions = Subscriptions.init
+    Series = Series.init
     Notifications = Notifications.init
     Pages = 0
     Overlay = None }
@@ -287,7 +299,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       let siteDeploy = SiteDeploy.restart model.SiteDeploy
       { next with SiteDeploy = siteDeploy }, Some(Send [ PollSiteDeploy siteDeploy.Generation ])
     | _ -> next, effect |> Option.map (fun Rebuild.Dispatch -> Send [ RebuildSite ])
-  | SiteDeploy(SiteDeploy.PollElapsed _) when model.Router.Route <> Route.Dashboard -> model, None
+  | SiteDeploy(SiteDeploy.PollElapsed _) when model.Router.Route <> Route.Dashboard && model.Router.Route <> Route.Series ->
+    model, None
   | SiteDeploy msg ->
     let siteDeploy, effect = SiteDeploy.update msg model.SiteDeploy
     let next = { model with SiteDeploy = siteDeploy }
@@ -506,6 +519,35 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         | Subscriptions.LoadDeliveries subscriptionId -> Send [ LoadSubscriptionDeliveries subscriptionId ]
         | Subscriptions.CancelSubscription subscriptionId -> Send [ CancelSubscription subscriptionId ]
         | Subscriptions.DeleteSubscription subscriptionId -> Send [ DeleteSubscription subscriptionId ])
+  | Series(Series.DeleteChosen) when model.Overlay <> Some DeleteSeriesDialog -> model, None
+  | Series msg ->
+    let series, effect = Series.update msg model.Series
+
+    let next =
+      { model with
+          Series = series
+          Overlay =
+            match msg with
+            | Series.DeleteChosen -> None
+            | _ -> model.Overlay }
+
+    match msg with
+    | Series.Answered(Error Api.Refused)
+    | Series.ImageUploaded(Error Api.Refused)
+    | Series.SaveAnswered(Error Api.Refused)
+    | Series.DeleteAnswered(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Series.SaveAnswered(Ok _) ->
+      let siteDeploy = SiteDeploy.restart model.SiteDeploy
+      { next with SiteDeploy = siteDeploy }, Some(Send [ LoadSeries; PollSiteDeploy siteDeploy.Generation ])
+    | _ ->
+      next,
+      effect
+      |> Option.map (fun effect ->
+        match effect with
+        | Series.Load -> Send [ LoadSeries ]
+        | Series.UploadImage file -> Send [ UploadSeriesImage file ]
+        | Series.SaveSeries request -> Send [ SaveSeries request ]
+        | Series.DeleteSeries(slug, eTag) -> Send [ DeleteSeries(slug, eTag) ])
   | Notifications msg ->
     let notifications, effect = Notifications.update msg model.Notifications
     let next = { model with Notifications = notifications }
@@ -549,6 +591,7 @@ let deleteChosen (model: Model) =
   | Some(DeleteDialog _), _
   | Some DeleteCommenterDialog, _
   | Some DeleteSubscriptionDialog, _
+  | Some DeleteSeriesDialog, _
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
@@ -562,6 +605,7 @@ let deleteCommenterChosen (model: Model) =
   | Some DeleteCommenterDialog, _
   | Some(DeleteDialog _), _
   | Some DeleteSubscriptionDialog, _
+  | Some DeleteSeriesDialog, _
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
@@ -571,6 +615,18 @@ let deleteSubscriptionChosen (model: Model) =
   | Some DeleteSubscriptionDialog, Route.Subscriptions, Some sheet ->
     Subscriptions.tryOpened model.Subscriptions
     |> Option.map (fun _ -> Subscriptions(Subscriptions.Chosen(sheet.Id, Subscriptions.Delete)))
+  | Some DeleteSubscriptionDialog, _, _
+  | Some DeleteSeriesDialog, _, _
+  | Some DeleteCommenterDialog, _, _
+  | Some(DeleteDialog _), _, _
+  | Some MoreSheet, _, _
+  | Some SignOutDialog, _, _
+  | None, _, _ -> None
+
+let deleteSeriesChosen (model: Model) =
+  match model.Overlay, model.Router.Route, model.Series.Form with
+  | Some DeleteSeriesDialog, Route.Series, Some form when Series.canDelete form -> Some(Series Series.DeleteChosen)
+  | Some DeleteSeriesDialog, _, _
   | Some DeleteSubscriptionDialog, _, _
   | Some DeleteCommenterDialog, _, _
   | Some(DeleteDialog _), _, _
