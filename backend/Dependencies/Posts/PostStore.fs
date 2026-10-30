@@ -208,6 +208,54 @@ type PostStore(service : BlobServiceClient, logger : ILogger, texts : BlobTextCa
         ()
     }
 
+  /// A blob whose name is not a revision name is not in the list.
+  member _.GetRevisionBlobs (slug : Slug) : DependencyResult<StoredRevision list> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.GetRevisionBlobs({slug})"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let revisions = service.GetBlobContainerClient "revisions"
+      let prefix = $"{Slug.value slug}/"
+
+      try
+        let! blobs = revisions.GetBlobsAsync(BlobTraits.None, BlobStates.None, prefix, ct) |> TaskSeq.toListAsync
+
+        let named =
+          blobs
+          |> List.filter (fun blob -> blob.Name.EndsWith extension)
+          |> List.choose (fun blob ->
+            match RevisionName.create (blob.Name.Substring(prefix.Length, blob.Name.Length - prefix.Length - extension.Length)) with
+            | Ok name -> Some(blob, name)
+            | Error reason ->
+              logger.LogWarning("The blob '{blobName}' in 'revisions' is not a revision: {reason}", blob.Name, reason)
+              None)
+
+        let! texts =
+          named
+          |> List.map (fun (blob, _) ->
+            task {
+              let! content = revisions.GetBlobClient(blob.Name).DownloadContentAsync(ct)
+              return content.Value.Content.ToString()
+            })
+          |> Task.WhenAll
+
+        return List.map2 (fun (_, name) text -> { Name = name; Text = text }) named (List.ofArray texts)
+      with :? RequestFailedException as error when error.ErrorCode = "ContainerNotFound" ->
+        return []
+    }
+
+  member _.GetRevisionBlob (slug : Slug) (name : RevisionName) : DependencyResult<string option> =
+    runDependencyWithLogging Dependency.BlobStorage logger $"{nameof PostStore}.GetRevisionBlob({slug}, {name})"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let blob = $"{Slug.value slug}/{RevisionName.value name}{extension}"
+
+      try
+        let! download = service.GetBlobContainerClient("revisions").GetBlobClient(blob).DownloadContentAsync(ct)
+        return Some(download.Value.Content.ToString())
+      with :? RequestFailedException as error when notFound error ->
+        return None
+    }
+
   member _.GetPublishedPosts () = read "published"
 
   member _.GetWorkingPosts () = read "working"

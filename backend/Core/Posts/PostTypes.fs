@@ -6,6 +6,7 @@ open TwoPoint.Core.Util
 open FsToolkit.ErrorHandling
 
 open System
+open System.Globalization
 
 type CommenterStatus =
   | New
@@ -244,6 +245,30 @@ type TermCount = { Slug : Slug; Title : string; Value : string; Posts : int }
 type TermSuggestions = { Categories : TermCount list; Tags : TermCount list }
 
 type SeriesListing = { Slug : Slug; Title : string }
+
+/// The blob `<slug>/<name>.md` in `revisions`. A migrated post has a name in the round-trip form of its publish date,
+/// such as `2024-01-15T00:00:00.0000000Z`, so the name keeps the blob text.
+type RevisionName =
+  private | RevisionName of name: string * publishedAt: DateTime
+
+  override this.ToString() =
+    let (RevisionName(name, _)) = this
+    name
+
+module RevisionName =
+
+  let create (name : string) : Result<RevisionName, string list> =
+    match DateTimeOffset.TryParse(name, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal) with
+    | true, time when Text.RegularExpressions.Regex.IsMatch(name, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?Z$") -> Ok(RevisionName(name, time.UtcDateTime))
+    | _ -> Error [ $"'{name}' is not a revision name. A revision name is an ISO 8601 UTC time" ]
+
+  let value (RevisionName(name, _)) = name
+
+  let publishedAt (RevisionName(_, publishedAt)) = publishedAt
+
+type StoredRevision = { Name : RevisionName; Text : string }
+
+type RevisionListing = { Name : RevisionName; PublishedAt : DateTime; Title : string option }
 
 /// `Text` is the pending edit when the post has one, and else the published text. `ETag` is the ETag of the working blob.
 type PostDocument =

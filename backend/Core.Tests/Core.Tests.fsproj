@@ -27,6 +27,7 @@
     <Compile Include="PostTermsTests.fs" />
     <Compile Include="PostPreviewTests.fs" />
     <Compile Include="PublishPostTests.fs" />
+    <Compile Include="RevisionTests.fs" />
     <Compile Include="PhotoMetadataTests.fs" />
     <Compile Include="UploadAssetTests.fs" />
     <Compile Include="Main.fs" />

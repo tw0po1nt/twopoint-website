@@ -235,6 +235,40 @@ module GetSeries =
     }
 
 // ====================================================================================================================
+// Get the revisions of a post
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetRevisions =
+
+  type Query = string -> CancellableTask<QueryResult<RevisionListing list>>
+
+  type Dependencies =
+    abstract member GetRevisionBlobs: slug: Slug -> DependencyResult<StoredRevision list>
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    let listing (revisions : StoredRevision list) : RevisionListing list =
+      revisions
+      |> List.map (fun revision ->
+        { Name = revision.Name
+          PublishedAt = RevisionName.publishedAt revision.Name
+          Title = (TwoPoint.Site.Render.Post.summary revision.Text).Title })
+      |> List.sortByDescending _.PublishedAt
+
+  let withDependencies (dependencies : Dependencies) : Query =
+    fun slug -> cancellableTaskResult {
+      let! slug = slug |> Slug.create |> Result.mapError QueryError.Validation
+
+      let! revisions =
+        dependencies.GetRevisionBlobs slug
+        |> CancellableTaskResult.mapError QueryError.Dependency
+
+      return Logic.listing revisions
+    }
+
+// ====================================================================================================================
 // Get post by slug
 // ====================================================================================================================
 
