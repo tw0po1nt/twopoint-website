@@ -2,21 +2,8 @@
 module TwoPoint.Admin.Details
 
 open System
-open System.Text.RegularExpressions
 
 let seriesCategory = "Series"
-
-/// The slug that the site gives to a category or a tag. It has the same rule as the build.
-let termSlug (text: string) =
-  let joined = Regex.Replace(text, "(\\S)['‘’‚‛′‵](\\S)", "$1$2").Replace("&", " and ")
-  let withoutMarks = Regex.Replace(joined.Normalize(Text.NormalizationForm.FormD), "[̀-ͯ]", "")
-  Regex.Replace(withoutMarks.ToLowerInvariant(), "[^a-z0-9_]+", "-").Trim '-'
-
-/// The title that the site shows for a category or a tag. For example, `FSharp` gives `F#`.
-let termTitle (text: string) =
-  Regex.Replace(Regex.Replace(text, "fsharp", "F#", RegexOptions.IgnoreCase), "csharp", "C#", RegexOptions.IgnoreCase)
-
-let isSlug (text: string) = Regex.IsMatch(text, "^[a-z0-9]+(-[a-z0-9]+)*$")
 
 type Choices =
   { Terms: Api.Terms
@@ -33,6 +20,11 @@ type SlugState =
   | Changing
   | ChangeFailed of reason: string
 
+type NewSeries =
+  | NoNewSeries
+  | Writing of SeriesForm.Form
+  | Made of Api.SavedSeries
+
 type Model =
   { Values: Api.PostDetails
     Open: bool
@@ -40,7 +32,8 @@ type Model =
     CategoryInput: string
     TagInput: string
     SlugInput: string
-    Slug: SlugState }
+    Slug: SlugState
+    NewSeries: NewSeries }
 
 type Msg =
   | Opened
@@ -55,11 +48,18 @@ type Msg =
   | TagRemoved of slug: string
   | SeriesChosen of slug: string
   | SeriesRemoved
+  | NewSeriesClicked
+  | NewSeriesClosed
+  | NewSeriesMsg of SeriesForm.Msg
+  | NewSeriesAnswered of Result<Api.SavedSeries, Api.Failure>
   | ImageChanged of string
   | ShowOnHomepageChanged of bool
   | SlugTyped of string
 
-type Effect = LoadOptions
+type Effect =
+  | LoadOptions
+  | UploadSeriesImage of Browser.Types.File
+  | SaveSeries of SeriesForm.SaveRequest
 
 let init (slug: string) (values: Api.PostDetails) =
   { Values = values
@@ -68,7 +68,8 @@ let init (slug: string) (values: Api.PostDetails) =
     CategoryInput = ""
     TagInput = ""
     SlugInput = slug
-    Slug = Idle }
+    Slug = Idle
+    NewSeries = NoNewSeries }
 
 let private known (model: Model) : Api.Terms =
   match model.Options with
@@ -77,9 +78,16 @@ let private known (model: Model) : Api.Terms =
   | Waiting
   | NotLoaded _ -> { Categories = []; Tags = [] }
 
+let otherSeries (model: Model) =
+  match model.Options with
+  | Ready choices -> choices.Series |> List.map _.Slug
+  | NotAsked
+  | Waiting
+  | NotLoaded _ -> []
+
 /// A text with no letter or digit gives `None`.
 let resolve (terms: Api.Term list) (typed: string) : string option =
-  match termSlug typed with
+  match Slug.term typed with
   | "" -> None
   | slug ->
     match terms |> List.tryFind (fun term -> term.Slug = slug) with
@@ -89,8 +97,8 @@ let resolve (terms: Api.Term list) (typed: string) : string option =
 let categoryLocked (values: Api.PostDetails) = values.Series.IsSome
 
 let suggestions (terms: Api.Term list) (typed: string) (chosen: string list) : Api.Term list =
-  let wanted = termSlug typed
-  let taken = chosen |> List.map termSlug
+  let wanted = Slug.term typed
+  let taken = chosen |> List.map Slug.term
 
   terms
   |> List.filter (fun term -> not (List.contains term.Slug taken) && (wanted = "" || term.Slug.Contains wanted))
@@ -98,6 +106,21 @@ let suggestions (terms: Api.Term list) (typed: string) (chosen: string list) : A
 
 let private blankAsNone (text: string) =
   if String.IsNullOrWhiteSpace text then None else Some(text.Trim())
+
+let private withSeries (slug: string) (model: Model) =
+  { model with
+      Values =
+        { model.Values with
+            Series = Some slug
+            Category = Some seriesCategory }
+      CategoryInput = "" }
+
+let private withListing (listing: Api.SeriesListing) (options: Options) =
+  match options with
+  | Ready choices -> Ready { choices with Series = choices.Series @ [ listing ] |> List.sortBy _.Slug }
+  | NotAsked
+  | Waiting
+  | NotLoaded _ -> options
 
 let private withCategory (title: string option) (model: Model) =
   { model with
@@ -121,7 +144,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | CategoryTyped typed when not (categoryLocked values) -> { model with CategoryInput = typed }, None
   | CategoryChosen typed when not (categoryLocked values) ->
     match resolve (known model).Categories typed with
-    | Some title when termSlug title <> termSlug seriesCategory -> withCategory (Some title) model, None
+    | Some title when Slug.term title <> Slug.term seriesCategory -> withCategory (Some title) model, None
     | Some _
     | None -> { model with CategoryInput = "" }, None
   | CategoryCleared when not (categoryLocked values) -> withCategory None model, None
@@ -131,7 +154,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | TagTyped typed -> { model with TagInput = typed }, None
   | TagAdded typed ->
     match resolve (known model).Tags typed with
-    | Some title when not (values.Tags |> List.exists (fun tag -> termSlug tag = termSlug title)) ->
+    | Some title when not (values.Tags |> List.exists (fun tag -> Slug.term tag = Slug.term title)) ->
       { model with
           Values = { values with Tags = values.Tags @ [ title ] }
           TagInput = "" },
@@ -139,34 +162,63 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | Some _
     | None -> { model with TagInput = "" }, None
   | TagRemoved slug ->
-    { model with Values = { values with Tags = values.Tags |> List.filter (fun tag -> termSlug tag <> slug) } }, None
-  | SeriesChosen slug ->
-    { model with
-        Values =
-          { values with
-              Series = Some slug
-              Category = Some seriesCategory }
-        CategoryInput = "" },
-    None
+    { model with Values = { values with Tags = values.Tags |> List.filter (fun tag -> Slug.term tag <> slug) } }, None
+  | SeriesChosen slug -> { withSeries slug model with NewSeries = NoNewSeries }, None
   | SeriesRemoved ->
     { model with
         Values =
           { values with
               Series = None
-              Category = None } },
+              Category = None }
+        NewSeries = NoNewSeries },
     None
+  | NewSeriesClicked ->
+    match model.NewSeries with
+    | Writing _ -> model, None
+    | NoNewSeries
+    | Made _ -> { model with NewSeries = Writing SeriesForm.blank }, None
+  | NewSeriesClosed ->
+    match model.NewSeries with
+    | Writing form when SeriesForm.isSaving form -> model, None
+    | Writing _
+    | Made _
+    | NoNewSeries -> { model with NewSeries = NoNewSeries }, None
+  | NewSeriesMsg msg ->
+    match model.NewSeries with
+    | Writing form ->
+      let form, effect = SeriesForm.update (otherSeries model) msg form
+
+      { model with NewSeries = Writing form },
+      effect
+      |> Option.map (function
+        | SeriesForm.UploadImage file -> UploadSeriesImage file
+        | SeriesForm.SaveSeries request -> SaveSeries request)
+    | NoNewSeries
+    | Made _ -> model, None
+  | NewSeriesAnswered answer ->
+    match model.NewSeries, answer with
+    | Writing form, Ok saved when SeriesForm.isSaving form ->
+      { withSeries saved.Slug model with
+          Options = withListing { Slug = saved.Slug; Title = form.Title.Trim() } model.Options
+          NewSeries = Made saved },
+      None
+    | Writing form, Error failure when SeriesForm.isSaving form ->
+      { model with NewSeries = Writing(SeriesForm.saveFailed failure form) }, None
+    | Writing _, _
+    | NoNewSeries, _
+    | Made _, _ -> model, None
   | ImageChanged image -> { model with Values = { values with Image = blankAsNone image } }, None
   | ShowOnHomepageChanged shown -> { model with Values = { values with ShowOnHomepage = shown } }, None
   | SlugTyped typed -> { model with SlugInput = typed; Slug = Idle }, None
 
 let slugChangeable (slug: string) (model: Model) =
-  model.SlugInput <> slug && isSlug model.SlugInput
+  model.SlugInput <> slug && Slug.isSlug model.SlugInput
 
 let slugHint (slug: string) (model: Model) =
   match model.Slug with
   | ChangeFailed reason -> reason
   | Changing -> ""
-  | Idle when model.SlugInput = slug || isSlug model.SlugInput -> ""
+  | Idle when model.SlugInput = slug || Slug.isSlug model.SlugInput -> ""
   | Idle -> "Use lowercase letters and digits, with a single - between them."
 
 let isChangingSlug (model: Model) = model.Slug = Changing

@@ -28,6 +28,7 @@ const series = [{ slug: 'my-series', title: 'My series' }];
 
 const saves = [];
 const slugChanges = [];
+const seriesSaves = [];
 let saved = 0;
 
 const ok = (data) => answer(200, { success: true, message: null, data });
@@ -37,6 +38,11 @@ const respond = (url, init = {}) => {
 
   if (url.endsWith('/api/internal/terms')) return ok(terms);
   if (url.endsWith('/api/internal/series')) return ok(series);
+
+  if (url.endsWith('/api/internal/series/f-for-fun')) {
+    seriesSaves.push({ method: init.method, ifNoneMatch: headers.get('If-None-Match'), body: JSON.parse(init.body) });
+    return ok({ slug: 'f-for-fun', eTag: '"f-1"', warnings: [] });
+  }
 
   if (url.endsWith('/api/internal/posts/my-post/slug')) {
     slugChanges.push({ method: init.method, ifMatch: headers.get('If-Match'), body: JSON.parse(init.body) });
@@ -151,6 +157,45 @@ test('the removal of the series leaves the post with no category and unlocks the
   const save = await saveNow();
   assert.equal(save.body.details.series, null);
   assert.equal(save.body.details.category, null);
+});
+
+test('New series in the picker saves a series and selects it, and the editor stays', async () => {
+  const select = field('details-series');
+  select.value = '+new';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+
+  const saveSeries = () => [...sheet().querySelectorAll('button')].find((item) => item.textContent.trim() === 'Save the series');
+  saveSeries().click();
+  await settle();
+  assert.match(sheet().textContent, /Give the series a title\./, 'The errors of the Series page');
+  assert.equal(seriesSaves.length, 0, 'No save with problems');
+
+  const title = field('new-series-title');
+  await type(title, 'F# for fun');
+  assert.ok(field('new-series-title') === title, 'The input stays, so it keeps its focus');
+  assert.equal(field('new-series-slug').value, 'f-for-fun', 'The slug from the title');
+  field('new-series-excerpt').value = 'Small programs in F#.';
+  field('new-series-excerpt').dispatchEvent(new Event('input', { bubbles: true }));
+  await settle();
+  saveSeries().click();
+  await settle();
+
+  assert.deepEqual(seriesSaves, [
+    {
+      method: 'PUT',
+      ifNoneMatch: '*',
+      body: { slug: 'f-for-fun', title: 'F# for fun', excerpt: 'Small programs in F#.', image: null },
+    },
+  ]);
+  assert.equal(field('new-series-title'), null, 'The form closes');
+  assert.equal(field('details-series').value, 'f-for-fun', 'The picker selects the new series');
+  assert.ok(chips().includes('Series'), 'The category is Series');
+  assert.equal(location.pathname, '/posts/my-post', 'The author stays in the editor');
+
+  const save = await saveNow();
+  assert.equal(save.body.details.series, 'f-for-fun');
+  assert.equal(save.body.details.category, 'Series');
 });
 
 test('the slug of a draft changes with the ETag, and the editor goes to the new address', async () => {

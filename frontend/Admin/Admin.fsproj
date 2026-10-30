@@ -25,6 +25,8 @@
     <Compile Include="Deploy.fs" />
     <Compile Include="SiteDeploy.fs" />
     <Compile Include="Posts.fs" />
+    <Compile Include="Slug.fs" />
+    <Compile Include="SeriesForm.fs" />
     <Compile Include="Details.fs" />
     <Compile Include="Series.fs" />
     <Compile Include="Preview.fs" />
@@ -46,6 +48,7 @@
     <Compile Include="Parts.fs" />
     <Compile Include="Banner.fs" />
     <Compile Include="CodeMirror.fs" />
+    <Compile Include="SeriesFormView.fs" />
     <Compile Include="DetailsView.fs" />
     <Compile Include="EditorView.fs" />
     <Compile Include="ShellView.fs" />

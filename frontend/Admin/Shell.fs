@@ -32,6 +32,8 @@ type Call =
   | LoadPost of slug: string
   | SavePost of Editor.SaveRequest
   | LoadDetailsOptions
+  | UploadNewSeriesImage of file: Browser.Types.File
+  | SaveNewSeries of SeriesForm.SaveRequest
   | ChangeSlug of Editor.SlugRequest
   | PreviewPost of Editor.PreviewRequest
   | CheckPublish of Editor.PublishRequest * choice: Publish.When
@@ -46,7 +48,7 @@ type Call =
   | RestoreRevision of Editor.RestoreRequest
   | UploadAsset of id: int * file: Browser.Types.File
   | LoadSeries
-  | SaveSeries of Series.SaveRequest
+  | SaveSeries of SeriesForm.SaveRequest
   | DeleteSeries of slug: string * eTag: string
   | UploadSeriesImage of file: Browser.Types.File
 
@@ -221,6 +223,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.Save request -> [ SavePost request ]
           | Editor.Autosave _
           | Editor.LoadDetailsOptions
+          | Editor.UploadSeriesImage _
+          | Editor.SaveSeries _
           | Editor.ChangeSlug _
           | Editor.FetchPreview _
           | Editor.CheckPublish _
@@ -354,6 +358,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.SaveAnswered(_, _, Error Api.Refused), _
       | Editor.SlugChangeAnswered(_, Error Api.Refused), _
       | Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Refused)), _
+      | Editor.DetailsMsg(Details.NewSeriesMsg(SeriesForm.ImageUploaded(Error Api.Refused))), _
+      | Editor.DetailsMsg(Details.NewSeriesAnswered(Error Api.Refused)), _
       | Editor.PreviewAnswered(_, Error Api.Refused), _
       | Editor.PublishCheckAnswered(_, _, Error Api.Refused), _
       | Editor.PublishAnswered(_, Error Api.Refused), _
@@ -378,6 +384,8 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.Autosave version -> Autosave version
           | Editor.Save request -> Send [ SavePost request ]
           | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
+          | Editor.UploadSeriesImage file -> Send [ UploadNewSeriesImage file ]
+          | Editor.SaveSeries request -> Send [ SaveNewSeries request ]
           | Editor.ChangeSlug request -> Send [ ChangeSlug request ]
           | Editor.FetchPreview request -> Send [ PreviewPost request ]
           | Editor.CheckPublish(request, choice) -> Send [ CheckPublish(request, choice) ]
@@ -533,7 +541,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     match msg with
     | Series.Answered(Error Api.Refused)
-    | Series.ImageUploaded(Error Api.Refused)
+    | Series.FormMsg(SeriesForm.ImageUploaded(Error Api.Refused))
     | Series.SaveAnswered(Error Api.Refused)
     | Series.DeleteAnswered(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
     | Series.SaveAnswered(Ok _) ->

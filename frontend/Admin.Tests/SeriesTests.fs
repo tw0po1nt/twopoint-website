@@ -75,10 +75,10 @@ let tests =
     }
 
     test "a new series gives its slug from the title until the author types a slug" {
-      let model, _ = listed () |> sendAll [ Series.NewClicked; Series.TitleTyped "Matt's F# Notes & Tips" ]
+      let model, _ = listed () |> sendAll [ Series.NewClicked; Series.FormMsg(SeriesForm.TitleTyped "Matt's F# Notes & Tips") ]
       Expect.equal (form model).Slug "matts-f-notes-and-tips" "The term slug of the title"
 
-      let model, _ = model |> sendAll [ Series.SlugTyped "fsharp-notes"; Series.TitleTyped "Other title" ]
+      let model, _ = model |> sendAll [ Series.FormMsg(SeriesForm.SlugTyped "fsharp-notes"); Series.FormMsg(SeriesForm.TitleTyped "Other title") ]
       Expect.equal (form model).Slug "fsharp-notes" "The typed slug stays"
     }
 
@@ -86,22 +86,22 @@ let tests =
       let model, _ = listed () |> send Series.NewClicked
       Expect.isEmpty (problems model) "No problem yet"
 
-      let model, effect = model |> send Series.SaveClicked
+      let model, effect = model |> send (Series.FormMsg SeriesForm.SaveClicked)
       Expect.isNone effect "No save"
-      Expect.equal (problems model) [ Series.EmptyTitle; Series.BadSlug; Series.EmptyExcerpt ] "Each empty field"
-      Expect.equal (Series.fieldProblem model.Series Series.TitleField) (Some "Give the series a title.") "The title text"
+      Expect.equal (problems model) [ SeriesForm.EmptyTitle; SeriesForm.BadSlug; SeriesForm.EmptyExcerpt ] "Each empty field"
+      Expect.equal (Series.fieldProblem model.Series SeriesForm.TitleField) (Some "Give the series a title.") "The title text"
     }
 
     test "a bad slug, a slug of another series, and an image that is not https are problems at once" {
       let model, _ =
         listed ()
-        |> sendAll [ Series.NewClicked; Series.TitleTyped "Notes"; Series.ImageTyped "http://example.com/a.jpg" ]
+        |> sendAll [ Series.NewClicked; Series.FormMsg(SeriesForm.TitleTyped "Notes"); Series.FormMsg(SeriesForm.ImageTyped "http://example.com/a.jpg") ]
 
-      Expect.equal (problems model) [ Series.SlugTaken; Series.BadImage ] "The slug of Notes and the image"
+      Expect.equal (problems model) [ SeriesForm.SlugTaken; SeriesForm.BadImage ] "The slug of Notes and the image"
 
-      let model, _ = model |> send (Series.SlugTyped "Bad Slug")
-      Expect.equal (problems model) [ Series.BadSlug; Series.BadImage ] "The bad slug"
-      Expect.equal (Series.fieldProblem model.Series Series.SlugField) (Some(Series.problemText Series.BadSlug)) "On the slug"
+      let model, _ = model |> send (Series.FormMsg(SeriesForm.SlugTyped "Bad Slug"))
+      Expect.equal (problems model) [ SeriesForm.BadSlug; SeriesForm.BadImage ] "The bad slug"
+      Expect.equal (Series.fieldProblem model.Series SeriesForm.SlugField) (Some(SeriesForm.problemText SeriesForm.BadSlug)) "On the slug"
     }
 
     test "the series keeps its own slug in an edit" {
@@ -110,8 +110,8 @@ let tests =
     }
 
     test "a save with no problem sends the fields, and its answer reloads the list and polls the deploy" {
-      let model, _ = listed () |> sendAll [ Series.Opened "empty"; Series.TitleTyped " Empty, again "; Series.SlugTyped "empty-again" ]
-      let model, effect = model |> send Series.SaveClicked
+      let model, _ = listed () |> sendAll [ Series.Opened "empty"; Series.FormMsg(SeriesForm.TitleTyped " Empty, again "); Series.FormMsg(SeriesForm.SlugTyped "empty-again") ]
+      let model, effect = model |> send (Series.FormMsg SeriesForm.SaveClicked)
 
       Expect.equal
         effect
@@ -137,16 +137,16 @@ let tests =
     }
 
     test "the slug is locked while a published post, a draft, or a pending edit refers to the series" {
-      let model, _ = listed () |> sendAll [ Series.Opened "fable"; Series.SlugTyped "other" ]
-      Expect.isTrue (Series.slugLocked (form model)) "Locked"
+      let model, _ = listed () |> sendAll [ Series.Opened "fable"; Series.FormMsg(SeriesForm.SlugTyped "other") ]
+      Expect.isTrue (SeriesForm.slugLocked (form model)) "Locked"
       Expect.equal (form model).Slug "fable" "The slug stays"
 
-      let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.SlugTyped "other" ]
-      Expect.isTrue (Series.slugLocked (form model)) "A draft locks the slug"
+      let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.FormMsg(SeriesForm.SlugTyped "other") ]
+      Expect.isTrue (SeriesForm.slugLocked (form model)) "A draft locks the slug"
       Expect.equal (form model).Slug "notes" "The slug stays"
 
-      let model, _ = listed () |> sendAll [ Series.Opened "empty"; Series.SlugTyped "other" ]
-      Expect.isFalse (Series.slugLocked (form model)) "No post, no lock"
+      let model, _ = listed () |> sendAll [ Series.Opened "empty"; Series.FormMsg(SeriesForm.SlugTyped "other") ]
+      Expect.isFalse (SeriesForm.slugLocked (form model)) "No post, no lock"
       Expect.equal (form model).Slug "other" "The slug changes"
     }
 
@@ -194,18 +194,18 @@ let tests =
 
     test "an uploaded image fills the image field" {
       let model, _ = listed () |> send (Series.Opened "empty")
-      let model, effect = model |> send (Series.ImagePicked Unchecked.defaultof<Browser.Types.File>)
-      Expect.isTrue (Series.isUploading (form model)) "The upload starts"
+      let model, effect = model |> send (Series.FormMsg(SeriesForm.ImagePicked Unchecked.defaultof<Browser.Types.File>))
+      Expect.isTrue (SeriesForm.isUploading (form model)) "The upload starts"
       Expect.isSome effect "The upload call"
 
-      let model, _ = model |> send (Series.ImageUploaded(Ok "https://twopointwebsite.blob.core.windows.net/assets/a.jpg"))
+      let model, _ = model |> send (Series.FormMsg(SeriesForm.ImageUploaded(Ok "https://twopointwebsite.blob.core.windows.net/assets/a.jpg")))
 
       Expect.equal (form model).Image "https://twopointwebsite.blob.core.windows.net/assets/a.jpg" "The URL"
-      Expect.equal (form model).Upload Series.NoUpload "The upload is done"
+      Expect.equal (form model).Upload SeriesForm.NoUpload "The upload is done"
     }
 
     test "a stale save keeps the form open with the reason" {
-      let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.SaveClicked; Series.SaveAnswered(Error Api.Stale) ]
-      Expect.stringContains (Series.failure (form model) |> Option.defaultValue "") "changed in another place" "The reason"
+      let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.FormMsg SeriesForm.SaveClicked; Series.SaveAnswered(Error Api.Stale) ]
+      Expect.stringContains (SeriesForm.failure (form model) |> Option.defaultValue "") "changed in another place" "The reason"
     }
   ]
