@@ -121,7 +121,7 @@ let private latestPostTests =
       Expect.equal
         (SendWelcome.Logic.latestPost utcNow noDeploys [ olderPost; latestPost; upcomingPost ])
         (Some latestPost)
-        "Expected the latest post, and not the upcoming post"
+        "Expected the latest post with a past publish date"
     }
 
     test "the welcome uses the previous post while the publish of the newest post deploys" {

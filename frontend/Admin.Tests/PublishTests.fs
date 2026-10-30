@@ -27,7 +27,6 @@ let private document state pendingEdit publishDate eTag : Api.PostDocument =
 
 let private draft = document Api.Draft false None (Some "\"v1\"")
 let private live = document Api.Published false (Some "2026-02-04T13:00:00Z") None
-let private upcoming = document Api.Upcoming false (Some "2099-12-31T00:00:00Z") None
 
 let private opened (post: Api.PostDocument) =
   let model, _ = Shell.init "/posts/my-post"
@@ -311,10 +310,5 @@ let menuTests =
       let model = opened live
       Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Change the date"
       Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
-    }
-
-    test "the menu of an upcoming post has a reason for each action that a later version brings" {
-      let model = opened upcoming
-      Expect.equal (reasonOf Editor.SendToSubscribers model) "A later version adds this action." "Send to subscribers"
     }
   ]

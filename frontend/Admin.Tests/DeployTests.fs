@@ -52,6 +52,7 @@ let private post slug deploy : Api.Post =
     PendingEdit = false
     PublishDate = None
     Deploy = deploy
+    DeliveryToStart = false
     CommentStats = { New = 0; Approved = 0; Rejected = 0 } }
 
 let private listed (posts: Api.Post list) =

@@ -53,6 +53,10 @@ type Document =
     ChangeDate: Typed.State
     ChangeWarnings: Api.ChangeWarning list
     Revisions: Revisions.State
+    /// The typed text is the intro of the email.
+    SendToSubscribers: Typed.State
+    /// The count of active subscriptions that the last send queued an email for. The author dismisses it.
+    SentTo: int option
     Deploy: Deploy.Model }
 
 type Model =
@@ -108,6 +112,8 @@ type RestoreRequest =
     ETag: string option
     Revision: string }
 
+type DeliveryRequest = { Slug: string; Intro: string }
+
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
   | TitleChanged of string
@@ -159,6 +165,12 @@ type Msg =
   | RestoreChosen of revision: string
   | RestoreAnswered of slug: string * Result<Api.RestoredRevision, Api.Failure>
   | RevisionsClosed
+  | SendRequested
+  | IntroTyped of string
+  | SendConfirmed
+  | SendAnswered of slug: string * Result<Api.StartedDelivery, Api.Failure>
+  | SendClosed
+  | SentNoticeDismissed
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -177,6 +189,7 @@ type Effect =
   | DeletePost of DeleteRequest
   | LoadRevisions of slug: string
   | RestoreRevision of RestoreRequest
+  | StartDelivery of DeliveryRequest
   | Reload of slug: string
   | Focus of elementId: string
   | MoveToBodyLine of line: int
@@ -219,6 +232,8 @@ let private loaded (chain: Deploy.Chain) (post: Api.PostDocument) =
       ChangeDate = Typed.Closed
       ChangeWarnings = []
       Revisions = Revisions.Closed
+      SendToSubscribers = Typed.Closed
+      SentTo = None
       Deploy = Deploy.start chain }
 
 let private deployRead (post: Api.PostDocument) =
@@ -789,6 +804,58 @@ let private revisionsClosed (document: Document) =
   else
     Loaded { document with Revisions = Revisions.Closed }, None
 
+/// The email contains the newsletter that the production build of the latest change uploads.
+let private sendAvailability (document: Document) =
+  match document.State, document.Deploy.Status with
+  | Api.Draft, _ -> Unavailable "Publish the post first."
+  | Api.Upcoming, _ -> Unavailable "The post is not published yet. Send it after its publish date."
+  | Api.Published, Deploy.Known Api.DeployState.Deployed -> Available
+  | Api.Published, Deploy.Known Api.DeployState.Deploying ->
+    Unavailable "The latest change to the post deploys. Send the post after the deploy."
+  | Api.Published, Deploy.Known Api.DeployState.DeployFailed ->
+    Unavailable "The deploy of the latest change failed. Rebuild the site, and then send the post."
+  | Api.Published, Deploy.Unread -> Unavailable "The admin reads the deploy state of the post."
+  | Api.Published, Deploy.Unreadable _ -> Unavailable "The deploy state of the post is not known. Reload the page."
+
+let private sendRequested (document: Document) =
+  match sendAvailability document with
+  | Available -> Loaded { document with SendToSubscribers = Typed.Typing ""; SentTo = None }, None
+  | Unavailable _ -> Loaded document, None
+
+let private introTyped (typed: string) (document: Document) =
+  match document.SendToSubscribers with
+  | Typed.Typing _
+  | Typed.Failed _ -> Loaded { document with SendToSubscribers = Typed.Typing typed }, None
+  | Typed.Closed
+  | Typed.Sending _ -> Loaded document, None
+
+let private sendConfirmed (document: Document) =
+  match document.SendToSubscribers with
+  | Typed.Typing intro
+  | Typed.Failed(intro, _) ->
+    Loaded { document with SendToSubscribers = Typed.Sending intro },
+    Some(StartDelivery { Slug = document.Slug; Intro = intro })
+  | Typed.Closed
+  | Typed.Sending _ -> Loaded document, None
+
+let private sendAnswered (result: Result<Api.StartedDelivery, Api.Failure>) (document: Document) =
+  match document.SendToSubscribers, result with
+  | Typed.Sending _, Ok started ->
+    Loaded
+      { document with
+          SendToSubscribers = Typed.Closed
+          SentTo = Some started.Queued },
+    None
+  | Typed.Sending intro, Error failure ->
+    Loaded { document with SendToSubscribers = Typed.Failed(intro, Api.reason failure) }, None
+  | _ -> Loaded document, None
+
+let private sendClosed (document: Document) =
+  if Typed.isSending document.SendToSubscribers then
+    Loaded document, None
+  else
+    Loaded { document with SendToSubscribers = Typed.Closed }, None
+
 let private changesOpened (document: Document) =
   match document.State, document.Published with
   | (Api.Published | Api.Upcoming), Some _ -> Loaded { document with Changes = ChangesShown }, None
@@ -850,6 +917,12 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, RestoreChosen revision -> restoreChosen revision document
   | Loaded document, RestoreAnswered(slug, result) when slug = document.Slug -> restoreAnswered result document
   | Loaded document, RevisionsClosed -> revisionsClosed document
+  | Loaded document, SendRequested -> sendRequested document
+  | Loaded document, IntroTyped typed -> introTyped typed document
+  | Loaded document, SendConfirmed -> sendConfirmed document
+  | Loaded document, SendAnswered(slug, result) when slug = document.Slug -> sendAnswered result document
+  | Loaded document, SendClosed -> sendClosed document
+  | Loaded document, SentNoticeDismissed -> Loaded { document with SentTo = None }, None
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -937,8 +1010,6 @@ let primaryAction (document: Document) =
   | Api.Published
   | Api.Upcoming -> "Publish changes"
 
-let private laterVersion = Unavailable "A later version adds this action."
-
 let primaryAvailability (document: Document) =
   match document.State, document.Save with
   | _ when canPublish document -> Available
@@ -981,11 +1052,9 @@ let private availability (document: Document) (action: MenuAction) =
   | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can change its date."
   | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
   | Revisions, _ -> revisionsAvailability document
-  | SendToSubscribers, Api.Draft -> Unavailable "Publish the post first."
+  | SendToSubscribers, _ -> sendAvailability document
   | Delete, _ -> deleteAvailability document
   | (ChangeDate | Unpublish), Api.Upcoming -> upcomingChangeAvailability document
-  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/270): send a post to the subscribers
-  | SendToSubscribers, (Api.Published | Api.Upcoming) -> laterVersion
 
 let menu (document: Document) : MenuItem list =
   [ SaveNow, "Save"
@@ -1009,8 +1078,14 @@ let menuMsg (action: MenuAction) =
   | ChangeDate -> Some ChangeDateRequested
   | Unpublish -> Some UnpublishRequested
   | Revisions -> Some RevisionsRequested
-  | SendToSubscribers -> None
+  | SendToSubscribers -> Some SendRequested
   | Delete -> Some DeleteRequested
+
+let sentText (queued: int) =
+  match queued with
+  | 0 -> "No subscription is active, so the admin sent no email."
+  | 1 -> "The admin queued the email for 1 active subscription."
+  | count -> $"The admin queued the email for {count} active subscriptions."
 
 let private detailsText (details: Api.PostDetails) =
   let value = Option.defaultValue ""

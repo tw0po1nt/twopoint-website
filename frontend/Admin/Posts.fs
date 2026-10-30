@@ -5,6 +5,7 @@ type Filter =
   | All
   | Drafts
   | PendingEdits
+  | DeliveriesToStart
 
 type Posts =
   | Waiting
@@ -50,7 +51,11 @@ let reload (model: Model) =
       Posts = Waiting
       Generation = model.Generation + 1 }
 
-let filters = [ All, "All"; Drafts, "Drafts"; PendingEdits, "Pending edits" ]
+let filters =
+  [ All, "All"
+    Drafts, "Drafts"
+    PendingEdits, "Pending edits"
+    DeliveriesToStart, "Deliveries to start" ]
 
 let private isDeploying (posts: Api.Post list) =
   posts |> List.exists (fun post -> post.Deploy = Api.DeployState.Deploying)
@@ -93,6 +98,7 @@ let shown (model: Model) =
   | Loaded posts, All -> posts
   | Loaded posts, Drafts -> posts |> List.filter (fun post -> post.State = Api.Draft)
   | Loaded posts, PendingEdits -> posts |> List.filter (fun post -> post.PendingEdit)
+  | Loaded posts, DeliveriesToStart -> posts |> List.filter (fun post -> post.DeliveryToStart)
   | (Waiting | NotLoaded _), _ -> []
 
 let emptyText (filter: Filter) =
@@ -100,6 +106,7 @@ let emptyText (filter: Filter) =
   | All -> "The blog has no posts."
   | Drafts -> "The blog has no drafts."
   | PendingEdits -> "No post has a pending edit."
+  | DeliveriesToStart -> "No post waits for a delivery."
 
 let showsDeploy (post: Api.Post) =
   match post.State with

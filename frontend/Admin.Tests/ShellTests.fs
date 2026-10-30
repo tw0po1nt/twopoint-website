@@ -11,6 +11,7 @@ let private post slug fresh : Api.Post =
     PendingEdit = false
     PublishDate = Some "2026-01-02T03:04:05Z"
     Deploy = Api.DeployState.Deployed
+    DeliveryToStart = false
     CommentStats = { New = fresh; Approved = 1; Rejected = 0 } }
 
 [<Tests>]
