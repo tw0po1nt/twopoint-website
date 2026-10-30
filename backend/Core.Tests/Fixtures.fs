@@ -1,5 +1,6 @@
 module TwoPoint.Core.Tests.Fixtures
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Subscriptions
@@ -27,6 +28,19 @@ let post slug (createdDate : string) =
 
 let olderPost = post "older-post" "2026-01-01T00:00:00.0000000Z"
 let latestPost = post "latest-post" "2026-02-01T00:00:00.0000000Z"
+
+let noDeploys =
+  { Changes = Map.empty
+    Rebuild = None
+    Runs = { Latest = None; LatestSucceeded = None } }
+
+/// The deploy context of one change to the post, with no run yet.
+let changed (post : Post) (production : ProductionDispatch) =
+  { noDeploys with Changes = Map.ofList [ post.Id, { ChangedDate = post.Info.CreatedDate; Production = production } ] }
+
+let deploying (post : Post) = changed post (Dispatched (Queued (RunNumber 9L)))
+
+let deployFailed (post : Post) = changed post ProductionDispatch.Failed
 
 let delivery deliveryType (post : Post) =
   { Id = SubscriptionDeliveryId.create (Guid.NewGuid().ToString()) |> ok

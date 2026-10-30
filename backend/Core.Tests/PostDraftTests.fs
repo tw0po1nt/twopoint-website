@@ -44,11 +44,11 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   interface GetPostDocument.Dependencies with
     member _.GetUtcNow () = utcNow
     member _.GetPublishedBlob slug =
-      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1" }) |> CancellableTaskResult.singleton
+      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1"; Mark = NotMigrated }) |> CancellableTaskResult.singleton
     member _.GetWorkingBlob slug =
       working
       |> Map.tryFind (Slug.value slug)
-      |> Option.map (fun (text, version) -> { Text = text; ETag = $"v{version}" })
+      |> Option.map (fun (text, version) -> { Text = text; ETag = $"v{version}"; Mark = NotMigrated })
       |> CancellableTaskResult.singleton
 
   interface SaveDraft.Dependencies with

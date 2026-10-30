@@ -114,6 +114,7 @@ type StartNewPostDelivery(
             // Action
             let startNewPostDelivery = StartNewPostDelivery.withDependencies { new StartNewPostDelivery.Dependencies with
               member _.GetPostBySlug slug = deliveryDependencies.GetPostBySlug slug
+              member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
               member _.GetNewsletter post = deliveryDependencies.GetNewsletter post
               member _.GetAllSubscriptions () = subscriptionDependencies.GetAllSubscriptions()
               member _.GetUtcNow () = DateTime.UtcNow
@@ -140,8 +141,13 @@ type StartNewPostDelivery(
                 match error with
                 | StartNewPostDelivery.Error.PostNotFound slug ->
                   $"Post '{slug}' not found", HttpStatusCode.NotFound
-                | StartNewPostDelivery.Error.PostUpcoming post ->
-                  $"Post '{post.Id}' is not published until {post.Info.CreatedDate:o}", HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.NotYetPublished publishDate) ->
+                  $"Post '{post.Id}' is not published until {publishDate:o}", HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.LatestChangeDeploying) ->
+                  $"The latest change to post '{post.Id}' is not deployed yet", HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.LatestChangeNotDeployed) ->
+                  $"The deploy of the latest change to post '{post.Id}' failed. Rebuild the site first",
+                  HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NewsletterNotFound post ->
                   $"The newsletter of post '{post.Id}' does not exist", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NewsletterInvalid (post, reason) ->

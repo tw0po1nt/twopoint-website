@@ -38,14 +38,12 @@ type DeliveryDependencies(
     builder.Query <- query.ToString()
     builder.Uri
 
-  member _.GetLatestPost () = cancellableTaskResult {
+  member _.GetAllPosts () = cancellableTaskResult {
     let! (dbPosts: DbPost list) = postDb.GetAllPosts()
 
     return!
       dbPosts
-      |> List.sortByDescending _.CreatedDate
-      |> List.tryHead
-      |> Option.traverseResult (fun dbo -> dbo.ToPost PostCommentStats.Zero)
+      |> List.traverseValidationA (fun dbo -> dbo.ToPost PostCommentStats.Zero)
       |> DependencyError.ofValidation Dependency.Database
   }
 

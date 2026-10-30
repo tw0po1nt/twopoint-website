@@ -26,6 +26,7 @@
     <Compile Include="Posts\PostTypes.fs" />
     <Compile Include="Deploys\DeployTypes.fs" />
     <Compile Include="Deploys\DeployRule.fs" />
+    <Compile Include="Posts\DeliveryGate.fs" />
     <Compile Include="Posts\SeriesTypes.fs" />
     <Compile Include="Posts\PostCheck.fs" />
     <Compile Include="Posts\Newsletter.fs" />

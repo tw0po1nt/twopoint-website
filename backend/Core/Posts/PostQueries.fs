@@ -24,6 +24,9 @@ module GetAllPosts =
     abstract member GetWorkingPosts: unit -> DependencyResult<StoredPost list>
     abstract member GetPostsInTable: unit -> DependencyResult<PostInfo list>
     abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
+    /// The slugs of the `published` blobs with the migrated mark.
+    abstract member GetMigratedPosts: unit -> DependencyResult<Set<Slug>>
+    abstract member GetPostsWithNewPostDelivery: unit -> DependencyResult<Set<Slug>>
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -37,6 +40,8 @@ module GetAllPosts =
       (working : StoredPost list)
       (table : PostInfo list)
       (deploys : DeployContext)
+      (migrated : Set<Slug>)
+      (delivered : Set<Slug>)
       : PostListing list =
       let published = summaries published
       let working = summaries working
@@ -58,13 +63,25 @@ module GetAllPosts =
           | false, _ -> Draft
           | true, Some date when date > utcNow -> Upcoming
           | true, _ -> Published
+        let deploy = DeployRule.stateOf utcNow deploys slug
+        let deliveryToStart =
+          match state, publishDate with
+          | Published, Some date ->
+            DeliveryGate.isToStart
+              utcNow
+              date
+              deploy
+              (if migrated.Contains slug then Migrated else NotMigrated)
+              (if delivered.Contains slug then HasNewPostDelivery else NoNewPostDelivery)
+          | _ -> false
 
         { Slug = slug
           Title = summary.Title |> Option.defaultValue (Slug.value slug)
           State = state
           HasPendingEdit = hasPublished && working.ContainsKey slug
           PublishDate = publishDate
-          Deploy = DeployRule.stateOf utcNow deploys slug
+          Deploy = deploy
+          DeliveryToStart = deliveryToStart
           CommentStats = stats slug })
       |> List.ofSeq
       |> List.sortBy (fun listing ->
@@ -81,7 +98,11 @@ module GetAllPosts =
             (CancellableTaskResult.parallelZip (dependencies.GetPostsInTable()) (dependencies.GetDeployContext())))
         |> CancellableTaskResult.mapError QueryError.Dependency
 
-      return Logic.list (dependencies.GetUtcNow()) published working table deploys
+      let! migrated, delivered =
+        CancellableTaskResult.parallelZip (dependencies.GetMigratedPosts()) (dependencies.GetPostsWithNewPostDelivery())
+        |> CancellableTaskResult.mapError QueryError.Dependency
+
+      return Logic.list (dependencies.GetUtcNow()) published working table deploys migrated delivered
     }
 
 // ====================================================================================================================

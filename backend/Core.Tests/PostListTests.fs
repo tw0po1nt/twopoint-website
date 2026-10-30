@@ -21,23 +21,31 @@ let private text title (publishDate : string option) =
   let date = publishDate |> Option.map (sprintf "publishDate: %s\n") |> Option.defaultValue ""
   $"---\ntitle: {title}\n{date}---\n\nBody."
 
-type private FakeStore(published : StoredPost list, working : StoredPost list, table : PostInfo list, deploys : DeployContext) =
+type private FakeStore
+  (
+    published : StoredPost list,
+    working : StoredPost list,
+    table : PostInfo list,
+    deploys : DeployContext,
+    migrated : string list,
+    delivered : string list
+  ) =
   interface GetAllPosts.Dependencies with
     member _.GetUtcNow () = utcNow
     member _.GetPublishedPosts () = CancellableTaskResult.singleton published
     member _.GetWorkingPosts () = CancellableTaskResult.singleton working
     member _.GetPostsInTable () = CancellableTaskResult.singleton table
     member _.GetDeployContext () = CancellableTaskResult.singleton deploys
+    member _.GetMigratedPosts () = migrated |> List.map Slug.Unsafe.create |> Set.ofList |> CancellableTaskResult.singleton
+    member _.GetPostsWithNewPostDelivery () =
+      delivered |> List.map Slug.Unsafe.create |> Set.ofList |> CancellableTaskResult.singleton
 
-let private noDeploys =
-  { Changes = Map.empty
-    Rebuild = None
-    Runs = { Latest = None; LatestSucceeded = None } }
-
-let private listWith deploys published working table =
-  match (GetAllPosts.withDependencies (FakeStore(published, working, table, deploys)) () CancellationToken.None).Result with
+let private listFrom (store : FakeStore) =
+  match (GetAllPosts.withDependencies store () CancellationToken.None).Result with
   | Ok listings -> listings
   | Error error -> failtestf "Expected a list, got %A" error
+
+let private listWith deploys published working table = listFrom (FakeStore(published, working, table, deploys, [], []))
 
 let private list published working table = listWith noDeploys published working table
 
@@ -112,6 +120,27 @@ let tests =
 
       Expect.equal (find "published-post" listings).Deploy DeployFailed "The failed dispatch"
       Expect.equal (find "upcoming-post" listings).Deploy Deployed "No change is recorded"
+    }
+
+    test "a published post that is deployed, with no new-post delivery and no migrated mark, is a delivery to start" {
+      let listings = list [ published; upcoming ] [ draft ] []
+      Expect.isTrue (find "published-post" listings).DeliveryToStart "The published post"
+      Expect.isFalse (find "upcoming-post" listings).DeliveryToStart "Not before the publish date"
+      Expect.isFalse (find "draft-post" listings).DeliveryToStart "Not a draft"
+    }
+
+    test "a post is not a delivery to start before the deploy of its latest change" {
+      let row = post "published-post" "2026-01-01T00:00:00.0000000Z"
+      Expect.isFalse (listWith (deploying row) [ published ] [] [] |> find "published-post").DeliveryToStart "Deploying"
+      Expect.isFalse (listWith (deployFailed row) [ published ] [] [] |> find "published-post").DeliveryToStart "Failed"
+    }
+
+    test "a post with a new-post delivery or the migrated mark is not a delivery to start" {
+      let listings =
+        listFrom (FakeStore([ published; edited ], [], [], noDeploys, [ "published-post" ], [ "edited-post" ]))
+
+      Expect.isFalse (find "published-post" listings).DeliveryToStart "The migrated mark"
+      Expect.isFalse (find "edited-post" listings).DeliveryToStart "A new-post delivery"
     }
 
     test "the list shows the drafts first, and then the newest post first" {
