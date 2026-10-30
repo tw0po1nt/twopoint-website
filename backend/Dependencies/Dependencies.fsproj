@@ -12,7 +12,6 @@
     <Compile Include="Notifications\DeviceDependencies.fs" />
     <Compile Include="Notifications\WebPush.fs" />
     <Compile Include="Comms\CommsDb.fs" />
-    <Compile Include="Notifications\NewCommentPushDependencies.fs" />
     <Compile Include="Comms\Comms.fs" />
     <Compile Include="Posts\PostDb.fs" />
     <Compile Include="Posts\BlobTextCache.fs" />
@@ -30,6 +29,7 @@
     <Compile Include="Deploys\ChangeColumns.fs" />
     <Compile Include="Deploys\RebuildDb.fs" />
     <Compile Include="Deploys\DeployDb.fs" />
+    <Compile Include="Notifications\PushDependencies.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Communication.Email" Version="1.0.2" />

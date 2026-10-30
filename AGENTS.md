@@ -62,6 +62,11 @@ nothing. Each action that dispatches the site stores its change in the table `po
 `PostChange.ofDispatch` and `PostChanges.RecordChange`. `GET internal/posts` and
 `GET internal/posts/{slug}/deploy` give the deploy state of a post. The rule is the pure function
 `DeployRule.state`. The local backend logs each dispatch, so each change there is deployed.
+A failed production run sends a Web Push to each registered device, and the notification opens
+the dashboard. A re-run keeps the run number, and the failure of each attempt sends a Web Push.
+`GET internal/deploys` gives the deploy state of the site and the latest run of each
+repo. The dashboard shows a failed production run with a link to the run, and a failed staging run
+as a warning.
 
 `Admin-Posts-Publish` publishes a draft now or on a future date. It sets the publish date in the
 working text and runs the check of the build, with the card image, so an error refuses the publish.

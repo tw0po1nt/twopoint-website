@@ -11,7 +11,7 @@ const replies = [
 ];
 
 const respond = (url, init) => {
-  if (url.endsWith('/api/internal/deploys')) {
+  if (url.endsWith('/api/internal/deploys') && init.method === 'POST') {
     rebuilds.push({ method: init.method, authorization: new Headers(init.headers).get('Authorization') });
     return replies.shift();
   }

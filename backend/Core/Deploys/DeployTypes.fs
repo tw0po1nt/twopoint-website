@@ -18,6 +18,8 @@ module Repo =
     | [| owner; name |] when owner <> "" && name <> "" -> true, { Owner = owner; Name = name }
     | _ -> false, { Owner = ""; Name = "" }
 
+  let workflowPage (repo : Repo) = Uri $"https://github.com/{repo.Owner}/{repo.Name}/actions/workflows/site.yml"
+
 /// The production repo deploys the site of record. The staging repo deploys the same posts with the unreleased code.
 type SiteRepos =
   { Production : Repo
@@ -30,6 +32,14 @@ type RunNumber =
   member this.Value =
     let (RunNumber number) = this
     number
+
+/// A re-run keeps the run number. GitHub numbers the attempts of each run from 1.
+type RunAttempt =
+  | RunAttempt of int
+
+  member this.Value =
+    let (RunAttempt attempt) = this
+    attempt
 
 type Dispatch =
   | Queued of RunNumber
@@ -118,10 +128,12 @@ type RunState =
 type SiteRun =
   { Repo : Repo
     Number : RunNumber
+    Attempt : RunAttempt
     Event : RunEvent
     State : RunState
     CreatedDate : DateTime
-    UpdatedDate : DateTime }
+    UpdatedDate : DateTime
+    Url : Uri }
 
 type ProductionRuns =
   { Latest : SiteRun option

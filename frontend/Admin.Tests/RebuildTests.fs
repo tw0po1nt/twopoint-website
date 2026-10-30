@@ -32,8 +32,7 @@ let tests =
     test "a started rebuild shows the production run" {
       let model, _ = Shell.init "/"
       let model, _ = clicked model
-      let model, effect = answered (Ok(Api.Queued 42)) model
-      Expect.isNone effect "No more calls"
+      let model, _ = answered (Ok(Api.Queued 42)) model
       Expect.equal (Rebuild.text model.Rebuild) "The rebuild started. The production run is #42." "The run number"
     }
 

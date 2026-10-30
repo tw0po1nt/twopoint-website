@@ -35,12 +35,21 @@ const targetOf = (data) =>
     ? `/posts/${encodeURIComponent(data.slug)}/comments#${encodeURIComponent(data.commentId)}`
     : `/comments#${encodeURIComponent(data.commentId)}`;
 
-const noticeOf = (data) => ({
+const commentNoticeOf = (data) => ({
   title: `${data.case === 'approved' ? 'Comment posted on' : 'New comment on'} ${data.postTitle}`,
   options: {
     body: `${data.commenter}: ${[...String(data.text)].slice(0, bodyLength).join('')}`,
     tag: data.commentId,
     data: { target: targetOf(data) },
+  },
+});
+
+const deployNoticeOf = (data) => ({
+  title: 'The production deploy failed',
+  options: {
+    body: `The run #${data.runNumber} of site.yml failed. Open the dashboard to rebuild the site.`,
+    tag: `deploy-${data.runNumber}`,
+    data: { target: '/' },
   },
 });
 
@@ -65,7 +74,14 @@ const tellPages = async (message) => {
 
 const show = async (event) => {
   const data = readData(event);
-  const { title, options } = data ? noticeOf(data) : fallbackNotice;
+
+  if (data?.case === 'deploy-failed') {
+    const { title, options } = deployNoticeOf(data);
+    await self.registration.showNotification(title, options);
+    return;
+  }
+
+  const { title, options } = data ? commentNoticeOf(data) : fallbackNotice;
 
   await self.registration.showNotification(title, options);
 

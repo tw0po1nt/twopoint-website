@@ -29,7 +29,7 @@ test('the admin calls no API while the sign-in starts', () => {
 test('the admin asks for a token after the sign-in starts, and calls no API before the token', async () => {
   started.resolve(true);
   await settle();
-  assert.deepEqual(events, ['start', 'token', 'token']);
+  assert.deepEqual(events, ['start', 'token', 'token', 'token']);
   assert.deepEqual(calls, []);
 });
 
@@ -39,6 +39,7 @@ test('the token goes with the first API calls', async () => {
   assert.deepEqual(calls, [
     { url: `${config.api}/api/internal/posts`, authorization: 'Bearer token-2' },
     { url: `${config.api}/api/internal/comments`, authorization: 'Bearer token-2' },
+    { url: `${config.api}/api/internal/deploys`, authorization: 'Bearer token-2' },
   ]);
   assert.deepEqual(summary(), ['2', '3']);
 });

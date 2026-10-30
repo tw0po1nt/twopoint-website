@@ -13,6 +13,7 @@
     <Compile Include="SessionTests.fs" />
     <Compile Include="ShellTests.fs" />
     <Compile Include="RebuildTests.fs" />
+    <Compile Include="SiteDeployTests.fs" />
     <Compile Include="QueueTests.fs" />
     <Compile Include="PostsTests.fs" />
     <Compile Include="DeployTests.fs" />

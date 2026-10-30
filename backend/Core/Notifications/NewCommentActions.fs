@@ -17,11 +17,6 @@ type NewCommentCase =
   | AwaitsModeration
   | Approved
 
-type PushOutcome =
-  | Delivered
-  /// The push service answered `404` or `410`.
-  | DeviceGone
-
 type NewCommentPayload =
   { Case : NewCommentCase
     CommentId : string
@@ -95,13 +90,8 @@ module NotifyNewComment =
 
   type Error = unit
 
-  type Notified =
-    { Sent : RegisteredDevice list
-      Removed : RegisteredDevice list
-      Failed : (RegisteredDevice * DependencyError) list }
-
   type Event =
-    | Notified of Notified
+    | Notified of Pushed
     | Skipped of CommentId
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
@@ -114,38 +104,7 @@ module NotifyNewComment =
     abstract member RecordPush: RegisteredDevice -> CommentId -> DependencyResult<unit>
     abstract member DeleteDevice: RegisteredDevice -> DependencyResult<unit>
 
-  type private PushStep =
-    | PushSent of RegisteredDevice
-    | PushRemoved of RegisteredDevice
-    | PushFailed of RegisteredDevice * DependencyError
-
   let withDependencies (dependencies : Dependencies) : Action =
-
-    let pushTo (payload : byte array) (commentId : CommentId) (device : RegisteredDevice) : CancellableTask<PushStep> =
-      cancellableTask {
-        let! sent = dependencies.SendPush device payload
-
-        match sent with
-        | Ok Delivered ->
-          let! recorded = dependencies.RecordPush device commentId
-          return recorded |> Result.map (fun () -> PushSent device) |> Result.defaultWith (fun error -> PushFailed(device, error))
-        | Ok DeviceGone ->
-          let! deleted = dependencies.DeleteDevice device
-          return deleted |> Result.map (fun () -> PushRemoved device) |> Result.defaultWith (fun error -> PushFailed(device, error))
-        | Error error -> return PushFailed(device, error)
-      }
-
-    let pushAll (payload : byte array) (commentId : CommentId) (devices : RegisteredDevice list) : CancellableTask<PushStep list> =
-      cancellableTask {
-        let results = ResizeArray<PushStep>()
-
-        for device in devices do
-          let! result = pushTo payload commentId device
-          results.Add result
-
-        return List.ofSeq results
-      }
-
     fun dto -> cancellableTaskResult {
       let! commentId =
         CommentId.create dto.CommentId
@@ -170,11 +129,14 @@ module NotifyNewComment =
             |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
           let bytes = NewCommentPayload.toBytes payload
-          let! results = pushAll bytes commentId devices |> CancellableTask.map Ok
 
-          return
-            Notified
-              { Sent = results |> List.choose (function PushSent device -> Some device | _ -> None)
-                Removed = results |> List.choose (function PushRemoved device -> Some device | _ -> None)
-                Failed = results |> List.choose (function PushFailed(device, error) -> Some(device, error) | _ -> None) }
+          let! pushed =
+            devices
+            |> DevicePush.pushAll
+              (fun device -> dependencies.SendPush device bytes)
+              (fun device -> dependencies.RecordPush device commentId)
+              dependencies.DeleteDevice
+            |> CancellableTask.map Ok
+
+          return Notified pushed
     }

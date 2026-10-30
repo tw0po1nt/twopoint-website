@@ -35,6 +35,8 @@ let private fail (call: Shell.Call) =
   | Shell.RegisterDevice _ -> Shell.Notifications(Notifications.RegisterAnswered(Error Api.Unanswered))
   | Shell.RemoveDevice deviceId -> Shell.Notifications(Notifications.Removed(deviceId, Error Api.Unanswered))
   | Shell.RebuildSite -> Shell.Rebuild(Rebuild.Answered(Error Api.Unanswered))
+  | Shell.LoadSiteDeploy -> Shell.SiteDeploy(SiteDeploy.Answered(Error Api.Unanswered))
+  | Shell.PollSiteDeploy generation -> Shell.SiteDeploy(SiteDeploy.Polled(generation, Error Api.Unanswered))
   | Shell.CreateDraft -> Shell.Posts(Posts.DraftCreated(Error Api.Unanswered))
   | Shell.LoadPost slug -> Shell.Editor(Editor.Answered(slug, Error Api.Unanswered))
   | Shell.SavePost request -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, Error Api.Unanswered))
@@ -138,6 +140,11 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
     Api.deleteDevice (Config.api ()) token deviceId
     |> Promise.map (fun result -> Shell.Notifications(Notifications.Removed(deviceId, result)))
   | Shell.RebuildSite -> Api.rebuildSite (Config.api ()) token |> Promise.map (Rebuild.Answered >> Shell.Rebuild)
+  | Shell.LoadSiteDeploy ->
+    Api.getSiteDeploy (Config.api ()) token |> Promise.map (SiteDeploy.Answered >> Shell.SiteDeploy)
+  | Shell.PollSiteDeploy generation ->
+    Api.getSiteDeploy (Config.api ()) token
+    |> Promise.map (fun result -> Shell.SiteDeploy(SiteDeploy.Polled(generation, result)))
   | Shell.CreateDraft -> Api.createDraft (Config.api ()) token |> Promise.map (Posts.DraftCreated >> Shell.Posts)
   | Shell.LoadPost slug ->
     Api.getPost (Config.api ()) token slug
@@ -289,6 +296,9 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
   | Shell.WaitToPollPosts generation ->
     window.setTimeout ((fun () -> dispatch (Shell.Posts(Posts.PollElapsed generation))), Deploy.pollDelay)
     |> ignore
+  | Shell.WaitToPollSiteDeploy generation ->
+    window.setTimeout ((fun () -> dispatch (Shell.SiteDeploy(SiteDeploy.PollElapsed generation))), Deploy.pollDelay)
+    |> ignore
 
 let private site = "https://twopoint.dev"
 
@@ -427,12 +437,39 @@ let private dashboard (model: Dashboard.Model) =
   | Dashboard.NotLoaded reason ->
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The dashboard did not load.").Has(p () { reason }) }
 
+let private deployTone (state: Api.DeployState) =
+  match state with
+  | Api.DeployState.Deploying -> Parts.Info
+  | Api.DeployState.Deployed -> Parts.Good
+  | Api.DeployState.DeployFailed -> Parts.Bad
+
 [<SolidComponent>]
-let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) =
+let private runAlert (tone: Parts.Tone) (title: string) (text: string) (run: Api.SiteRun) =
+  Parts
+    .Alert(tone = tone, title = title)
+    .Has(
+      Fragment() {
+        p () { text }
+
+        p () {
+          a (href = run.Url, target = "_blank", rel = "noopener") { "Open the run in GitHub" }
+        }
+      }
+    )
+
+[<SolidComponent>]
+let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) (siteDeploy: SiteDeploy.Model) =
   div (class' = "card card-body rebuild") {
     div (class' = "rebuild-row") {
       div (class' = "grow") {
-        h3 () { "Site" }
+        h3 () {
+          "Site "
+
+          For(each = Array.ofList (Option.toList (SiteDeploy.state siteDeploy))) {
+            yield fun state _ -> Parts.badge (deployTone state) (Deploy.badgeText state)
+          }
+        }
+
         p (class' = "muted small rebuild-text", ariaLive = "polite") { Rebuild.text model }
       }
 
@@ -442,6 +479,24 @@ let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) =
     }
 
     Show(when' = Rebuild.failed model) { Parts.Alert(tone = Parts.Bad).Has(p () { Rebuild.reason model }) }
+
+    For(each = Array.ofList (Option.toList (SiteDeploy.productionFailure siteDeploy))) {
+      yield fun run _ -> runAlert Parts.Bad (SiteDeploy.productionFailureTitle run) SiteDeploy.productionFailureText run
+    }
+
+    Show(when' = SiteDeploy.notDeployed siteDeploy) {
+      Parts.Alert(tone = Parts.Bad, title = SiteDeploy.notDeployedTitle).Has(p () { SiteDeploy.notDeployedText })
+    }
+
+    For(each = Array.ofList (Option.toList (SiteDeploy.stagingWarning siteDeploy))) {
+      yield fun run _ -> runAlert Parts.Warn (SiteDeploy.stagingWarningTitle run) SiteDeploy.stagingWarningText run
+    }
+
+    Show(when' = (SiteDeploy.reason siteDeploy).IsSome) {
+      Parts
+        .Alert(tone = Parts.Bad, title = "The deploy state did not load.")
+        .Has(p () { SiteDeploy.reason siteDeploy |> Option.defaultValue "" })
+    }
   }
 
 let private statusTone (status: Api.CommenterStatus) =
@@ -746,12 +801,6 @@ let private stateTone (state: Api.PostState) =
   | Api.Draft -> Parts.Plain
   | Api.Published -> Parts.Good
   | Api.Upcoming -> Parts.Info
-
-let private deployTone (state: Api.DeployState) =
-  match state with
-  | Api.DeployState.Deploying -> Parts.Info
-  | Api.DeployState.Deployed -> Parts.Good
-  | Api.DeployState.DeployFailed -> Parts.Bad
 
 [<SolidComponent>]
 let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
@@ -1094,7 +1143,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   | Dashboard ->
     Fragment() {
       dashboard model.Dashboard
-      rebuild dispatch model.Rebuild
+      rebuild dispatch model.Rebuild model.SiteDeploy
     }
   | Settings ->
     Fragment() {

@@ -1,6 +1,7 @@
 namespace TwoPoint.Core.Deploys.Actions
 
 open TwoPoint.Core.Deploys
+open TwoPoint.Core.Notifications
 open TwoPoint.Core.Util
 
 open FsToolkit.ErrorHandling
@@ -40,13 +41,18 @@ module ReceiveWorkflowRun =
     | UnknownRepo
     | UnknownRunEvent
 
+  type Notification =
+    | NoNotification
+    | Notified of Pushed
+    | DevicesNotRead of DependencyError
+
   type Event =
-    | Recorded of SiteRun
+    | Recorded of SiteRun * Notification
     | Skipped of Skipped
     | OlderThanStored
 
   type Next =
-    | Newer of SiteRun
+    | Newer of run : SiteRun * before : RunState option
     | OlderThanStored
 
   type Parsed =
@@ -66,6 +72,8 @@ module ReceiveWorkflowRun =
   type WorkflowRunJson =
     { [<JsonPropertyName "run_number">]
       RunNumber : int64
+      [<JsonPropertyName "run_attempt">]
+      RunAttempt : int
       Event : string
       Status : string
       Conclusion : string
@@ -73,6 +81,8 @@ module ReceiveWorkflowRun =
       CreatedAt : DateTimeOffset
       [<JsonPropertyName "updated_at">]
       UpdatedAt : DateTimeOffset
+      [<JsonPropertyName "html_url">]
+      HtmlUrl : string
       Path : string }
 
   [<CLIMutable>]
@@ -80,6 +90,20 @@ module ReceiveWorkflowRun =
     { [<JsonPropertyName "workflow_run">]
       WorkflowRun : WorkflowRunJson
       Repository : RepositoryJson }
+
+  type DeployFailedPayload = { Run : RunNumber }
+
+  [<RequireQualifiedAccess>]
+  module DeployFailedPayload =
+
+    /// The worker `sw.js` builds the notification of a failed deploy from a payload of this case.
+    [<Literal>]
+    let Case = "deploy-failed"
+
+    let ofRun (run : SiteRun) : DeployFailedPayload = { Run = run.Number }
+
+    let toBytes (payload : DeployFailedPayload) : byte array =
+      JsonSerializer.SerializeToUtf8Bytes {| ``case`` = Case; runNumber = payload.Run.Value |}
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -115,16 +139,18 @@ module ReceiveWorkflowRun =
 
     let private siteWorkflowPath = ".github/workflows/site.yml"
 
-    let private run (repo : Repo) (json : WorkflowRunJson) =
+    let private run (repo : Repo) (url : Uri) (json : WorkflowRunJson) =
       match RunEvent.tryParse json.Event with
       | Some event ->
         Run
           { Repo = repo
             Number = RunNumber json.RunNumber
+            Attempt = RunAttempt json.RunAttempt
             Event = event
             State = state json.Status (json.Conclusion |> Option.ofObj |> Option.defaultValue "")
             CreatedDate = json.CreatedAt.UtcDateTime
-            UpdatedDate = json.UpdatedAt.UtcDateTime }
+            UpdatedDate = json.UpdatedAt.UtcDateTime
+            Url = url }
       | None -> Skip UnknownRunEvent
 
     let parse (repos : SiteRepos) (event : string) (body : byte array) : Result<Parsed, Malformed> =
@@ -150,8 +176,11 @@ module ReceiveWorkflowRun =
             else
               match Repo.tryParse payload.Repository.FullName with
               | false, _ -> Error NoRepoName
-              | true, repo when repo = repos.Production || repo = repos.Staging -> Ok (run repo json)
-              | true, _ -> Ok (Skip UnknownRepo)
+              | true, repo when repo <> repos.Production && repo <> repos.Staging -> Ok (Skip UnknownRepo)
+              | true, repo ->
+                match Uri.TryCreate(json.HtmlUrl, UriKind.Absolute) with
+                | true, url -> Ok (run repo url json)
+                | false, _ -> Error (MissingField "html_url")
         with :? JsonException as ex ->
           Error (BadJson ex)
 
@@ -163,13 +192,20 @@ module ReceiveWorkflowRun =
       | RunState.Failed
       | RunState.Canceled -> 2
 
-    /// GitHub sends the webhooks of a run in no fixed order, so a stored run never goes back to an earlier state.
+    /// GitHub sends the webhooks of a run in no fixed order, so a stored run never goes back to an earlier state or
+    /// an earlier attempt. A later attempt starts again from no state.
     let next (stored : SiteRun option) (incoming : SiteRun) : Next =
       match stored with
+      | Some stored when stored.Attempt.Value > incoming.Attempt.Value -> Next.OlderThanStored
+      | Some stored when stored.Attempt.Value < incoming.Attempt.Value -> Newer(incoming, None)
       | Some stored when rank stored.State > rank incoming.State -> Next.OlderThanStored
       | Some stored when rank stored.State = rank incoming.State && stored.UpdatedDate > incoming.UpdatedDate ->
         Next.OlderThanStored
-      | _ -> Newer incoming
+      | _ -> Newer(incoming, stored |> Option.map _.State)
+
+    /// GitHub can send the webhook of a finished run more than one time.
+    let needsNotification (repos : SiteRepos) (run : SiteRun) (before : RunState option) =
+      run.Repo = repos.Production && run.State = RunState.Failed && before <> Some RunState.Failed
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
@@ -177,8 +213,29 @@ module ReceiveWorkflowRun =
     abstract member GetSiteRepos: unit -> SiteRepos
     abstract member GetWebhookSecret: unit -> DependencyResult<byte array>
     abstract member SaveRun: run: SiteRun -> DependencyResult<Next>
+    abstract member GetDevicesOfAuthor: unit -> DependencyResult<RegisteredDevice list>
+    abstract member SendPush: RegisteredDevice -> payload: byte array -> DependencyResult<PushOutcome>
+    abstract member RecordPush: RegisteredDevice -> SiteRun -> DependencyResult<unit>
+    abstract member DeleteDevice: RegisteredDevice -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
+
+    let notify (run : SiteRun) : CancellableTask<Notification> = cancellableTask {
+      match! dependencies.GetDevicesOfAuthor() with
+      | Error error -> return DevicesNotRead error
+      | Ok devices ->
+        let payload = DeployFailedPayload.ofRun run |> DeployFailedPayload.toBytes
+
+        let! pushed =
+          devices
+          |> DevicePush.pushAll
+            (fun device -> dependencies.SendPush device payload)
+            (fun device -> dependencies.RecordPush device run)
+            dependencies.DeleteDevice
+
+        return Notified pushed
+    }
+
     fun dto -> cancellableTaskResult {
       let! secret = dependencies.GetWebhookSecret() |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
@@ -190,6 +247,9 @@ module ReceiveWorkflowRun =
         | Ok (Skip skipped) -> return Skipped skipped
         | Ok (Run run) ->
           match! dependencies.SaveRun run |> CancellableTaskResult.mapError ActionError<Error>.Dependency with
-          | Newer saved -> return Recorded saved
+          | Newer(saved, before) when Logic.needsNotification (dependencies.GetSiteRepos()) saved before ->
+            let! notification = notify saved |> CancellableTask.map Ok
+            return Recorded(saved, notification)
+          | Newer(saved, _) -> return Recorded(saved, NoNotification)
           | Next.OlderThanStored -> return Event.OlderThanStored
     }

@@ -2,6 +2,9 @@ module TwoPoint.Core.Tests.ReceiveWorkflowRunTests
 
 open TwoPoint.Core.Deploys
 open TwoPoint.Core.Deploys.Actions
+open TwoPoint.Core.Notifications
+open TwoPoint.Core.Posts
+open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 
 open Expecto
@@ -11,18 +14,39 @@ open IcedTasks
 open System
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open System.Threading
 
 let private production = { Owner = "tw0po1nt"; Name = "twopoint-website" }
 let private staging = { Owner = "tw0po1nt"; Name = "twopoint-website-staging" }
 let private secret = Encoding.UTF8.GetBytes "a-webhook-secret"
 
+let private device (endpoint : string) =
+  let at = DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+  let endpoint = PushEndpoint.create endpoint |> Fixtures.ok
+  { RegisteredDevice.UserId = UserExternalId.create "6f1c1b5e-3d2a-4a43-9c6b-0d7a5b0e9a11" |> Fixtures.ok
+    Id = DeviceId.ofEndpoint endpoint
+    Endpoint = endpoint
+    P256dh = NonEmptyString.create None "BNcRdre" |> Fixtures.ok
+    Auth = NonEmptyString.create None "tBHItJI" |> Fixtures.ok
+    Label = NonEmptyString.create None "Safari on macOS" |> Fixtures.ok
+    CreatedDate = at
+    LastSeenDate = at }
+
+let private phone = device "https://push.example.com/send/phone"
+
 type private FakeStore(stored : SiteRun list) =
   let saved = ResizeArray<SiteRun>()
+  let pushes = ResizeArray<RegisteredDevice * byte array>()
+  let recorded = ResizeArray<RegisteredDevice * SiteRun>()
   let mutable secretFails = false
+  let mutable devicesFail = false
 
   member _.Saved = List.ofSeq saved
+  member _.Pushes = List.ofSeq pushes
+  member _.Recorded = List.ofSeq recorded
   member _.SecretFails with set value = secretFails <- value
+  member _.DevicesFail with set value = devicesFail <- value
 
   interface ReceiveWorkflowRun.Dependencies with
     member _.GetSiteRepos () = { Production = production; Staging = staging }
@@ -37,22 +61,44 @@ type private FakeStore(stored : SiteRun list) =
       let current = stored |> List.tryFind (fun item -> item.Repo = run.Repo && item.Number = run.Number)
 
       match ReceiveWorkflowRun.Logic.next current run with
-      | ReceiveWorkflowRun.Newer run ->
+      | ReceiveWorkflowRun.Newer(run, before) ->
         saved.Add run
-        CancellableTaskResult.singleton (ReceiveWorkflowRun.Newer run)
+        CancellableTaskResult.singleton (ReceiveWorkflowRun.Newer(run, before))
       | ReceiveWorkflowRun.Next.OlderThanStored -> CancellableTaskResult.singleton ReceiveWorkflowRun.Next.OlderThanStored
 
-let private payload repo number event status (conclusion : string) path =
+    member _.GetDevicesOfAuthor () =
+      if devicesFail then
+        CancellableTaskResult.error { Dependency = Dependency.Database; Type = Unknown (exn "The table is down") }
+      else
+        CancellableTaskResult.singleton [ phone ]
+
+    member _.SendPush device payload =
+      pushes.Add(device, payload)
+      CancellableTaskResult.singleton Delivered
+
+    member _.RecordPush device run =
+      recorded.Add(device, run)
+      CancellableTaskResult.singleton ()
+
+    member _.DeleteDevice _ = CancellableTaskResult.singleton ()
+
+let private attemptPayload attempt repo number event status (conclusion : string) path =
   let conclusion = if conclusion = "" then "null" else $"\"{conclusion}\""
 
   $"""{{ "action": "completed",
-  "workflow_run": {{ "run_number": {number}, "event": "{event}", "status": "{status}", "conclusion": {conclusion},
-    "created_at": "2026-03-01T09:00:00Z", "updated_at": "2026-03-01T09:05:00Z", "path": "{path}" }},
+  "workflow_run": {{ "run_number": {number}, "run_attempt": {attempt}, "event": "{event}", "status": "{status}", "conclusion": {conclusion},
+    "created_at": "2026-03-01T09:00:00Z", "updated_at": "2026-03-01T09:05:00Z", "path": "{path}",
+    "html_url": "https://github.com/{repo}/actions/runs/900{number}" }},
   "repository": {{ "full_name": "{repo}" }} }}"""
   |> Encoding.UTF8.GetBytes
 
+let private payload repo number event status conclusion path = attemptPayload 1 repo number event status conclusion path
+
 let private siteRun repo number status conclusion =
   payload repo number "workflow_dispatch" status conclusion ".github/workflows/site.yml"
+
+let private siteRunAttempt attempt repo number status conclusion =
+  attemptPayload attempt repo number "workflow_dispatch" status conclusion ".github/workflows/site.yml"
 
 let private sign (body : byte array) = "sha256=" + Convert.ToHexString(HMACSHA256.HashData(secret, body)).ToLowerInvariant()
 
@@ -106,12 +152,14 @@ let tests =
       let expected =
         { Repo = production
           Number = RunNumber 5L
+          Attempt = RunAttempt 1
           Event = WorkflowDispatch
           State = RunState.Succeeded
           CreatedDate = DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc)
-          UpdatedDate = DateTime(2026, 3, 1, 9, 5, 0, DateTimeKind.Utc) }
+          UpdatedDate = DateTime(2026, 3, 1, 9, 5, 0, DateTimeKind.Utc)
+          Url = Uri "https://github.com/tw0po1nt/twopoint-website/actions/runs/9005" }
 
-      Expect.equal (receiveSigned store body) (Ok(ReceiveWorkflowRun.Recorded expected)) "Recorded"
+      Expect.equal (receiveSigned store body) (Ok(ReceiveWorkflowRun.Recorded(expected, ReceiveWorkflowRun.NoNotification))) "Recorded"
       Expect.equal store.Saved [ expected ] "One run is written"
     }
 
@@ -182,10 +230,12 @@ let tests =
       let finished =
         { Repo = production
           Number = RunNumber 5L
+          Attempt = RunAttempt 1
           Event = WorkflowDispatch
           State = RunState.Succeeded
           CreatedDate = DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc)
-          UpdatedDate = DateTime(2026, 3, 1, 9, 5, 0, DateTimeKind.Utc) }
+          UpdatedDate = DateTime(2026, 3, 1, 9, 5, 0, DateTimeKind.Utc)
+          Url = Uri "https://github.com/tw0po1nt/twopoint-website/actions/runs/9005" }
 
       let store = FakeStore [ finished ]
 
@@ -232,13 +282,15 @@ let tests =
       let run state updated =
         { Repo = production
           Number = RunNumber 5L
+          Attempt = RunAttempt 1
           Event = Push
           State = state
           CreatedDate = at 0
-          UpdatedDate = at updated }
+          UpdatedDate = at updated
+          Url = Uri "https://github.com/tw0po1nt/twopoint-website/actions/runs/9005" }
 
-      Expect.equal (ReceiveWorkflowRun.Logic.next None (run RunState.Waiting 0)) (ReceiveWorkflowRun.Newer(run RunState.Waiting 0)) "No stored run"
-      Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Running 1)) (run RunState.Succeeded 2)) (ReceiveWorkflowRun.Newer(run RunState.Succeeded 2)) "A later state"
+      Expect.equal (ReceiveWorkflowRun.Logic.next None (run RunState.Waiting 0)) (ReceiveWorkflowRun.Newer(run RunState.Waiting 0, None)) "No stored run"
+      Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Running 1)) (run RunState.Succeeded 2)) (ReceiveWorkflowRun.Newer(run RunState.Succeeded 2, Some RunState.Running)) "A later state"
       Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Succeeded 2)) (run RunState.Running 3)) ReceiveWorkflowRun.Next.OlderThanStored "An earlier state"
       Expect.equal (ReceiveWorkflowRun.Logic.next (Some(run RunState.Failed 5)) (run RunState.Failed 4)) ReceiveWorkflowRun.Next.OlderThanStored "An older update"
     }
@@ -250,5 +302,139 @@ let tests =
       Expect.equal (ReceiveWorkflowRun.Logic.state "completed" "skipped") RunState.Canceled "skipped"
       Expect.equal (ReceiveWorkflowRun.Logic.state "in_progress" "") RunState.Running "in_progress"
       Expect.equal (ReceiveWorkflowRun.Logic.state "queued" "") RunState.Waiting "queued"
+    }
+  
+    test "a failed production run sends one notification with the run number" {
+      let store = FakeStore []
+      let result = receiveSigned store (siteRun "tw0po1nt/twopoint-website" 5 "completed" "failure")
+
+      match result with
+      | Ok(ReceiveWorkflowRun.Recorded(run, ReceiveWorkflowRun.Notified pushed)) ->
+        Expect.equal pushed.Sent [ phone ] "One push to the device"
+        Expect.equal (store.Pushes |> List.map fst) [ phone ] "One notification"
+        Expect.equal (store.Recorded |> List.map (fun (device, run) -> device, run.Number)) [ phone, RunNumber 5L ] "A push row"
+
+        use json = JsonDocument.Parse(snd store.Pushes.Head)
+        Expect.equal (json.RootElement.GetProperty("case").GetString()) ReceiveWorkflowRun.DeployFailedPayload.Case "The case"
+        Expect.equal (json.RootElement.GetProperty("runNumber").GetInt64()) 5L "The run number"
+        Expect.equal run.State RunState.Failed "The run is recorded as failed"
+      | other -> failtestf "Expected a notified failed run, got %A" other
+    }
+
+    test "a failed staging run sends no notification" {
+      let store = FakeStore []
+      let result = receiveSigned store (siteRun "tw0po1nt/twopoint-website-staging" 8 "completed" "failure")
+
+      match result with
+      | Ok(ReceiveWorkflowRun.Recorded(_, ReceiveWorkflowRun.NoNotification)) -> ()
+      | other -> failtestf "Expected a recorded run with no notice, got %A" other
+
+      Expect.isEmpty store.Pushes "No notification"
+    }
+
+    test "a successful production run sends no notification" {
+      let store = FakeStore []
+      receiveSigned store (siteRun "tw0po1nt/twopoint-website" 5 "completed" "success") |> ignore
+
+      Expect.isEmpty store.Pushes "No notification"
+    }
+
+    test "a second webhook of the same failed production run sends no notification" {
+      let at = DateTime(2026, 3, 1, 9, 5, 0, DateTimeKind.Utc)
+
+      let failed =
+        { Repo = production
+          Number = RunNumber 5L
+          Attempt = RunAttempt 1
+          Event = WorkflowDispatch
+          State = RunState.Failed
+          CreatedDate = at
+          UpdatedDate = at
+          Url = Uri "https://github.com/tw0po1nt/twopoint-website/actions/runs/9005" }
+
+      let store = FakeStore [ failed ]
+      receiveSigned store (siteRun "tw0po1nt/twopoint-website" 5 "completed" "failure") |> ignore
+
+      Expect.isEmpty store.Pushes "No second notification"
+    }
+
+    test "a re-run of a failed production run deploys again, and its failure sends a notification" {
+      let at = DateTime(2026, 3, 1, 9, 5, 0, DateTimeKind.Utc)
+
+      let failed =
+        { Repo = production
+          Number = RunNumber 5L
+          Attempt = RunAttempt 1
+          Event = WorkflowDispatch
+          State = RunState.Failed
+          CreatedDate = at
+          UpdatedDate = at
+          Url = Uri "https://github.com/tw0po1nt/twopoint-website/actions/runs/9005" }
+
+      let queued = FakeStore [ failed ]
+      receiveSigned queued (siteRunAttempt 2 "tw0po1nt/twopoint-website" 5 "queued" "") |> ignore
+
+      Expect.equal (queued.Saved |> List.map (fun run -> run.Attempt, run.State)) [ RunAttempt 2, RunState.Waiting ] "The re-run waits"
+
+      let failedAgain = FakeStore [ failed ]
+      receiveSigned failedAgain (siteRunAttempt 2 "tw0po1nt/twopoint-website" 5 "completed" "failure") |> ignore
+
+      Expect.equal (failedAgain.Pushes |> List.map fst) [ phone ] "One notification for the second attempt"
+      Expect.equal (failedAgain.Recorded |> List.map (fun (_, run) -> run.Attempt)) [ RunAttempt 2 ] "A push row of the second attempt"
+    }
+
+    test "a late webhook of an earlier attempt does not replace a re-run" {
+      let rerun =
+        { Repo = production
+          Number = RunNumber 5L
+          Attempt = RunAttempt 2
+          Event = WorkflowDispatch
+          State = RunState.Running
+          CreatedDate = DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc)
+          UpdatedDate = DateTime(2026, 3, 1, 9, 10, 0, DateTimeKind.Utc)
+          Url = Uri "https://github.com/tw0po1nt/twopoint-website/actions/runs/9005" }
+
+      let store = FakeStore [ rerun ]
+
+      Expect.equal
+        (receiveSigned store (siteRun "tw0po1nt/twopoint-website" 5 "completed" "failure"))
+        (Ok ReceiveWorkflowRun.Event.OlderThanStored)
+        "Ignored"
+
+      Expect.isEmpty store.Pushes "No notification"
+    }
+
+    test "a failed production run is recorded when the devices are not readable" {
+      let store = FakeStore []
+      store.DevicesFail <- true
+
+      match receiveSigned store (siteRun "tw0po1nt/twopoint-website" 5 "completed" "failure") with
+      | Ok(ReceiveWorkflowRun.Recorded(_, ReceiveWorkflowRun.DevicesNotRead _)) -> ()
+      | other -> failtestf "Expected a recorded run with no read of the devices, got %A" other
+
+      Expect.hasLength store.Saved 1 "The run is written"
+    }
+
+    test "a run with no link to its page is malformed" {
+      let store = FakeStore []
+
+      let body =
+        "{ \"workflow_run\": { \"run_number\": 1, \"event\": \"push\", \"status\": \"queued\", \"path\": \".github/workflows/site.yml\" }, \"repository\": { \"full_name\": \"tw0po1nt/twopoint-website\" } }"
+        |> Encoding.UTF8.GetBytes
+
+      Expect.equal
+        (receiveSigned store body)
+        (Error(ActionError.Logic(ReceiveWorkflowRun.MalformedPayload(ReceiveWorkflowRun.MissingField "html_url"))))
+        "No link"
+    }
+
+    test "a run of another repo with no link to its page is ignored" {
+      let store = FakeStore []
+
+      let body =
+        "{ \"workflow_run\": { \"run_number\": 1, \"event\": \"push\", \"status\": \"queued\", \"path\": \".github/workflows/site.yml\" }, \"repository\": { \"full_name\": \"someone/else\" } }"
+        |> Encoding.UTF8.GetBytes
+
+      Expect.equal (receiveSigned store body) (Ok(ReceiveWorkflowRun.Skipped ReceiveWorkflowRun.UnknownRepo)) "Ignored"
     }
   ]

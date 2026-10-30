@@ -21,6 +21,7 @@
     <Compile Include="Notifications\DeviceTypes.fs" />
     <Compile Include="Notifications\DeviceActions.fs" />
     <Compile Include="Notifications\DeviceQueries.fs" />
+    <Compile Include="Notifications\DevicePush.fs" />
     <Compile Include="Deploys\DeployState.fs" />
     <Compile Include="Posts\PostTypes.fs" />
     <Compile Include="Deploys\DeployTypes.fs" />

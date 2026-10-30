@@ -19,10 +19,12 @@ let private production = { Owner = "tw0po1nt"; Name = "twopoint-website" }
 let private run number state event created =
   { Repo = production
     Number = RunNumber number
+    Attempt = RunAttempt 1
     Event = event
     State = state
     CreatedDate = at created
-    UpdatedDate = at created }
+    UpdatedDate = at created
+    Url = Uri $"https://github.com/tw0po1nt/twopoint-website/actions/runs/{number}" }
 
 let private dispatched number = ProductionDispatch.Dispatched(Queued(RunNumber number))
 
@@ -146,6 +148,58 @@ let tests =
     }
   ]
 
+let private siteAt now changes rebuild runs =
+  DeployRule.siteState (at now) { Changes = Map.ofList changes; Rebuild = rebuild; Runs = runs }
+
+[<Tests>]
+let siteTests =
+  testList "The deploy state of the site" [
+    test "a site with no change and no run is deployed" {
+      siteAt 5 [] None (runs None None) |> expect Deployed
+    }
+
+    test "the newest change gives the state while its run deploys" {
+      let live = run 10L RunState.Succeeded WorkflowDispatch 1
+      let older = Slug.Unsafe.create "older", change 0 (dispatched 10L)
+      let newer = Slug.Unsafe.create "newer", change 3 (dispatched 11L)
+      siteAt 5 [ older; newer ] None (runs (Some live) (Some live)) |> expect Deploying
+    }
+
+    test "a failed dispatch of the newest change is a failed deploy" {
+      let live = run 10L RunState.Succeeded WorkflowDispatch 1
+      siteAt 5 [ Slug.Unsafe.create "my-post", change 3 ProductionDispatch.Failed ] None (runs (Some live) (Some live))
+      |> expect DeployFailed
+    }
+
+    test "a rebuild after the newest change gives the state" {
+      let live = run 10L RunState.Succeeded WorkflowDispatch 1
+      let rebuild = { DispatchedDate = at 4; Production = dispatched 11L }
+      siteAt 5 [ Slug.Unsafe.create "my-post", change 0 (dispatched 10L) ] (Some rebuild) (runs (Some live) (Some live))
+      |> expect Deploying
+    }
+
+    test "a failed push run after the deployed changes is a failed deploy" {
+      let live = run 10L RunState.Succeeded WorkflowDispatch 1
+      let push = run 11L RunState.Failed Push 3
+      siteAt 5 [ Slug.Unsafe.create "my-post", change 0 (dispatched 10L) ] None (runs (Some push) (Some live))
+      |> expect DeployFailed
+    }
+
+    test "a running push run after the deployed changes is deploying" {
+      let live = run 10L RunState.Succeeded WorkflowDispatch 1
+      let push = run 11L RunState.Running Push 3
+      siteAt 5 [ Slug.Unsafe.create "my-post", change 0 (dispatched 10L) ] None (runs (Some push) (Some live))
+      |> expect Deploying
+    }
+
+    test "a successful run after a failed run is deployed" {
+      let live = run 12L RunState.Succeeded WorkflowDispatch 4
+      let rebuild = { DispatchedDate = at 4; Production = dispatched 12L }
+      siteAt 5 [ Slug.Unsafe.create "my-post", change 0 (dispatched 11L) ] (Some rebuild) (runs (Some live) (Some live))
+      |> expect Deployed
+    }
+  ]
+
 type private FakeContext(context : DeployContext) =
   interface GetPostDeploy.Dependencies with
     member _.GetUtcNow () = at 5
@@ -167,5 +221,31 @@ let queryTests =
       match (GetPostDeploy.withDependencies (FakeContext context) "Not A Slug" CancellationToken.None).Result with
       | Error(QueryError.Validation _) -> ()
       | other -> failtestf "Expected a validation error, got %A" other
+    }
+  ]
+
+let private staging = { Owner = "tw0po1nt"; Name = "twopoint-website-staging" }
+
+type private FakeSite(context : DeployContext, staging : SiteRun option) =
+  interface GetSiteDeploy.Dependencies with
+    member _.GetUtcNow () = at 5
+    member _.GetDeployContext () = CancellableTaskResult.singleton context
+    member _.GetLatestStagingRun () = CancellableTaskResult.singleton staging
+
+[<Tests>]
+let siteQueryTests =
+  testList "Get the deploy state of the site" [
+    test "the answer has the state of the site and the latest run of each repo" {
+      let failed = run 11L RunState.Failed WorkflowDispatch 3
+      let live = run 10L RunState.Succeeded WorkflowDispatch 1
+      let stagingRun = { run 30L RunState.Failed Push 2 with Repo = staging }
+      let context = { Changes = Map.empty; Rebuild = None; Runs = runs (Some failed) (Some live) }
+
+      let result = (GetSiteDeploy.withDependencies (FakeSite(context, Some stagingRun)) () CancellationToken.None).Result
+
+      Expect.equal
+        result
+        (Ok { GetSiteDeploy.State = DeployFailed; GetSiteDeploy.Production = Some failed; GetSiteDeploy.Staging = Some stagingRun })
+        "The failed production run and the failed staging run"
     }
   ]

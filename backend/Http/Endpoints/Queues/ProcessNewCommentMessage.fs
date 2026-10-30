@@ -55,14 +55,14 @@ type ProcessNewCommentMessage(
         logger
       )
       let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
-      let pushDependencies = NewCommentPushDependencies(pushSetup, tableServiceClient, logger)
+      let pushDependencies = PushDependencies(pushSetup, tableServiceClient, logger)
 
       let notifyNewComment = NotifyNewComment.withDependencies { new NotifyNewComment.Dependencies with
         member _.GetPostedComment commentId = postDependencies.GetPostedCommentById commentId
         member _.CountNewComments () = postDependencies.CountNewComments()
         member _.GetDevicesOfAuthor () = deviceDependencies.GetDevicesOfUser Access.authorUserId
         member _.SendPush device payload = pushDependencies.SendPush device payload
-        member _.RecordPush device commentId = pushDependencies.RecordPush device commentId
+        member _.RecordPush device commentId = pushDependencies.RecordCommentPush device commentId
         member _.DeleteDevice device = deviceDependencies.DeleteDevice device
       }
 

@@ -1,11 +1,12 @@
 namespace TwoPoint.Dependencies.Notifications
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Notifications
-open TwoPoint.Core.Notifications.Actions
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Comms
+open TwoPoint.Dependencies.Deploys
 open TwoPoint.Dependencies.Util
 
 open Azure.Data.Tables
@@ -14,7 +15,7 @@ open Microsoft.Extensions.Logging
 
 open System
 
-type NewCommentPushDependencies(
+type PushDependencies(
   setup : WebPushSetup,
   tableServiceClient : TableServiceClient,
   logger : ILogger
@@ -28,6 +29,17 @@ type NewCommentPushDependencies(
   let notConfigured =
     { Dependency = Dependency.WebPush
       Type = DependencyErrorType.Validation "The 'WebPush' setting is missing, so the backend cannot send a push" }
+
+  let record (device : RegisteredDevice) (operationId : string) : DependencyResult<unit> = cancellableTaskResult {
+    let push =
+      { DbPush.Id = Guid.NewGuid().ToString()
+        OperationId = operationId
+        CreatedDate = DateTime.UtcNow
+        Recipient = device.Id.ToString() }
+
+    let! (_ : DbPush) = commsDb.CreatePush push
+    return ()
+  }
 
   member _.SendPush (device : RegisteredDevice) (payload : byte array) : DependencyResult<PushOutcome> =
     match setup with
@@ -43,13 +55,7 @@ type NewCommentPushDependencies(
         | Sent -> Delivered
         | EndpointGone -> DeviceGone)
 
-  member _.RecordPush (device : RegisteredDevice) (commentId : CommentId) : DependencyResult<unit> = cancellableTaskResult {
-    let push =
-      { DbPush.Id = Guid.NewGuid().ToString()
-        OperationId = commentId.ToString()
-        CreatedDate = DateTime.UtcNow
-        Recipient = device.Id.ToString() }
+  member _.RecordCommentPush (device : RegisteredDevice) (commentId : CommentId) = record device (commentId.ToString())
 
-    let! (_ : DbPush) = commsDb.CreatePush push
-    return ()
-  }
+  member _.RecordRunPush (device : RegisteredDevice) (run : SiteRun) =
+    record device $"site-run:{DeployRows.runPartition run.Repo}:{run.Number.Value}:{run.Attempt.Value}"
