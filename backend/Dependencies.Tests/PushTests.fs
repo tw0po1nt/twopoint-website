@@ -1,4 +1,4 @@
-module TwoPoint.Dependencies.Tests.NewCommentPushTests
+module TwoPoint.Dependencies.Tests.PushTests
 
 open TwoPoint.Core.Notifications
 open TwoPoint.Core.Notifications.Actions
@@ -46,14 +46,14 @@ let private configured (status : HttpStatusCode) =
   WebPushConfigured sender
 
 let private dependencies setup =
-  NewCommentPushDependencies(setup, TableServiceClient "UseDevelopmentStorage=true", NullLogger.Instance)
+  PushDependencies(setup, TableServiceClient "UseDevelopmentStorage=true", NullLogger.Instance)
 
 let private send setup =
   ((dependencies setup).SendPush device (Text.Encoding.UTF8.GetBytes "{}") CancellationToken.None).Result
 
 [<Tests>]
 let tests =
-  testList "NewCommentPushDependencies" [
+  testList "PushDependencies" [
     test "a 201 from the push service is a delivery" {
       Expect.equal (send (configured HttpStatusCode.Created)) (Ok Delivered) "Expected Delivered"
     }

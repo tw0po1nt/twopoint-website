@@ -47,6 +47,7 @@ module DeployRows =
     entity["State"] <- stateName run.State
     entity["CreatedDate"] <- ChangeColumns.dateText run.CreatedDate
     entity["UpdatedDate"] <- ChangeColumns.dateText run.UpdatedDate
+    entity["Url"] <- string run.Url
     entity
 
   let tryRun (repo : Repo) (entity : TableEntity) : SiteRun option =
@@ -63,7 +64,13 @@ module DeployRows =
           Event = event
           State = state
           CreatedDate = ChangeColumns.parseDate created
-          UpdatedDate = ChangeColumns.parseDate updated }
+          UpdatedDate = ChangeColumns.parseDate updated
+          // A row that was written before the column existed has no Url.
+          Url =
+            match entity.TryGetString "Url" |> Option.map (fun url -> Uri.TryCreate(url, UriKind.Absolute)) with
+            | Some (true, url) -> url
+            | Some (false, _)
+            | None -> Repo.workflowPage repo }
     }
 
   let changeEntity (change : PostChange) =
@@ -118,7 +125,7 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
 
         match ReceiveWorkflowRun.Logic.next stored incoming with
         | ReceiveWorkflowRun.Next.OlderThanStored -> outcome <- Some ReceiveWorkflowRun.Next.OlderThanStored
-        | ReceiveWorkflowRun.Newer run ->
+        | ReceiveWorkflowRun.Newer(run, before) ->
           try
             if response.HasValue then
               let! _ = runs.UpdateEntityAsync(DeployRows.runEntity run, response.Value.ETag, TableUpdateMode.Replace, ct)
@@ -127,11 +134,18 @@ type DeployDb(tableServiceClient : TableServiceClient, logger : ILogger) =
               let! _ = runs.AddEntityAsync(DeployRows.runEntity run, ct)
               ()
 
-            outcome <- Some(ReceiveWorkflowRun.Newer run)
+            outcome <- Some(ReceiveWorkflowRun.Newer(run, before))
           with :? RequestFailedException as ex when (ex.Status = 409 || ex.Status = 412) && remaining > 1 ->
             remaining <- remaining - 1
 
       return outcome.Value
+    }
+
+  member _.GetLatestRun (repo : Repo) : DependencyResult<SiteRun option> =
+    runDependencyWithLogging Dependency.Database logger $"{nameof DeployDb}.GetLatestRun"
+    <| cancellableTaskResult {
+      let! latest = runs repo ""
+      return latest
     }
 
   member _.RecordChange (change : PostChange) : DependencyResult<unit> =

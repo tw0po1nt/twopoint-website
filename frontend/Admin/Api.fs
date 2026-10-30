@@ -242,6 +242,26 @@ type Failure =
   | Invalid
   | Failed of reason: string
 
+[<RequireQualifiedAccess>]
+type RunState =
+  | Waiting
+  | Running
+  | Succeeded
+  | Failed
+  | Canceled
+
+type SiteRun =
+  { Number: int
+    State: RunState
+    Url: string
+    UpdatedDate: string }
+
+/// The latest run of each repo. The production run deploys the site of record.
+type SiteDeploy =
+  { Deploy: DeployState
+    Production: SiteRun option
+    Staging: SiteRun option }
+
 let reason (failure: Failure) =
   match failure with
   | Refused -> "The API refused the token of this account."
@@ -267,6 +287,17 @@ let private deployState: Decoder<DeployState> =
     | "deployed" -> Decode.succeed DeployState.Deployed
     | "failed" -> Decode.succeed DeployState.DeployFailed
     | _ -> Decode.fail $"The deploy state '{name}' is not known.")
+
+let private runState: Decoder<RunState> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "waiting" -> Decode.succeed RunState.Waiting
+    | "running" -> Decode.succeed RunState.Running
+    | "succeeded" -> Decode.succeed RunState.Succeeded
+    | "failed" -> Decode.succeed RunState.Failed
+    | "canceled" -> Decode.succeed RunState.Canceled
+    | _ -> Decode.fail $"The run state '{name}' is not known.")
 
 let private commenterStatusName (status: CommenterStatus) =
   match status with
@@ -373,6 +404,7 @@ let private coders =
   Extra.empty
   |> Extra.withCustom (fun (_: PostState) -> failwith "The admin sends no post state.") postState
   |> Extra.withCustom (fun (_: DeployState) -> failwith "The admin sends no deploy state.") deployState
+  |> Extra.withCustom (fun (_: RunState) -> failwith "The admin sends no run state.") runState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
@@ -464,6 +496,9 @@ let getPosts (api: string) (token: string) : JS.Promise<Result<Post list, Failur
 let getPostDeploy (api: string) (token: string) (slug: string) : JS.Promise<Result<DeployState, Failure>> =
   send<PostDeploy> HttpMethod.GET api token (internalPath [ "posts"; slug; "deploy" ])
   |> Promise.map (Result.map _.Deploy)
+
+let getSiteDeploy (api: string) (token: string) : JS.Promise<Result<SiteDeploy, Failure>> =
+  send HttpMethod.GET api token (internalPath [ "deploys" ])
 
 let rebuildSite (api: string) (token: string) : JS.Promise<Result<Rebuilt, Failure>> =
   send<Rebuild> HttpMethod.POST api token (internalPath [ "deploys" ])

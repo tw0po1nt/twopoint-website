@@ -2,8 +2,10 @@ namespace TwoPoint.Http.Endpoints.Github
 
 open TwoPoint.Core.Deploys
 open TwoPoint.Core.Deploys.Actions
+open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Deploys
+open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 
@@ -53,6 +55,7 @@ type ReceiveGitHubWebhook(
   config : Config,
   credential : TokenCredential,
   logger : ILogger<ReceiveGitHubWebhook>,
+  pushSetup : WebPushSetup,
   tableServiceClient : TableServiceClient
 ) =
 
@@ -98,11 +101,17 @@ type ReceiveGitHubWebhook(
         do! req.Body.CopyToAsync(buffer, ct)
 
         let db = DeployDb(tableServiceClient, logger)
+        let devices = DeviceDependencies(tableServiceClient, logger)
+        let push = PushDependencies(pushSetup, tableServiceClient, logger)
 
         let receive = ReceiveWorkflowRun.withDependencies { new ReceiveWorkflowRun.Dependencies with
           member _.GetSiteRepos () = settings.Repos
           member _.GetWebhookSecret () = secret settings
           member _.SaveRun run = db.SaveRun run
+          member _.GetDevicesOfAuthor () = devices.GetDevicesOfUser Access.authorUserId
+          member _.SendPush device payload = push.SendPush device payload
+          member _.RecordPush device run = push.RecordRunPush device run
+          member _.DeleteDevice device = devices.DeleteDevice device
         }
 
         let! result =
@@ -113,8 +122,23 @@ type ReceiveGitHubWebhook(
 
         let statusCode =
           match result with
-          | Ok (ReceiveWorkflowRun.Recorded run) ->
+          | Ok (ReceiveWorkflowRun.Recorded(run, notice)) ->
             logger.LogInformation("Recorded run {number} of site.yml in {repo}: {state}", run.Number.Value, run.Repo, run.State)
+
+            match notice with
+            | ReceiveWorkflowRun.NoNotice -> ()
+            | ReceiveWorkflowRun.Notified pushed ->
+              logger.LogInformation(
+                "Notified the author of the failed run {number}: {sent} sent, {removed} removed",
+                run.Number.Value,
+                pushed.Sent.Length,
+                pushed.Removed.Length
+              )
+              for device, error in pushed.Failed do
+                logger.LogError("Unable to push to device '{deviceId}': {error}", device.Id, error.DebugMessage)
+            | ReceiveWorkflowRun.DevicesNotRead error ->
+              logger.LogError("Unable to notify the author of the failed run {number}: {error}", run.Number.Value, error.DebugMessage)
+
             HttpStatusCode.OK
           | Ok (ReceiveWorkflowRun.Skipped skipped) ->
             logger.LogInformation("The webhook of GitHub was not recorded: {skipped}", skipped)

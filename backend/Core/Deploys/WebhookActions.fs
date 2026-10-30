@@ -1,6 +1,7 @@
 namespace TwoPoint.Core.Deploys.Actions
 
 open TwoPoint.Core.Deploys
+open TwoPoint.Core.Notifications
 open TwoPoint.Core.Util
 
 open FsToolkit.ErrorHandling
@@ -40,13 +41,18 @@ module ReceiveWorkflowRun =
     | UnknownRepo
     | UnknownRunEvent
 
+  type Notice =
+    | NoNotice
+    | Notified of Pushed
+    | DevicesNotRead of DependencyError
+
   type Event =
-    | Recorded of SiteRun
+    | Recorded of SiteRun * Notice
     | Skipped of Skipped
     | OlderThanStored
 
   type Next =
-    | Newer of SiteRun
+    | Newer of run : SiteRun * before : RunState option
     | OlderThanStored
 
   type Parsed =
@@ -73,6 +79,8 @@ module ReceiveWorkflowRun =
       CreatedAt : DateTimeOffset
       [<JsonPropertyName "updated_at">]
       UpdatedAt : DateTimeOffset
+      [<JsonPropertyName "html_url">]
+      HtmlUrl : string
       Path : string }
 
   [<CLIMutable>]
@@ -115,7 +123,7 @@ module ReceiveWorkflowRun =
 
     let private siteWorkflowPath = ".github/workflows/site.yml"
 
-    let private run (repo : Repo) (json : WorkflowRunJson) =
+    let private run (repo : Repo) (url : Uri) (json : WorkflowRunJson) =
       match RunEvent.tryParse json.Event with
       | Some event ->
         Run
@@ -124,7 +132,8 @@ module ReceiveWorkflowRun =
             Event = event
             State = state json.Status (json.Conclusion |> Option.ofObj |> Option.defaultValue "")
             CreatedDate = json.CreatedAt.UtcDateTime
-            UpdatedDate = json.UpdatedAt.UtcDateTime }
+            UpdatedDate = json.UpdatedAt.UtcDateTime
+            Url = url }
       | None -> Skip UnknownRunEvent
 
     let parse (repos : SiteRepos) (event : string) (body : byte array) : Result<Parsed, Malformed> =
@@ -148,10 +157,11 @@ module ReceiveWorkflowRun =
             elif json.Path.Split('@')[0] <> siteWorkflowPath then
               Ok (Skip NotSiteWorkflow)
             else
-              match Repo.tryParse payload.Repository.FullName with
-              | false, _ -> Error NoRepoName
-              | true, repo when repo = repos.Production || repo = repos.Staging -> Ok (run repo json)
-              | true, _ -> Ok (Skip UnknownRepo)
+              match Repo.tryParse payload.Repository.FullName, Uri.TryCreate(json.HtmlUrl, UriKind.Absolute) with
+              | (false, _), _ -> Error NoRepoName
+              | _, (false, _) -> Error (MissingField "html_url")
+              | (true, repo), (true, url) when repo = repos.Production || repo = repos.Staging -> Ok (run repo url json)
+              | (true, _), _ -> Ok (Skip UnknownRepo)
         with :? JsonException as ex ->
           Error (BadJson ex)
 
@@ -169,7 +179,14 @@ module ReceiveWorkflowRun =
       | Some stored when rank stored.State > rank incoming.State -> Next.OlderThanStored
       | Some stored when rank stored.State = rank incoming.State && stored.UpdatedDate > incoming.UpdatedDate ->
         Next.OlderThanStored
-      | _ -> Newer incoming
+      | _ -> Newer(incoming, stored |> Option.map _.State)
+
+    /// GitHub can send the webhook of a finished run more than one time.
+    let needsNotice (repos : SiteRepos) (run : SiteRun) (before : RunState option) =
+      run.Repo = repos.Production && run.State = RunState.Failed && before <> Some RunState.Failed
+
+    let noticeOf (run : SiteRun) : byte array =
+      JsonSerializer.SerializeToUtf8Bytes {| ``case`` = "deploy-failed"; runNumber = run.Number.Value |}
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
@@ -177,8 +194,29 @@ module ReceiveWorkflowRun =
     abstract member GetSiteRepos: unit -> SiteRepos
     abstract member GetWebhookSecret: unit -> DependencyResult<byte array>
     abstract member SaveRun: run: SiteRun -> DependencyResult<Next>
+    abstract member GetDevicesOfAuthor: unit -> DependencyResult<RegisteredDevice list>
+    abstract member SendPush: RegisteredDevice -> payload: byte array -> DependencyResult<PushOutcome>
+    abstract member RecordPush: RegisteredDevice -> SiteRun -> DependencyResult<unit>
+    abstract member DeleteDevice: RegisteredDevice -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
+
+    let notify (run : SiteRun) : CancellableTask<Notice> = cancellableTask {
+      match! dependencies.GetDevicesOfAuthor() with
+      | Error error -> return DevicesNotRead error
+      | Ok devices ->
+        let payload = Logic.noticeOf run
+
+        let! pushed =
+          devices
+          |> DevicePush.pushAll
+            (fun device -> dependencies.SendPush device payload)
+            (fun device -> dependencies.RecordPush device run)
+            dependencies.DeleteDevice
+
+        return Notified pushed
+    }
+
     fun dto -> cancellableTaskResult {
       let! secret = dependencies.GetWebhookSecret() |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
@@ -190,6 +228,9 @@ module ReceiveWorkflowRun =
         | Ok (Skip skipped) -> return Skipped skipped
         | Ok (Run run) ->
           match! dependencies.SaveRun run |> CancellableTaskResult.mapError ActionError<Error>.Dependency with
-          | Newer saved -> return Recorded saved
+          | Newer(saved, before) when Logic.needsNotice (dependencies.GetSiteRepos()) saved before ->
+            let! notice = notify saved |> CancellableTask.map Ok
+            return Recorded(saved, notice)
+          | Newer(saved, _) -> return Recorded(saved, NoNotice)
           | Next.OlderThanStored -> return Event.OlderThanStored
     }

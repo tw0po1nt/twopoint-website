@@ -23,6 +23,7 @@
     <Compile Include="Rebuild.fs" />
     <Compile Include="Queue.fs" />
     <Compile Include="Deploy.fs" />
+    <Compile Include="SiteDeploy.fs" />
     <Compile Include="Posts.fs" />
     <Compile Include="Details.fs" />
     <Compile Include="Preview.fs" />

@@ -18,3 +18,8 @@ type DeployStore(config : Config, tableServiceClient : TableServiceClient, logge
     match config.Deploy with
     | Some deploy -> DeployDb(tableServiceClient, logger).GetDeployContext deploy.ProductionRepo
     | None -> CancellableTaskResult.singleton { Changes = Map.empty; Rebuild = None; Runs = noRuns }
+
+  member _.GetLatestStagingRun () : DependencyResult<SiteRun option> =
+    match config.Deploy with
+    | Some deploy -> DeployDb(tableServiceClient, logger).GetLatestRun deploy.StagingRepo
+    | None -> CancellableTaskResult.singleton None

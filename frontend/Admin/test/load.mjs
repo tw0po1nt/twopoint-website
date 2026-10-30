@@ -32,8 +32,26 @@ export const postsAnswer = () => answer(200, { success: true, message: null, dat
 
 export const queueAnswer = () => answer(200, { success: true, message: null, data: queue });
 
-// The default API answers the two calls of the start: the posts and the moderation queue.
-export const apiAnswer = (url) => (url.endsWith('/api/internal/comments') ? queueAnswer() : postsAnswer());
+export const siteDeploy = {
+  deploy: 'deployed',
+  production: { number: 40, state: 'succeeded', url: 'https://github.com/tw0po1nt/twopoint-website/actions/runs/40', updatedDate: '2026-02-04T00:00:00Z' },
+  staging: null,
+};
+
+export const siteDeployAnswer = () => answer(200, { success: true, message: null, data: siteDeploy });
+
+// The default API answers the three calls of the start: the posts, the moderation queue, and the deploy state of the site.
+export const apiAnswer = (url) => {
+  if (url.endsWith('/api/internal/comments')) {
+    return queueAnswer();
+  }
+
+  if (url.endsWith('/api/internal/deploys')) {
+    return siteDeployAnswer();
+  }
+
+  return postsAnswer();
+};
 
 // The stub sign-in has a session and gives a token at once. A test replaces a member to change that.
 export const stubSignIn = (members = {}) => {

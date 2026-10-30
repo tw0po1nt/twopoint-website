@@ -26,6 +26,8 @@ type Call =
   | RegisterDevice of PushKeys
   | RemoveDevice of deviceId: string
   | RebuildSite
+  | LoadSiteDeploy
+  | PollSiteDeploy of generation: int
   | CreateDraft
   | LoadPost of slug: string
   | SavePost of Editor.SaveRequest
@@ -57,6 +59,7 @@ type Model =
     Session: Session.Model<Call>
     Dashboard: Dashboard.Model
     Rebuild: Rebuild.Model
+    SiteDeploy: SiteDeploy.Model
     Posts: Posts.Model
     Editor: Editor.Model option
     Uploads: Upload.Model
@@ -75,6 +78,7 @@ type Msg =
   | Session of Session.Msg<Call>
   | Dashboard of Dashboard.Msg
   | Rebuild of Rebuild.Msg
+  | SiteDeploy of SiteDeploy.Msg
   | Posts of Posts.Msg
   | Editor of Editor.Msg
   | Upload of Upload.Msg
@@ -103,6 +107,7 @@ type Effect =
   | Autosave of version: int
   | WaitToPollDeploy of slug: string * Deploy.Chain
   | WaitToPollPosts of generation: int
+  | WaitToPollSiteDeploy of generation: int
   | Focus of elementId: string
   | MoveToBodyLine of line: int
 
@@ -127,7 +132,7 @@ let private enter (route: Route) (model: Model) =
   | Route.Subscriptions ->
     { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
   | Route.Settings -> { left with Notifications = Notifications.reload model.Notifications }, [ LoadDevices ]
-  | Route.Dashboard
+  | Route.Dashboard -> { left with SiteDeploy = SiteDeploy.reload model.SiteDeploy }, [ LoadSiteDeploy ]
   | Route.ModerationQueue
   | Route.Series
   | Route.NotFound _ -> left, []
@@ -140,6 +145,7 @@ let init (path: string) : Model * Effect option =
     Session = session
     Dashboard = Dashboard.init
     Rebuild = Rebuild.init
+    SiteDeploy = SiteDeploy.init
     Posts = Posts.init
     Editor = None
     Uploads = Upload.init
@@ -277,7 +283,27 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     match msg with
     | Rebuild.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Rebuild.Answered(Ok _) ->
+      let siteDeploy = SiteDeploy.restart model.SiteDeploy
+      { next with SiteDeploy = siteDeploy }, Some(Send [ PollSiteDeploy siteDeploy.Generation ])
     | _ -> next, effect |> Option.map (fun Rebuild.Dispatch -> Send [ RebuildSite ])
+  | SiteDeploy(SiteDeploy.PollElapsed _) when model.Router.Route <> Route.Dashboard -> model, None
+  | SiteDeploy msg ->
+    let siteDeploy, effect = SiteDeploy.update msg model.SiteDeploy
+    let next = { model with SiteDeploy = siteDeploy }
+
+    match msg with
+    | SiteDeploy.Answered(Error Api.Refused)
+    | SiteDeploy.Polled(_, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | SiteDeploy.Answered _
+    | SiteDeploy.Polled _
+    | SiteDeploy.PollElapsed _ ->
+      next,
+      effect
+      |> Option.map (fun effect ->
+        match effect with
+        | SiteDeploy.Poll generation -> Send [ PollSiteDeploy generation ]
+        | SiteDeploy.WaitToPoll generation -> WaitToPollSiteDeploy generation)
   | Posts(Posts.PollElapsed _) when model.Router.Route <> Route.Posts -> model, None
   | Posts msg ->
     let posts, effect = Posts.update msg model.Posts

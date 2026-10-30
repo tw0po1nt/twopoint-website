@@ -44,6 +44,15 @@ const noticeOf = (data) => ({
   },
 });
 
+const deployNoticeOf = (data) => ({
+  title: 'The production deploy failed',
+  options: {
+    body: `The run #${data.runNumber} of site.yml failed. Open the dashboard to rebuild the site.`,
+    tag: `deploy-${data.runNumber}`,
+    data: { target: '/' },
+  },
+});
+
 // A browser requires a notification for each push, so a payload that is not readable still shows one.
 const fallbackNotice = { title: 'New comment', options: { data: { target: '/comments' } } };
 
@@ -65,6 +74,13 @@ const tellPages = async (message) => {
 
 const show = async (event) => {
   const data = readData(event);
+
+  if (data?.case === 'deploy-failed') {
+    const { title, options } = deployNoticeOf(data);
+    await self.registration.showNotification(title, options);
+    return;
+  }
+
   const { title, options } = data ? noticeOf(data) : fallbackNotice;
 
   await self.registration.showNotification(title, options);

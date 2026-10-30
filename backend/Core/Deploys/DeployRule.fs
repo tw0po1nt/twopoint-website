@@ -46,3 +46,24 @@ module DeployRule =
     match Map.tryFind slug context.Changes with
     | Some change -> state now context.Runs context.Rebuild change
     | None -> Deployed
+
+  /// A later run includes each earlier change, so the newest change gives the state of all changes.
+  let siteState (now : DateTime) (context : DeployContext) : DeployState =
+    let newest =
+      (context.Rebuild |> Option.map Change.ofRebuild |> Option.toList)
+      @ (context.Changes |> Map.values |> List.ofSeq)
+      |> List.sortByDescending _.ChangedDate
+      |> List.tryHead
+
+    match newest |> Option.map (state now context.Runs context.Rebuild) with
+    | Some Deploying -> Deploying
+    | Some DeployFailed -> DeployFailed
+    | Some Deployed
+    | None ->
+      match context.Runs.Latest |> Option.map _.State with
+      | Some RunState.Waiting
+      | Some RunState.Running -> Deploying
+      | Some RunState.Failed -> DeployFailed
+      | Some RunState.Succeeded
+      | Some RunState.Canceled
+      | None -> Deployed
