@@ -138,7 +138,7 @@ let private categoryField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
         Show(when' = (details (model ())).Values.Category.IsSome) {
           div (class' = "chips") {
             chip
-              (Details.termTitle ((details (model ())).Values.Category |> Option.defaultValue ""))
+              (Slug.termTitle ((details (model ())).Values.Category |> Option.defaultValue ""))
               (fun () -> if not (locked ()) then send Details.CategoryCleared)
           }
         }
@@ -177,7 +177,7 @@ let private tagsField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
           For(each = Array.ofList (details (model ())).Values.Tags) {
             yield
               fun tag _ ->
-                chip (Details.termTitle tag) (fun () -> send (Details.TagRemoved(Details.termSlug tag)))
+                chip (Slug.termTitle tag) (fun () -> send (Details.TagRemoved(Slug.term tag)))
           }
         }
 
@@ -204,18 +204,58 @@ let private tagsField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
 let private seriesOption (current: string) (series: Api.SeriesListing) =
   option (value = series.Slug, selected = (series.Slug = current)) { series.Title }
 
+let private newSeriesValue = "+new"
+
+let private newSeriesForm (model: Shell.Model) =
+  match (details model).NewSeries with
+  | Details.Writing form -> Some form
+  | Details.NoNewSeries
+  | Details.Made _ -> None
+
+let private madeText (model: Shell.Model) =
+  match (details model).NewSeries with
+  | Details.Made saved -> SeriesForm.savedText saved
+  | Details.NoNewSeries
+  | Details.Writing _ -> ""
+
+[<SolidComponent>]
+let private newSeries (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
+  let form () = newSeriesForm (model ())
+  let busy () = form () |> Option.exists SeriesForm.isBusy
+
+  div (class' = "card card-body") {
+    h3 () { "New series" }
+
+    SeriesFormView.fields "new-series" (Details.NewSeriesMsg >> send) form (fun () -> Details.otherSeries (details (model ())))
+
+    div (class' = "row") {
+      Parts
+        .Button(kind = Parts.Ghost, disabled = busy (), onClick = fun _ -> send Details.NewSeriesClosed)
+        .Has(Fragment() { "Cancel" })
+
+      Parts
+        .Button(kind = Parts.Primary, disabled = busy (), onClick = fun _ -> send (Details.NewSeriesMsg SeriesForm.SaveClicked))
+        .Has(Fragment() { if form () |> Option.exists SeriesForm.isSaving then "Saving…" else "Save the series" })
+    }
+  }
+
 [<SolidComponent>]
 let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send msg = dispatch (Shell.Editor(Editor.DetailsMsg msg))
-  let current () = (details (model ())).Values.Series |> Option.defaultValue ""
+
+  let current () =
+    match newSeriesForm (model ()) with
+    | Some _ -> newSeriesValue
+    | None -> (details (model ())).Values.Series |> Option.defaultValue ""
 
   let listed () =
     let series = (choices (model ())).Series
 
-    if current () = "" || series |> List.exists (fun item -> item.Slug = current ()) then
-      series
-    else
-      series @ [ { Slug = current (); Title = current () } ]
+    match (details (model ())).Values.Series with
+    | Some slug when not (series |> List.exists (fun item -> item.Slug = slug)) -> series @ [ { Slug = slug; Title = slug } ]
+    | Some _
+    | None -> series
 
   Parts
     .Field(
@@ -224,22 +264,30 @@ let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
       hint = "A series sets the category to Series."
     )
     .Has(
-      Parts
-        .Select(
-          id = "details-series",
-          value = current,
-          onChange =
-            fun event ->
-              match (event.target :?> HTMLSelectElement).value with
-              | "" -> send Details.SeriesRemoved
-              | slug -> send (Details.SeriesChosen slug)
-        )
-        .Has(
-          Fragment() {
-            option (value = "") { "No series" }
-            For(each = Array.ofList (listed ())) { yield fun series _ -> seriesOption (current ()) series }
-          }
-        )
+      Fragment() {
+        Parts
+          .Select(
+            id = "details-series",
+            value = current,
+            disabled = Details.newSeriesSaving (details (model ())),
+            onChange =
+              fun event ->
+                match (event.target :?> HTMLSelectElement).value with
+                | "" -> send Details.SeriesRemoved
+                | value when value = newSeriesValue -> send Details.NewSeriesClicked
+                | slug -> send (Details.SeriesChosen slug)
+          )
+          .Has(
+            Fragment() {
+              option (value = "") { "No series" }
+              For(each = Array.ofList (listed ())) { yield fun series _ -> seriesOption (current ()) series }
+              option (value = newSeriesValue, selected = (current () = newSeriesValue)) { "New series…" }
+            }
+          )
+
+        Show(when' = (madeText (model ()) <> "")) { p (class' = "hint", role = "status") { madeText (model ()) } }
+        Show(when' = (newSeriesForm (model ())).IsSome) { newSeries dispatch model }
+      }
     )
 
 [<SolidComponent>]

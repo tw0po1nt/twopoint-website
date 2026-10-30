@@ -41,6 +41,9 @@ let private fail (call: Shell.Call) =
   | Shell.LoadPost slug -> Shell.Editor(Editor.Answered(slug, Error Api.Unanswered))
   | Shell.SavePost request -> Shell.Editor(Editor.SaveAnswered(request.Slug, request.Version, Error Api.Unanswered))
   | Shell.LoadDetailsOptions -> Shell.Editor(Editor.DetailsMsg(Details.OptionsAnswered(Error Api.Unanswered)))
+  | Shell.UploadNewSeriesImage _ ->
+    Shell.Editor(Editor.DetailsMsg(Details.NewSeriesMsg(SeriesForm.ImageUploaded(Error Api.Unanswered))))
+  | Shell.SaveNewSeries _ -> Shell.Editor(Editor.DetailsMsg(Details.NewSeriesAnswered(Error Api.Unanswered)))
   | Shell.ChangeSlug request -> Shell.Editor(Editor.SlugChangeAnswered(request.Slug, Error Api.Unanswered))
   | Shell.PreviewPost request -> Shell.Editor(Editor.PreviewAnswered(request.Slug, Error Api.Unanswered))
   | Shell.CheckPublish(request, choice) ->
@@ -58,7 +61,7 @@ let private fail (call: Shell.Call) =
   | Shell.LoadSeries -> Shell.Series(Series.Answered(Error Api.Unanswered))
   | Shell.SaveSeries _ -> Shell.Series(Series.SaveAnswered(Error Api.Unanswered))
   | Shell.DeleteSeries(slug, _) -> Shell.Series(Series.DeleteAnswered(slug, Error Api.Unanswered))
-  | Shell.UploadSeriesImage _ -> Shell.Series(Series.ImageUploaded(Error Api.Unanswered))
+  | Shell.UploadSeriesImage _ -> Shell.Series(Series.FormMsg(SeriesForm.ImageUploaded(Error Api.Unanswered)))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
   match action with
@@ -173,6 +176,12 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
         |> Promise.map (Result.map (fun series -> { Details.Terms = terms; Details.Series = series }))
       | Error failure -> Promise.lift (Error failure))
     |> Promise.map (Details.OptionsAnswered >> Editor.DetailsMsg >> Shell.Editor)
+  | Shell.UploadNewSeriesImage file ->
+    Api.uploadAsset (Config.api ()) token file
+    |> Promise.map (SeriesForm.ImageUploaded >> Details.NewSeriesMsg >> Editor.DetailsMsg >> Shell.Editor)
+  | Shell.SaveNewSeries request ->
+    Api.saveSeries (Config.api ()) token request.Slug request.ETag request.Fields
+    |> Promise.map (Details.NewSeriesAnswered >> Editor.DetailsMsg >> Shell.Editor)
   | Shell.ChangeSlug request ->
     Api.changeSlug (Config.api ()) token request.Slug request.ETag request.NewSlug
     |> Promise.map (fun result -> Shell.Editor(Editor.SlugChangeAnswered(request.Slug, result)))
@@ -227,7 +236,8 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
     Api.deleteSeries (Config.api ()) token slug eTag
     |> Promise.map (fun result -> Shell.Series(Series.DeleteAnswered(slug, result)))
   | Shell.UploadSeriesImage file ->
-    Api.uploadAsset (Config.api ()) token file |> Promise.map (Series.ImageUploaded >> Shell.Series)
+    Api.uploadAsset (Config.api ()) token file
+    |> Promise.map (SeriesForm.ImageUploaded >> Series.FormMsg >> Shell.Series)
 
 let private send (signIn: SignIn) (push: Push) (dispatch: Shell.Msg -> unit) (call: Shell.Call) =
   signIn.token ()
@@ -1165,111 +1175,18 @@ let private seriesPage (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
     seriesList dispatch model.Series
   }
 
-let private pickImage (onPicked: File -> unit) =
-  let input = document.createElement "input" :?> HTMLInputElement
-  input.``type`` <- "file"
-  input.accept <- "image/jpeg,image/png,image/webp,image/gif"
-
-  input.addEventListener (
-    "change",
-    fun _ ->
-      if input.files.length > 0 then
-        onPicked input.files[0]
-  )
-
-  input.click ()
-
-let private inputText (event: Event) = (event.target :?> HTMLInputElement).value
-
-[<SolidComponent>]
-let private seriesError (text: unit -> string) =
-  Show(when' = (text () <> "")) { p (class' = "err", role = "alert") { text () } }
-
 [<SolidComponent>]
 let private seriesForm (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
-  // A read of the model in the body of a component would build the form again at each change, and an input would lose its focus.
-  let send msg = dispatch (Shell.Series msg)
   let page () = (model ()).Series
-  let read (get: Series.Form -> 'T) (fallback: 'T) () = (page ()).Form |> Option.map get |> Option.defaultValue fallback
-  let problem field () = Series.fieldProblem (page ()) field |> Option.defaultValue ""
+  let form () = (page ()).Form
+  let read get fallback = SeriesFormView.read form get fallback
 
   Fragment() {
-    Parts
-      .Field(id = "series-title", label = "Title")
-      .Has(
-        Fragment() {
-          Parts
-            .Input(id = "series-title", value = read _.Title "", onInput = fun event -> send (Series.TitleTyped(inputText event)))
-            .View()
-
-          seriesError (problem Series.TitleField)
-        }
-      )
-
-    Parts
-      .Field(id = "series-slug", label = "Slug")
-      .Has(
-        Fragment() {
-          Parts
-            .Input(
-              id = "series-slug",
-              value = read _.Slug "",
-              disabledWhen = read Series.slugLocked false,
-              onInput = fun event -> send (Series.SlugTyped(inputText event))
-            )
-            .View()
-
-          p (class' = "hint") { read Series.slugHint "" () }
-          seriesError (problem Series.SlugField)
-        }
-      )
-
-    Parts
-      .Field(id = "series-excerpt", label = "Excerpt")
-      .Has(
-        Fragment() {
-          Parts
-            .Textarea(id = "series-excerpt", value = read _.Excerpt "", onInput = fun event -> send (Series.ExcerptTyped(inputText event)))
-            .View()
-
-          seriesError (problem Series.ExcerptField)
-        }
-      )
-
-    Parts
-      .Field(id = "series-image", label = "Image")
-      .Has(
-        Fragment() {
-          div (class' = "row") {
-            Parts
-              .Input(
-                id = "series-image",
-                kind = "url",
-                value = read _.Image "",
-                disabledWhen = read Series.isUploading false,
-                onInput = fun event -> send (Series.ImageTyped(inputText event))
-              )
-              .View()
-
-            button (
-              type' = "button",
-              class' = Parts.buttonClass Parts.Secondary Parts.Medium,
-              disabled = read Series.isUploading false (),
-              onClick = fun _ -> pickImage (Series.ImagePicked >> send)
-            ) {
-              if read Series.isUploading false () then "Uploading…" else "Upload"
-            }
-          }
-
-          p (class' = "hint") { "The https URL of the image, or upload an image." }
-          seriesError (problem Series.ImageField)
-          seriesError (fun () -> read Series.uploadFailure None () |> Option.defaultValue "")
-        }
-      )
-
-    Show(when' = (read Series.failure None ()).IsSome) {
-      Parts.Alert(tone = Parts.Bad).Has(p () { read Series.failure None () |> Option.defaultValue "" })
-    }
+    SeriesFormView.fields
+      "series"
+      (Series.FormMsg >> Shell.Series >> dispatch)
+      form
+      (fun () -> form () |> Option.map (Series.otherSlugs (page ())) |> Option.defaultValue [])
 
     For(each = Array.ofList (read _.Original None () |> Option.toList)) {
       yield
@@ -1314,8 +1231,8 @@ let private seriesSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
           Parts
             .Button(
               kind = Parts.Primary,
-              disabled = (form () |> Option.exists (fun form -> Series.isSaving form || Series.isUploading form)),
-              onClick = fun _ -> dispatch (Shell.Series Series.SaveClicked)
+              disabled = (form () |> Option.exists SeriesForm.isBusy),
+              onClick = fun _ -> dispatch (Shell.Series(Series.FormMsg SeriesForm.SaveClicked))
             )
             .Has(Fragment() { "Save" })
         }

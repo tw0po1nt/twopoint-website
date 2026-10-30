@@ -165,6 +165,8 @@ type Effect =
   | Autosave of version: int
   | Save of SaveRequest
   | LoadDetailsOptions
+  | UploadSeriesImage of Browser.Types.File
+  | SaveSeries of SeriesForm.SaveRequest
   | ChangeSlug of SlugRequest
   | FetchPreview of PreviewRequest
   | CheckPublish of PublishRequest * choice: Publish.When
@@ -313,7 +315,12 @@ let private answered (version: int) (result: Result<Api.SavedPost, Api.Failure>)
 
 let private detailsChanged (msg: Details.Msg) (document: Document) =
   let details, effect = Details.update msg document.Details
-  let effect = effect |> Option.map (fun Details.LoadOptions -> LoadDetailsOptions)
+  let effect =
+    effect
+    |> Option.map (function
+      | Details.LoadOptions -> LoadDetailsOptions
+      | Details.UploadSeriesImage file -> UploadSeriesImage file
+      | Details.SaveSeries request -> SaveSeries request)
 
   if details.Values = document.Details.Values then
     Loaded { document with Details = details }, effect

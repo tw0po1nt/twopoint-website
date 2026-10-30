@@ -79,20 +79,20 @@ let tests =
           "snake_case term"
           "100% sure!"
           "日本語" ] do
-        Expect.equal (Details.termSlug text) (TwoPoint.Site.Render.Slug.term text) $"The slug of '{text}'"
+        Expect.equal (Slug.term text) (TwoPoint.Site.Render.Slug.term text) $"The slug of '{text}'"
     }
 
     test "the term title has the rule of the build" {
       for text in [ "FSharp"; "fsharp tips"; "CSharp"; "Testing" ] do
-        Expect.equal (Details.termTitle text) (TwoPoint.Site.Render.Slug.termTitle text) $"The title of '{text}'"
+        Expect.equal (Slug.termTitle text) (TwoPoint.Site.Render.Slug.termTitle text) $"The title of '{text}'"
     }
 
     test "a post slug has lowercase letters and digits with a single dash between them" {
-      Expect.isTrue (Details.isSlug "my-post-2") "A slug"
-      Expect.isFalse (Details.isSlug "My-post") "Capital"
-      Expect.isFalse (Details.isSlug "my--post") "Double dash"
-      Expect.isFalse (Details.isSlug "-my-post") "Leading dash"
-      Expect.isFalse (Details.isSlug "") "Empty"
+      Expect.isTrue (Slug.isSlug "my-post-2") "A slug"
+      Expect.isFalse (Slug.isSlug "My-post") "Capital"
+      Expect.isFalse (Slug.isSlug "my--post") "Double dash"
+      Expect.isFalse (Slug.isSlug "-my-post") "Leading dash"
+      Expect.isFalse (Slug.isSlug "") "Empty"
     }
 
     test "a typed term gives the title of the known term with the same slug" {
@@ -190,6 +190,124 @@ let tests =
 
       let model, _ = detail (Details.CategoryChosen "Life") model
       Expect.equal (values model).Category (Some "Life") "The picker works again"
+    }
+
+    test "a new series from the picker saves the record, selects the series, and saves the post" {
+      let newSeries msg = detail (Details.NewSeriesMsg msg)
+      let model, _ = detail Details.NewSeriesClicked (withSheet draft)
+
+      let form (model: Shell.Model) =
+        match (document' model).Details.NewSeries with
+        | Details.Writing form -> form
+        | other -> failtestf "Expected the form, got %A" other
+
+      let problem field model =
+        SeriesForm.fieldProblem (Details.otherSeries (document' model).Details) (form model) field
+
+      let model, effect = newSeries SeriesForm.SaveClicked model
+      Expect.isNone effect "No save with empty fields"
+      Expect.equal (problem SeriesForm.TitleField model) (Some "Give the series a title.") "The rule of the Series page"
+
+      let model, _ = newSeries (SeriesForm.TitleTyped "My series") model
+      Expect.equal (problem SeriesForm.SlugField model) (Some "Another series has this slug.") "A known slug"
+
+      let model, _ = newSeries (SeriesForm.TitleTyped "F# for fun") model
+      let model, _ = newSeries (SeriesForm.ExcerptTyped " Small programs in F#. ") model
+      Expect.equal (form model).Slug "f-for-fun" "The slug from the title"
+
+      let model, effect = newSeries SeriesForm.SaveClicked model
+
+      Expect.equal
+        effect
+        (Some(
+          Shell.Send
+            [ Shell.SaveNewSeries
+                { Slug = "f-for-fun"
+                  ETag = None
+                  Fields =
+                    { Slug = "f-for-fun"
+                      Title = "F# for fun"
+                      Excerpt = "Small programs in F#."
+                      Image = None } } ]
+        ))
+        "The save of the record"
+
+      let model, effect = detail Details.NewSeriesClosed model
+      Expect.isTrue (SeriesForm.isSaving (form model)) "The form stays open during the save"
+      Expect.isNone effect "No call"
+
+      let answer: Api.SavedSeries = { Slug = "f-for-fun"; ETag = "\"f-1\""; Warnings = [] }
+      let model, effect = detail (Details.NewSeriesAnswered(Ok answer)) model
+
+      Expect.equal (values model).Series (Some "f-for-fun") "The picker selects the series"
+      Expect.equal (values model).Category (Some "Series") "The category"
+      Expect.equal effect (Some(Shell.Autosave 1)) "The post saves"
+      Expect.equal (document' model).Details.NewSeries (Details.Made answer) "The form closes"
+
+      match (document' model).Details.Options with
+      | Details.Ready choices ->
+        Expect.contains choices.Series ({ Slug = "f-for-fun"; Title = "F# for fun" }: Api.SeriesListing) "The picker lists it"
+      | other -> failtestf "Expected the choices, got %A" other
+
+      Expect.equal (saved model).Details.Series (Some "f-for-fun") "The save of the post has the series"
+    }
+
+    test "a new series with the slug of a series that the picker did not know keeps the form open with the reason" {
+      let newSeries msg = detail (Details.NewSeriesMsg msg)
+      let model, _ = detail Details.NewSeriesClicked (withSheet draft)
+      let model, _ = newSeries (SeriesForm.TitleTyped "Other") model
+      let model, _ = newSeries (SeriesForm.ExcerptTyped "About it.") model
+      let model, _ = newSeries SeriesForm.SaveClicked model
+      let model, effect = detail (Details.NewSeriesAnswered(Error Api.Stale)) model
+
+      match (document' model).Details.NewSeries with
+      | Details.Writing form ->
+        Expect.equal (SeriesForm.failure form) (Some "The series did not save. Another series has this slug.") "The reason"
+      | other -> failtestf "Expected the form, got %A" other
+
+      Expect.equal (values model).Series None "No series"
+      Expect.isNone effect "No save of the post"
+    }
+
+    test "a choice in the picker during the save of a new series does not lose the answer" {
+      let newSeries msg = detail (Details.NewSeriesMsg msg)
+      let model, _ = detail Details.NewSeriesClicked (withSheet draft)
+      let model, _ = newSeries (SeriesForm.TitleTyped "F# for fun") model
+      let model, _ = newSeries (SeriesForm.ExcerptTyped "Small programs in F#.") model
+      let model, _ = newSeries SeriesForm.SaveClicked model
+
+      let model, effect = detail (Details.SeriesChosen "my-series") model
+      Expect.isNone effect "No call"
+      let model, _ = detail Details.SeriesRemoved model
+      Expect.isTrue (Details.newSeriesSaving (document' model).Details) "The form waits for the answer"
+
+      let answer: Api.SavedSeries = { Slug = "f-for-fun"; ETag = "\"f-1\""; Warnings = [] }
+      let model, _ = detail (Details.NewSeriesAnswered(Ok answer)) model
+
+      Expect.equal (values model).Series (Some "f-for-fun") "The picker selects the new series"
+      Expect.equal (document' model).Details.NewSeries (Details.Made answer) "The saved notice"
+
+      match (document' model).Details.Options with
+      | Details.Ready choices ->
+        Expect.contains choices.Series ({ Slug = "f-for-fun"; Title = "F# for fun" }: Api.SeriesListing) "The picker lists it"
+      | other -> failtestf "Expected the choices, got %A" other
+    }
+
+    test "an image upload of the new series goes to the upload endpoint, and a refused token offers another account" {
+      let model, _ = detail Details.NewSeriesClicked (withSheet draft)
+      let file = Unchecked.defaultof<Browser.Types.File>
+      let model, effect = detail (Details.NewSeriesMsg(SeriesForm.ImagePicked file)) model
+      Expect.equal effect (Some(Shell.Send [ Shell.UploadNewSeriesImage file ])) "The upload"
+
+      let model, _ = detail (Details.NewSeriesMsg(SeriesForm.ImageUploaded(Error Api.Refused))) model
+      Expect.equal model.Session.Status Session.Refused "The banner"
+    }
+
+    test "the choice of a series closes the new series form" {
+      let model, _ = detail Details.NewSeriesClicked (withSheet draft)
+      let model, _ = detail (Details.SeriesChosen "my-series") model
+      Expect.equal (document' model).Details.NewSeries Details.NoNewSeries "Closed"
+      Expect.equal (values model).Series (Some "my-series") "The series"
     }
 
     test "the author, the image, and the home page flag change the details, and a blank text clears a field" {
