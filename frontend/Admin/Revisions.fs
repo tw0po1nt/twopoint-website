@@ -31,7 +31,7 @@ let reason (state: State) =
   | RestoreFailed(_, reason) -> Some reason
   | _ -> None
 
-let restoring (state: State) =
+let restoringName (state: State) =
   match state with
   | Restoring(_, name) -> Some name
   | _ -> None

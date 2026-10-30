@@ -196,4 +196,10 @@ let tests =
       | Error(ActionError.Validation _) -> ()
       | other -> failtestf "Expected a validation error, got %A" other
     }
+
+    test "a revision name with a line break after the time is refused" {
+      match RevisionName.create $"{secondName}\n" with
+      | Error _ -> ()
+      | Ok name -> failtestf "Expected a refusal, got %A" name
+    }
   ]

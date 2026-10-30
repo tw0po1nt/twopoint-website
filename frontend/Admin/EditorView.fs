@@ -583,22 +583,22 @@ let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
 [<SolidComponent>]
 let private revisionEntry (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (revision: Api.Revision) =
   let restoring () = Revisions.isRestoring (revisionsState (model ()))
-  let when' = $"{Editor.longDateText revision.PublishedAt}, {Revisions.timeText revision.PublishedAt}"
+  let publishedText = $"{Editor.longDateText revision.PublishedAt}, {Revisions.timeText revision.PublishedAt}"
 
   li (class' = "revision") {
     div (class' = "grow") {
       p (class' = "revision-title") { revision.Title |> Option.defaultValue "No title" }
-      p (class' = "muted small") { $"Published {when'}" }
+      p (class' = "muted small") { $"Published {publishedText}" }
     }
 
     Parts.Button(
       disabled = restoring (),
-      label = $"Restore the revision of {when'}",
+      label = $"Restore the revision of {publishedText}",
       onClick = fun _ -> dispatch (Shell.Editor(Editor.RestoreChosen revision.Name))
     )
       .Has(
         Fragment() {
-          if Revisions.restoring (revisionsState (model ())) = Some revision.Name then
+          if Revisions.restoringName (revisionsState (model ())) = Some revision.Name then
             "Restoring…"
           else
             "Restore"
