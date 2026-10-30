@@ -52,6 +52,7 @@ type Document =
     DeleteDraft: Confirm.State
     ChangeDate: Typed.State
     ChangeWarnings: Api.ChangeWarning list
+    Revisions: Revisions.State
     Deploy: Deploy.Model }
 
 type Model =
@@ -101,6 +102,12 @@ type ChangeDateRequest =
     ETag: string option
     PublishDate: string }
 
+/// `ETag` is `None` when the post has no pending edit.
+type RestoreRequest =
+  { Slug: string
+    ETag: string option
+    Revision: string }
+
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
   | TitleChanged of string
@@ -147,6 +154,11 @@ type Msg =
   | DeleteConfirmed
   | DeleteAnswered of slug: string * Result<Api.DeletedPost, Api.Failure>
   | DeleteClosed
+  | RevisionsRequested
+  | RevisionsAnswered of slug: string * Result<Api.Revision list, Api.Failure>
+  | RestoreChosen of revision: string
+  | RestoreAnswered of slug: string * Result<Api.RestoredRevision, Api.Failure>
+  | RevisionsClosed
 
 type Effect =
   /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
@@ -161,6 +173,8 @@ type Effect =
   | UnpublishPost of UnpublishRequest
   | ChangePostDate of ChangeDateRequest
   | DeletePost of DeleteRequest
+  | LoadRevisions of slug: string
+  | RestoreRevision of RestoreRequest
   | Reload of slug: string
   | Focus of elementId: string
   | MoveToBodyLine of line: int
@@ -202,6 +216,7 @@ let private loaded (chain: Deploy.Chain) (post: Api.PostDocument) =
       DeleteDraft = Confirm.Closed
       ChangeDate = Typed.Closed
       ChangeWarnings = []
+      Revisions = Revisions.Closed
       Deploy = Deploy.start chain }
 
 let private deployRead (post: Api.PostDocument) =
@@ -721,6 +736,52 @@ let private deleteClosed (document: Document) =
   | WaitingForSlug
   | ReadyToDelete -> Loaded { document with Delete = Typed.Closed; DeleteDraft = Confirm.Closed }, None
 
+let private revisionsAvailability (document: Document) =
+  match document.State, document.Save with
+  | Api.Draft, _ -> Unavailable "Revisions are available after the next publish."
+  | _, Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | _, (Unsaved | SaveFailed _) -> Unavailable "Save the post first."
+  | _, Saving _ -> Unavailable "The save runs."
+  | _, Saved when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, and then restore a revision."
+  | _, Saved -> Available
+
+let private revisionsRequested (document: Document) =
+  match revisionsAvailability document with
+  | Available -> Loaded { document with Revisions = Revisions.Loading }, Some(LoadRevisions document.Slug)
+  | Unavailable _ -> Loaded document, None
+
+let private revisionsAnswered (result: Result<Api.Revision list, Api.Failure>) (document: Document) =
+  match document.Revisions, result with
+  | Revisions.Loading, Ok revisions -> Loaded { document with Revisions = Revisions.Listed revisions }, None
+  | Revisions.Loading, Error failure -> Loaded { document with Revisions = Revisions.LoadFailed(Api.reason failure) }, None
+  | _ -> Loaded document, None
+
+let private restoreChosen (revision: string) (document: Document) =
+  match document.Revisions with
+  | Revisions.Listed revisions
+  | Revisions.RestoreFailed(revisions, _) when revisions |> List.exists (fun listed -> listed.Name = revision) ->
+    Loaded { document with Revisions = Revisions.Restoring(revisions, revision) },
+    Some(
+      RestoreRevision
+        { Slug = document.Slug
+          ETag = document.ETag
+          Revision = revision }
+    )
+  | _ -> Loaded document, None
+
+let private restoreAnswered (result: Result<Api.RestoredRevision, Api.Failure>) (document: Document) =
+  match document.Revisions, result with
+  | Revisions.Restoring _, Ok _ -> Loading(document.Slug, Deploy.nextChain document.Deploy), Some(Reload document.Slug)
+  | Revisions.Restoring(revisions, _), Error failure ->
+    Loaded { document with Revisions = Revisions.RestoreFailed(revisions, Api.reason failure) }, None
+  | _ -> Loaded document, None
+
+let private revisionsClosed (document: Document) =
+  if Revisions.isRestoring document.Revisions then
+    Loaded document, None
+  else
+    Loaded { document with Revisions = Revisions.Closed }, None
+
 let private changesOpened (document: Document) =
   match document.State, document.Published with
   | (Api.Published | Api.Upcoming), Some _ -> Loaded { document with Changes = ChangesShown }, None
@@ -777,6 +838,11 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, DeleteConfirmed -> deleteConfirmed document
   | Loaded document, DeleteAnswered(slug, result) when slug = document.Slug -> deleteAnswered result document
   | Loaded document, DeleteClosed -> deleteClosed document
+  | Loaded document, RevisionsRequested -> revisionsRequested document
+  | Loaded document, RevisionsAnswered(slug, result) when slug = document.Slug -> revisionsAnswered result document
+  | Loaded document, RestoreChosen revision -> restoreChosen revision document
+  | Loaded document, RestoreAnswered(slug, result) when slug = document.Slug -> restoreAnswered result document
+  | Loaded document, RevisionsClosed -> revisionsClosed document
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -907,12 +973,10 @@ let private availability (document: Document) (action: MenuAction) =
   | DiscardChanges, _ -> discardAvailability document
   | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can change its date."
   | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
-  | Revisions, Api.Draft -> Unavailable "Revisions are available after the next publish."
+  | Revisions, _ -> revisionsAvailability document
   | SendToSubscribers, Api.Draft -> Unavailable "Publish the post first."
   | Delete, _ -> deleteAvailability document
   | (ChangeDate | Unpublish), Api.Upcoming -> upcomingChangeAvailability document
-  // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/263): list and restore the revisions
-  | Revisions, (Api.Published | Api.Upcoming)
   // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/270): send a post to the subscribers
   | SendToSubscribers, (Api.Published | Api.Upcoming) -> laterVersion
 
@@ -937,7 +1001,7 @@ let menuMsg (action: MenuAction) =
   | DiscardChanges -> Some DiscardRequested
   | ChangeDate -> Some ChangeDateRequested
   | Unpublish -> Some UnpublishRequested
-  | Revisions
+  | Revisions -> Some RevisionsRequested
   | SendToSubscribers -> None
   | Delete -> Some DeleteRequested
 

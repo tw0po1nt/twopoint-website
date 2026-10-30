@@ -50,6 +50,8 @@ let private fail (call: Shell.Call) =
   | Shell.UnpublishPost request -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, Error Api.Unanswered))
   | Shell.ChangePostDate request -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, Error Api.Unanswered))
   | Shell.DeletePost request -> Shell.Editor(Editor.DeleteAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.LoadRevisions slug -> Shell.Editor(Editor.RevisionsAnswered(slug, Error Api.Unanswered))
+  | Shell.RestoreRevision request -> Shell.Editor(Editor.RestoreAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
 
 let private moderate (token: string) (slug: string) (comment: Api.Comment) (action: Queue.Action) =
@@ -197,6 +199,12 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.DeletePost request ->
     Api.deletePost (Config.api ()) token request.Slug request.ETag request.ConfirmSlug
     |> Promise.map (fun result -> Shell.Editor(Editor.DeleteAnswered(request.Slug, result)))
+  | Shell.LoadRevisions slug ->
+    Api.getRevisions (Config.api ()) token slug
+    |> Promise.map (fun result -> Shell.Editor(Editor.RevisionsAnswered(slug, result)))
+  | Shell.RestoreRevision request ->
+    Api.restoreRevision (Config.api ()) token request.Slug request.ETag request.Revision
+    |> Promise.map (fun result -> Shell.Editor(Editor.RestoreAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))

@@ -373,6 +373,31 @@
   margin-top: var(--s-3);
 }
 
+.revision-list {
+  max-height: 50vh;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.revision {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.revision p {
+  margin: 0;
+}
+
+.revision-title {
+  color: var(--fg);
+  font-weight: var(--w-semibold);
+}
+
 .diff h3 {
   margin: var(--s-3) 0 var(--s-1);
   font-size: var(--t-sm);

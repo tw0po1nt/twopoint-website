@@ -225,6 +225,14 @@ type UpcomingChange =
 
 type DeletedPost = { Warnings: ChangeWarning list }
 
+/// `Name` names the revision in a restore. `PublishedAt` is an ISO 8601 UTC time.
+type Revision =
+  { Name: string
+    PublishedAt: string
+    Title: string option }
+
+type RestoredRevision = { ETag: string }
+
 type Failure =
   /// The API answered 401 or 403.
   | Refused
@@ -725,6 +733,26 @@ let deletePost
 
   let json = Encode.object [ "confirmSlug", confirmation ] |> Encode.toString 0
   sendWith HttpMethod.DELETE api token (internalPath [ "posts"; slug ]) (Some(Json json)) [ workingPrecondition eTag ]
+
+let getRevisions (api: string) (token: string) (slug: string) : JS.Promise<Result<Revision list, Failure>> =
+  send HttpMethod.GET api token (internalPath [ "posts"; slug; "revisions" ])
+
+let restoreRevision
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string option)
+  (revision: string)
+  : JS.Promise<Result<RestoredRevision, Failure>> =
+  let json = Encode.object [ "revision", Encode.string revision ] |> Encode.toString 0
+
+  sendWith
+    HttpMethod.POST
+    api
+    token
+    (internalPath [ "posts"; slug; "revisions"; "restore" ])
+    (Some(Json json))
+    [ workingPrecondition eTag ]
 
 type private UploadedAsset = { Url: string }
 
