@@ -4,15 +4,13 @@ open TwoPoint.Admin
 
 open Expecto
 
-let private post slug fresh : Api.Post =
-  { Slug = slug
-    Title = slug
-    State = Api.Published
-    PendingEdit = false
-    PublishDate = Some "2026-01-02T03:04:05Z"
-    Deploy = Api.DeployState.Deployed
-    DeliveryToStart = false
-    CommentStats = { New = fresh; Approved = 1; Rejected = 0 } }
+let private counts: Api.DashboardCounts =
+  { Drafts = 1
+    PendingEdits = 2
+    DeliveriesToStart = 3
+    ActiveSubscriptions = 40
+    NewSubscriptions = 5
+    CanceledSubscriptions = 6 }
 
 [<Tests>]
 let tests =
@@ -23,10 +21,26 @@ let tests =
       Expect.equal model.Dashboard Dashboard.Waiting "The dashboard waits"
     }
 
-    test "a started session loads the dashboard and the moderation queue" {
+    test "a started session loads the moderation queue" {
       let model, _ = Shell.init "/comments"
       let _, effect = Shell.update (Shell.Session(Session.Started true)) model
-      Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue ])) "The first API calls"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue ])) "The first API calls"
+    }
+
+    test "a started session on the dashboard loads the counts of the dashboard" {
+      let model, _ = Shell.init "/"
+      let _, effect = Shell.update (Shell.Session(Session.Started true)) model
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadDashboard; Shell.LoadSiteDeploy ])) "The first API calls"
+    }
+
+    test "each visit to the dashboard loads the counts again" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let model, _ = Shell.update (Shell.Dashboard(Dashboard.Answered(Ok counts))) model
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
+      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/")) model
+      Expect.equal model.Dashboard Dashboard.Waiting "The counts wait"
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/", [ Shell.LoadDashboard; Shell.LoadSiteDeploy ]))) "The counts load"
     }
 
     test "an open request from the push worker keeps the fragment of the comment in the route" {
@@ -63,11 +77,53 @@ let tests =
       Expect.isTrue (Session.isActive model.Session) "Active"
     }
 
-    test "the dashboard counts the posts and the new comments" {
+    test "the dashboard shows the counts of the API" {
       let model, _ = Shell.init "/"
-      let answer = Ok [ post "first" 2; post "second" 1 ] |> Dashboard.Answered |> Shell.Dashboard
-      let model, _ = Shell.update answer model
-      Expect.equal model.Dashboard (Dashboard.Loaded { Posts = 2; NewComments = 3 }) "Two posts and three new comments"
+      let model, _ = Shell.update (Shell.Dashboard(Dashboard.Answered(Ok counts))) model
+      Expect.equal model.Dashboard (Dashboard.Loaded counts) "The counts"
+    }
+
+    test "the to-do counts link to the moderation queue and to the filters of the post list" {
+      let links = Dashboard.toDo (Some 7) counts
+
+      Expect.equal
+        links
+        [ "Moderation queue", Some 7, Dashboard.ModerationQueue
+          "Drafts", Some 1, Dashboard.Posts Posts.Drafts
+          "Pending edits", Some 2, Dashboard.Posts Posts.PendingEdits
+          "Deliveries to start", Some 3, Dashboard.Posts Posts.DeliveriesToStart ]
+        "The rows"
+    }
+
+    test "the audience shows the new and the canceled subscriptions of the last 30 days" {
+      Expect.equal (Dashboard.audienceText counts) "+5 new, −6 canceled in the last 30 days" "The text"
+    }
+
+    test "a count goes to its page with its filter" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let model, effect = Shell.update (Shell.Dashboard(Dashboard.LinkFollowed(Dashboard.Posts Posts.PendingEdits))) model
+      Expect.equal model.Router.Route Route.Posts "The post list"
+      Expect.equal model.Posts.Filter Posts.PendingEdits "The filter"
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "The posts load"
+    }
+
+    test "the audience goes to the active subscriptions with no search" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let model, _ = Shell.update (Shell.Subscriptions(Subscriptions.Searched "ada")) model
+      let link = Dashboard.LinkFollowed(Dashboard.Subscriptions Subscriptions.Active)
+      let model, _ = Shell.update (Shell.Dashboard link) model
+      Expect.equal model.Router.Route Route.Subscriptions "The subscriptions"
+      Expect.equal model.Subscriptions.Filter Subscriptions.Active "The filter"
+      Expect.equal model.Subscriptions.Search "" "No search"
+    }
+
+    test "the queue count goes to the moderation queue" {
+      let model, _ = Shell.init "/"
+      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
+      let model, _ = Shell.update (Shell.Dashboard(Dashboard.LinkFollowed Dashboard.ModerationQueue)) model
+      Expect.equal model.Router.Route Route.ModerationQueue "The moderation queue"
     }
 
     test "a refused token shows the reason on the dashboard" {

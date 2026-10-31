@@ -142,7 +142,11 @@ let private enter (route: Route) (model: Model) =
   | Route.Subscriptions ->
     { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
   | Route.Settings -> { left with Notifications = Notifications.reload model.Notifications }, [ LoadDevices ]
-  | Route.Dashboard -> { left with SiteDeploy = SiteDeploy.reload model.SiteDeploy }, [ LoadSiteDeploy ]
+  | Route.Dashboard ->
+    { left with
+        Dashboard = Dashboard.init
+        SiteDeploy = SiteDeploy.reload model.SiteDeploy },
+    [ LoadDashboard; LoadSiteDeploy ]
   | Route.Series ->
     { left with
         Series = Series.reload model.Series
@@ -286,7 +290,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     if model.Session.Status = Session.Starting && Session.isActive session then
       let sync = if Notifications.canSync model.Notifications.Environment then [ SyncDevice ] else []
-      next, Some(Send([ LoadDashboard; LoadQueue ] @ snd (enter model.Router.Route model) @ sync))
+      next, Some(Send([ LoadQueue ] @ snd (enter model.Router.Route model) @ sync))
     else
       next, Option.map SignIn effect
   | Dashboard msg ->
@@ -295,6 +299,19 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Dashboard.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | Dashboard.Answered _ -> next, None
+    | Dashboard.LinkFollowed link ->
+      let filtered =
+        match link with
+        | Dashboard.ModerationQueue -> next
+        | Dashboard.Posts filter -> { next with Posts = { next.Posts with Filter = filter } }
+        | Dashboard.Subscriptions filter ->
+          { next with
+              Subscriptions =
+                { next.Subscriptions with
+                    Filter = filter
+                    Search = "" } }
+
+      update (Router(Router.LinkFollowed(Route.path (Dashboard.route link)))) filtered
   | Rebuild msg ->
     let rebuild, effect = Rebuild.update msg model.Rebuild
     let next = { model with Rebuild = rebuild }

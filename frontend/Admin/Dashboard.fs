@@ -1,22 +1,40 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Dashboard
 
-type Summary = { Posts: int; NewComments: int }
-
 type Model =
   | Waiting
-  | Loaded of Summary
+  | Loaded of Api.DashboardCounts
   | NotLoaded of reason: string
 
-type Msg = Answered of Result<Api.Post list, Api.Failure>
+type Link =
+  | ModerationQueue
+  | Posts of Posts.Filter
+  | Subscriptions of Subscriptions.Filter
+
+type Msg =
+  | Answered of Result<Api.DashboardCounts, Api.Failure>
+  /// The Shell sets the filter of the page and goes to the page.
+  | LinkFollowed of Link
 
 let init: Model = Waiting
 
-let summary (posts: Api.Post list) =
-  { Posts = List.length posts
-    NewComments = posts |> List.sumBy _.CommentStats.New }
-
-let update (msg: Msg) (_: Model) : Model =
+let update (msg: Msg) (model: Model) : Model =
   match msg with
-  | Answered(Ok posts) -> Loaded(summary posts)
+  | Answered(Ok counts) -> Loaded counts
   | Answered(Error failure) -> NotLoaded(Api.reason failure)
+  | LinkFollowed _ -> model
+
+let route (link: Link) =
+  match link with
+  | ModerationQueue -> Route.ModerationQueue
+  | Posts _ -> Route.Posts
+  | Subscriptions _ -> Route.Subscriptions
+
+let toDo (queue: int option) (counts: Api.DashboardCounts) =
+  [ "Moderation queue", queue, ModerationQueue
+    "Drafts", Some counts.Drafts, Posts Posts.Drafts
+    "Pending edits", Some counts.PendingEdits, Posts Posts.PendingEdits
+    "Deliveries to start", Some counts.DeliveriesToStart, Posts Posts.DeliveriesToStart ]
+
+let audienceText (counts: Api.DashboardCounts) =
+  $"+{counts.NewSubscriptions} new, −{counts.CanceledSubscriptions} canceled in the last 30 days"

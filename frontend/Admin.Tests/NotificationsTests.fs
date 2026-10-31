@@ -249,18 +249,18 @@ let tests =
     testList "the shell" [
       test "a start on the settings page loads the devices" {
         let _, effect = started "/settings" (environment Notifications.Supported Notifications.Undecided)
-        Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadDevices ])) "The devices"
+        Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadDevices ])) "The devices"
       }
 
       test "a start with the permission granted sends the subscription again with no click" {
         let _, effect = started "/" (environment Notifications.Supported Notifications.Granted)
-        Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadSiteDeploy; Shell.SyncDevice ])) "The sync"
+        Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadDashboard; Shell.LoadSiteDeploy; Shell.SyncDevice ])) "The sync"
       }
 
       test "a start with the permission undecided or denied sends no subscription" {
         for permission in [ Notifications.Undecided; Notifications.Denied ] do
           let _, effect = started "/" (environment Notifications.Supported permission)
-          Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadSiteDeploy ])) $"{permission}"
+          Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadDashboard; Shell.LoadSiteDeploy ])) $"{permission}"
       }
 
       test "the click is an effect of the shell, so the browser keeps the user gesture" {

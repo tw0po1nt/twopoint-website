@@ -280,6 +280,15 @@ type RestoredRevision = { ETag: string }
 /// `Queued` counts the active subscriptions that get the email.
 type StartedDelivery = { Queued: int; StartedDate: string }
 
+/// `NewSubscriptions` and `CanceledSubscriptions` count the last 30 days.
+type DashboardCounts =
+  { Drafts: int
+    PendingEdits: int
+    DeliveriesToStart: int
+    ActiveSubscriptions: int
+    NewSubscriptions: int
+    CanceledSubscriptions: int }
+
 type Failure =
   /// The API answered 401 or 403.
   | Refused
@@ -557,6 +566,9 @@ let private commentPath (slug: string) (comment: Comment) =
 
 let getPosts (api: string) (token: string) : JS.Promise<Result<Post list, Failure>> =
   send HttpMethod.GET api token (internalPath [ "posts" ])
+
+let getDashboard (api: string) (token: string) : JS.Promise<Result<DashboardCounts, Failure>> =
+  send HttpMethod.GET api token (internalPath [ "dashboard" ])
 
 let getPostDeploy (api: string) (token: string) (slug: string) : JS.Promise<Result<DeployState, Failure>> =
   send<PostDeploy> HttpMethod.GET api token (internalPath [ "posts"; slug; "deploy" ])

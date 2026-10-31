@@ -49,7 +49,7 @@ let private tests' =
   testList "Subscriptions" [
     test "a start on the subscriptions page loads the subscriptions with the first API calls" {
       let model, effect = start "/subscriptions"
-      Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadSubscriptions ])) "The list"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadSubscriptions ])) "The list"
       Expect.equal model.Subscriptions.Subscriptions Subscriptions.Waiting "The list waits"
     }
 

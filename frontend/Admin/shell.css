@@ -181,6 +181,22 @@
   margin-top: var(--s-3);
 }
 
+h2 + .stat-grid {
+  margin-top: var(--s-3);
+}
+
+.stat-grid + h2 {
+  margin-top: var(--s-5);
+}
+
+.stat-link {
+  text-decoration: none;
+}
+
+.stat-link:hover {
+  border-color: var(--border-strong);
+}
+
 .card.settings {
   max-width: 640px;
 }

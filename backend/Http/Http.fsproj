@@ -54,6 +54,7 @@
     <Compile Include="Endpoints\Admin\GetPostDeploy.fs" />
     <Compile Include="Endpoints\Admin\GetSiteDeploy.fs" />
     <Compile Include="Endpoints\Admin\GetAllSubscriptions.fs" />
+    <Compile Include="Endpoints\Admin\GetDashboard.fs" />
     <Compile Include="Endpoints\Admin\GetSubscriptionDeliveries.fs" />
     <Compile Include="Endpoints\Admin\CancelSubscription.fs" />
     <Compile Include="Endpoints\Admin\DeleteSubscription.fs" />

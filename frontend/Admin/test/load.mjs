@@ -32,6 +32,17 @@ export const postsAnswer = () => answer(200, { success: true, message: null, dat
 
 export const queueAnswer = () => answer(200, { success: true, message: null, data: queue });
 
+export const dashboard = {
+  drafts: 1,
+  pendingEdits: 2,
+  deliveriesToStart: 0,
+  activeSubscriptions: 12,
+  newSubscriptions: 3,
+  canceledSubscriptions: 1,
+};
+
+export const dashboardAnswer = () => answer(200, { success: true, message: null, data: dashboard });
+
 export const siteDeploy = {
   deploy: 'deployed',
   production: { number: 40, state: 'succeeded', url: 'https://github.com/tw0po1nt/twopoint-website/actions/runs/40' },
@@ -40,10 +51,15 @@ export const siteDeploy = {
 
 export const siteDeployAnswer = () => answer(200, { success: true, message: null, data: siteDeploy });
 
-// The default API answers the three calls of the start: the posts, the moderation queue, and the deploy state of the site.
+// The default API answers the three calls of the start on the dashboard: the moderation queue, the counts, and the
+// deploy state of the site. It answers each other call with the posts.
 export const apiAnswer = (url) => {
   if (url.endsWith('/api/internal/comments')) {
     return queueAnswer();
+  }
+
+  if (url.endsWith('/api/internal/dashboard')) {
+    return dashboardAnswer();
   }
 
   if (url.endsWith('/api/internal/deploys')) {

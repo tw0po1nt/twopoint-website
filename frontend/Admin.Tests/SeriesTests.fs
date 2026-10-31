@@ -63,7 +63,7 @@ let tests =
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadSeries; Shell.LoadSiteDeploy ]))
+        (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadSeries; Shell.LoadSiteDeploy ]))
         "The API calls"
     }
 

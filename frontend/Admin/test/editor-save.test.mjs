@@ -35,7 +35,7 @@ const respond = (url, init = {}) => {
   return apiAnswer(url);
 };
 
-const tokens = ['token-1', 'token-1', 'token-1', 'token-1', 'token-1', null];
+const tokens = ['token-1', 'token-1', 'token-1', 'token-1', null];
 
 const signIn = stubSignIn({
   token: async () => tokens.shift() ?? null,

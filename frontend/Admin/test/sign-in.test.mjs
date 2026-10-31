@@ -37,9 +37,9 @@ test('the token goes with the first API calls', async () => {
   token.resolve('token-2');
   await settle();
   assert.deepEqual(calls, [
-    { url: `${config.api}/api/internal/posts`, authorization: 'Bearer token-2' },
     { url: `${config.api}/api/internal/comments`, authorization: 'Bearer token-2' },
+    { url: `${config.api}/api/internal/dashboard`, authorization: 'Bearer token-2' },
     { url: `${config.api}/api/internal/deploys`, authorization: 'Bearer token-2' },
   ]);
-  assert.deepEqual(summary(), ['2', '3']);
+  assert.deepEqual(summary(), ['3', '1', '2', '0', '12']);
 });
