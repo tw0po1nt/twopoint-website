@@ -52,6 +52,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable working = working
   let mutable version = 1
   let mutable publishedVersion = 1
+  let mutable marks = Map.empty<string, MigratedMark>
   let mutable revisions = Map.empty<string, string>
   let mutable rows = Map.empty<string, PostRow>
   let mutable images : IImageSize = okImages
@@ -87,6 +88,8 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
 
   member _.Log = List.ofSeq log
   member _.Published = published
+  member _.Mark (name : string) = marks |> Map.tryFind name |> Option.defaultValue NotMigrated
+  member _.MarkMigrated (name : string) = marks <- marks |> Map.add name Migrated
   member _.Working = working
   member _.Revisions = revisions
   member _.Rows = rows
@@ -130,11 +133,17 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
     member _.GetUtcNow () = now
     member _.ParsePublished = PostCheck.parsePublished Stage.Staging
 
-    member _.GetPublishedBlob slug =
-      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = $"p{publishedVersion}" }) |> CancellableTaskResult.singleton
+    member this.GetPublishedBlob slug =
+      published
+      |> Map.tryFind (Slug.value slug)
+      |> Option.map (fun text -> { Text = text; ETag = $"p{publishedVersion}"; Mark = this.Mark(Slug.value slug) })
+      |> CancellableTaskResult.singleton
 
     member _.GetWorkingBlob slug =
-      working |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = $"w{version}" }) |> CancellableTaskResult.singleton
+      working
+      |> Map.tryFind (Slug.value slug)
+      |> Option.map (fun text -> { Text = text; ETag = $"w{version}"; Mark = NotMigrated })
+      |> CancellableTaskResult.singleton
 
     member _.GetPublishedPosts () =
       published
@@ -161,7 +170,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       revisions <- revisions |> Map.remove $"{Slug.value slug}/{isoOf time}"
       CancellableTaskResult.singleton ()
 
-    member _.WritePublishedBlob slug text condition =
+    member _.WritePublishedBlob slug text mark condition =
       beforePublishedWrite ()
 
       if publishedWriteFails then
@@ -171,11 +180,13 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
         | MustNotExist, None ->
           log.Add "published"
           published <- published |> Map.add (Slug.value slug) text
+          marks <- marks |> Map.add (Slug.value slug) mark
           CancellableTaskResult.singleton (Written $"p{publishedVersion}")
         | MatchesETag eTag, Some _ when eTag = $"p{publishedVersion}" ->
           log.Add "published"
           publishedVersion <- publishedVersion + 1
           published <- published |> Map.add (Slug.value slug) text
+          marks <- marks |> Map.add (Slug.value slug) mark
           CancellableTaskResult.singleton (Written $"p{publishedVersion}")
         | _ -> CancellableTaskResult.singleton ConditionFailed
 
@@ -736,6 +747,21 @@ let changesTests =
         "The outcome has the production run"
     }
 
+    test "the publish keeps the migrated mark of the published blob" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      fake.MarkMigrated "live"
+
+      publishChanges fake "live" (Some "w1") None |> changesOutcomeOf |> ignore
+      Expect.equal fake.Published["live"] changedText "The changes are published"
+      Expect.equal (fake.Mark "live") Migrated "The mark stays"
+    }
+
+    test "the publish gives no mark to a post without one" {
+      let fake = store [ "live", livePost ] [ "live", changedText ]
+      publishChanges fake "live" (Some "w1") None |> changesOutcomeOf |> ignore
+      Expect.equal (fake.Mark "live") NotMigrated "No mark"
+    }
+
     test "the publish records the change with the production run number" {
       let fake = store [ "live", livePost ] [ "live", changedText ]
       publishChanges fake "live" (Some "w1") None |> changesOutcomeOf |> ignore
@@ -1197,6 +1223,13 @@ let changeDateTests =
           Production = Dispatched(Queued(RunNumber 7L))
           Warnings = [] }
         "The outcome has the date and the production run"
+    }
+
+    test "a date change keeps the migrated mark of the published blob" {
+      let fake = upcomingStore [ "soon", upcomingPost ] []
+      fake.MarkMigrated "soon"
+      changeDate fake "soon" None "2026-05-02T08:00:00Z" |> dateChangedOf |> ignore
+      Expect.equal (fake.Mark "soon") Migrated "The mark stays"
     }
 
     test "a date change writes the published blob, the row, and then dispatches, with no revision" {

@@ -162,7 +162,13 @@ module PublishChanges =
         |> Result.mapError ActionError<Error>.Validation
 
       do!
-        PublishSteps.writeRevisionAndPublished dependencies gated.Slug gated.PublishedAt gated.Text (MatchesETag gated.Published.ETag)
+        PublishSteps.writeRevisionAndPublished
+          dependencies
+          gated.Slug
+          gated.PublishedAt
+          gated.Text
+          gated.Published.Mark
+          (MatchesETag gated.Published.ETag)
         |> CancellableTask.map (
           Result.mapError (function
             | PublishSteps.RevisionTaken -> ActionError.Logic(RevisionExists gated.Slug)

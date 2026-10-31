@@ -57,6 +57,7 @@ let private fail (call: Shell.Call) =
   | Shell.DeletePost request -> Shell.Editor(Editor.DeleteAnswered(request.Slug, Error Api.Unanswered))
   | Shell.LoadRevisions slug -> Shell.Editor(Editor.RevisionsAnswered(slug, Error Api.Unanswered))
   | Shell.RestoreRevision request -> Shell.Editor(Editor.RestoreAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.StartDelivery request -> Shell.Editor(Editor.SendAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UploadAsset(id, _) -> Shell.Upload(Upload.Answered(id, Error Api.Unanswered))
   | Shell.LoadSeries -> Shell.Series(Series.Answered(Error Api.Unanswered))
   | Shell.SaveSeries _ -> Shell.Series(Series.SaveAnswered(Error Api.Unanswered))
@@ -225,6 +226,9 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.RestoreRevision request ->
     Api.restoreRevision (Config.api ()) token request.Slug request.ETag request.Revision
     |> Promise.map (fun result -> Shell.Editor(Editor.RestoreAnswered(request.Slug, result)))
+  | Shell.StartDelivery request ->
+    Api.startDelivery (Config.api ()) token request.Slug request.Intro
+    |> Promise.map (fun result -> Shell.Editor(Editor.SendAnswered(request.Slug, result)))
   | Shell.UploadAsset(id, file) ->
     Api.uploadAsset (Config.api ()) token file
     |> Promise.map (fun result -> Shell.Upload(Upload.Answered(id, result)))

@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Subscriptions.Actions
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
@@ -385,6 +386,12 @@ module SendWelcome =
         return Send (subscription, latestPost)
       }
 
+    let latestPost (utcNow : DateTime) (deploys : DeployContext) (posts : Post list) : Post option =
+      posts
+      |> List.filter (DeliveryGate.checkPost utcNow deploys >> Result.isOk)
+      |> List.sortByDescending _.Info.CreatedDate
+      |> List.tryHead
+
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
       NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
 
@@ -395,7 +402,8 @@ module SendWelcome =
   type Dependencies =
     abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
     abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<SubscriptionDelivery list>
-    abstract member GetLatestPost: unit -> DependencyResult<Post option>
+    abstract member GetAllPosts: unit -> DependencyResult<Post list>
+    abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
     abstract member GetNewsletter: Post -> DependencyResult<string option>
     abstract member GetUtcNow: unit -> DateTime
     abstract member SendWelcome: Subscription -> Newsletter -> DependencyResult<OperationId>
@@ -424,9 +432,11 @@ module SendWelcome =
         |> CancellableTaskResult.map (Option.defaultValue [])
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let! latestPost =
-        dependencies.GetLatestPost()
+      let! posts, deploys =
+        CancellableTaskResult.parallelZip (dependencies.GetAllPosts()) (dependencies.GetDeployContext())
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let latestPost = Logic.latestPost (dependencies.GetUtcNow()) deploys posts
 
       let! (Send (subscription, post)) =
         Logic.decide request.SubscriptionId subscription deliveries latestPost
@@ -490,12 +500,13 @@ module StartNewPostDelivery =
 
   type Error =
     | PostNotFound of Slug
-    | PostUpcoming of Post
+    | NotReady of Post * DeliveryGate.Refusal
+    | AlreadyStarted of Post * startedDate : DateTime
     | NewsletterNotFound of Post
     | NewsletterInvalid of Post * reason : string
   type Success = Start of Post
   type Decision = Decision<Success, Error>
-  type Event = Started of Post * recipients : Subscription list
+  type Event = Started of Post * recipients : Subscription list * startedDate : DateTime
 
   // Logic
 
@@ -503,16 +514,22 @@ module StartNewPostDelivery =
     DateTime
       -> Slug
       -> Post option
+      -> DeployContext
       -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun utcNow slug post -> result {
+      fun utcNow slug post deploys -> result {
         let! post = post |> Result.requireSome (PostNotFound slug)
-        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
+        do! DeliveryGate.checkPost utcNow deploys post |> Result.mapError (fun refusal -> NotReady (post, refusal))
         return Start post
       }
+
+    let inserted (post : Post) (insert : DeliveryStartInsert) : Result<unit, Error> =
+      match insert with
+      | Inserted -> Ok ()
+      | StartedBefore startedDate -> Error (AlreadyStarted (post, startedDate))
 
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
       NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
@@ -525,9 +542,12 @@ module StartNewPostDelivery =
 
   type Dependencies =
     abstract member GetPostBySlug: Slug -> DependencyResult<Post option>
+    abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
     abstract member GetNewsletter: Post -> DependencyResult<string option>
     abstract member GetAllSubscriptions: unit -> DependencyResult<Subscription list>
     abstract member GetUtcNow: unit -> DateTime
+    abstract member InsertDeliveryStart: post: Post -> startedDate: DateTime -> DependencyResult<DeliveryStartInsert>
+    abstract member DeleteDeliveryStart: post: Post -> DependencyResult<unit>
     abstract member QueueDeliveries:
       post: Post
         -> intro: NonEmptyString option
@@ -545,8 +565,12 @@ module StartNewPostDelivery =
         dependencies.GetPostBySlug start.Post
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
+      let! deploys =
+        dependencies.GetDeployContext()
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
       let! (Start post) =
-        Logic.decide (dependencies.GetUtcNow()) start.Post post
+        Logic.decide (dependencies.GetUtcNow()) start.Post post deploys
         |> Result.mapError ActionError<Error>.Logic
 
       let! html =
@@ -563,12 +587,23 @@ module StartNewPostDelivery =
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let recipients = Logic.recipients subscriptions
+      let startedDate = dependencies.GetUtcNow()
 
-      do!
-        dependencies.QueueDeliveries post start.Intro recipients
+      // The insert fails when another start inserted first, so two starts never queue the same post.
+      let! insert =
+        dependencies.InsertDeliveryStart post startedDate
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      return Event.Started (post, recipients)
+      do! Logic.inserted post insert |> Result.mapError ActionError<Error>.Logic
+
+      // A failed queue deletes the start, so the author can start the delivery again.
+      do!
+        dependencies.QueueDeliveries post start.Intro recipients
+        |> CancellableTaskResult.orElseWith (fun queueError ->
+          dependencies.DeleteDeliveryStart post |> CancellableTask.map (fun _ -> Error queueError))
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return Event.Started (post, recipients, startedDate)
     }
 
 

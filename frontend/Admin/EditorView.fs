@@ -130,6 +130,16 @@ let private changeDateState (model: Shell.Model) =
   | Some document -> document.ChangeDate
   | None -> Typed.Closed
 
+let private sendState (model: Shell.Model) =
+  match document model with
+  | Some document -> document.SendToSubscribers
+  | None -> Typed.Closed
+
+let private queuedCount (model: Shell.Model) =
+  match document model with
+  | Some document -> document.QueuedCount
+  | None -> None
+
 let private deleteStep (model: Shell.Model) =
   match document model with
   | Some document -> Editor.deleteStep document
@@ -793,6 +803,51 @@ let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell
   }
 
 [<SolidComponent>]
+let private sendDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let send msg = dispatch (Shell.Editor msg)
+  let state () = sendState (model ())
+  let sending () = Typed.isSending (state ())
+
+  dialog(id = "send-dialog", class' = "dialog publish-dialog", ariaLabelledBy = "send-dialog-title")
+    .ref(Parts.followOpen (fun () -> Typed.isOpen (state ())))
+    .on("cancel", fun event ->
+      if sending () then
+        event.preventDefault())
+    .on ("close", fun _ -> send Editor.SendClosed) {
+    h2 (id = "send-dialog-title") { "Send to subscribers?" }
+
+    div (class' = "dialog-body") {
+      p () { "Each active subscription gets the newsletter of the post by email. A subscription that already has the post gets no second email." }
+
+      Parts
+        .Field(id = "send-intro", label = "Intro", hint = "Optional. The email shows it above the post.")
+        .Has(
+          Parts
+            .Textarea(
+              id = "send-intro",
+              value = (fun () -> Typed.typed (state ())),
+              disabled = sending (),
+              onInput = fun event -> send (Editor.IntroTyped (event.target :?> HTMLTextAreaElement).value)
+            )
+            .View()
+        )
+
+      Show(when' = (Typed.reason (state ())).IsSome) {
+        Parts.Alert(tone = Parts.Bad, title = "The post is not sent.").Has(
+          p () { Typed.reason (state ()) |> Option.defaultValue "" }
+        )
+      }
+    }
+
+    div (class' = "actions") {
+      Parts.Button(disabled = sending (), onClick = fun _ -> send Editor.SendClosed).Has(Fragment() { "Cancel" })
+
+      Parts.Button(kind = Parts.Primary, disabled = sending (), onClick = fun _ -> send Editor.SendConfirmed)
+        .Has(Fragment() { "Send" })
+    }
+  }
+
+[<SolidComponent>]
 let private publishProblems (model: unit -> Shell.Model) =
   Show(when' = not (List.isEmpty (Publish.problems (publishModel (model ()))))) {
     ul (class' = "preview-problems", ariaLabel = "Problems") {
@@ -959,6 +1014,20 @@ let private changeNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
   }
 
 [<SolidComponent>]
+let private sentNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  Show(when' = (queuedCount (model ())).IsSome) {
+    Parts.Alert(tone = Parts.Good, title = "The delivery started.").Has(
+      Fragment() {
+        p () { queuedCount (model ()) |> Option.map Editor.queuedText |> Option.defaultValue "" }
+
+        div (class' = "editor-notice-actions") {
+          Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.SentNoticeDismissed)).Has(Fragment() { "Dismiss" })
+        }
+      }
+    )
+  }
+
+[<SolidComponent>]
 let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: MouseEvent -> unit) (heading: unit -> string) =
   let listen (name: string) (handler: Event -> unit) =
     window.addEventListener (name, handler)
@@ -994,6 +1063,7 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
       Banner.view dispatch (model ()).Session
       publishNotice dispatch model
       changeNotice dispatch model
+      sentNotice dispatch model
       h1 (class' = "sr-only") { heading () }
 
       Show(when' = isLoaded (model ()), fallback = loading model) { writing dispatch bodyView model }
@@ -1007,5 +1077,6 @@ let page (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) (back: Mouse
     revisionsDialog dispatch model
     unpublishDialog dispatch model
     changeDateDialog dispatch model
+    sendDialog dispatch model
     deleteDialog dispatch model
   }

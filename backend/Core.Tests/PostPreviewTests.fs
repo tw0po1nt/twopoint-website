@@ -32,7 +32,7 @@ type private FakeStore(published : (string * string) list, working : (string * s
     member _.GetWorkingBlob slug =
       working
       |> List.tryFind (fun (name, _) -> name = Slug.value slug)
-      |> Option.map (fun (_, text) -> { Text = text; ETag = "v1" })
+      |> Option.map (fun (_, text) -> { Text = text; ETag = "v1"; Mark = NotMigrated })
       |> CancellableTaskResult.singleton
 
     member _.GetPublishedPosts () =

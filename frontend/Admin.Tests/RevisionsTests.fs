@@ -22,6 +22,7 @@ let private livePost: Api.PostDocument =
     Excerpt = "About it."
     Body = "Live body.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published =
       Some

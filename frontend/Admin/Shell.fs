@@ -46,6 +46,7 @@ type Call =
   | DeletePost of Editor.DeleteRequest
   | LoadRevisions of slug: string
   | RestoreRevision of Editor.RestoreRequest
+  | StartDelivery of Editor.DeliveryRequest
   | UploadAsset of id: int * file: Browser.Types.File
   | LoadSeries
   | SaveSeries of SeriesForm.SaveRequest
@@ -238,6 +239,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.DeletePost _
           | Editor.LoadRevisions _
           | Editor.RestoreRevision _
+          | Editor.StartDelivery _
           | Editor.Reload _
           | Editor.Focus _
           | Editor.MoveToBodyLine _ -> [])
@@ -399,6 +401,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.DeletePost request -> Send [ DeletePost request ]
           | Editor.LoadRevisions slug -> Send [ LoadRevisions slug ]
           | Editor.RestoreRevision request -> Send [ RestoreRevision request ]
+          | Editor.StartDelivery request -> Send [ StartDelivery request ]
           | Editor.Reload slug -> Send [ LoadPost slug ]
           | Editor.Focus elementId -> Focus elementId
           | Editor.MoveToBodyLine line -> MoveToBodyLine line)

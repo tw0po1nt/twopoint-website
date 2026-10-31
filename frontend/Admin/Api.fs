@@ -30,6 +30,8 @@ type Post =
     PendingEdit: bool
     PublishDate: string option
     Deploy: DeployState
+    /// The post is published and deployed, and has no delivery start and no migrated mark.
+    DeliveryToStart: bool
     CommentStats: CommentStats }
 
 type PostDeploy = { Deploy: DeployState }
@@ -95,7 +97,8 @@ type PostDocument =
     Body: string
     Details: PostDetails
     Text: string
-    Published: PublishedFields option }
+    Published: PublishedFields option
+    DeliveryStarted: string option }
 
 type CreatedDraft = { Slug: string; ETag: string }
 
@@ -273,6 +276,9 @@ type Revision =
     Title: string option }
 
 type RestoredRevision = { ETag: string }
+
+/// `Queued` counts the active subscriptions that get the email.
+type StartedDelivery = { Queued: int; StartedDate: string }
 
 type Failure =
   /// The API answered 401 or 403.
@@ -883,6 +889,11 @@ let restoreRevision
     (internalPath [ "posts"; slug; "revisions"; "restore" ])
     (Some(Json json))
     [ workingPrecondition eTag ]
+
+/// A blank intro sends the email with no intro.
+let startDelivery (api: string) (token: string) (slug: string) (intro: string) : JS.Promise<Result<StartedDelivery, Failure>> =
+  let json = Encode.object [ "intro", Encode.string intro ] |> Encode.toString 0
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "deliveries" ]) (Some(Json json)) []
 
 type private UploadedAsset = { Url: string }
 

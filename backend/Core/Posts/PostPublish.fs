@@ -199,7 +199,8 @@ module PublishSteps =
     inherit PostChanges
     abstract member WriteRevisionBlob: slug: Slug -> time: DateTime -> text: string -> DependencyResult<WriteOutcome>
     abstract member DeleteRevisionBlob: slug: Slug -> time: DateTime -> DependencyResult<unit>
-    abstract member WritePublishedBlob: slug: Slug -> text: string -> condition: WriteCondition -> DependencyResult<WriteOutcome>
+    abstract member WritePublishedBlob:
+      slug: Slug -> text: string -> mark: MigratedMark -> condition: WriteCondition -> DependencyResult<WriteOutcome>
     abstract member UpsertPostRow: post: PostRow -> DependencyResult<unit>
     abstract member DeleteWorkingBlob: slug: Slug -> eTag: string -> DependencyResult<DeleteOutcome>
     abstract member DispatchSite: unit -> DependencyResult<SiteDispatch>
@@ -266,6 +267,7 @@ module PublishSteps =
     (slug: Slug)
     (time: DateTime)
     (text: string)
+    (mark: MigratedMark)
     (condition: WriteCondition)
     : CancellableTask<Result<unit, WriteFailure>> =
     cancellableTask {
@@ -276,7 +278,7 @@ module PublishSteps =
         let removeRevision () =
           dependencies.DeleteRevisionBlob slug time |> CancellableTask.map ignore
 
-        match! dependencies.WritePublishedBlob slug text condition with
+        match! dependencies.WritePublishedBlob slug text mark condition with
         | Ok(Written _) -> return Ok()
         | Ok ConditionFailed ->
           do! removeRevision ()
@@ -371,7 +373,7 @@ module PublishPost =
         |> Result.mapError ActionError<Error>.Validation
 
       do!
-        PublishSteps.writeRevisionAndPublished dependencies slug gated.PublishedAt gated.DatedText MustNotExist
+        PublishSteps.writeRevisionAndPublished dependencies slug gated.PublishedAt gated.DatedText NotMigrated MustNotExist
         |> CancellableTask.map (
           Result.mapError (function
             | PublishSteps.RevisionTaken -> ActionError.Logic(RevisionExists slug)

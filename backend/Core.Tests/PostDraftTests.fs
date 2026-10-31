@@ -26,6 +26,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
     { new IImageSize with
         member _.Size _ = Result.Ok { Width = 1600; Height = 900 } }
   let mutable storeDown = false
+  let mutable deliveryStart = NotStarted
 
   member _.Working = working |> Map.map (fun _ (text, _) -> text)
 
@@ -37,6 +38,8 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
 
   member _.StoreDown with set value = storeDown <- value
 
+  member _.DeliveryStart with set value = deliveryStart <- value
+
   member _.Overwrite (name : string) (text : string) =
     let version = working |> Map.tryFind name |> Option.map snd |> Option.defaultValue 0
     working <- working |> Map.add name (text, version + 1)
@@ -44,12 +47,13 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   interface GetPostDocument.Dependencies with
     member _.GetUtcNow () = utcNow
     member _.GetPublishedBlob slug =
-      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1" }) |> CancellableTaskResult.singleton
+      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1"; Mark = NotMigrated }) |> CancellableTaskResult.singleton
     member _.GetWorkingBlob slug =
       working
       |> Map.tryFind (Slug.value slug)
-      |> Option.map (fun (text, version) -> { Text = text; ETag = $"v{version}" })
+      |> Option.map (fun (text, version) -> { Text = text; ETag = $"v{version}"; Mark = NotMigrated })
       |> CancellableTaskResult.singleton
+    member _.GetDeliveryStart _ = CancellableTaskResult.singleton deliveryStart
 
   interface SaveDraft.Dependencies with
     member _.Stage = Stage.Staging
@@ -393,6 +397,14 @@ let documentTests =
 
     test "a post that does not exist gives nothing" {
       Expect.isNone (document (store [] []) "missing") "Nothing"
+    }
+
+    test "a published post gives the start of its new-post delivery" {
+      let fake = store [ "live", published ] []
+      Expect.equal (document fake "live" |> Option.get).DeliveryStart NotStarted "Not started"
+
+      fake.DeliveryStart <- Started utcNow
+      Expect.equal (document fake "live" |> Option.get).DeliveryStart (Started utcNow) "Started"
     }
   ]
 

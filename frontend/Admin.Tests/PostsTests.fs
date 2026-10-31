@@ -11,12 +11,14 @@ let private post slug state pendingEdit : Api.Post =
     PendingEdit = pendingEdit
     PublishDate = None
     Deploy = Api.DeployState.Deployed
+    DeliveryToStart = false
     CommentStats = { New = 0; Approved = 0; Rejected = 0 } }
 
 let private draft = post "draft" Api.Draft false
 let private published = post "published" Api.Published false
 let private edited = post "edited" Api.Published true
 let private upcoming = post "upcoming" Api.Upcoming false
+let private toSend = { post "to-send" Api.Published false with DeliveryToStart = true }
 
 let private start (path: string) =
   let model, _ = Shell.init path
@@ -61,6 +63,16 @@ let tests =
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPosts ])) "The posts again"
       Expect.equal model.Posts.Filter Posts.PendingEdits "The pending edits"
       Expect.equal model.Posts.Posts Posts.Waiting "The list waits"
+    }
+
+    test "the filter of deliveries to start shows only the posts that wait for a delivery" {
+      let model, _ = start "/posts"
+      let model, _ = Shell.update (Shell.Posts(Posts.Answered(Ok [ draft; published; toSend; upcoming ]))) model
+      let model, effect = Shell.update (Shell.Posts(Posts.Filtered Posts.DeliveriesToStart)) model
+      Expect.isNone effect "The filter calls no API"
+      Expect.equal (shown model) [ "to-send" ] "Only the post to send"
+      Expect.contains (Posts.filters |> List.map snd) "Deliveries to start" "The filter tab"
+      Expect.equal (Posts.emptyText Posts.DeliveriesToStart) "No post waits for a delivery." "The empty text"
     }
 
     test "a filter with no post has its own empty text" {

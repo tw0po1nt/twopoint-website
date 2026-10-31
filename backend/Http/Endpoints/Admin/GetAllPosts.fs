@@ -4,6 +4,7 @@ open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Subscriptions
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -32,6 +33,7 @@ type PostDto =
     PublishDate : Nullable<DateTime>
     /// `deploying`, `deployed`, or `failed`.
     Deploy : string
+    DeliveryToStart : bool
     CommentStats : PostCommentStatsDto }
 
 [<AutoOpen>]
@@ -65,6 +67,7 @@ module PostTypesExt =
         PendingEdit = this.HasPendingEdit
         PublishDate = Option.toNullable this.PublishDate
         Deploy = this.Deploy.Name
+        DeliveryToStart = this.DeliveryToStart
         CommentStats = this.CommentStats.ToDto() }
 
 module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
@@ -113,6 +116,8 @@ type GetAllPosts (
           member _.GetWorkingPosts () = postStore.GetWorkingPosts()
           member _.GetPostsInTable () = postDependencies.GetAllPosts()
           member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
+          member _.GetMigratedPosts () = postStore.GetMigratedPosts()
+          member _.GetDeliveryStarts () = DeliveryStartDb(tableServiceClient, logger).GetDeliveryStarts()
         }
 
         let! postsResult = getAllPosts()

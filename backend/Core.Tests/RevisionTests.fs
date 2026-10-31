@@ -54,10 +54,10 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
 
   interface RestoreRevision.Dependencies with
     member _.GetPublishedBlob slug =
-      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1" }) |> CancellableTaskResult.singleton
+      published |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = "p1"; Mark = NotMigrated }) |> CancellableTaskResult.singleton
 
     member _.GetWorkingBlob slug =
-      working |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = $"w{version}" }) |> CancellableTaskResult.singleton
+      working |> Map.tryFind (Slug.value slug) |> Option.map (fun text -> { Text = text; ETag = $"w{version}"; Mark = NotMigrated }) |> CancellableTaskResult.singleton
 
     member _.GetRevisionBlob slug revision =
       revisions |> Map.tryFind $"{Slug.value slug}/{RevisionName.value revision}" |> CancellableTaskResult.singleton

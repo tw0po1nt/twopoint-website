@@ -22,6 +22,7 @@ let private document state : Api.PostDocument =
     Excerpt = "About it."
     Body = "Some text.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published = None }
 
@@ -52,6 +53,7 @@ let private post slug deploy : Api.Post =
     PendingEdit = false
     PublishDate = None
     Deploy = deploy
+    DeliveryToStart = false
     CommentStats = { New = 0; Approved = 0; Rejected = 0 } }
 
 let private listed (posts: Api.Post list) =

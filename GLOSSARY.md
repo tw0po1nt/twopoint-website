@@ -67,6 +67,11 @@ _Avoid_: Scheduled post, future post
 The email version of a post. The build makes one newsletter for each post.
 _Avoid_: Email post
 
+**Migrated mark**:
+The mark on the stored published version of each post from before the admin. The author cannot set or
+clear it, and each later publish keeps it. A post with the mark is never a delivery to start.
+_Avoid_: Legacy flag, imported post
+
 ### Build
 
 **Stage**:
@@ -106,14 +111,26 @@ _Avoid_: Subscription notification, send
 
 **Welcome**:
 A delivery that the blog sends after a new subscription or a reactivation. It contains the newsletter of
-the latest post.
+the newest post with a publish date in the past and a deployed latest change. Between a publish and its
+deploy, a new subscription gets the previous post.
 _Avoid_: Welcome notification, greeting
 
 **New-post delivery**:
-A delivery that contains the newsletter of one post. After the publish date of a post, the author starts
-a new-post delivery of that post to each active subscription. A subscription that already has a delivery
-of the post does not get a new-post delivery of it.
+A delivery that contains the newsletter of one post. The author starts a new-post delivery of a post to
+each active subscription. The start is possible only after the publish date of the post and after the
+deploy of the latest change to the post. A subscription that already has a delivery of the post does not
+get a new-post delivery of it.
 _Avoid_: Announcement, broadcast, blast
+
+**Delivery start**:
+The record that the author started the new-post delivery of a post, with its date. A post has at most one
+delivery start, so the blog refuses a second start of the same post.
+_Avoid_: Send record, sent flag
+
+**Delivery to start**:
+A published post with a publish date in the past, a deployed latest change, no delivery start, and no
+migrated mark.
+_Avoid_: Unsent post, pending delivery
 
 ### Comments
 

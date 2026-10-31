@@ -209,8 +209,22 @@ type PostState =
 /// The text of one blob in the post store.
 type StoredPost = { Slug : Slug; Text : string; ETag : string }
 
-/// The text of one blob in the post store, with the ETag that the store gave the blob.
-type StoredBlob = { Text : string; ETag : string }
+/// The author cannot set or clear the mark, so each write of a `published` blob keeps it.
+type MigratedMark =
+  | Migrated
+  | NotMigrated
+
+/// A post has at most one start of its new-post delivery.
+type DeliveryStart =
+  | NotStarted
+  | Started of startedDate : DateTime
+
+type DeliveryStartInsert =
+  | Inserted
+  | StartedBefore of startedDate : DateTime
+
+/// Only a `published` blob can have the migrated mark.
+type StoredBlob = { Text : string; ETag : string; Mark : MigratedMark }
 
 /// The store refuses a write when its condition is false.
 type WriteCondition =
@@ -276,7 +290,8 @@ type PostDocument =
     PublishDate : DateTime option
     ETag : string option
     Text : string
-    PublishedText : string option }
+    PublishedText : string option
+    DeliveryStart : DeliveryStart }
 
 type PostListing =
   { Slug : Slug
@@ -285,6 +300,7 @@ type PostListing =
     HasPendingEdit : bool
     PublishDate : DateTime option
     Deploy : TwoPoint.Core.Deploys.DeployState
+    DeliveryToStart : bool
     CommentStats : PostCommentStats }
 
 type PostedComment =

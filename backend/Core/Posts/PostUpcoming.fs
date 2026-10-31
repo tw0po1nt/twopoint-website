@@ -226,7 +226,7 @@ module ChangeDate =
       let! post = PublishSteps.row slug date datedText |> Result.mapError ActionError<Error>.Validation
 
       let! written =
-        dependencies.WritePublishedBlob slug datedText (MatchesETag upcoming.Published.ETag)
+        dependencies.WritePublishedBlob slug datedText upcoming.Published.Mark (MatchesETag upcoming.Published.ETag)
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       do!

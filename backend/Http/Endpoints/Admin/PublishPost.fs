@@ -124,7 +124,7 @@ type PostPublishing(
     member _.ParsePublished = gate.ParsePublished
     member _.WriteRevisionBlob slug time text = postStore.WriteRevisionBlob slug time text
     member _.DeleteRevisionBlob slug time = postStore.DeleteRevisionBlob slug time
-    member _.WritePublishedBlob slug text condition = postStore.WritePublishedBlob slug text condition
+    member _.WritePublishedBlob slug text mark condition = postStore.WritePublishedBlob slug text mark condition
     member _.UpsertPostRow post = postDependencies.UpsertPost post |> CancellableTaskResult.map ignore
     member _.DeleteWorkingBlob slug eTag = postStore.DeleteWorkingBlob slug eTag
     member _.DispatchSite () = rebuilder.Dispatch()
