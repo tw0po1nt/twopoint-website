@@ -75,7 +75,7 @@ let tests =
 
       Expect.equal
         effect'
-        (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadPost "my-post" ]))
+        (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadPost "my-post" ]))
         "The post"
     }
 

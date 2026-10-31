@@ -33,7 +33,7 @@ let tests =
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadSiteDeploy ]))
+        (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadDashboard; Shell.LoadSiteDeploy ]))
         "The first API calls"
     }
 
@@ -42,7 +42,7 @@ let tests =
       let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/")) model
 
       match effect with
-      | Some(Shell.Navigate(_, calls)) -> Expect.equal calls [ Shell.LoadSiteDeploy ] "The deploy state"
+      | Some(Shell.Navigate(_, calls)) -> Expect.equal calls [ Shell.LoadDashboard; Shell.LoadSiteDeploy ] "The deploy state"
       | other -> failtestf "Expected a navigation, got %A" other
 
       Expect.equal model.SiteDeploy.Status SiteDeploy.Waiting "The state waits"

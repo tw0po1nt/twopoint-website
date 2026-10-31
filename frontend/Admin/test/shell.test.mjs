@@ -42,13 +42,13 @@ test('the account shows the name of the signed-in account', () => {
   assert.equal(document.querySelector('.side .account .avatar').textContent.trim(), 'AL');
 });
 
-test('the start gets the posts, the moderation queue, and the deploy state of the site from the API with the token, and shows the counts', () => {
+test('the start gets the moderation queue, the counts, and the deploy state of the site from the API with the token, and shows the counts', () => {
   assert.deepEqual(calls, [
-    { url: `${config.api}/api/internal/posts`, authorization: 'Bearer token-1' },
     { url: `${config.api}/api/internal/comments`, authorization: 'Bearer token-1' },
+    { url: `${config.api}/api/internal/dashboard`, authorization: 'Bearer token-1' },
     { url: `${config.api}/api/internal/deploys`, authorization: 'Bearer token-1' },
   ]);
-  assert.deepEqual(summary(), ['2', '3'], 'Two posts and three new comments');
+  assert.deepEqual(summary(), ['3', '1', '2', '0', '12'], 'The counts');
 });
 
 test('a link in the navigation shows its page and changes the URL with no page load', () => {
@@ -124,6 +124,7 @@ test('a change of page calls the API only for a page with a list of its own', ()
     [
       `${config.api}/api/internal/subscriptions`,
       `${config.api}/api/internal/notifications/devices`,
+      `${config.api}/api/internal/dashboard`,
       `${config.api}/api/internal/deploys`,
       `${config.api}/api/internal/series`,
       `${config.api}/api/internal/deploys`,

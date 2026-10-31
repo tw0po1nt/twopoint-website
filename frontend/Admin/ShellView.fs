@@ -83,7 +83,7 @@ let private register (token: string) (keys: PushKeys) =
 
 let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<Shell.Msg> =
   match call with
-  | Shell.LoadDashboard -> Api.getPosts (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
+  | Shell.LoadDashboard -> Api.getDashboard (Config.api ()) token |> Promise.map (Dashboard.Answered >> Shell.Dashboard)
   | Shell.LoadPosts -> Api.getPosts (Config.api ()) token |> Promise.map (Posts.Answered >> Shell.Posts)
   | Shell.PollPosts generation ->
     Api.getPosts (Config.api ()) token
@@ -329,10 +329,13 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
 
 let private site = "https://twopoint.dev"
 
-let private follow (dispatch: Router.Msg -> unit) (route: Route) (event: MouseEvent) =
+let private onPlainClick (act: unit -> unit) (event: MouseEvent) =
   if event.button = 0. && not (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) then
     event.preventDefault ()
-    dispatch (Router.LinkFollowed(Route.path route))
+    act ()
+
+let private follow (dispatch: Router.Msg -> unit) (route: Route) =
+  onPlainClick (fun () -> dispatch (Router.LinkFollowed(Route.path route)))
 
 let private currentMark (isCurrent: bool) = if isCurrent then "page" else null
 
@@ -438,27 +441,60 @@ let private accountMenu (id: string) (placement: Menu.Placement) (name: unit -> 
     })
 
 [<SolidComponent>]
-let private dashboard (model: Dashboard.Model) =
+let private countLink (dispatch: Shell.Msg -> unit) (link: Dashboard.Link) (content: #HtmlElement) =
+  a (
+    class' = "card card-body stat-card stat-link",
+    href = Route.path (Dashboard.route link),
+    onClick = onPlainClick (fun () -> dispatch (Shell.Dashboard(Dashboard.LinkFollowed link)))
+  ) {
+    content
+  }
+
+[<SolidComponent>]
+let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (queue: int option) =
   match model with
   | Dashboard.Waiting ->
     Fragment() {
-      div (class' = "stat-grid", ariaBusy = true) {
-        div (class' = "card card-body") {
-          Parts.skeleton "40%"
-          Parts.skeleton "24px"
-        }
+      h2 () { "To-do" }
 
-        div (class' = "card card-body") {
-          Parts.skeleton "60%"
-          Parts.skeleton "24px"
+      div (class' = "stat-grid", ariaBusy = true) {
+        For(each = [| "40%"; "60%"; "50%"; "70%" |]) {
+          yield fun width _ ->
+            div (class' = "card card-body") {
+              Parts.skeleton width
+              Parts.skeleton "24px"
+            }
         }
       }
     }
-  | Dashboard.Loaded summary ->
+  | Dashboard.Loaded counts ->
     Fragment() {
+      h2 () { "To-do" }
+
       div (class' = "stat-grid") {
-        Parts.stat "Posts" (string summary.Posts)
-        Parts.stat "New comments" (string summary.NewComments)
+        For(each = Array.ofList (Dashboard.toDo queue counts)) {
+          yield fun item _ ->
+            countLink
+              dispatch
+              item.Link
+              (Fragment() {
+                h3 () { item.Title }
+                span (class' = "stat") { item.Count |> Option.map string |> Option.defaultValue "…" }
+              })
+        }
+      }
+
+      h2 () { "Audience" }
+
+      div (class' = "stat-grid") {
+        countLink
+          dispatch
+          (Dashboard.Subscriptions Subscriptions.Active)
+          (Fragment() {
+            h3 () { "Active subscriptions" }
+            span (class' = "stat") { string counts.ActiveSubscriptions }
+            span (class' = "muted small") { Dashboard.audienceText counts }
+          })
       }
     }
   | Dashboard.NotLoaded reason ->
@@ -1341,7 +1377,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   match model.Router.Route with
   | Dashboard ->
     Fragment() {
-      dashboard model.Dashboard
+      dashboard dispatch model.Dashboard (Queue.count model.Queue)
       rebuild dispatch model.Rebuild model.SiteDeploy
     }
   | Settings ->

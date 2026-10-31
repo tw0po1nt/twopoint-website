@@ -58,7 +58,7 @@ let private listTests =
   testList "Commenters" [
     test "a start on the commenter list loads the commenters with the first API calls" {
       let model, effect = start "/commenters"
-      Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadCommenters ])) "The commenters"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadCommenters ])) "The commenters"
       Expect.equal model.Commenters.Commenters Commenters.Waiting "The list waits"
     }
 

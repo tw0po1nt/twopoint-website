@@ -37,7 +37,7 @@ let tests =
   testList "Posts" [
     test "a start on the post list loads the posts with the first API calls" {
       let model, effect = start "/posts"
-      Expect.equal effect (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadPosts ])) "The posts"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadPosts ])) "The posts"
       Expect.equal model.Posts.Posts Posts.Waiting "The list waits"
     }
 

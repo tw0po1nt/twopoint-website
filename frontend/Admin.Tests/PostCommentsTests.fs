@@ -47,7 +47,7 @@ let tests =
       let model, effect = start "/posts/first/comments"
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.LoadDashboard; Shell.LoadQueue; Shell.LoadPostComments "first" ]))
+        (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadPostComments "first" ]))
         "The comments of the post"
       Expect.equal (page model).Comments PostComments.Waiting "The page waits"
     }

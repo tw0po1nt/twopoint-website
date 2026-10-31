@@ -21,6 +21,7 @@
     <Compile Include="ReceiveWorkflowRunTests.fs" />
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PostListTests.fs" />
+    <Compile Include="DashboardTests.fs" />
     <Compile Include="DeviceTests.fs" />
     <Compile Include="NewCommentTests.fs" />
     <Compile Include="PostDraftTests.fs" />

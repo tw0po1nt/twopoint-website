@@ -94,6 +94,13 @@ passes the same check. The migrated mark is the blob metadata `migrated=true` on
 blob, and each write of a `published` blob keeps it. The filter "Deliveries to start" of the post
 list shows each published post that passes the check, with no delivery start and no migrated mark.
 
+`GET internal/dashboard` gives the counts of the dashboard: the drafts, the pending edits, the
+deliveries to start, the active subscriptions, and the subscriptions made and canceled in the last
+30 days. The backend calculates them at each request with `GetDashboard`, from the same post list
+as `GET internal/posts`. The admin reads them at each visit to the dashboard. The moderation queue
+count comes from the queue that the admin loads at the start. Each count opens its page with its
+filter.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

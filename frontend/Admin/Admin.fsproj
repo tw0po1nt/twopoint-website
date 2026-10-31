@@ -19,7 +19,6 @@
     <Compile Include="Progress.fs" />
     <Compile Include="Upload.fs" />
     <Compile Include="Session.fs" />
-    <Compile Include="Dashboard.fs" />
     <Compile Include="Rebuild.fs" />
     <Compile Include="Queue.fs" />
     <Compile Include="Deploy.fs" />
@@ -41,6 +40,7 @@
     <Compile Include="Commenters.fs" />
     <Compile Include="Commenter.fs" />
     <Compile Include="Subscriptions.fs" />
+    <Compile Include="Dashboard.fs" />
     <Compile Include="Notifications.fs" />
     <Compile Include="Shell.fs" />
     <Compile Include="Menu.fs" />
