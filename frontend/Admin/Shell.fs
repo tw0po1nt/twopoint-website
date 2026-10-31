@@ -303,13 +303,13 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       let filtered =
         match link with
         | Dashboard.ModerationQueue -> next
-        | Dashboard.Posts filter -> { next with Posts = { next.Posts with Filter = filter } }
+        | Dashboard.Posts filter -> { next with Posts = fst (Posts.update (Posts.Filtered filter) next.Posts) }
         | Dashboard.Subscriptions filter ->
-          { next with
-              Subscriptions =
-                { next.Subscriptions with
-                    Filter = filter
-                    Search = "" } }
+          let subscriptions =
+            [ Subscriptions.Filtered filter; Subscriptions.Searched "" ]
+            |> List.fold (fun page msg -> fst (Subscriptions.update msg page)) next.Subscriptions
+
+          { next with Subscriptions = subscriptions }
 
       update (Router(Router.LinkFollowed(Route.path (Dashboard.route link)))) filtered
   | Rebuild msg ->

@@ -13,7 +13,6 @@ type Link =
 
 type Msg =
   | Answered of Result<Api.DashboardCounts, Api.Failure>
-  /// The Shell sets the filter of the page and goes to the page.
   | LinkFollowed of Link
 
 let init: Model = Waiting
@@ -30,11 +29,16 @@ let route (link: Link) =
   | Posts _ -> Route.Posts
   | Subscriptions _ -> Route.Subscriptions
 
+type ToDoCount =
+  { Title: string
+    Count: int option
+    Link: Link }
+
 let toDo (queue: int option) (counts: Api.DashboardCounts) =
-  [ "Moderation queue", queue, ModerationQueue
-    "Drafts", Some counts.Drafts, Posts Posts.Drafts
-    "Pending edits", Some counts.PendingEdits, Posts Posts.PendingEdits
-    "Deliveries to start", Some counts.DeliveriesToStart, Posts Posts.DeliveriesToStart ]
+  [ { Title = "Moderation queue"; Count = queue; Link = ModerationQueue }
+    { Title = "Drafts"; Count = Some counts.Drafts; Link = Posts Posts.Drafts }
+    { Title = "Pending edits"; Count = Some counts.PendingEdits; Link = Posts Posts.PendingEdits }
+    { Title = "Deliveries to start"; Count = Some counts.DeliveriesToStart; Link = Posts Posts.DeliveriesToStart } ]
 
 let audienceText (counts: Api.DashboardCounts) =
   $"+{counts.NewSubscriptions} new, −{counts.CanceledSubscriptions} canceled in the last 30 days"

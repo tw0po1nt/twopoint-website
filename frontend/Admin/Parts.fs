@@ -202,13 +202,6 @@ let cardHead (content: #HtmlElement) = div (class' = "card-head") { content }
 [<SolidComponent>]
 let cardBody (content: #HtmlElement) = div (class' = "card-body") { content }
 
-[<SolidComponent>]
-let stat (label: string) (value: string) =
-  div (class' = "card card-body stat-card") {
-    h3 () { label }
-    span (class' = "stat") { value }
-  }
-
 type Alert() =
   member val tone = Info with get, set
   member val title: string = null with get, set

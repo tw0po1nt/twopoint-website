@@ -72,6 +72,33 @@ module PostTypesExt =
 
 module GetAllPostsQuery = TwoPoint.Core.Posts.Queries.GetAllPosts
 
+type PostListDependencies(
+  config: Config,
+  emailClient: EmailClient,
+  tableServiceClient: TableServiceClient,
+  postStoreClient: BlobServiceClient,
+  texts : BlobTextCache,
+  logger : ILogger
+) =
+
+  let postDependencies = PostDependencies(
+    config.ValidRedirectUris |> List.map _.Uri,
+    emailClient,
+    config.Azure.EmailSender,
+    tableServiceClient,
+    logger
+  )
+  let postStore = PostStore(postStoreClient, logger, texts)
+
+  interface GetAllPostsQuery.Dependencies with
+    member _.GetUtcNow () = DateTime.UtcNow
+    member _.GetPublishedPosts () = postStore.GetPublishedPosts()
+    member _.GetWorkingPosts () = postStore.GetWorkingPosts()
+    member _.GetPostsInTable () = postDependencies.GetAllPosts()
+    member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
+    member _.GetMigratedPosts () = postStore.GetMigratedPosts()
+    member _.GetDeliveryStarts () = DeliveryStartDb(tableServiceClient, logger).GetDeliveryStarts()
+
 type GetAllPosts (
   config: Config,
   emailClient: EmailClient,
@@ -97,28 +124,11 @@ type GetAllPosts (
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request", op)
         let response = req.CreateResponse HttpStatusCode.OK
-        let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         // Dependencies
-        let postDependencies = PostDependencies(
-          validRedirectUris,
-          emailClient,
-          config.Azure.EmailSender,
-          tableServiceClient,
-          logger
-        )
-        let postStore = PostStore(postStoreClient, logger, texts)
-        let getAllPosts = TwoPoint.Core.Posts.Queries.GetAllPosts.withDependencies {
-          new GetAllPostsQuery.Dependencies with
-
-          member _.GetUtcNow () = DateTime.UtcNow
-          member _.GetPublishedPosts () = postStore.GetPublishedPosts()
-          member _.GetWorkingPosts () = postStore.GetWorkingPosts()
-          member _.GetPostsInTable () = postDependencies.GetAllPosts()
-          member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
-          member _.GetMigratedPosts () = postStore.GetMigratedPosts()
-          member _.GetDeliveryStarts () = DeliveryStartDb(tableServiceClient, logger).GetDeliveryStarts()
-        }
+        let getAllPosts =
+          GetAllPostsQuery.withDependencies
+            (PostListDependencies(config, emailClient, tableServiceClient, postStoreClient, texts, logger))
 
         let! postsResult = getAllPosts()
         let apiResponse, statusCode = postsResult |> QueryResult.toApiResponse (List.map _.ToDto())

@@ -3,7 +3,9 @@ module TwoPoint.Core.Tests.DashboardTests
 open TwoPoint.Core.Dashboard.Queries
 open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
+open TwoPoint.Core.Posts.Queries
 open TwoPoint.Core.Subscriptions
+open TwoPoint.Core.Subscriptions.Queries
 open TwoPoint.Core.Tests.Fixtures
 
 open Expecto
@@ -31,7 +33,7 @@ type private FakeStore
     started : string list,
     subscriptions : Subscription list
   ) =
-  interface GetDashboard.Dependencies with
+  interface GetAllPosts.Dependencies with
     member _.GetUtcNow () = utcNow
     member _.GetPublishedPosts () = CancellableTaskResult.singleton published
     member _.GetWorkingPosts () = CancellableTaskResult.singleton working
@@ -40,10 +42,11 @@ type private FakeStore
     member _.GetMigratedPosts () = migrated |> List.map Slug.Unsafe.create |> Set.ofList |> CancellableTaskResult.singleton
     member _.GetDeliveryStarts () =
       started |> List.map (fun slug -> Slug.Unsafe.create slug, utcNow) |> Map.ofList |> CancellableTaskResult.singleton
+  interface GetAllSubscriptions.Dependencies with
     member _.GetAllSubscriptions () = CancellableTaskResult.singleton subscriptions
 
 let private countsFrom (store : FakeStore) =
-  match (GetDashboard.withDependencies store () CancellationToken.None).Result with
+  match (GetDashboard.withDependencies store store () CancellationToken.None).Result with
   | Ok counts -> counts
   | Error error -> failtestf "Expected the counts, got %A" error
 

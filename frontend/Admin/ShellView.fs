@@ -473,13 +473,13 @@ let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (qu
 
       div (class' = "stat-grid") {
         For(each = Array.ofList (Dashboard.toDo queue counts)) {
-          yield fun (title, count, link) _ ->
+          yield fun item _ ->
             countLink
               dispatch
-              link
+              item.Link
               (Fragment() {
-                h3 () { title }
-                span (class' = "stat") { count |> Option.map string |> Option.defaultValue "…" }
+                h3 () { item.Title }
+                span (class' = "stat") { item.Count |> Option.map string |> Option.defaultValue "…" }
               })
         }
       }

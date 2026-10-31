@@ -88,10 +88,10 @@ let tests =
 
       Expect.equal
         links
-        [ "Moderation queue", Some 7, Dashboard.ModerationQueue
-          "Drafts", Some 1, Dashboard.Posts Posts.Drafts
-          "Pending edits", Some 2, Dashboard.Posts Posts.PendingEdits
-          "Deliveries to start", Some 3, Dashboard.Posts Posts.DeliveriesToStart ]
+        [ { Dashboard.Title = "Moderation queue"; Count = Some 7; Link = Dashboard.ModerationQueue }
+          { Dashboard.Title = "Drafts"; Count = Some 1; Link = Dashboard.Posts Posts.Drafts }
+          { Dashboard.Title = "Pending edits"; Count = Some 2; Link = Dashboard.Posts Posts.PendingEdits }
+          { Dashboard.Title = "Deliveries to start"; Count = Some 3; Link = Dashboard.Posts Posts.DeliveriesToStart } ]
         "The rows"
     }
 

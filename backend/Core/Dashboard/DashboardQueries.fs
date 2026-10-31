@@ -28,17 +28,13 @@ module GetDashboard =
 
   type Query = unit -> CancellableTask<QueryResult<Counts>>
 
-  type Dependencies =
-    inherit GetAllPosts.Dependencies
-    inherit GetAllSubscriptions.Dependencies
-
-  let window = TimeSpan.FromDays 30.0
+  let audienceWindow = TimeSpan.FromDays 30.0
 
   [<RequireQualifiedAccess>]
   module Logic =
 
     let counts (utcNow : DateTime) (posts : PostListing list) (subscriptions : Subscription list) : Counts =
-      let since = utcNow - window
+      let since = utcNow - audienceWindow
       let count predicate items = items |> List.filter predicate |> List.length
 
       { Drafts = posts |> count (fun post -> post.State = Draft)
@@ -53,12 +49,12 @@ module GetDashboard =
             | Canceled date -> date >= since
             | Active -> false) }
 
-  let withDependencies (dependencies : Dependencies) : Query =
+  let withDependencies (posts : GetAllPosts.Dependencies) (subscriptions : GetAllSubscriptions.Dependencies) : Query =
     fun () -> cancellableTaskResult {
-      let! posts, subscriptions =
+      let! postList, subscriptionList =
         CancellableTaskResult.parallelZip
-          (GetAllPosts.withDependencies dependencies ())
-          (GetAllSubscriptions.withDependencies dependencies ())
+          (GetAllPosts.withDependencies posts ())
+          (GetAllSubscriptions.withDependencies subscriptions ())
 
-      return Logic.counts (dependencies.GetUtcNow()) posts subscriptions
+      return Logic.counts (posts.GetUtcNow()) postList subscriptionList
     }

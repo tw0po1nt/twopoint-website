@@ -51,8 +51,7 @@ export const siteDeploy = {
 
 export const siteDeployAnswer = () => answer(200, { success: true, message: null, data: siteDeploy });
 
-// The default API answers the three calls of the start on the dashboard: the moderation queue, the counts, and the
-// deploy state of the site. It answers each other call with the posts.
+// The default API answers the queue, the counts, and the site deploy, and answers each other call with the posts.
 export const apiAnswer = (url) => {
   if (url.endsWith('/api/internal/comments')) {
     return queueAnswer();

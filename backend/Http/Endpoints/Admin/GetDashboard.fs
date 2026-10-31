@@ -14,10 +14,10 @@ open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
 
-open System
 open System.Net
 open System.Threading
 
+module GetAllSubscriptionsQuery = TwoPoint.Core.Subscriptions.Queries.GetAllSubscriptions
 module GetDashboardQuery = TwoPoint.Core.Dashboard.Queries.GetDashboard
 
 type DashboardDto =
@@ -63,30 +63,14 @@ type GetDashboard (
         let! ct = CancellableTask.getCancellationToken()
         logger.LogInformation("Processing '{op}' request", op)
         let response = req.CreateResponse HttpStatusCode.OK
-        let validRedirectUris = config.ValidRedirectUris |> List.map _.Uri
 
         // Dependencies
-        let postDependencies = PostDependencies(
-          validRedirectUris,
-          emailClient,
-          config.Azure.EmailSender,
-          tableServiceClient,
-          logger
-        )
-        let postStore = PostStore(postStoreClient, logger, texts)
         let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, logger)
-        let getDashboard = GetDashboardQuery.withDependencies {
-          new GetDashboardQuery.Dependencies with
-
-          member _.GetUtcNow () = DateTime.UtcNow
-          member _.GetPublishedPosts () = postStore.GetPublishedPosts()
-          member _.GetWorkingPosts () = postStore.GetWorkingPosts()
-          member _.GetPostsInTable () = postDependencies.GetAllPosts()
-          member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
-          member _.GetMigratedPosts () = postStore.GetMigratedPosts()
-          member _.GetDeliveryStarts () = DeliveryStartDb(tableServiceClient, logger).GetDeliveryStarts()
-          member _.GetAllSubscriptions () = subscriptionDependencies.GetAllSubscriptions()
-        }
+        let getDashboard =
+          GetDashboardQuery.withDependencies
+            (PostListDependencies(config, emailClient, tableServiceClient, postStoreClient, texts, logger))
+            { new GetAllSubscriptionsQuery.Dependencies with
+                member _.GetAllSubscriptions () = subscriptionDependencies.GetAllSubscriptions() }
 
         let! result = getDashboard ()
         let apiResponse, statusCode = result |> QueryResult.toApiResponse DashboardDto.ofCounts
