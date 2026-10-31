@@ -184,6 +184,11 @@ The `sagefs` skill drives the SageFs REPL through the `sagefs` MCP server in `.m
 standards in `docs/standards/` and the gate in `scripts/verify.sh` take priority over the design
 and test rules of that skill.
 
+The site session is a solution session over `frontend/Site.slnx`, with `frontend/` as its working
+directory. Its init script `frontend/.SageFs/init.fsx` starts the dev server on
+`http://localhost:4321` and the widget watch. The session runs the tests of `Dev.Tests`,
+`Generator.Tests`, and `Render.Tests`. The gate uses `TwoPoint.slnx`.
+
 ### Feedback ledger
 
 The ledger is an opt-in record for a review loop between two agents. Only `to-feedback` creates
