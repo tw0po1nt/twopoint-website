@@ -70,6 +70,28 @@ test('the filters show only the drafts, or only the posts with a pending edit', 
   assert.equal(reads.length, before, 'The filter calls no API');
 });
 
+test('a click on a filter tab changes the URL, and Back shows the last filter again', async () => {
+  tab('Drafts').click();
+  await settle();
+  assert.equal(location.pathname + location.search, '/posts?filter=drafts');
+
+  tab('Pending edits').click();
+  await settle();
+  assert.equal(location.pathname + location.search, '/posts?filter=pending-edits');
+
+  const back = new Promise((resolve) => window.addEventListener('popstate', resolve, { once: true }));
+  history.back();
+  await back;
+  await settle();
+  assert.equal(location.pathname + location.search, '/posts?filter=drafts');
+  assert.equal(tab('Drafts').getAttribute('aria-selected'), 'true');
+  assert.deepEqual(rows(), ['new-draft']);
+
+  tab('All').click();
+  await settle();
+  assert.equal(location.pathname + location.search, '/posts');
+});
+
 test('New draft makes a draft and opens it in the editor', async () => {
   press('New draft');
   await settle();

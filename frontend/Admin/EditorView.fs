@@ -300,7 +300,7 @@ let private topBar
   (model: unit -> Shell.Model)
   =
   header (class' = (if isTyping (model ()) then "editor-bar is-typing" else "editor-bar")) {
-    a (class' = "back", href = Route.path Posts, onClick = back) {
+    a (class' = "back", href = Route.path (Posts PostFilter.All), onClick = back) {
       Icon.view Icon.Back
       "Posts"
     }

@@ -60,7 +60,7 @@ let tests =
         (Some(Shell.Navigate(Router.PushUrl "/posts/first/comments", [ Shell.LoadPostComments "first" ])))
         "The URL and the comments"
       Expect.equal (Router.title model.Router.Route) "Comments on first" "The title names the post"
-      Expect.isTrue (Router.isCurrent Posts model.Router.Route) "The posts are the current page in the navigation"
+      Expect.isTrue (Router.isCurrent (Posts PostFilter.All) model.Router.Route) "The posts are the current page in the navigation"
     }
 
     test "the back button to the page of a post loads its comments again" {

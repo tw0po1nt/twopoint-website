@@ -32,19 +32,25 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | UrlChanged path -> init path, None
 
 let navigation =
-  [ Dashboard; Posts; ModerationQueue; Commenters; Series; Subscriptions; Settings ]
+  [ Dashboard
+    Posts PostFilter.All
+    ModerationQueue
+    Commenters
+    Series
+    Subscriptions SubscriptionFilter.All
+    Settings ]
 
 let title (route: Route) =
   match route with
   | Dashboard -> "Dashboard"
-  | Posts -> "Posts"
+  | Posts _ -> "Posts"
   | Post slug -> slug
   | PostComments slug -> $"Comments on {slug}"
   | ModerationQueue -> "Moderation queue"
   | Commenters -> "Commenters"
   | Commenter _ -> "Commenter"
   | Series -> "Series"
-  | Subscriptions -> "Subscriptions"
+  | Subscriptions _ -> "Subscriptions"
   | Settings -> "Settings"
   | NotFound _ -> "Page not found"
 
@@ -52,22 +58,22 @@ let showsNavigation (route: Route) =
   match route with
   | Post _ -> false
   | Dashboard
-  | Posts
+  | Posts _
   | PostComments _
   | ModerationQueue
   | Commenters
   | Commenter _
   | Series
-  | Subscriptions
+  | Subscriptions _
   | Settings
   | NotFound _ -> true
 
 let isCurrent (item: Route) (route: Route) =
   match route with
   | Post _
-  | PostComments _ -> item = Posts
+  | PostComments _ -> Route.isSamePage item (Posts PostFilter.All)
   | Commenter _ -> item = Commenters
-  | _ -> item = route
+  | _ -> Route.isSamePage item route
 
 /// A tab of the tab bar of a phone.
 type Tab =
@@ -75,7 +81,12 @@ type Tab =
   /// Opens a sheet with the pages that have no tab.
   | More
 
-let tabs = [ Page Dashboard; Page Posts; Page ModerationQueue; Page Subscriptions; More ]
+let tabs =
+  [ Page Dashboard
+    Page(Posts PostFilter.All)
+    Page ModerationQueue
+    Page(Subscriptions SubscriptionFilter.All)
+    More ]
 
 let morePages = [ Commenters; Series; Settings ]
 
@@ -83,7 +94,7 @@ let tabTitle (tab: Tab) =
   match tab with
   | Page Dashboard -> "Home"
   | Page ModerationQueue -> "Queue"
-  | Page Subscriptions -> "Readers"
+  | Page(Subscriptions _) -> "Readers"
   | Page route -> title route
   | More -> "More"
 

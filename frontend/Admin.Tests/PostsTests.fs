@@ -30,7 +30,12 @@ let private listed () =
   model
 
 let private shown (model: Shell.Model) =
-  Posts.shown model.Posts |> List.map _.Slug
+  match model.Router.Route with
+  | Posts filter -> Posts.shown filter model.Posts |> List.map _.Slug
+  | _ -> []
+
+let private follow (path: string) (model: Shell.Model) =
+  Shell.update (Shell.Router(Router.LinkFollowed path)) model
 
 [<Tests>]
 let tests =
@@ -43,49 +48,63 @@ let tests =
 
     test "the filters show all posts, only the drafts, or only the posts with a pending edit" {
       let model = listed ()
-      Expect.equal model.Posts.Filter Posts.All "All at first"
+      Expect.equal model.Router.Route (Posts PostFilter.All) "All at first"
       Expect.equal (shown model) [ "draft"; "published"; "edited"; "upcoming" ] "All"
 
-      for filter, expected in [ Posts.Drafts, [ "draft" ]; Posts.PendingEdits, [ "edited" ] ] do
-        let model, effect = Shell.update (Shell.Posts(Posts.Filtered filter)) model
-        Expect.isNone effect "The filter calls no API"
-        Expect.equal (shown model) expected $"Only {filter}"
+      for path, expected in [ "/posts?filter=drafts", [ "draft" ]; "/posts?filter=pending-edits", [ "edited" ] ] do
+        let model, effect = follow path model
+        Expect.equal effect (Some(Shell.Navigate(Router.PushUrl path, []))) "The filter calls no API"
+        Expect.equal (shown model) expected $"Only {path}"
 
-      let model, _ = Shell.update (Shell.Posts(Posts.Filtered Posts.Drafts)) model
-      let model, _ = Shell.update (Shell.Posts(Posts.Filtered Posts.All)) model
+      let model, _ = follow "/posts?filter=drafts" model
+      let model, _ = follow "/posts" model
       Expect.equal (shown model) [ "draft"; "published"; "edited"; "upcoming" ] "All again"
     }
 
-    test "the filter stays when the author comes back to the list, and the list loads again" {
-      let model, _ = Shell.update (Shell.Posts(Posts.Filtered Posts.PendingEdits)) (listed ())
-      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/comments")) model
-      let model, effect = Shell.update (Shell.Router(Router.UrlChanged "/posts")) model
+    test "a start at a filter shows that filter" {
+      let model, _ = start "/posts?filter=drafts"
+      let model, _ = Shell.update (Shell.Posts(Posts.Answered(Ok [ draft; published; edited; upcoming ]))) model
+      Expect.equal model.Router.Route (Posts PostFilter.Drafts) "The drafts"
+      Expect.equal (shown model) [ "draft" ] "Only the draft"
+    }
+
+    test "Back to the list shows the filter of the URL, and the list loads again" {
+      let model, _ = follow "/posts?filter=pending-edits" (listed ())
+      let model, _ = follow "/comments" model
+      let model, effect = Shell.update (Shell.Router(Router.UrlChanged "/posts?filter=pending-edits")) model
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPosts ])) "The posts again"
-      Expect.equal model.Posts.Filter Posts.PendingEdits "The pending edits"
+      Expect.equal model.Router.Route (Posts PostFilter.PendingEdits) "The pending edits"
       Expect.equal model.Posts.Posts Posts.Waiting "The list waits"
+    }
+
+    test "the navigation link opens the list with All" {
+      let model, _ = follow "/posts?filter=pending-edits" (listed ())
+      let model, _ = follow "/comments" model
+      let model, _ = follow (Route.path (List.item 1 Router.navigation)) model
+      Expect.equal model.Router.Route (Posts PostFilter.All) "All"
     }
 
     test "the filter of deliveries to start shows only the posts that wait for a delivery" {
       let model, _ = start "/posts"
       let model, _ = Shell.update (Shell.Posts(Posts.Answered(Ok [ draft; published; toSend; upcoming ]))) model
-      let model, effect = Shell.update (Shell.Posts(Posts.Filtered Posts.DeliveriesToStart)) model
-      Expect.isNone effect "The filter calls no API"
+      let model, effect = follow "/posts?filter=deliveries-to-start" model
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts?filter=deliveries-to-start", []))) "The filter calls no API"
       Expect.equal (shown model) [ "to-send" ] "Only the post to send"
       Expect.contains (Posts.filters |> List.map snd) "Deliveries to start" "The filter tab"
-      Expect.equal (Posts.emptyText Posts.DeliveriesToStart) "No post waits for a delivery." "The empty text"
+      Expect.equal (Posts.emptyText PostFilter.DeliveriesToStart) "No post waits for a delivery." "The empty text"
     }
 
     test "a filter with no post has its own empty text" {
-      Expect.equal (Posts.emptyText Posts.All) "The blog has no posts." "All"
-      Expect.equal (Posts.emptyText Posts.Drafts) "The blog has no drafts." "Drafts"
-      Expect.equal (Posts.emptyText Posts.PendingEdits) "No post has a pending edit." "Pending edits"
+      Expect.equal (Posts.emptyText PostFilter.All) "The blog has no posts." "All"
+      Expect.equal (Posts.emptyText PostFilter.Drafts) "The blog has no drafts." "Drafts"
+      Expect.equal (Posts.emptyText PostFilter.PendingEdits) "No post has a pending edit." "Pending edits"
     }
 
     test "a failed load shows the reason, and an answer of 403 refuses the account" {
       let model, _ = start "/posts"
       let failed, _ = Shell.update (Shell.Posts(Posts.Answered(Error Api.Unanswered))) model
       Expect.equal failed.Posts.Posts (Posts.NotLoaded(Api.reason Api.Unanswered)) "The reason"
-      Expect.isEmpty (Posts.shown failed.Posts) "No post"
+      Expect.isEmpty (Posts.shown PostFilter.All failed.Posts) "No post"
 
       let refused, _ = Shell.update (Shell.Posts(Posts.Answered(Error Api.Refused))) model
       Expect.equal refused.Session.Status Session.Refused "The account is refused"

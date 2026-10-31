@@ -37,10 +37,10 @@ test('the dashboard shows the to-do counts and the audience, and each count link
 
   assert.deepEqual(cards(), [
     { title: 'Moderation queue', count: '3', href: '/comments' },
-    { title: 'Drafts', count: '1', href: '/posts' },
-    { title: 'Pending edits', count: '2', href: '/posts' },
-    { title: 'Deliveries to start', count: '0', href: '/posts' },
-    { title: 'Active subscriptions', count: '12', href: '/subscriptions' },
+    { title: 'Drafts', count: '1', href: '/posts?filter=drafts' },
+    { title: 'Pending edits', count: '2', href: '/posts?filter=pending-edits' },
+    { title: 'Deliveries to start', count: '0', href: '/posts?filter=deliveries-to-start' },
+    { title: 'Active subscriptions', count: '12', href: '/subscriptions?filter=active' },
   ]);
 
   assert.equal(
@@ -52,7 +52,7 @@ test('the dashboard shows the to-do counts and the audience, and each count link
 test('a count opens its page with its filter', async () => {
   click('Pending edits');
   await settle();
-  assert.equal(location.pathname, '/posts');
+  assert.equal(location.pathname + location.search, '/posts?filter=pending-edits');
   assert.equal(tab('Pending edits').getAttribute('aria-selected'), 'true');
 });
 
@@ -66,6 +66,6 @@ test('each visit to the dashboard reads the counts again', async () => {
 test('the active subscriptions open the subscriptions with the filter Active', async () => {
   click('Active subscriptions');
   await settle();
-  assert.equal(location.pathname, '/subscriptions');
+  assert.equal(location.pathname + location.search, '/subscriptions?filter=active');
   assert.equal(tab('Active').getAttribute('aria-selected'), 'true');
 });

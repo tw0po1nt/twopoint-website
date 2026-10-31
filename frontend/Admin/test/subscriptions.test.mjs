@@ -156,18 +156,19 @@ test('the sheet closes, and a sheet of an active subscription has no canceled da
   await settle();
 });
 
-test('the filter stays after a visit to another page, and the list loads again', async () => {
+test('the navigation link opens All after a visit to another page, and the list loads again', async () => {
   tab('Inactive').click();
   await settle();
+  assert.equal(location.pathname + location.search, '/subscriptions?filter=inactive');
 
   follow('Dashboard');
   await settle();
   follow('Subscriptions');
   await settle();
 
-  assert.equal(location.pathname, '/subscriptions');
-  assert.equal(tab('Inactive').getAttribute('aria-selected'), 'true');
-  assert.deepEqual(rows(), ['grace']);
+  assert.equal(location.pathname + location.search, '/subscriptions');
+  assert.equal(tab('All').getAttribute('aria-selected'), 'true');
+  assert.deepEqual(rows(), ['ada', 'grace', 'alan']);
   assert.equal(reads.filter((path) => path === 'internal/subscriptions').length, 2);
 });
 

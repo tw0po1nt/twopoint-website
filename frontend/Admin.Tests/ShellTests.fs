@@ -88,10 +88,18 @@ let tests =
 
       Expect.equal
         links
-        [ { Dashboard.Title = "Moderation queue"; Count = Some 7; Link = Dashboard.ModerationQueue }
-          { Dashboard.Title = "Drafts"; Count = Some 1; Link = Dashboard.Posts Posts.Drafts }
-          { Dashboard.Title = "Pending edits"; Count = Some 2; Link = Dashboard.Posts Posts.PendingEdits }
-          { Dashboard.Title = "Deliveries to start"; Count = Some 3; Link = Dashboard.Posts Posts.DeliveriesToStart } ]
+        [ { Dashboard.Title = "Moderation queue"
+            Count = Some 7
+            Route = ModerationQueue }
+          { Dashboard.Title = "Drafts"
+            Count = Some 1
+            Route = Posts PostFilter.Drafts }
+          { Dashboard.Title = "Pending edits"
+            Count = Some 2
+            Route = Posts PostFilter.PendingEdits }
+          { Dashboard.Title = "Deliveries to start"
+            Count = Some 3
+            Route = Posts PostFilter.DeliveriesToStart } ]
         "The rows"
     }
 
@@ -99,31 +107,23 @@ let tests =
       Expect.equal (Dashboard.audienceText counts) "+5 new, −6 canceled in the last 30 days" "The text"
     }
 
-    test "a count goes to its page with its filter" {
+    test "a route with a filter in its query string opens the page with that filter" {
       let model, _ = Shell.init "/"
       let model, _ = Shell.update (Shell.Session(Session.Started true)) model
-      let model, effect = Shell.update (Shell.Dashboard(Dashboard.LinkFollowed(Dashboard.Posts Posts.PendingEdits))) model
-      Expect.equal model.Router.Route Route.Posts "The post list"
-      Expect.equal model.Posts.Filter Posts.PendingEdits "The filter"
-      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "The posts load"
+      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/posts?filter=pending-edits")) model
+      Expect.equal model.Router.Route (Posts PostFilter.PendingEdits) "The post list with the filter"
+
+      Expect.equal
+        effect
+        (Some(Shell.Navigate(Router.PushUrl "/posts?filter=pending-edits", [ Shell.LoadPosts ])))
+        "The posts load"
     }
 
-    test "the audience goes to the active subscriptions with no search" {
-      let model, _ = Shell.init "/"
-      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
-      let model, _ = Shell.update (Shell.Subscriptions(Subscriptions.Searched "ada")) model
-      let link = Dashboard.LinkFollowed(Dashboard.Subscriptions Subscriptions.Active)
-      let model, _ = Shell.update (Shell.Dashboard link) model
-      Expect.equal model.Router.Route Route.Subscriptions "The subscriptions"
-      Expect.equal model.Subscriptions.Filter Subscriptions.Active "The filter"
-      Expect.equal model.Subscriptions.Search "" "No search"
-    }
-
-    test "the queue count goes to the moderation queue" {
-      let model, _ = Shell.init "/"
-      let model, _ = Shell.update (Shell.Session(Session.Started true)) model
-      let model, _ = Shell.update (Shell.Dashboard(Dashboard.LinkFollowed Dashboard.ModerationQueue)) model
-      Expect.equal model.Router.Route Route.ModerationQueue "The moderation queue"
+    test "a start at a route with a filter opens the page with that filter" {
+      let model, _ = Shell.init "/subscriptions?filter=inactive"
+      let _, effect = Shell.update (Shell.Session(Session.Started true)) model
+      Expect.equal model.Router.Route (Subscriptions SubscriptionFilter.Inactive) "The inactive subscriptions"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadSubscriptions ])) "The list loads"
     }
 
     test "a refused token shows the reason on the dashboard" {

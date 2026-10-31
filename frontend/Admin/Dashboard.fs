@@ -6,14 +6,7 @@ type Model =
   | Loaded of Api.DashboardCounts
   | NotLoaded of reason: string
 
-type Link =
-  | ModerationQueue
-  | Posts of Posts.Filter
-  | Subscriptions of Subscriptions.Filter
-
-type Msg =
-  | Answered of Result<Api.DashboardCounts, Api.Failure>
-  | LinkFollowed of Link
+type Msg = Answered of Result<Api.DashboardCounts, Api.Failure>
 
 let init: Model = Waiting
 
@@ -21,24 +14,25 @@ let update (msg: Msg) (model: Model) : Model =
   match msg with
   | Answered(Ok counts) -> Loaded counts
   | Answered(Error failure) -> NotLoaded(Api.reason failure)
-  | LinkFollowed _ -> model
-
-let route (link: Link) =
-  match link with
-  | ModerationQueue -> Route.ModerationQueue
-  | Posts _ -> Route.Posts
-  | Subscriptions _ -> Route.Subscriptions
 
 type ToDoCount =
   { Title: string
     Count: int option
-    Link: Link }
+    Route: Route }
 
 let toDo (queue: int option) (counts: Api.DashboardCounts) =
-  [ { Title = "Moderation queue"; Count = queue; Link = ModerationQueue }
-    { Title = "Drafts"; Count = Some counts.Drafts; Link = Posts Posts.Drafts }
-    { Title = "Pending edits"; Count = Some counts.PendingEdits; Link = Posts Posts.PendingEdits }
-    { Title = "Deliveries to start"; Count = Some counts.DeliveriesToStart; Link = Posts Posts.DeliveriesToStart } ]
+  [ { Title = "Moderation queue"
+      Count = queue
+      Route = Route.ModerationQueue }
+    { Title = "Drafts"
+      Count = Some counts.Drafts
+      Route = Route.Posts PostFilter.Drafts }
+    { Title = "Pending edits"
+      Count = Some counts.PendingEdits
+      Route = Route.Posts PostFilter.PendingEdits }
+    { Title = "Deliveries to start"
+      Count = Some counts.DeliveriesToStart
+      Route = Route.Posts PostFilter.DeliveriesToStart } ]
 
 let audienceText (counts: Api.DashboardCounts) =
   $"+{counts.NewSubscriptions} new, −{counts.CanceledSubscriptions} canceled in the last 30 days"

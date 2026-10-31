@@ -24,6 +24,20 @@ let tests =
       Expect.equal effect (Some(Router.PushUrl "/comments#c-1")) "The URL has the fragment"
     }
 
+    test "a followed link with a query string and a fragment pushes a URL that has both" {
+      let model, effect = Router.update (Router.LinkFollowed "/posts?filter=drafts#first") (Router.init "/")
+
+      Expect.equal model { Route = Posts PostFilter.Drafts; Fragment = "first" } "The filter and the fragment"
+      Expect.equal effect (Some(Router.PushUrl "/posts?filter=drafts#first")) "The URL has both"
+    }
+
+    test "a followed link to another filter of the same page pushes the new URL" {
+      let model, effect = Router.update (Router.LinkFollowed "/subscriptions?filter=active") (Router.init "/subscriptions")
+
+      Expect.equal model.Route (Subscriptions SubscriptionFilter.Active) "The active subscriptions"
+      Expect.equal effect (Some(Router.PushUrl "/subscriptions?filter=active")) "A history entry"
+    }
+
     test "the first route keeps the fragment of the page" {
       Expect.equal (Router.init "/posts/hello/comments#c-2") { Route = PostComments "hello"; Fragment = "c-2" } "The comment"
     }
@@ -49,7 +63,7 @@ let tests =
 
     test "a URL change from the browser shows its route and pushes nothing" {
       let model, effect = Router.update (Router.UrlChanged "/subscriptions") (Router.init "/settings")
-      Expect.equal model { Route = Subscriptions; Fragment = "" } "The subscriptions"
+      Expect.equal model { Route = Subscriptions SubscriptionFilter.All; Fragment = "" } "The subscriptions"
       Expect.isNone effect "The browser already changed the URL"
     }
 
@@ -72,7 +86,14 @@ let tests =
         Router.navigation |> List.filter (fun item -> Router.isCurrent item route)
 
       Expect.equal (current Commenters) [ Commenters ] "The commenters"
-      Expect.equal (current (Post "hello")) [ Posts ] "The posts"
+      Expect.equal (current (Post "hello")) [ Posts PostFilter.All ] "The posts"
+      Expect.equal (current (Posts PostFilter.Drafts)) [ Posts PostFilter.All ] "The posts with a filter"
+
+      Expect.equal
+        (current (Subscriptions SubscriptionFilter.Inactive))
+        [ Subscriptions SubscriptionFilter.All ]
+        "The subscriptions with a filter"
+
       Expect.equal (current (NotFound "/nothing")) [] "No page"
     }
 
@@ -104,7 +125,7 @@ let tests =
         Router.tabs |> List.filter (fun tab -> Router.isCurrentTab tab route)
 
       Expect.equal (current ModerationQueue) [ Router.Page ModerationQueue ] "The queue"
-      Expect.equal (current (Post "hello")) [ Router.Page Posts ] "The posts"
+      Expect.equal (current (Post "hello")) [ Router.Page(Posts PostFilter.All) ] "The posts"
       Expect.equal (current Series) [ Router.More ] "More"
       Expect.equal (current (NotFound "/nothing")) [] "No tab"
     }

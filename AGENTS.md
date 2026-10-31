@@ -99,7 +99,8 @@ deliveries to start, the active subscriptions, and the subscriptions made and ca
 30 days. The backend calculates them at each request with `GetDashboard`, from the same post list
 as `GET internal/posts`. The admin reads them at each visit to the dashboard. The moderation queue
 count comes from the queue that the admin loads at the start. Each count opens its page with its
-filter.
+filter. The filter of the post list and of the Subscriptions page is part of the route and of the
+URL, for example `/posts?filter=drafts`. "All" has no query string.
 
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`

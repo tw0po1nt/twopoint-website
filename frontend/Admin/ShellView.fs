@@ -441,17 +441,15 @@ let private accountMenu (id: string) (placement: Menu.Placement) (name: unit -> 
     })
 
 [<SolidComponent>]
-let private countLink (dispatch: Shell.Msg -> unit) (link: Dashboard.Link) (content: #HtmlElement) =
-  a (
-    class' = "card card-body stat-card stat-link",
-    href = Route.path (Dashboard.route link),
-    onClick = onPlainClick (fun () -> dispatch (Shell.Dashboard(Dashboard.LinkFollowed link)))
-  ) {
+let private countLink (dispatch: Router.Msg -> unit) (route: Route) (content: #HtmlElement) =
+  a (class' = "card card-body stat-card stat-link", href = Route.path route, onClick = follow dispatch route) {
     content
   }
 
 [<SolidComponent>]
 let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (queue: int option) =
+  let route = Shell.Router >> dispatch
+
   match model with
   | Dashboard.Waiting ->
     Fragment() {
@@ -475,8 +473,8 @@ let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (qu
         For(each = Array.ofList (Dashboard.toDo queue counts)) {
           yield fun item _ ->
             countLink
-              dispatch
-              item.Link
+              route
+              item.Route
               (Fragment() {
                 h3 () { item.Title }
                 span (class' = "stat") { item.Count |> Option.map string |> Option.defaultValue "…" }
@@ -488,8 +486,8 @@ let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (qu
 
       div (class' = "stat-grid") {
         countLink
-          dispatch
-          (Dashboard.Subscriptions Subscriptions.Active)
+          route
+          (Subscriptions SubscriptionFilter.Active)
           (Fragment() {
             h3 () { "Active subscriptions" }
             span (class' = "stat") { string counts.ActiveSubscriptions }
@@ -903,8 +901,8 @@ let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   }
 
 [<SolidComponent>]
-let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
-  match model.Posts, Posts.shown model with
+let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter: PostFilter) =
+  match model.Posts, Posts.shown filter model with
   | Posts.Waiting, _ ->
     Fragment() {
       div (class' = "card card-body", ariaBusy = true) {
@@ -914,7 +912,7 @@ let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
     }
   | Posts.Loaded _, [] ->
     Fragment() {
-      Parts.emptyState Icon.Inbox (Posts.emptyText model.Filter) (p () { "Each post of the post store comes here." })
+      Parts.emptyState Icon.Inbox (Posts.emptyText filter) (p () { "Each post of the post store comes here." })
     }
   | Posts.Loaded _, posts ->
     Fragment() {
@@ -924,12 +922,12 @@ let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
     Fragment() { Parts.Alert(tone = Parts.Bad, title = "The posts did not load.").Has(p () { reason }) }
 
 [<SolidComponent>]
-let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
-  let filter = Posts.Filtered >> Shell.Posts >> dispatch
+let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter: PostFilter) =
+  let choose = Route.Posts >> Route.path >> Router.LinkFollowed >> Shell.Router >> dispatch
 
   Fragment() {
     div (class' = "filter-bar toolbar") {
-      Parts.tabs "Show" Posts.filters (fun () -> model.Filter) filter
+      Parts.tabs "Show" Posts.filters (fun () -> filter) choose
 
       Parts
         .Button(
@@ -959,7 +957,7 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) =
       )
     }
 
-    postList dispatch model
+    postList dispatch model filter
   }
 
 let private subscriptionTone (subscription: Api.Subscription) =
@@ -973,6 +971,12 @@ let private countsText (model: Subscriptions.Model) =
 [<SolidComponent>]
 let private subscriptionsToolbar (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send = Shell.Subscriptions >> dispatch
+  let choose = Route.Subscriptions >> Route.path >> Router.LinkFollowed >> Shell.Router >> dispatch
+
+  let filter () =
+    match (model ()).Router.Route with
+    | Subscriptions filter -> filter
+    | _ -> SubscriptionFilter.All
 
   div (class' = "filter-bar toolbar") {
     p (class' = "muted", ariaLive = "polite") { countsText (model ()).Subscriptions }
@@ -986,7 +990,7 @@ let private subscriptionsToolbar (dispatch: Shell.Msg -> unit) (model: unit -> S
       )
       .View()
 
-    Parts.tabs "Status" Subscriptions.filters (fun () -> (model ()).Subscriptions.Filter) (Subscriptions.Filtered >> send)
+    Parts.tabs "Status" Subscriptions.filters filter choose
   }
 
 [<SolidComponent>]
@@ -1016,8 +1020,8 @@ let private subscriptionRow (dispatch: Shell.Msg -> unit) (subscription: Api.Sub
   }
 
 [<SolidComponent>]
-let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions.Model) =
-  match model.Subscriptions, Subscriptions.shown model with
+let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions.Model) (filter: SubscriptionFilter) =
+  match model.Subscriptions, Subscriptions.shown filter model with
   | Subscriptions.Waiting, _ ->
     Fragment() {
       div (class' = "card card-body", ariaBusy = true) {
@@ -1029,7 +1033,7 @@ let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions
     Fragment() {
       Parts.emptyState
         Icon.Inbox
-        (Subscriptions.emptyText model.Filter model.Search)
+        (Subscriptions.emptyText filter model.Search)
         (p () { "Each reader who subscribes to the newsletter comes here." })
     }
   | Subscriptions.Loaded _, subscriptions ->
@@ -1396,7 +1400,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   | ModerationQueue -> Fragment() { queue dispatch model.Queue }
   | PostComments slug ->
     Fragment() { postComments dispatch (model.PostComments |> Option.defaultValue (PostComments.init slug)) }
-  | Posts -> Fragment() { posts dispatch model.Posts }
+  | Posts filter -> Fragment() { posts dispatch model.Posts filter }
   | Commenters -> Fragment() { commenters dispatch model.Commenters }
   | Commenter commenterId ->
     Fragment() { commenterPage dispatch (model.Commenter |> Option.defaultValue (Commenter.init commenterId)) }
@@ -1411,7 +1415,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
           "."
         })
     }
-  | Subscriptions -> Fragment() { subscriptionList dispatch model.Subscriptions }
+  | Subscriptions filter -> Fragment() { subscriptionList dispatch model.Subscriptions filter }
   // The editor has its own page.
   | Post _ -> Fragment() { "" }
   | Series -> Fragment() { seriesPage dispatch model }
@@ -1485,7 +1489,7 @@ let private scrollToId (id: string) : unit = jsNative
 [<SolidComponent>]
 let view (signIn: SignIn) (push: Push) =
   let model, dispatch =
-    Mvu.run (Shell.init (window.location.pathname + window.location.hash)) Shell.update (perform signIn push)
+    Mvu.run (Shell.init (window.location.pathname + window.location.search + window.location.hash)) Shell.update (perform signIn push)
 
   let fragmentToShow () =
     let model = model ()
@@ -1510,7 +1514,7 @@ let view (signIn: SignIn) (push: Push) =
 
   let route = Shell.Router >> dispatch
 
-  window.addEventListener ("popstate", fun _ -> route (Router.UrlChanged(window.location.pathname + window.location.hash)))
+  window.addEventListener ("popstate", fun _ -> route (Router.UrlChanged(window.location.pathname + window.location.search + window.location.hash)))
 
   let current () = (model ()).Router.Route
   let showsNavigation () = Router.showsNavigation (current ())
@@ -1591,7 +1595,7 @@ let view (signIn: SignIn) (push: Push) =
 
       // The editor stays outside the page, so a typed letter does not replace the editor.
       Show(when' = not (showsNavigation ())) {
-        EditorView.page dispatch model (follow route Posts) (fun () -> Router.title (current ()))
+        EditorView.page dispatch model (follow route (Posts PostFilter.All)) (fun () -> Router.title (current ()))
       }
 
       Show(when' = showsNavigation ()) {
@@ -1600,7 +1604,7 @@ let view (signIn: SignIn) (push: Push) =
           div (class' = "page-head") { h1 () { Router.title (current ()) } }
 
           // The search input stays outside the page, so a typed letter does not replace the input.
-          Show(when' = (current () = Subscriptions)) { subscriptionsToolbar dispatch model }
+          Show(when' = Route.isSamePage (current ()) (Subscriptions SubscriptionFilter.All)) { subscriptionsToolbar dispatch model }
 
           content dispatch (model ())
         }

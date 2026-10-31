@@ -154,7 +154,7 @@ let tests =
       let model, _ = send Editor.DeleteConfirmed (typing "my-post" (requested (opened live)))
       let answered: Api.DeletedPost = { Warnings = [ Api.CommentsKept ] }
       let model, _ = send (Editor.DeleteAnswered("my-post", Ok answered)) model
-      Expect.equal model.Router.Route Route.Posts "The post list"
+      Expect.equal model.Router.Route (Route.Posts PostFilter.All) "The post list"
       Expect.equal model.Posts.Notice [ Api.CommentsKept ] "The warnings"
 
       let model, _ = Shell.update (Shell.Posts Posts.NoticeDismissed) model

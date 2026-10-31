@@ -130,7 +130,7 @@ let private enter (route: Route) (model: Model) =
         Commenter = None }
 
   match route with
-  | Route.Posts -> { left with Posts = Posts.reload model.Posts }, [ LoadPosts ]
+  | Route.Posts _ -> { left with Posts = Posts.reload model.Posts }, [ LoadPosts ]
   | Route.Post slug ->
     { left with
         Editor = Some(Editor.init slug (model.Pages + 1))
@@ -139,7 +139,7 @@ let private enter (route: Route) (model: Model) =
   | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
   | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
-  | Route.Subscriptions ->
+  | Route.Subscriptions _ ->
     { left with Subscriptions = Subscriptions.reload model.Subscriptions }, [ LoadSubscriptions ]
   | Route.Settings -> { left with Notifications = Notifications.reload model.Notifications }, [ LoadDevices ]
   | Route.Dashboard ->
@@ -257,7 +257,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     let router, effect = Router.update msg model.Router
 
     let page, pageCalls =
-      if router.Route <> model.Router.Route then
+      if not (Route.isSamePage router.Route model.Router.Route) then
         enter router.Route model
       else
         model, []
@@ -299,19 +299,6 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Dashboard.Answered(Error Api.Refused) -> update (Session Session.AccountRefused) next
     | Dashboard.Answered _ -> next, None
-    | Dashboard.LinkFollowed link ->
-      let filtered =
-        match link with
-        | Dashboard.ModerationQueue -> next
-        | Dashboard.Posts filter -> { next with Posts = fst (Posts.update (Posts.Filtered filter) next.Posts) }
-        | Dashboard.Subscriptions filter ->
-          let subscriptions =
-            [ Subscriptions.Filtered filter; Subscriptions.Searched "" ]
-            |> List.fold (fun page msg -> fst (Subscriptions.update msg page)) next.Subscriptions
-
-          { next with Subscriptions = subscriptions }
-
-      update (Router(Router.LinkFollowed(Route.path (Dashboard.route link)))) filtered
   | Rebuild msg ->
     let rebuild, effect = Rebuild.update msg model.Rebuild
     let next = { model with Rebuild = rebuild }
@@ -340,7 +327,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         match effect with
         | SiteDeploy.Poll generation -> Send [ PollSiteDeploy generation ]
         | SiteDeploy.WaitToPoll generation -> WaitToPollSiteDeploy generation)
-  | Posts(Posts.PollElapsed _) when model.Router.Route <> Route.Posts -> model, None
+  | Posts(Posts.PollElapsed _) when not (Route.isSamePage model.Router.Route (Route.Posts PostFilter.All)) -> model, None
   | Posts msg ->
     let posts, effect = Posts.update msg model.Posts
     let next = { model with Posts = posts }
@@ -354,7 +341,6 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Posts.Polled _
     | Posts.PollElapsed _
     | Posts.DraftCreated _
-    | Posts.Filtered _
     | Posts.NoticeDismissed
     | Posts.NewDraftClicked ->
       next,
@@ -392,7 +378,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.DiscardAnswered(_, Error Api.Refused), _ -> update (Session Session.AccountRefused) next
       | Editor.DeleteAnswered(_, Ok deleted), _ ->
         let notice = { next with Posts = { next.Posts with Notice = deleted.Warnings } }
-        update (Router(Router.LinkFollowed(Route.path Route.Posts))) notice
+        update (Router(Router.LinkFollowed(Route.path (Route.Posts PostFilter.All)))) notice
       | _, Editor.Loaded({ LeaveTo = Some path } as document) when not (Editor.needsSave document) ->
         update (Router(Router.LinkFollowed path)) next
       | _ ->
@@ -640,7 +626,7 @@ let deleteCommenterChosen (model: Model) =
 
 let deleteSubscriptionChosen (model: Model) =
   match model.Overlay, model.Router.Route, model.Subscriptions.Sheet with
-  | Some DeleteSubscriptionDialog, Route.Subscriptions, Some sheet ->
+  | Some DeleteSubscriptionDialog, Route.Subscriptions _, Some sheet ->
     Subscriptions.tryOpened model.Subscriptions
     |> Option.map (fun _ -> Subscriptions(Subscriptions.Chosen(sheet.Id, Subscriptions.Delete)))
   | Some DeleteSubscriptionDialog, _, _

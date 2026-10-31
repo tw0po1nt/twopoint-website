@@ -269,7 +269,7 @@ let tests =
 
       let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
       Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "Now the author leaves"
-      Expect.equal model.Router.Route Route.Posts "The post list"
+      Expect.equal model.Router.Route (Route.Posts PostFilter.All) "The post list"
       Expect.isNone model.Editor "The editor goes"
     }
 
@@ -291,7 +291,7 @@ let tests =
       Expect.equal model.Router.Route (Route.Post "my-post") "The author still stays"
       let model, effect = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
       Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts", [ Shell.LoadPosts ]))) "Now the author leaves"
-      Expect.equal model.Router.Route Route.Posts "The post list"
+      Expect.equal model.Router.Route (Route.Posts PostFilter.All) "The post list"
     }
 
     test "a failed save after a leave keeps the author on the editor with the text" {
@@ -313,7 +313,7 @@ let tests =
       Expect.equal (status model) "Draft · changed in another tab" "The status"
 
       let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts")) model
-      Expect.equal model.Router.Route Route.Posts "The second leave goes"
+      Expect.equal model.Router.Route (Route.Posts PostFilter.All) "The second leave goes"
     }
 
     test "a leave after a session expiry saves the newest text after the waiting save" {
@@ -337,7 +337,7 @@ let tests =
         "The newest text"
 
       let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
-      Expect.equal model.Router.Route Route.Posts "The author leaves"
+      Expect.equal model.Router.Route (Route.Posts PostFilter.All) "The author leaves"
     }
 
     test "the Back button of the browser with unsaved text puts the editor address back and saves" {

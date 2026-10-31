@@ -42,8 +42,13 @@ let private listed () =
 
 let private send msg model = Shell.update (Shell.Subscriptions msg) model
 
+let private filterTo (filter: SubscriptionFilter) (model: Shell.Model) =
+  Shell.update (Shell.Router(Router.LinkFollowed(Route.path (Subscriptions filter)))) model
+
 let private shown (model: Shell.Model) =
-  Subscriptions.shown model.Subscriptions |> List.map _.Id
+  match model.Router.Route with
+  | Subscriptions filter -> Subscriptions.shown filter model.Subscriptions |> List.map _.Id
+  | _ -> []
 
 let private tests' =
   testList "Subscriptions" [
@@ -60,7 +65,7 @@ let private tests' =
 
     test "the counts do not follow the filter or the search" {
       let model = listed ()
-      let model, _ = send (Subscriptions.Filtered Subscriptions.Inactive) model
+      let model, _ = filterTo SubscriptionFilter.Inactive model
       let model, _ = send (Subscriptions.Searched "grace") model
       Expect.equal (Subscriptions.counts model.Subscriptions) (Some(counts 2 2)) "Two and two"
     }
@@ -72,14 +77,14 @@ let private tests' =
 
     test "the filter shows all subscriptions, or only the active or the inactive subscriptions" {
       let model = listed ()
-      Expect.equal model.Subscriptions.Filter Subscriptions.All "All at first"
+      Expect.equal model.Router.Route (Subscriptions SubscriptionFilter.All) "All at first"
       Expect.equal (shown model) [ "ada"; "grace"; "alan"; "edsger" ] "All, in the order of the API"
 
       for filter, expected in
-        [ Subscriptions.Active, [ "ada"; "alan" ]
-          Subscriptions.Inactive, [ "grace"; "edsger" ] ] do
-        let model, effect = send (Subscriptions.Filtered filter) model
-        Expect.isNone effect "The filter calls no API"
+        [ SubscriptionFilter.Active, [ "ada"; "alan" ]
+          SubscriptionFilter.Inactive, [ "grace"; "edsger" ] ] do
+        let model, effect = filterTo filter model
+        Expect.equal effect (Some(Shell.Navigate(Router.PushUrl(Route.path (Subscriptions filter)), []))) "The filter calls no API"
         Expect.equal (shown model) expected $"Only {filter}"
     }
 
@@ -106,11 +111,11 @@ let private tests' =
 
     test "the search and the filter work together" {
       let model = listed ()
-      let model, _ = send (Subscriptions.Filtered Subscriptions.Inactive) model
+      let model, _ = filterTo SubscriptionFilter.Inactive model
       let model, _ = send (Subscriptions.Searched "dijkstra") model
       Expect.equal (shown model) [ "edsger" ] "Inactive and Dijkstra"
 
-      let model, _ = send (Subscriptions.Filtered Subscriptions.Active) model
+      let model, _ = filterTo SubscriptionFilter.Active model
       Expect.isEmpty (shown model) "No active subscription has Dijkstra"
     }
 
@@ -121,27 +126,44 @@ let private tests' =
     }
 
     test "the empty text says what the filter and the search found" {
-      let none = Subscriptions.emptyText Subscriptions.All ""
+      let none = Subscriptions.emptyText SubscriptionFilter.All ""
       Expect.equal none "The blog has no subscriptions." "No subscription"
-      Expect.equal (Subscriptions.emptyText Subscriptions.Active "") "The blog has no active subscriptions." "No active"
-      Expect.equal (Subscriptions.emptyText Subscriptions.Inactive "") "The blog has no inactive subscriptions." "No inactive"
-      Expect.equal (Subscriptions.emptyText Subscriptions.All "zed") "No subscription matches the search." "No match"
+
+      Expect.equal
+        (Subscriptions.emptyText SubscriptionFilter.Active "")
+        "The blog has no active subscriptions."
+        "No active"
+
+      Expect.equal
+        (Subscriptions.emptyText SubscriptionFilter.Inactive "")
+        "The blog has no inactive subscriptions."
+        "No inactive"
+
+      Expect.equal (Subscriptions.emptyText SubscriptionFilter.All "zed") "No subscription matches the search." "No match"
     }
 
-    test "the filter and the search stay after a visit to another page, and the list loads again" {
-      let model = listed ()
-      let model, _ = send (Subscriptions.Filtered Subscriptions.Inactive) model
-      let model, _ = send (Subscriptions.Searched "grace") model
-      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/")) model
-      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/subscriptions")) model
+    test "a change of the filter alone sends no API call and keeps the search" {
+      let model, _ = send (Subscriptions.Searched "grace") (listed ())
+      let model, effect = filterTo SubscriptionFilter.Inactive model
 
-      Expect.equal model.Subscriptions.Filter Subscriptions.Inactive "The filter"
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/subscriptions?filter=inactive", []))) "No API call"
       Expect.equal model.Subscriptions.Search "grace" "The search"
+      Expect.equal (shown model) [ "grace" ] "Inactive and Grace"
+    }
+
+    test "a move from another page to a filter loads the list and clears the search" {
+      let model, _ = send (Subscriptions.Searched "grace") (listed ())
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/")) model
+      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/subscriptions?filter=active")) model
+
+      Expect.equal model.Router.Route (Subscriptions SubscriptionFilter.Active) "The filter"
+      Expect.equal model.Subscriptions.Search "" "No search"
       Expect.equal model.Subscriptions.Subscriptions Subscriptions.Waiting "The list loads again"
 
-      match effect with
-      | Some(Shell.Navigate(_, calls)) -> Expect.equal calls [ Shell.LoadSubscriptions ] "The list"
-      | other -> failtestf "Expected a navigation, got %A" other
+      Expect.equal
+        effect
+        (Some(Shell.Navigate(Router.PushUrl "/subscriptions?filter=active", [ Shell.LoadSubscriptions ])))
+        "The list"
     }
 
     test "a list that did not load shows the reason" {
@@ -211,13 +233,13 @@ let private sheetTests =
     }
 
     test "a close removes the sheet, and the filter stays" {
-      let model, _ = send (Subscriptions.Filtered Subscriptions.Inactive) (listed ())
+      let model, _ = filterTo SubscriptionFilter.Inactive (listed ())
       let model, _ = send (Subscriptions.Opened "grace") model
       let model, effect = send Subscriptions.Closed model
 
       Expect.isNone effect "No call"
       Expect.isNone model.Subscriptions.Sheet "No sheet"
-      Expect.equal model.Subscriptions.Filter Subscriptions.Inactive "The filter"
+      Expect.equal model.Router.Route (Subscriptions SubscriptionFilter.Inactive) "The filter"
     }
 
     test "a refused delivery list opens the refusal banner" {
