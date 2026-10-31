@@ -24,9 +24,8 @@ module GetAllPosts =
     abstract member GetWorkingPosts: unit -> DependencyResult<StoredPost list>
     abstract member GetPostsInTable: unit -> DependencyResult<PostInfo list>
     abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
-    /// The slugs of the `published` blobs with the migrated mark.
     abstract member GetMigratedPosts: unit -> DependencyResult<Set<Slug>>
-    abstract member GetPostsWithNewPostDelivery: unit -> DependencyResult<Set<Slug>>
+    abstract member GetDeliveryStarts: unit -> DependencyResult<Map<Slug, DateTime>>
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -41,7 +40,7 @@ module GetAllPosts =
       (table : PostInfo list)
       (deploys : DeployContext)
       (migrated : Set<Slug>)
-      (delivered : Set<Slug>)
+      (starts : Map<Slug, DateTime>)
       : PostListing list =
       let published = summaries published
       let working = summaries working
@@ -67,12 +66,12 @@ module GetAllPosts =
         let deliveryToStart =
           match state, publishDate with
           | Published, Some date ->
-            DeliveryGate.isToStart
+            DeliveryGate.isDeliveryToStart
               utcNow
               date
               deploy
               (if migrated.Contains slug then Migrated else NotMigrated)
-              (if delivered.Contains slug then HasNewPostDelivery else NoNewPostDelivery)
+              (starts |> Map.tryFind slug |> Option.map Started |> Option.defaultValue NotStarted)
           | _ -> false
 
         { Slug = slug
@@ -98,11 +97,11 @@ module GetAllPosts =
             (CancellableTaskResult.parallelZip (dependencies.GetPostsInTable()) (dependencies.GetDeployContext())))
         |> CancellableTaskResult.mapError QueryError.Dependency
 
-      let! migrated, delivered =
-        CancellableTaskResult.parallelZip (dependencies.GetMigratedPosts()) (dependencies.GetPostsWithNewPostDelivery())
+      let! migrated, starts =
+        CancellableTaskResult.parallelZip (dependencies.GetMigratedPosts()) (dependencies.GetDeliveryStarts())
         |> CancellableTaskResult.mapError QueryError.Dependency
 
-      return Logic.list (dependencies.GetUtcNow()) published working table deploys migrated delivered
+      return Logic.list (dependencies.GetUtcNow()) published working table deploys migrated starts
     }
 
 // ====================================================================================================================
@@ -118,6 +117,7 @@ module GetPostDocument =
     abstract member GetUtcNow: unit -> DateTime
     abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member GetWorkingBlob: slug: Slug -> DependencyResult<StoredBlob option>
+    abstract member GetDeliveryStart: slug: Slug -> DependencyResult<DeliveryStart>
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -127,6 +127,7 @@ module GetPostDocument =
       (slug : Slug)
       (published : StoredBlob option)
       (working : StoredBlob option)
+      (start : DeliveryStart)
       : PostDocument option =
       match published, working with
       | None, None -> None
@@ -149,17 +150,20 @@ module GetPostDocument =
             PublishDate = publishDate
             ETag = working |> Option.map _.ETag
             Text = (working |> Option.orElse published).Value.Text
-            PublishedText = published |> Option.map _.Text }
+            PublishedText = published |> Option.map _.Text
+            DeliveryStart = start }
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun slug -> cancellableTaskResult {
       let! slug = slug |> Slug.create |> Result.mapError QueryError.Validation
 
-      let! published, working =
-        CancellableTaskResult.parallelZip (dependencies.GetPublishedBlob slug) (dependencies.GetWorkingBlob slug)
+      let! published, (working, start) =
+        CancellableTaskResult.parallelZip
+          (dependencies.GetPublishedBlob slug)
+          (CancellableTaskResult.parallelZip (dependencies.GetWorkingBlob slug) (dependencies.GetDeliveryStart slug))
         |> CancellableTaskResult.mapError QueryError.Dependency
 
-      return Logic.document (dependencies.GetUtcNow()) slug published working
+      return Logic.document (dependencies.GetUtcNow()) slug published working start
     }
 
 // ====================================================================================================================

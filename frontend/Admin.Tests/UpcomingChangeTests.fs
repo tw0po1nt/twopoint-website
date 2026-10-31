@@ -22,6 +22,7 @@ let private post state pendingEdit publishDate eTag : Api.PostDocument =
     Excerpt = "About it."
     Body = "Some text.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published =
       Some

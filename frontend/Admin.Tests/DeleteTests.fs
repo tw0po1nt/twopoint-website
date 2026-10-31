@@ -22,6 +22,7 @@ let private post state pendingEdit eTag: Api.PostDocument =
     Excerpt = "About it."
     Body = "Body.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published =
       if state = Api.Draft then

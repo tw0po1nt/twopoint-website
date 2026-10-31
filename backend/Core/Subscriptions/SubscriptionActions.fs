@@ -386,13 +386,9 @@ module SendWelcome =
         return Send (subscription, latestPost)
       }
 
-    /// The latest post that a new-post delivery could start for, so the link in the welcome opens the page.
     let latestPost (utcNow : DateTime) (deploys : DeployContext) (posts : Post list) : Post option =
       posts
-      |> List.filter (fun post ->
-        DeployRule.stateOf utcNow deploys post.Id
-        |> DeliveryGate.check utcNow post.Info.CreatedDate
-        |> Result.isOk)
+      |> List.filter (DeliveryGate.checkPost utcNow deploys >> Result.isOk)
       |> List.sortByDescending _.Info.CreatedDate
       |> List.tryHead
 
@@ -505,11 +501,12 @@ module StartNewPostDelivery =
   type Error =
     | PostNotFound of Slug
     | NotReady of Post * DeliveryGate.Refusal
+    | AlreadyStarted of Post * startedDate : DateTime
     | NewsletterNotFound of Post
     | NewsletterInvalid of Post * reason : string
   type Success = Start of Post
   type Decision = Decision<Success, Error>
-  type Event = Started of Post * recipients : Subscription list
+  type Event = Started of Post * recipients : Subscription list * startedDate : DateTime
 
   // Logic
 
@@ -525,12 +522,14 @@ module StartNewPostDelivery =
     let decide : Logic =
       fun utcNow slug post deploys -> result {
         let! post = post |> Result.requireSome (PostNotFound slug)
-        do!
-          DeployRule.stateOf utcNow deploys post.Id
-          |> DeliveryGate.check utcNow post.Info.CreatedDate
-          |> Result.mapError (fun refusal -> NotReady (post, refusal))
+        do! DeliveryGate.checkPost utcNow deploys post |> Result.mapError (fun refusal -> NotReady (post, refusal))
         return Start post
       }
+
+    let inserted (post : Post) (insert : DeliveryStartInsert) : Result<unit, Error> =
+      match insert with
+      | Inserted -> Ok ()
+      | StartedBefore startedDate -> Error (AlreadyStarted (post, startedDate))
 
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
       NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
@@ -547,6 +546,8 @@ module StartNewPostDelivery =
     abstract member GetNewsletter: Post -> DependencyResult<string option>
     abstract member GetAllSubscriptions: unit -> DependencyResult<Subscription list>
     abstract member GetUtcNow: unit -> DateTime
+    abstract member InsertDeliveryStart: post: Post -> startedDate: DateTime -> DependencyResult<DeliveryStartInsert>
+    abstract member DeleteDeliveryStart: post: Post -> DependencyResult<unit>
     abstract member QueueDeliveries:
       post: Post
         -> intro: NonEmptyString option
@@ -586,12 +587,23 @@ module StartNewPostDelivery =
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let recipients = Logic.recipients subscriptions
+      let startedDate = dependencies.GetUtcNow()
 
-      do!
-        dependencies.QueueDeliveries post start.Intro recipients
+      // The insert fails when another start inserted first, so two starts never queue the same post.
+      let! insert =
+        dependencies.InsertDeliveryStart post startedDate
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      return Event.Started (post, recipients)
+      do! Logic.inserted post insert |> Result.mapError ActionError<Error>.Logic
+
+      // A failed queue deletes the start, so the author can start the delivery again.
+      do!
+        dependencies.QueueDeliveries post start.Intro recipients
+        |> CancellableTaskResult.orElseWith (fun queueError ->
+          dependencies.DeleteDeliveryStart post |> CancellableTask.map (fun _ -> Error queueError))
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return Event.Started (post, recipients, startedDate)
     }
 
 

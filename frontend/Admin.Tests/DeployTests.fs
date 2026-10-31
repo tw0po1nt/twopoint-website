@@ -22,6 +22,7 @@ let private document state : Api.PostDocument =
     Excerpt = "About it."
     Body = "Some text.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published = None }
 

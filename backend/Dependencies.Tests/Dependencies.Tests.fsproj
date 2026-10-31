@@ -12,6 +12,7 @@
     <Compile Include="GitHubAppJwtTests.fs" />
     <Compile Include="GitHubDispatchTests.fs" />
     <Compile Include="DeployRowsTests.fs" />
+    <Compile Include="DeliveryStartRowsTests.fs" />
     <Compile Include="WebPushTests.fs" />
     <Compile Include="PushTests.fs" />
     <Compile Include="DeviceDbTests.fs" />

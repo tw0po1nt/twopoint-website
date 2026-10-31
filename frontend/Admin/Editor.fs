@@ -55,8 +55,9 @@ type Document =
     Revisions: Revisions.State
     /// The typed text is the intro of the email.
     SendToSubscribers: Typed.State
-    /// The count of active subscriptions that the last send queued an email for. The author dismisses it.
-    SentTo: int option
+    /// The count of active subscriptions that the last start queued an email for. The author dismisses it.
+    QueuedCount: int option
+    DeliveryStarted: string option
     Deploy: Deploy.Model }
 
 type Model =
@@ -233,7 +234,8 @@ let private loaded (chain: Deploy.Chain) (post: Api.PostDocument) =
       ChangeWarnings = []
       Revisions = Revisions.Closed
       SendToSubscribers = Typed.Closed
-      SentTo = None
+      QueuedCount = None
+      DeliveryStarted = post.DeliveryStarted
       Deploy = Deploy.start chain }
 
 let private deployRead (post: Api.PostDocument) =
@@ -804,22 +806,22 @@ let private revisionsClosed (document: Document) =
   else
     Loaded { document with Revisions = Revisions.Closed }, None
 
-/// The email contains the newsletter that the production build of the latest change uploads.
 let private sendAvailability (document: Document) =
-  match document.State, document.Deploy.Status with
-  | Api.Draft, _ -> Unavailable "Publish the post first."
-  | Api.Upcoming, _ -> Unavailable "The post is not published yet. Send it after its publish date."
-  | Api.Published, Deploy.Known Api.DeployState.Deployed -> Available
-  | Api.Published, Deploy.Known Api.DeployState.Deploying ->
-    Unavailable "The latest change to the post deploys. Send the post after the deploy."
-  | Api.Published, Deploy.Known Api.DeployState.DeployFailed ->
-    Unavailable "The deploy of the latest change failed. Rebuild the site, and then send the post."
-  | Api.Published, Deploy.Unread -> Unavailable "The admin reads the deploy state of the post."
-  | Api.Published, Deploy.Unreadable _ -> Unavailable "The deploy state of the post is not known. Reload the page."
+  match document.DeliveryStarted, document.State, document.Deploy.Status with
+  | Some started, _, _ -> Unavailable $"The delivery of the post started on {Dates.dateText started}."
+  | None, Api.Draft, _ -> Unavailable "Publish the post first."
+  | None, Api.Upcoming, _ -> Unavailable "The post is not published yet. Start the delivery after its publish date."
+  | None, Api.Published, Deploy.Known Api.DeployState.Deployed -> Available
+  | None, Api.Published, Deploy.Known Api.DeployState.Deploying ->
+    Unavailable "The latest change to the post deploys. Start the delivery after the deploy."
+  | None, Api.Published, Deploy.Known Api.DeployState.DeployFailed ->
+    Unavailable "The deploy of the latest change failed. Rebuild the site, and then start the delivery."
+  | None, Api.Published, Deploy.Unread -> Unavailable "The admin reads the deploy state of the post."
+  | None, Api.Published, Deploy.Unreadable _ -> Unavailable "The deploy state of the post is not known. Reload the page."
 
 let private sendRequested (document: Document) =
   match sendAvailability document with
-  | Available -> Loaded { document with SendToSubscribers = Typed.Typing ""; SentTo = None }, None
+  | Available -> Loaded { document with SendToSubscribers = Typed.Typing ""; QueuedCount = None }, None
   | Unavailable _ -> Loaded document, None
 
 let private introTyped (typed: string) (document: Document) =
@@ -844,7 +846,8 @@ let private sendAnswered (result: Result<Api.StartedDelivery, Api.Failure>) (doc
     Loaded
       { document with
           SendToSubscribers = Typed.Closed
-          SentTo = Some started.Queued },
+          QueuedCount = Some started.Queued
+          DeliveryStarted = Some started.StartedDate },
     None
   | Typed.Sending intro, Error failure ->
     Loaded { document with SendToSubscribers = Typed.Failed(intro, Api.reason failure) }, None
@@ -922,7 +925,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, SendConfirmed -> sendConfirmed document
   | Loaded document, SendAnswered(slug, result) when slug = document.Slug -> sendAnswered result document
   | Loaded document, SendClosed -> sendClosed document
-  | Loaded document, SentNoticeDismissed -> Loaded { document with SentTo = None }, None
+  | Loaded document, SentNoticeDismissed -> Loaded { document with QueuedCount = None }, None
   | _ -> model, None
 
 /// The browser asks before it closes a page with text that the API does not have.
@@ -1081,7 +1084,7 @@ let menuMsg (action: MenuAction) =
   | SendToSubscribers -> Some SendRequested
   | Delete -> Some DeleteRequested
 
-let sentText (queued: int) =
+let queuedText (queued: int) =
   match queued with
   | 0 -> "No subscription is active, so the admin sent no email."
   | 1 -> "The admin queued the email for 1 active subscription."

@@ -22,6 +22,7 @@ let private pendingPost: Api.PostDocument =
     Excerpt = "About it."
     Body = "First line.\nSecond line, edited.\nThird line.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published =
       Some

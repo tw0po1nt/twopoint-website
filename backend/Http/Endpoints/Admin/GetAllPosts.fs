@@ -117,8 +117,7 @@ type GetAllPosts (
           member _.GetPostsInTable () = postDependencies.GetAllPosts()
           member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
           member _.GetMigratedPosts () = postStore.GetMigratedPosts()
-          member _.GetPostsWithNewPostDelivery () =
-            SubscriptionDependencies(tableServiceClient, logger).GetPostsWithNewPostDelivery()
+          member _.GetDeliveryStarts () = DeliveryStartDb(tableServiceClient, logger).GetDeliveryStarts()
         }
 
         let! postsResult = getAllPosts()

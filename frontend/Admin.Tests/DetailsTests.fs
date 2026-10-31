@@ -22,6 +22,7 @@ let private document state eTag details : Api.PostDocument =
     Excerpt = "About it."
     Body = "Some text.\n"
     Details = details
+    DeliveryStarted = None
     Text = ""
     Published = None }
 

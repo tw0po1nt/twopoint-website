@@ -41,10 +41,14 @@ type DeliveryDependencies(
   member _.GetAllPosts () = cancellableTaskResult {
     let! (dbPosts: DbPost list) = postDb.GetAllPosts()
 
-    return!
+    return
       dbPosts
-      |> List.traverseValidationA (fun dbo -> dbo.ToPost PostCommentStats.Zero)
-      |> DependencyError.ofValidation Dependency.Database
+      |> List.choose (fun dbo ->
+        match dbo.ToPost PostCommentStats.Zero with
+        | Ok post -> Some post
+        | Error errors ->
+          logger.LogWarning("The row of post '{slug}' is not a post: {errors}", dbo.Slug, errors)
+          None)
   }
 
   member _.GetPostBySlug (slug : Slug) = cancellableTaskResult {

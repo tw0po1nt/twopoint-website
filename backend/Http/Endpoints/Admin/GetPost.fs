@@ -3,9 +3,11 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Subscriptions
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
+open Azure.Data.Tables
 open Azure.Storage.Blobs
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
@@ -62,7 +64,8 @@ type PostDocumentDto =
     Body : string
     Details : PostDetailsDto
     Text : string
-    Published : PublishedDto }
+    Published : PublishedDto
+    DeliveryStarted : Nullable<DateTime> }
 
 [<AutoOpen>]
 module PostDocumentExt =
@@ -92,13 +95,18 @@ module PostDocumentExt =
         Body = fields.Body
         Details = PostDetailsDto.ofDetails (TwoPoint.Site.Render.PostText.details this.Text)
         Text = this.Text
-        Published = published }
+        Published = published
+        DeliveryStarted =
+          match this.DeliveryStart with
+          | Started startedDate -> Nullable startedDate
+          | NotStarted -> Nullable() }
 
 module GetPostDocumentQuery = TwoPoint.Core.Posts.Queries.GetPostDocument
 
 type GetPost (
   logger : ILogger<GetPost>,
   postStoreClient: BlobServiceClient,
+  tableServiceClient: TableServiceClient,
   texts : BlobTextCache
 ) =
 
@@ -126,6 +134,7 @@ type GetPost (
           member _.GetUtcNow () = DateTime.UtcNow
           member _.GetPublishedBlob slug = postStore.GetPublishedBlob slug
           member _.GetWorkingBlob slug = postStore.GetWorkingBlob slug
+          member _.GetDeliveryStart slug = DeliveryStartDb(tableServiceClient, logger).GetDeliveryStart slug
         }
 
         let! postResult = getPost slug

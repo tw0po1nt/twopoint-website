@@ -209,14 +209,21 @@ type PostState =
 /// The text of one blob in the post store.
 type StoredPost = { Slug : Slug; Text : string; ETag : string }
 
-/// The migration put this mark on the `published` blob of each post from before the admin. A post with the mark never
-/// counts as a delivery to start. The author cannot set or clear it, so each write of a `published` blob keeps it.
+/// The author cannot set or clear the mark, so each write of a `published` blob keeps it.
 type MigratedMark =
   | Migrated
   | NotMigrated
 
-/// The text of one blob in the post store, with the ETag that the store gave the blob. Only a `published` blob can
-/// have the migrated mark.
+/// A post has at most one start of its new-post delivery.
+type DeliveryStart =
+  | NotStarted
+  | Started of startedDate : DateTime
+
+type DeliveryStartInsert =
+  | Inserted
+  | StartedBefore of startedDate : DateTime
+
+/// Only a `published` blob can have the migrated mark.
 type StoredBlob = { Text : string; ETag : string; Mark : MigratedMark }
 
 /// The store refuses a write when its condition is false.
@@ -283,7 +290,8 @@ type PostDocument =
     PublishDate : DateTime option
     ETag : string option
     Text : string
-    PublishedText : string option }
+    PublishedText : string option
+    DeliveryStart : DeliveryStart }
 
 type PostListing =
   { Slug : Slug

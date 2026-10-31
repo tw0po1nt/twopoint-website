@@ -22,6 +22,7 @@
     <Compile Include="Posts\PostEmails.fs" />
     <Compile Include="Posts\PostDependencies.fs" />
     <Compile Include="Subscriptions\SubscriptionDb.fs" />
+    <Compile Include="Subscriptions\DeliveryStartDb.fs" />
     <Compile Include="Subscriptions\SubscriptionDependencies.fs" />
     <Compile Include="Subscriptions\SubscriptionEmails.fs" />
     <Compile Include="Subscriptions\DeliveryDependencies.fs" />

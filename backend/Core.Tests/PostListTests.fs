@@ -28,7 +28,7 @@ type private FakeStore
     table : PostInfo list,
     deploys : DeployContext,
     migrated : string list,
-    delivered : string list
+    started : string list
   ) =
   interface GetAllPosts.Dependencies with
     member _.GetUtcNow () = utcNow
@@ -37,8 +37,8 @@ type private FakeStore
     member _.GetPostsInTable () = CancellableTaskResult.singleton table
     member _.GetDeployContext () = CancellableTaskResult.singleton deploys
     member _.GetMigratedPosts () = migrated |> List.map Slug.Unsafe.create |> Set.ofList |> CancellableTaskResult.singleton
-    member _.GetPostsWithNewPostDelivery () =
-      delivered |> List.map Slug.Unsafe.create |> Set.ofList |> CancellableTaskResult.singleton
+    member _.GetDeliveryStarts () =
+      started |> List.map (fun slug -> Slug.Unsafe.create slug, utcNow) |> Map.ofList |> CancellableTaskResult.singleton
 
 let private listFrom (store : FakeStore) =
   match (GetAllPosts.withDependencies store () CancellationToken.None).Result with
@@ -122,7 +122,7 @@ let tests =
       Expect.equal (find "upcoming-post" listings).Deploy Deployed "No change is recorded"
     }
 
-    test "a published post that is deployed, with no new-post delivery and no migrated mark, is a delivery to start" {
+    test "a published post that is deployed, with no delivery start and no migrated mark, is a delivery to start" {
       let listings = list [ published; upcoming ] [ draft ] []
       Expect.isTrue (find "published-post" listings).DeliveryToStart "The published post"
       Expect.isFalse (find "upcoming-post" listings).DeliveryToStart "Not before the publish date"
@@ -135,12 +135,12 @@ let tests =
       Expect.isFalse (listWith (deployFailed row) [ published ] [] [] |> find "published-post").DeliveryToStart "Failed"
     }
 
-    test "a post with a new-post delivery or the migrated mark is not a delivery to start" {
+    test "a post with a delivery start or the migrated mark is not a delivery to start" {
       let listings =
         listFrom (FakeStore([ published; edited ], [], [], noDeploys, [ "published-post" ], [ "edited-post" ]))
 
       Expect.isFalse (find "published-post" listings).DeliveryToStart "The migrated mark"
-      Expect.isFalse (find "edited-post" listings).DeliveryToStart "A new-post delivery"
+      Expect.isFalse (find "edited-post" listings).DeliveryToStart "A delivery start"
     }
 
     test "the list shows the drafts first, and then the newest post first" {

@@ -87,11 +87,12 @@ saves through the same endpoint, and selects the new series.
 "Send to subscribers" in the "•••" menu of the editor starts a new-post delivery, with an optional
 intro, through `Admin-Posts-Deliveries-Start` (`POST internal/posts/{slug}/deliveries`). The
 backend refuses with `409` until the publish date is in the past and the latest change to the post
-is deployed. The rule is the pure function `DeliveryGate.check`. The welcome uses the newest post
-that passes the same check. The migrated mark is the blob metadata `migrated=true` on a `published`
+is deployed. The rule is the pure function `DeliveryGate.check`. Each start inserts the delivery
+start of the post in the table `deliveryStarts` before it queues, so the backend refuses a second
+start with `409`. A failed queue deletes the delivery start. The welcome uses the newest post that
+passes the same check. The migrated mark is the blob metadata `migrated=true` on a `published`
 blob, and each write of a `published` blob keeps it. The filter "Deliveries to start" of the post
-list shows each published post that passes the check, with no new-post delivery and no migrated
-mark.
+list shows each published post that passes the check, with no delivery start and no migrated mark.
 
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`

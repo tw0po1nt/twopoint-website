@@ -135,9 +135,9 @@ let private sendState (model: Shell.Model) =
   | Some document -> document.SendToSubscribers
   | None -> Typed.Closed
 
-let private sentTo (model: Shell.Model) =
+let private queuedCount (model: Shell.Model) =
   match document model with
-  | Some document -> document.SentTo
+  | Some document -> document.QueuedCount
   | None -> None
 
 let private deleteStep (model: Shell.Model) =
@@ -1015,10 +1015,10 @@ let private changeNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
 
 [<SolidComponent>]
 let private sentNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
-  Show(when' = (sentTo (model ())).IsSome) {
-    Parts.Alert(tone = Parts.Good, title = "The post is sent to the subscribers.").Has(
+  Show(when' = (queuedCount (model ())).IsSome) {
+    Parts.Alert(tone = Parts.Good, title = "The delivery started.").Has(
       Fragment() {
-        p () { sentTo (model ()) |> Option.map Editor.sentText |> Option.defaultValue "" }
+        p () { queuedCount (model ()) |> Option.map Editor.queuedText |> Option.defaultValue "" }
 
         div (class' = "editor-notice-actions") {
           Parts.Button(size = Parts.Small, onClick = fun _ -> dispatch (Shell.Editor Editor.SentNoticeDismissed)).Has(Fragment() { "Dismiss" })

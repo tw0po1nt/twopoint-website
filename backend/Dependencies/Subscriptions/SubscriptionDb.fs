@@ -192,7 +192,6 @@ type internal ISubscriptionDb =
       -> CancellableTaskResult<DbSubscription, DependencyError>
   abstract member GetDeliveriesForSubscription:
     subscriptionId: string -> CancellableTaskResult<DbSubscriptionDelivery list, DependencyError>
-  abstract member GetDeliveriesOfType: deliveryType: string -> CancellableTaskResult<DbSubscriptionDelivery list, DependencyError>
   abstract member CreateDelivery:
     delivery: DbSubscriptionDelivery -> CancellableTaskResult<DbSubscriptionDelivery, DependencyError>
   abstract member DeleteSubscription: subscriptionId: string -> CancellableTaskResult<unit, DependencyError>
@@ -267,9 +266,6 @@ module internal SubscriptionDb =
 
       member _.GetDeliveriesForSubscription subscriptionId =
         eq "PartitionKey" subscriptionId |> where deliveriesTable DbSubscriptionDelivery.FromEntity
-
-      member _.GetDeliveriesOfType deliveryType =
-        eq "Type" deliveryType |> where deliveriesTable DbSubscriptionDelivery.FromEntity
 
       member _.CreateDelivery delivery =
         delivery.ToEntity() |> add deliveriesTable SubscriptionDbError.validation DbSubscriptionDelivery.FromEntity

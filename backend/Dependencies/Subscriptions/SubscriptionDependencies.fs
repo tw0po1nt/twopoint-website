@@ -77,15 +77,6 @@ type SubscriptionDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.GetPostsWithNewPostDelivery () = cancellableTaskResult {
-    let! dbDeliveries = subscriptionDb.GetDeliveriesOfType (DbSubscriptionDelivery.TypeToString NewPost)
-
-    return
-      dbDeliveries
-      |> List.choose (fun (delivery : DbSubscriptionDelivery) -> Slug.create delivery.Post |> Result.toOption)
-      |> Set.ofList
-  }
-
   member _.DeleteSubscription (subscription : Subscription) = subscriptionDb.DeleteSubscription (subscription.Id.ToString())
 
   member _.DeleteDelivery (subscription : Subscription) (delivery : SubscriptionDelivery) =

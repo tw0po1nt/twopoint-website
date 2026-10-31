@@ -4,10 +4,6 @@ open TwoPoint.Core.Deploys
 
 open System
 
-type NewPostDeliveries =
-  | NoNewPostDelivery
-  | HasNewPostDelivery
-
 /// A new-post delivery waits until the site shows the text that the email contains.
 [<RequireQualifiedAccess>]
 module DeliveryGate =
@@ -15,7 +11,7 @@ module DeliveryGate =
   type Refusal =
     | NotYetPublished of publishDate : DateTime
     | LatestChangeDeploying
-    | LatestChangeNotDeployed
+    | LatestDeployFailed
 
   let check (utcNow : DateTime) (publishDate : DateTime) (deploy : DeployState) : Result<unit, Refusal> =
     if publishDate > utcNow then
@@ -24,17 +20,19 @@ module DeliveryGate =
       match deploy with
       | Deployed -> Ok ()
       | Deploying -> Error LatestChangeDeploying
-      | DeployFailed -> Error LatestChangeNotDeployed
+      | DeployFailed -> Error LatestDeployFailed
 
-  /// A published post that passes the check is a delivery to start until it has a new-post delivery.
-  let isToStart
+  let checkPost (utcNow : DateTime) (deploys : DeployContext) (post : Post) : Result<unit, Refusal> =
+    DeployRule.stateOf utcNow deploys post.Id |> check utcNow post.Info.CreatedDate
+
+  let isDeliveryToStart
     (utcNow : DateTime)
     (publishDate : DateTime)
     (deploy : DeployState)
     (mark : MigratedMark)
-    (deliveries : NewPostDeliveries)
+    (start : DeliveryStart)
     : bool =
-    match mark, deliveries with
+    match mark, start with
     | Migrated, _
-    | _, HasNewPostDelivery -> false
-    | NotMigrated, NoNewPostDelivery -> check utcNow publishDate deploy |> Result.isOk
+    | _, Started _ -> false
+    | NotMigrated, NotStarted -> check utcNow publishDate deploy |> Result.isOk

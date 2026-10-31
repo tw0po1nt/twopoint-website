@@ -30,7 +30,7 @@ type Post =
     PendingEdit: bool
     PublishDate: string option
     Deploy: DeployState
-    /// The post is published and deployed, and has no new-post delivery and no migrated mark.
+    /// The post is published and deployed, and has no delivery start and no migrated mark.
     DeliveryToStart: bool
     CommentStats: CommentStats }
 
@@ -97,7 +97,8 @@ type PostDocument =
     Body: string
     Details: PostDetails
     Text: string
-    Published: PublishedFields option }
+    Published: PublishedFields option
+    DeliveryStarted: string option }
 
 type CreatedDraft = { Slug: string; ETag: string }
 
@@ -277,7 +278,7 @@ type Revision =
 type RestoredRevision = { ETag: string }
 
 /// `Queued` counts the active subscriptions that get the email.
-type StartedDelivery = { Queued: int }
+type StartedDelivery = { Queued: int; StartedDate: string }
 
 type Failure =
   /// The API answered 401 or 403.

@@ -22,6 +22,7 @@ let private post state publishDate eTag : Api.PostDocument =
     Excerpt = "About it."
     Body = "Some text.\n"
     Details = noDetails
+    DeliveryStarted = None
     Text = ""
     Published =
       Some
@@ -52,6 +53,8 @@ let private document' (model: Shell.Model) =
 let private availabilityOf (model: Shell.Model) =
   (Editor.menu (document' model) |> List.find (fun item -> item.Action = Editor.SendToSubscribers)).Availability
 
+let private started: Api.StartedDelivery = { Queued = 3; StartedDate = "2026-10-30T12:00:00Z" }
+
 let private reasonOf (model: Shell.Model) =
   match availabilityOf model with
   | Editor.Unavailable reason -> reason
@@ -76,7 +79,7 @@ let menuTests =
 
       Expect.equal
         (reasonOf upcoming)
-        "The post is not published yet. Send it after its publish date."
+        "The post is not published yet. Start the delivery after its publish date."
         "Upcoming"
     }
 
@@ -85,12 +88,12 @@ let menuTests =
 
       Expect.equal
         (reasonOf (opened live |> withDeploy Api.DeployState.Deploying))
-        "The latest change to the post deploys. Send the post after the deploy."
+        "The latest change to the post deploys. Start the delivery after the deploy."
         "Deploying"
 
       Expect.equal
         (reasonOf (opened live |> withDeploy Api.DeployState.DeployFailed))
-        "The deploy of the latest change failed. Rebuild the site, and then send the post."
+        "The deploy of the latest change failed. Rebuild the site, and then start the delivery."
         "Failed"
 
       let unreadable, _ = send (Editor.DeployMsg("my-post", Deploy.StatusRead(Error Api.Unanswered))) (opened live)
@@ -99,6 +102,11 @@ let menuTests =
         (reasonOf unreadable)
         "The deploy state of the post is not known. Reload the page."
         "Unreadable"
+    }
+
+    test "a post with a delivery start gives the date of the start" {
+      let started = opened { live with DeliveryStarted = Some "2026-10-30T12:00:00Z" } |> withDeploy Api.DeployState.Deployed
+      Expect.equal (reasonOf started) "The delivery of the post started on 2026-10-30." "Started"
     }
 
     test "a request while the action is not available opens no dialog" {
@@ -129,13 +137,23 @@ let sendTests =
 
     test "a started delivery closes the dialog and shows the count until the author dismisses it" {
       let sending, _ = send Editor.SendConfirmed (typing "")
-      let model, effect = send (Editor.SendAnswered("my-post", Ok { Queued = 3 })) sending
+      let model, effect = send (Editor.SendAnswered("my-post", Ok started)) sending
       Expect.isNone effect "No call"
       Expect.equal (document' model).SendToSubscribers Typed.Closed "Closed"
-      Expect.equal (document' model).SentTo (Some 3) "The count"
+      Expect.equal (document' model).QueuedCount (Some 3) "The count"
 
       let dismissed, _ = send Editor.SentNoticeDismissed model
-      Expect.equal (document' dismissed).SentTo None "Dismissed"
+      Expect.equal (document' dismissed).QueuedCount None "Dismissed"
+    }
+
+    test "a started delivery makes the action unavailable" {
+      let sending, _ = send Editor.SendConfirmed (typing "")
+      let model, _ = send (Editor.SendAnswered("my-post", Ok started)) sending
+      Expect.equal (reasonOf model) "The delivery of the post started on 2026-10-30." "Started"
+
+      let requested, effect = send Editor.SendRequested model
+      Expect.isNone effect "No call"
+      Expect.equal (document' requested).SendToSubscribers Typed.Closed "No dialog"
     }
 
     test "a refused delivery keeps the intro and shows the reason, and a second send tries again" {
@@ -167,13 +185,13 @@ let sendTests =
 
     test "an answer for another post changes nothing" {
       let sending, _ = send Editor.SendConfirmed (typing "")
-      let model, _ = send (Editor.SendAnswered("other-post", Ok { Queued = 3 })) sending
+      let model, _ = send (Editor.SendAnswered("other-post", Ok started)) sending
       Expect.equal (document' model).SendToSubscribers (Typed.Sending "") "Still sending"
     }
 
     test "the notice counts the active subscriptions" {
-      Expect.equal (Editor.sentText 0) "No subscription is active, so the admin sent no email." "None"
-      Expect.equal (Editor.sentText 1) "The admin queued the email for 1 active subscription." "One"
-      Expect.equal (Editor.sentText 4) "The admin queued the email for 4 active subscriptions." "Many"
+      Expect.equal (Editor.queuedText 0) "No subscription is active, so the admin sent no email." "None"
+      Expect.equal (Editor.queuedText 1) "The admin queued the email for 1 active subscription." "One"
+      Expect.equal (Editor.queuedText 4) "The admin queued the email for 4 active subscriptions." "Many"
     }
   ]

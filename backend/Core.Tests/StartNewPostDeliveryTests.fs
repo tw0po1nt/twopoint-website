@@ -44,8 +44,8 @@ let private decisionTests =
     test "a post gets no delivery when the deploy of its latest change failed" {
       Expect.equal
         (decide latestPost.Id (Some latestPost) (deployFailed latestPost))
-        (Error (StartNewPostDelivery.NotReady (latestPost, DeliveryGate.LatestChangeNotDeployed)))
-        "Expected LatestChangeNotDeployed"
+        (Error (StartNewPostDelivery.NotReady (latestPost, DeliveryGate.LatestDeployFailed)))
+        "Expected LatestDeployFailed"
     }
 
     test "the deploy of another post does not stop the delivery" {
@@ -99,10 +99,18 @@ let private recipientTests =
     }
   ]
 
+let private queueDown = { Dependency = Dependency.ServiceBus; Type = Unknown (exn "The queue is down") }
+
 type private FakeDependencies(post, newsletter, subscriptions, deploys) =
   let queued = ResizeArray<Post * NonEmptyString option * Subscription list>()
+  let mutable start = NotStarted
+  let mutable queueIsDown = false
 
   member _.Queued = List.ofSeq queued
+
+  member _.Start = start
+
+  member _.QueueIsDown with set value = queueIsDown <- value
 
   interface StartNewPostDelivery.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton post
@@ -110,9 +118,21 @@ type private FakeDependencies(post, newsletter, subscriptions, deploys) =
     member _.GetNewsletter _ = CancellableTaskResult.singleton newsletter
     member _.GetAllSubscriptions () = CancellableTaskResult.singleton subscriptions
     member _.GetUtcNow () = utcNow
-    member _.QueueDeliveries post intro recipients =
-      queued.Add (post, intro, recipients)
+    member _.InsertDeliveryStart _ startedDate =
+      match start with
+      | Started before -> CancellableTaskResult.singleton (StartedBefore before)
+      | NotStarted ->
+        start <- Started startedDate
+        CancellableTaskResult.singleton Inserted
+    member _.DeleteDeliveryStart _ =
+      start <- NotStarted
       CancellableTaskResult.singleton ()
+    member _.QueueDeliveries post intro recipients =
+      if queueIsDown then
+        CancellableTaskResult.error queueDown
+      else
+        queued.Add (post, intro, recipients)
+        CancellableTaskResult.singleton ()
 
 let private run intro (dependencies : FakeDependencies) =
   let start =
@@ -128,10 +148,13 @@ let private actionTests =
       let dependencies = FakeDependencies(Some latestPost, Some slottedHtml, allSubscriptions, noDeploys)
 
       match run (Some "Hello") dependencies with
-      | Ok (StartNewPostDelivery.Started (post, recipients)) ->
+      | Ok (StartNewPostDelivery.Started (post, recipients, startedDate)) ->
         Expect.equal post latestPost "Expected the post"
         Expect.equal recipients [ subscription Active; otherSubscription ] "Expected the active subscriptions"
+        Expect.equal startedDate utcNow "Expected the date of the start"
       | other -> failtestf "Expected Started, got %A" other
+
+      Expect.equal dependencies.Start (Started utcNow) "Expected the start"
 
       match dependencies.Queued with
       | [ post, Some intro, recipients ] ->
@@ -179,6 +202,37 @@ let private actionTests =
       | other -> failtestf "Expected LatestChangeDeploying, got %A" other
 
       Expect.isEmpty dependencies.Queued "Expected no queue message"
+    }
+
+    test "a second start of the post queues nothing" {
+      let dependencies = FakeDependencies(Some latestPost, Some slottedHtml, allSubscriptions, noDeploys)
+
+      run None dependencies |> ignore
+
+      match run None dependencies with
+      | Error (ActionError.Logic (StartNewPostDelivery.AlreadyStarted (post, startedDate))) ->
+        Expect.equal post latestPost "Expected the post"
+        Expect.equal startedDate utcNow "Expected the date of the first start"
+      | other -> failtestf "Expected AlreadyStarted, got %A" other
+
+      Expect.equal dependencies.Queued.Length 1 "Expected only the queue call of the first start"
+    }
+
+    test "a failed queue deletes the start, so the author can start the delivery again" {
+      let dependencies = FakeDependencies(Some latestPost, Some slottedHtml, allSubscriptions, noDeploys)
+      dependencies.QueueIsDown <- true
+
+      match run None dependencies with
+      | Error (ActionError.Dependency error) -> Expect.equal error queueDown "Expected the queue error"
+      | other -> failtestf "Expected the queue error, got %A" other
+
+      Expect.equal dependencies.Start NotStarted "Expected no start"
+
+      dependencies.QueueIsDown <- false
+
+      match run None dependencies with
+      | Ok (StartNewPostDelivery.Started _) -> ()
+      | other -> failtestf "Expected Started, got %A" other
     }
 
     test "queues nothing when the newsletter is missing" {

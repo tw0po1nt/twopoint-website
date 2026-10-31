@@ -122,8 +122,13 @@ deploy of the latest change to the post. A subscription that already has a deliv
 get a new-post delivery of it.
 _Avoid_: Announcement, broadcast, blast
 
+**Delivery start**:
+The record that the author started the new-post delivery of a post, with its date. A post has at most one
+delivery start, so the blog refuses a second start of the same post.
+_Avoid_: Send record, sent flag
+
 **Delivery to start**:
-A published post with a publish date in the past, a deployed latest change, no new-post delivery, and no
+A published post with a publish date in the past, a deployed latest change, no delivery start, and no
 migrated mark.
 _Avoid_: Unsent post, pending delivery
 

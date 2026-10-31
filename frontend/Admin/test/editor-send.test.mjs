@@ -17,12 +17,15 @@ const live = {
   details: noDetails,
   text: '',
   published: { title: 'My post', excerpt: 'About it.', body: 'Some text.\n', details: noDetails },
+  deliveryStarted: null,
 };
+
+const started = { queued: 2, startedDate: '2026-10-30T12:00:00Z' };
 
 const ok = (data) => answer(200, { success: true, message: null, data });
 
 const calls = [];
-let sendAnswer = () => ok({ queued: 2 });
+let sendAnswer = () => ok(started);
 
 const respond = (url, init = {}) => {
   if (url.endsWith('/api/internal/posts/my-post/deploy')) {
@@ -80,7 +83,7 @@ test('a refusal shows the reason in the dialog, and Send then sends the intro an
   assert.ok(dialog().open, 'The dialog stays open');
   assert.match(dialog().textContent, /The latest change to post 'my-post' is not deployed yet/);
 
-  sendAnswer = () => ok({ queued: 2 });
+  sendAnswer = () => ok(started);
   button(dialog(), 'Send').click();
   await settle();
 
@@ -89,5 +92,10 @@ test('a refusal shows the reason in the dialog, and Send then sends the intro an
     { method: 'POST', body: { intro: 'A short note.' } },
   ]);
   assert.ok(!dialog().open, 'The dialog closes');
+  assert.match(document.querySelector('main').textContent, /The delivery started\./);
   assert.match(document.querySelector('main').textContent, /The admin queued the email for 2 active subscriptions\./);
+});
+
+test('after the start, Send to subscribers is not available', () => {
+  assert.equal(menuItem('Send to subscribers').getAttribute('aria-disabled'), 'true');
 });
