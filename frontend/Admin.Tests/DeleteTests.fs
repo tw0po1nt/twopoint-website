@@ -77,6 +77,12 @@ let tests =
 
       let model, _ = send (Editor.BodyChanged "More.\n") (opened live)
       Expect.equal (reason model) "Save the post first." "Unsaved text"
+      let saving, _ = send (Editor.AutosaveElapsed 1) model
+      Expect.equal (reason saving) "The save runs." "Save runs"
+      let failed, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Unanswered)) saving
+      Expect.equal (reason failed) "Save the post first." "Failed save"
+      let stale, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Stale)) saving
+      Expect.equal (reason stale) "Another tab saved newer text. Reload the page." "Stale save"
       Expect.equal (reason (opened { draft with ETag = None })) "Reload the page, and then delete the post." "No ETag"
     }
 
