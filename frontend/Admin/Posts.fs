@@ -1,20 +1,13 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Posts
 
-type Filter =
-  | All
-  | Drafts
-  | PendingEdits
-  | DeliveriesToStart
-
 type Posts =
   | Waiting
   | Loaded of Api.Post list
   | NotLoaded of reason: string
 
 type Model =
-  { Filter: Filter
-    Posts: Posts
+  { Posts: Posts
     /// The call that makes a draft is in flight.
     Creating: bool
     CreateFailure: string option
@@ -27,7 +20,6 @@ type Msg =
   | Answered of Result<Api.Post list, Api.Failure>
   | Polled of generation: int * Result<Api.Post list, Api.Failure>
   | PollElapsed of generation: int
-  | Filtered of Filter
   | NewDraftClicked
   | DraftCreated of Result<Api.CreatedDraft, Api.Failure>
   | NoticeDismissed
@@ -39,8 +31,7 @@ type Effect =
   | WaitToPoll of generation: int
 
 let init =
-  { Filter = All
-    Posts = Waiting
+  { Posts = Waiting
     Creating = false
     CreateFailure = None
     Notice = []
@@ -52,10 +43,10 @@ let reload (model: Model) =
       Generation = model.Generation + 1 }
 
 let filters =
-  [ All, "All"
-    Drafts, "Drafts"
-    PendingEdits, "Pending edits"
-    DeliveriesToStart, "Deliveries to start" ]
+  [ PostFilter.All, "All"
+    PostFilter.Drafts, "Drafts"
+    PostFilter.PendingEdits, "Pending edits"
+    PostFilter.DeliveriesToStart, "Deliveries to start" ]
 
 let private isDeploying (posts: Api.Post list) =
   posts |> List.exists (fun post -> post.Deploy = Api.DeployState.Deploying)
@@ -78,7 +69,6 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | Waiting
     | Loaded _
     | NotLoaded _ -> model, None
-  | Filtered filter -> { model with Filter = filter }, None
   | NoticeDismissed -> { model with Notice = [] }, None
   | NewDraftClicked when model.Creating -> model, None
   | NewDraftClicked ->
@@ -93,20 +83,20 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
         CreateFailure = Some(Api.reason failure) },
     None
 
-let shown (model: Model) =
-  match model.Posts, model.Filter with
-  | Loaded posts, All -> posts
-  | Loaded posts, Drafts -> posts |> List.filter (fun post -> post.State = Api.Draft)
-  | Loaded posts, PendingEdits -> posts |> List.filter (fun post -> post.PendingEdit)
-  | Loaded posts, DeliveriesToStart -> posts |> List.filter (fun post -> post.DeliveryToStart)
+let shown (filter: PostFilter) (model: Model) =
+  match model.Posts, filter with
+  | Loaded posts, PostFilter.All -> posts
+  | Loaded posts, PostFilter.Drafts -> posts |> List.filter (fun post -> post.State = Api.Draft)
+  | Loaded posts, PostFilter.PendingEdits -> posts |> List.filter (fun post -> post.PendingEdit)
+  | Loaded posts, PostFilter.DeliveriesToStart -> posts |> List.filter (fun post -> post.DeliveryToStart)
   | (Waiting | NotLoaded _), _ -> []
 
-let emptyText (filter: Filter) =
+let emptyText (filter: PostFilter) =
   match filter with
-  | All -> "The blog has no posts."
-  | Drafts -> "The blog has no drafts."
-  | PendingEdits -> "No post has a pending edit."
-  | DeliveriesToStart -> "No post waits for a delivery."
+  | PostFilter.All -> "The blog has no posts."
+  | PostFilter.Drafts -> "The blog has no drafts."
+  | PostFilter.PendingEdits -> "No post has a pending edit."
+  | PostFilter.DeliveriesToStart -> "No post waits for a delivery."
 
 let showsDeploy (post: Api.Post) =
   match post.State with

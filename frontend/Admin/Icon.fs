@@ -49,14 +49,14 @@ let pathData (icon: Icon) =
 let ofRoute (route: Route) =
   match route with
   | Dashboard -> Home
-  | Route.Posts
+  | Route.Posts _
   | Post _
   | PostComments _ -> Posts
   | ModerationQueue -> Comments
   | Route.Commenters
   | Route.Commenter _ -> Commenters
   | Route.Series -> Series
-  | Route.Subscriptions -> Subscriptions
+  | Route.Subscriptions _ -> Subscriptions
   | Route.Settings -> Settings
   | NotFound _ -> Alert
 
