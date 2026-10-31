@@ -1604,7 +1604,7 @@ let view (signIn: SignIn) (push: Push) =
           div (class' = "page-head") { h1 () { Router.title (current ()) } }
 
           // The search input stays outside the page, so a typed letter does not replace the input.
-          Show(when' = Route.isSamePage (current ()) (Subscriptions SubscriptionFilter.All)) { subscriptionsToolbar dispatch model }
+          Show(when' = Route.isSubscriptions (current ())) { subscriptionsToolbar dispatch model }
 
           content dispatch (model ())
         }

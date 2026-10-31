@@ -327,7 +327,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         match effect with
         | SiteDeploy.Poll generation -> Send [ PollSiteDeploy generation ]
         | SiteDeploy.WaitToPoll generation -> WaitToPollSiteDeploy generation)
-  | Posts(Posts.PollElapsed _) when not (Route.isSamePage model.Router.Route (Route.Posts PostFilter.All)) -> model, None
+  | Posts(Posts.PollElapsed _) when not (Route.isPosts model.Router.Route) -> model, None
   | Posts msg ->
     let posts, effect = Posts.update msg model.Posts
     let next = { model with Posts = posts }

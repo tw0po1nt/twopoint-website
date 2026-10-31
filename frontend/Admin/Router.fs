@@ -9,19 +9,14 @@ type Msg =
 
 type Effect = PushUrl of path: string
 
-let private split (path: string) =
-  match path.IndexOf '#' with
-  | -1 -> path, ""
-  | index -> path.Substring(0, index), path.Substring(index + 1)
-
 let init (path: string) =
-  let path, fragment = split path
+  let path, fragment = Route.split '#' path
   { Route = Route.parse path; Fragment = fragment }
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | LinkFollowed path ->
-    let path, fragment = split path
+    let path, fragment = Route.split '#' path
     let route = Route.parse path
 
     if route = model.Route && fragment = model.Fragment then
@@ -71,7 +66,7 @@ let showsNavigation (route: Route) =
 let isCurrent (item: Route) (route: Route) =
   match route with
   | Post _
-  | PostComments _ -> Route.isSamePage item (Posts PostFilter.All)
+  | PostComments _ -> Route.isPosts item
   | Commenter _ -> item = Commenters
   | _ -> Route.isSamePage item route
 

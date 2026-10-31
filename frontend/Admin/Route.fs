@@ -33,7 +33,7 @@ module PostFilter =
 
   let all = [ PostFilter.All; PostFilter.Drafts; PostFilter.PendingEdits; PostFilter.DeliveriesToStart ]
 
-  /// The value of `filter` in the query string. "All" has no query string.
+  /// "All" has no query string.
   let value (filter: PostFilter) =
     match filter with
     | PostFilter.All -> None
@@ -46,7 +46,7 @@ module SubscriptionFilter =
 
   let all = [ SubscriptionFilter.All; SubscriptionFilter.Active; SubscriptionFilter.Inactive ]
 
-  /// The value of `filter` in the query string. "All" has no query string.
+  /// "All" has no query string.
   let value (filter: SubscriptionFilter) =
     match filter with
     | SubscriptionFilter.All -> None
@@ -56,7 +56,8 @@ module SubscriptionFilter =
 [<RequireQualifiedAccess>]
 module Route =
 
-  let private split (separator: char) (text: string) =
+  /// Splits the text at the first separator. With no separator, the second part is empty.
+  let split (separator: char) (text: string) =
     match text.IndexOf separator with
     | -1 -> text, ""
     | index -> text.Substring(0, index), text.Substring(index + 1)
@@ -119,3 +120,13 @@ module Route =
     | Posts _, Posts _
     | Subscriptions _, Subscriptions _ -> true
     | _ -> route = other
+
+  let isPosts (route: Route) =
+    match route with
+    | Posts _ -> true
+    | _ -> false
+
+  let isSubscriptions (route: Route) =
+    match route with
+    | Subscriptions _ -> true
+    | _ -> false
