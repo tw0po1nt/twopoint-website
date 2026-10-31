@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Dev.Tests/Dev.Tests.fsproj" />
+  <Project Path="Dev/Dev.fsproj" />
+  <Project Path="DevHost/DevHost.fsproj" />
+  <Project Path="Generator.Tests/Generator.Tests.fsproj" />
+  <Project Path="Generator/Generator.fsproj" />
+  <Project Path="Render.Tests/Render.Tests.fsproj" />
+  <Project Path="Render/Render.fsproj" />
+</Solution>

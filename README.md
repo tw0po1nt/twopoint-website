@@ -74,7 +74,7 @@ Use one of these two paths. Each path gives the site at [http://localhost:4321](
 
 Use this path to change the site. The dev server renders each page in memory, so it needs no build first.
 
-Start a SageFs session in `frontend/Dev/`. The init script starts the dev server and the widget watch. A save of a pulled post, a style, or a widget reloads the page.
+Start a SageFs solution session over `frontend/Site.slnx`, with `frontend/` as the working directory. The init script `frontend/.SageFs/init.fsx` starts the dev server and the widget watch. A save of a pulled post, a style, or a widget reloads the page. At each save, SageFs runs each test in `Site.slnx` that calls the changed code.
 
 On the first start, the page shows an error until the widget watch writes `frontend/Widgets/dist/`. Then the page reloads.
 
