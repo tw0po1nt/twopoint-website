@@ -550,7 +550,7 @@ let private deployChanged (slug: string) (msg: Deploy.Msg) (document: Document) 
     | Deploy.WaitToPoll chain -> WaitToPollDeploy(slug, chain)
     | Deploy.Rebuild -> RetryDeploy slug)
 
-let private savedAvailability (save: SaveState) =
+let private requireSaved (save: SaveState) =
   match save with
   | Stale -> Unavailable "Another tab saved newer text. Reload the page."
   | Unsaved
@@ -559,9 +559,9 @@ let private savedAvailability (save: SaveState) =
   | Saved -> Available
 
 let private discardAvailability (document: Document) =
-  match document.State, savedAvailability document.Save with
+  match document.State, requireSaved document.Save with
   | Api.Draft, _ -> Unavailable "A draft has no pending edit."
-  | _, (Unavailable _ as unsaved) -> unsaved
+  | _, (Unavailable _ as notSaved) -> notSaved
   | _, Available when not document.PendingEdit -> Unavailable "The post has no pending edit."
   | _, Available when document.ETag.IsNone -> Unavailable "Reload the page, and then discard the changes."
   | _, Available -> Available
@@ -591,9 +591,9 @@ let private discardClosed (document: Document) =
     Loaded { document with Discard = Confirm.Closed }, None
 
 let private upcomingChangeAvailability (document: Document) =
-  match document.State, savedAvailability document.Save with
+  match document.State, requireSaved document.Save with
   | (Api.Draft | Api.Published), _ -> Unavailable "Only an upcoming post can move."
-  | _, (Unavailable _ as unsaved) -> unsaved
+  | _, (Unavailable _ as notSaved) -> notSaved
   | _, Available when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, and then try again."
   | _, Available -> Available
 
@@ -711,8 +711,8 @@ let deleteStep (document: Document) =
     if typed = document.Slug then ReadyToDelete else WaitingForSlug
 
 let private deleteAvailability (document: Document) =
-  match savedAvailability document.Save with
-  | Unavailable _ as unsaved -> unsaved
+  match requireSaved document.Save with
+  | Unavailable _ as notSaved -> notSaved
   | Available when document.ETag.IsNone && (document.State = Api.Draft || document.PendingEdit) ->
     Unavailable "Reload the page, and then delete the post."
   | Available -> Available
@@ -762,9 +762,9 @@ let private deleteClosed (document: Document) =
   | ReadyToDelete -> Loaded { document with Delete = Typed.Closed; DeleteDraft = Confirm.Closed }, None
 
 let private revisionsAvailability (document: Document) =
-  match document.State, savedAvailability document.Save with
+  match document.State, requireSaved document.Save with
   | Api.Draft, _ -> Unavailable "Revisions are available after the next publish."
-  | _, (Unavailable _ as unsaved) -> unsaved
+  | _, (Unavailable _ as notSaved) -> notSaved
   | _, Available when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, and then restore a revision."
   | _, Available -> Available
 
