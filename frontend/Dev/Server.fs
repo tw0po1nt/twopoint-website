@@ -83,13 +83,4 @@ let start () =
 
   let url = (Stage.config stage).SiteUrl.GetLeftPart UriPartial.Authority
 
-  task {
-    match! Listen.start (TimeSpan.FromSeconds 30.0) url routes with
-    | Ok app ->
-      app.Lifetime.ApplicationStopping.Register(fun () -> watch.Dispose()) |> ignore
-      return Some app
-    | Error message ->
-      watch.Dispose()
-      eprintfn "dev: the server did not start on %s: %s" url message
-      return None
-  }
+  Listen.serve "dev" url routes watch

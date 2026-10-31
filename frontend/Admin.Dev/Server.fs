@@ -62,13 +62,10 @@ let start () =
   let url = origin ()
 
   task {
-    match! Listen.start (TimeSpan.FromSeconds 30.0) url routes with
-    | Ok app ->
-      app.Lifetime.ApplicationStopping.Register(fun () -> watch.Dispose()) |> ignore
+    let! result = Listen.serve "admin dev" url routes watch
+
+    if Result.isOk result then
       printfn "admin dev: serves %s on %s" dist url
-      return Some app
-    | Error message ->
-      watch.Dispose()
-      eprintfn "admin dev: the server did not start on %s: %s" url message
-      return None
+
+    return result
   }
