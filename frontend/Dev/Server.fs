@@ -56,7 +56,6 @@ let startWidgetWatch () =
     eprintfn "  Run 'npm run watch' in frontend/Widgets, or put npm and node on the PATH of the SageFs daemon."
     None
 
-/// SageFs adds its reload script only to an app that `RunAsync` or `Run` starts.
 let start () =
   let root = findRoot ()
 
@@ -78,9 +77,10 @@ let start () =
   load ()
   let watch = Watch.folders (TimeSpan.FromMilliseconds 200.0) (watchedFolders root) load
 
-  let app = WebApplication.CreateSlimBuilder().Build()
-  app.MapGet(Reload.path, RequestDelegate(Reload.events reloads)) |> ignore
-  app.MapGet("/{**path}", RequestDelegate(serve (fun () -> site.Value))) |> ignore
-  app.Lifetime.ApplicationStopping.Register(fun () -> watch.Dispose()) |> ignore
-  app.RunAsync((Stage.config stage).SiteUrl.GetLeftPart UriPartial.Authority) |> ignore
-  app
+  let routes (app: WebApplication) =
+    app.MapGet(Reload.path, RequestDelegate(Reload.events reloads)) |> ignore
+    app.MapGet("/{**path}", RequestDelegate(serve (fun () -> site.Value))) |> ignore
+
+  let url = (Stage.config stage).SiteUrl.GetLeftPart UriPartial.Authority
+
+  Listen.serve "dev" url routes watch
