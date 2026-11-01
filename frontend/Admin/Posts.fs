@@ -103,11 +103,12 @@ let emptyText (filter: PostFilter) =
   | PostFilter.PendingEdits -> "No post has a pending edit."
   | PostFilter.DeliveriesToStart -> "No post waits for a delivery."
 
-/// The name of a post on the page of its comments. A list with no post of the slug gives the slug.
+/// The name of a post on the page of its comments.
 type PostName =
   | NameWaiting
   | Name of string
 
+/// The slug is the name when the list has no post of the slug or does not load.
 let postName (slug: string) (model: Model) =
   match model.Posts with
   | Waiting -> NameWaiting

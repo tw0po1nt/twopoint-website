@@ -29,7 +29,7 @@ type ButtonKind =
   | Primary
   | Accent
   | Ghost
-  /// A ghost button with the danger color for its text, for a Delete that opens a confirm dialog.
+  /// For a Delete that opens a confirm dialog.
   | GhostDanger
   | Danger
 
