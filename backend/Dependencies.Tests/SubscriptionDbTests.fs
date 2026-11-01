@@ -33,7 +33,10 @@ let tests =
       match DbSubscription.FromEntity (entity false None) with
       | Ok subscription -> failtestf "Expected an error, got %A" subscription
       | Error errors ->
-        Expect.exists errors (fun error -> error.Contains "CanceledDate") "Expected an error that names CanceledDate"
+        Expect.contains
+          errors
+          "DbSubscription.CanceledDate is required, but was missing from TableEntity with PartitionKey: '2f1c4ed9-6a5b-4f0e-9a43-3d2b8c1e7a10'"
+          "Expected an error that names CanceledDate and the PartitionKey"
     }
 
     test "an inactive row keeps its canceled date, and its timestamp has no effect" {
