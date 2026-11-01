@@ -221,7 +221,7 @@ let tests =
       Expect.isTrue (document' model).PendingEdit "A pending edit"
 
       let model, _ = send (Editor.BodyChanged "More.\n") model
-      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let model, effect = send Editor.SaveRequested model
 
       match effect with
       | Some(Shell.Send [ Shell.SavePost request ]) ->

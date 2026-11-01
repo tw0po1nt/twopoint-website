@@ -311,9 +311,6 @@ let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispat
     |> Promise.start
   | Shell.Focus elementId -> EditorView.focus elementId
   | Shell.MoveToBodyLine line -> EditorView.moveToBodyLine line
-  | Shell.Autosave version ->
-    window.setTimeout ((fun () -> dispatch (Shell.Editor(Editor.AutosaveElapsed version))), Editor.autosaveDelay)
-    |> ignore
   | Shell.WaitToPollDeploy(slug, chain) ->
     window.setTimeout (
       (fun () -> dispatch (Shell.Editor(Editor.DeployMsg(slug, Deploy.PollElapsed chain)))),

@@ -79,7 +79,7 @@ let statusTests =
     test "the status follows the save of a pending edit" {
       let model, _ = send (Editor.BodyChanged "More.\n") (opened pendingPost)
       Expect.equal (Editor.statusText (document' model)) "Published Feb 4, 2026 · changes not live · unsaved changes" "Unsaved"
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       Expect.equal (Editor.statusText (document' model)) "Published Feb 4, 2026 · changes not live · saving…" "Saving"
     }
 

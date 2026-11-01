@@ -65,17 +65,18 @@ test('the editor has no line numbers, no gutter, and the slots of the top bar', 
   assert.equal(document.querySelector('.editor-bar a').textContent.trim(), 'Posts');
 });
 
-test('a save happens 2 seconds after the last input and not before', async () => {
+test('a pause in the typing saves nothing, and the post stays unsaved until the author saves', async () => {
   type('One. ');
   assert.equal(status(), 'Draft · unsaved changes');
   assert.ok(document.querySelector('.editor-bar.is-typing'), 'The top bar fades');
 
-  await wait(1500);
   type('Two. ');
-  await wait(1500);
-  assert.equal(saves.length, 0, 'The timer starts again at each input');
+  await wait(2500);
+  assert.equal(saves.length, 0, 'No save after the typing stops');
+  assert.equal(status(), 'Draft · unsaved changes');
 
-  await wait(700);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true, cancelable: true, bubbles: true }));
+  await settle();
   assert.equal(saves.length, 1);
   assert.equal(saves[0].ifMatch, '"v1"');
   assert.deepEqual(saves[0].body, {
