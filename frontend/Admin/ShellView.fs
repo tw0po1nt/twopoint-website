@@ -878,9 +878,11 @@ let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   let stats = post.CommentStats
   let date = post.PublishDate |> Option.map Dates.dateText |> Option.defaultValue "No publish date"
 
-  article (id = post.Slug, class' = "card card-body queue-row") {
+  article (id = post.Slug, class' = "card card-body queue-row is-link") {
     div (class' = "row-top") {
-      p (class' = "strong") { post.Title }
+      p (class' = "strong") {
+        a (class' = "row-link", href = Route.path (Post post.Slug), onClick = follow route (Post post.Slug)) { post.Title }
+      }
 
       div () {
         Parts.badge (stateTone post.State) (Posts.stateText post.State)

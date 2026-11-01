@@ -305,6 +305,40 @@ h2 + .stat-grid {
   margin-inline-start: var(--s-2);
 }
 
+/* The row link covers the full card. Another link of the card stays above it. */
+.queue-row.is-link {
+  position: relative;
+}
+
+.queue-row.is-link:hover {
+  border-color: var(--border-strong);
+}
+
+.row-link {
+  text-decoration: none;
+}
+
+.row-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+}
+
+.row-link:focus-visible {
+  outline: none;
+}
+
+.row-link:focus-visible::after {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.queue-row.is-link a:not(.row-link) {
+  position: relative;
+  z-index: 1;
+}
+
 .queue-row .actions {
   display: flex;
   flex-wrap: wrap;
