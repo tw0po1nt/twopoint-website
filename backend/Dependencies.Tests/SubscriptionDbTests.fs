@@ -29,11 +29,17 @@ let private canceledDate (entity : TableEntity) =
 [<Tests>]
 let tests =
   testList "DbSubscription.FromEntity" [
-    test "an inactive row with no canceled date gets the date of its last write" {
-      Expect.equal (canceledDate (entity false None)) (Some written.UtcDateTime) "Expected the timestamp"
+    test "an inactive row with no canceled date is an error" {
+      match DbSubscription.FromEntity (entity false None) with
+      | Ok subscription -> failtestf "Expected an error, got %A" subscription
+      | Error errors ->
+        Expect.contains
+          errors
+          "DbSubscription.CanceledDate is required, but was missing from TableEntity with PartitionKey: '2f1c4ed9-6a5b-4f0e-9a43-3d2b8c1e7a10'"
+          "Expected an error that names CanceledDate and the PartitionKey"
     }
 
-    test "an inactive row keeps its canceled date" {
+    test "an inactive row keeps its canceled date, and its timestamp has no effect" {
       Expect.equal (canceledDate (entity false (Some stored))) (Some stored) "Expected the stored date"
     }
 
@@ -48,10 +54,7 @@ let tests =
 
       Expect.equal (status (entity true None)) Active "Active"
       Expect.equal (status (entity false (Some stored))) (Canceled stored) "Canceled"
-      Expect.equal
-        (status (entity false None))
-        (Canceled written.UtcDateTime)
-        "Canceled at the timestamp of the row"
+      Expect.isError (DbSubscription.FromEntity (entity false None)) "Canceled with no date"
     }
 
     test "an active row has no canceled date" {

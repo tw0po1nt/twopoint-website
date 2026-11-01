@@ -48,18 +48,14 @@ type internal DbSubscription =
     let! emailAddress = "EmailAddress" |> entity.RequireString entityName
     let name = "Name" |> entity.TryGetString
     let isActive = "IsActive" |> entity.TryGetBoolean |> Option.defaultValue false
-    let! storedCanceledDate =
-      match "CanceledDate" |> entity.TryGetString with
-      | Some date -> DateTime.TryValidateUtc(date, "CanceledDate") |> Validation.map Some
-      | None -> Validation.ok None
-
-    // A row canceled before the field existed has no stored date. The cancellation was its last write.
-    let canceledDate =
-      match isActive, storedCanceledDate with
-      | true, _ -> None
-      | false, Some date -> Some date
-      | false, None ->
-        entity.Timestamp |> Option.ofNullable |> Option.map _.UtcDateTime |> Option.orElse (Some createdDate)
+    let! canceledDate =
+      match isActive with
+      | true -> Validation.ok None
+      | false ->
+        "CanceledDate"
+        |> entity.RequireString entityName
+        |> Validation.bind (fun date -> DateTime.TryValidateUtc(date, "CanceledDate"))
+        |> Validation.map Some
 
     return
       { SubscriptionId = entity.RowKey
