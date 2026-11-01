@@ -875,12 +875,15 @@ let private stateTone (state: Api.PostState) =
 [<SolidComponent>]
 let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   let route = Shell.Router >> dispatch
+  let editor = Post post.Slug
   let stats = post.CommentStats
   let date = post.PublishDate |> Option.map Dates.dateText |> Option.defaultValue "No publish date"
 
-  article (id = post.Slug, class' = "card card-body queue-row") {
+  article (id = post.Slug, class' = "card card-body queue-row is-link") {
     div (class' = "row-top") {
-      p (class' = "strong") { post.Title }
+      p (class' = "strong") {
+        a (class' = "row-link", href = Route.path editor, onClick = follow route editor) { post.Title }
+      }
 
       div () {
         Parts.badge (stateTone post.State) (Posts.stateText post.State)
