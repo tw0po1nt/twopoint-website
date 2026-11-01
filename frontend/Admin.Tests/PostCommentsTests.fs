@@ -47,9 +47,32 @@ let tests =
       let model, effect = start "/posts/first/comments"
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadPostComments "first" ]))
-        "The comments of the post"
+        (Some(Shell.Send [ Shell.LoadQueue; Shell.LoadPostComments "first"; Shell.LoadPosts ]))
+        "The comments and the posts"
       Expect.equal (page model).Comments PostComments.Waiting "The page waits"
+      Expect.equal (Posts.postName "first" model.Posts) Posts.NameWaiting "The post name waits"
+    }
+
+    test "the post name is the title from the post list, or the slug when the list has no title" {
+      let model, _ = start "/posts/first/comments"
+      let post: Api.Post =
+        { Slug = "first"
+          Title = "The first post"
+          State = Api.Published
+          PendingEdit = false
+          PublishDate = None
+          Deploy = Api.DeployState.Deployed
+          DeliveryToStart = false
+          CommentStats = { New = 0; Approved = 0; Rejected = 0 } }
+
+      let named, _ = Shell.update (Shell.Posts(Posts.Answered(Ok [ post ]))) model
+      Expect.equal (Posts.postName "first" named.Posts) (Posts.Name "The first post") "The title"
+
+      let failed, _ = Shell.update (Shell.Posts(Posts.Answered(Error(Api.Failed "No list")))) model
+      Expect.equal (Posts.postName "first" failed.Posts) (Posts.Name "first") "The slug after a failed load"
+
+      let other, _ = Shell.update (Shell.Posts(Posts.Answered(Ok [ { post with Slug = "second" } ]))) model
+      Expect.equal (Posts.postName "first" other.Posts) (Posts.Name "first") "The slug when the list has no post of the slug"
     }
 
     test "a link to the page of a post pushes its path and loads its comments" {
@@ -57,9 +80,9 @@ let tests =
       let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/posts/first/comments")) model
       Expect.equal
         effect
-        (Some(Shell.Navigate(Router.PushUrl "/posts/first/comments", [ Shell.LoadPostComments "first" ])))
-        "The URL and the comments"
-      Expect.equal (Router.title model.Router.Route) "Comments on first" "The title names the post"
+        (Some(Shell.Navigate(Router.PushUrl "/posts/first/comments", [ Shell.LoadPostComments "first"; Shell.LoadPosts ])))
+        "The URL, the comments, and the posts"
+      Expect.equal (Router.title model.Router.Route) "Comments" "The title"
       Expect.isTrue (Router.isCurrent (Posts PostFilter.All) model.Router.Route) "The posts are the current page in the navigation"
     }
 
@@ -67,7 +90,7 @@ let tests =
       let model = loaded ()
       let model, _ = Shell.update (Shell.Router(Router.UrlChanged "/comments")) model
       let model, effect = Shell.update (Shell.Router(Router.UrlChanged "/posts/first/comments")) model
-      Expect.equal effect (Some(Shell.Send [ Shell.LoadPostComments "first" ])) "The comments again"
+      Expect.equal effect (Some(Shell.Send [ Shell.LoadPostComments "first"; Shell.LoadPosts ])) "The comments again"
       Expect.equal (page model).Comments PostComments.Waiting "No old comments"
     }
 

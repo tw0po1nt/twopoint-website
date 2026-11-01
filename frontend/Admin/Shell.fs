@@ -136,7 +136,11 @@ let private enter (route: Route) (model: Model) =
         Editor = Some(Editor.init slug (model.Pages + 1))
         Pages = model.Pages + 1 },
     [ LoadPost slug ]
-  | Route.PostComments slug -> { left with PostComments = Some(PostComments.init slug) }, [ LoadPostComments slug ]
+  | Route.PostComments slug ->
+    { left with
+        PostComments = Some(PostComments.init slug)
+        Posts = Posts.reload model.Posts },
+    [ LoadPostComments slug; LoadPosts ]
   | Route.Commenters -> { left with Commenters = Commenters.reload model.Commenters }, [ LoadCommenters ]
   | Route.Commenter commenterId -> { left with Commenter = Some(Commenter.init commenterId) }, [ LoadCommenter commenterId ]
   | Route.Subscriptions _ ->

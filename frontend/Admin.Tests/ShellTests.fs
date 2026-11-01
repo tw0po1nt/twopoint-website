@@ -107,6 +107,20 @@ let tests =
       Expect.equal (Dashboard.audienceText counts) "+5 new, −6 canceled in the last 30 days" "The text"
     }
 
+    test "the audience text shows a sign only on a count that is more than zero" {
+      let counts =
+        { counts with
+            NewSubscriptions = 4
+            CanceledSubscriptions = 0 }
+
+      Expect.equal (Dashboard.audienceText counts) "+4 new, 0 canceled in the last 30 days" "No sign on zero canceled"
+
+      Expect.equal
+        (Dashboard.audienceText { counts with NewSubscriptions = 0 })
+        "0 new, 0 canceled in the last 30 days"
+        "No sign on zero new"
+    }
+
     test "a route with a filter in its query string opens the page with that filter" {
       let model, _ = Shell.init "/"
       let model, _ = Shell.update (Shell.Session(Session.Started true)) model

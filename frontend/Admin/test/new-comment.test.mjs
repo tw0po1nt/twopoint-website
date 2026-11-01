@@ -89,7 +89,7 @@ test('an open request for the comments of a post scrolls to the comment after th
   openTarget('/posts/first/comments#c-1');
   await settle();
 
-  assert.equal(heading(), 'Comments on first');
+  assert.equal(heading(), 'Comments');
   assert.ok(document.getElementById('c-1'));
   assert.deepEqual(scrolled, ['c-1']);
 });

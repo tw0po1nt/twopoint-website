@@ -34,5 +34,10 @@ let toDo (queue: int option) (counts: Api.DashboardCounts) =
       Count = Some counts.DeliveriesToStart
       Route = Route.Posts PostFilter.DeliveriesToStart } ]
 
+let private signed (sign: string) (count: int) =
+  if count > 0 then $"{sign}{count}" else string count
+
 let audienceText (counts: Api.DashboardCounts) =
-  $"+{counts.NewSubscriptions} new, −{counts.CanceledSubscriptions} canceled in the last 30 days"
+  let made = signed "+" counts.NewSubscriptions
+  let canceled = signed "−" counts.CanceledSubscriptions
+  $"{made} new, {canceled} canceled in the last 30 days"

@@ -92,6 +92,24 @@ h3 {
   white-space: nowrap;
 }
 
+.nowrap {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* A row of text and badges. The row wraps, and each item has a gap. */
+.badge-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.badge-line > .ellipsis {
+  min-width: 0;
+}
+
 .icon {
   width: 16px;
   height: 16px;
@@ -160,6 +178,14 @@ h3 {
 
 .btn.ghost:hover {
   background: var(--bg-hover);
+}
+
+.btn.ghost.bad {
+  color: var(--bad);
+}
+
+.btn.ghost.bad:hover {
+  background: var(--bad-soft);
 }
 
 .btn.danger {

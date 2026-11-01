@@ -61,6 +61,11 @@ test('the page lists each series with its posts in publish date order, and the d
 
   const posts = [...document.querySelectorAll('#series-fable .series-post a')].map((item) => item.textContent.trim());
   assert.deepEqual(posts, ['First', 'Second', 'A draft']);
+
+  const lines = [...document.querySelectorAll('#series-fable .series-post .badge-line')].map((line) =>
+    [...line.children].map((part) => part.textContent.trim()),
+  );
+  assert.deepEqual(lines, [['2026-01-02', 'Published'], ['2026-12-01', 'Upcoming'], ['Draft']]);
 });
 
 test('the slug of a series with a published post is locked, and the series cannot be deleted', async () => {

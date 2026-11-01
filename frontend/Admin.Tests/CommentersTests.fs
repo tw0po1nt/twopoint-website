@@ -90,8 +90,8 @@ let private listTests =
       Expect.equal (Commenters.emptyText(Commenters.Only Api.Banned)) "The blog has no banned commenters." "Banned"
     }
 
-    test "the first date is the day of the date" {
-      Expect.equal (Dates.dateText ada.CreatedDate) "2026-01-02" "The day"
+    test "the verified date is the day of the date" {
+      Expect.equal (Commenters.verifiedText ada) "Verified: 2026-01-02" "The day"
     }
 
     test "commenters that did not load show the reason" {

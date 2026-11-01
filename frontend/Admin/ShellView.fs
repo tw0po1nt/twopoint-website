@@ -484,7 +484,7 @@ let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (qu
 
       h2 () { "Audience" }
 
-      div (class' = "stat-grid") {
+      div (class' = "stat-grid audience") {
         countLink
           route
           (Subscriptions SubscriptionFilter.Active)
@@ -551,8 +551,8 @@ let private rebuild (dispatch: Shell.Msg -> unit) (model: Rebuild.Model) (siteDe
   div (class' = "card card-body rebuild") {
     div (class' = "rebuild-row") {
       div (class' = "grow") {
-        h3 () {
-          "Site "
+        h3 (class' = "badge-line") {
+          "Site"
           siteBadge siteDeploy
         }
 
@@ -583,9 +583,8 @@ let private commenterHead (dispatch: Shell.Msg -> unit) (commenter: Api.Commente
     Parts.avatar commenter.Name
 
     div (class' = "grow") {
-      p (class' = "strong") {
+      p (class' = "strong badge-line") {
         routeLink route (Commenter commenter.Id) commenter.Name
-        " "
         Parts.badge (statusTone commenter.Status) (Queue.statusText commenter.Status)
       }
 
@@ -622,7 +621,7 @@ let private actionButton
     Fragment() {
       Parts
         .Button(
-          kind = Parts.Ghost,
+          kind = Parts.GhostDanger,
           size = Parts.Small,
           disabled = sending,
           onClick = fun _ -> dispatch (Shell.Opened(Shell.DeleteDialog commentId))
@@ -738,7 +737,7 @@ let private postComments (dispatch: Shell.Msg -> unit) (model: PostComments.Mode
 let private commenterRow (dispatch: Shell.Msg -> unit) (commenter: Api.Commenter) =
   article (id = commenter.Id, class' = "card card-body queue-row") {
     commenterHead dispatch commenter
-    p (class' = "muted small") { $"First date: {Dates.dateText commenter.CreatedDate}" }
+    p (class' = "muted small") { Commenters.verifiedText commenter }
   }
 
 [<SolidComponent>]
@@ -789,7 +788,7 @@ let private commenterAction (dispatch: Shell.Msg -> unit) (sending: bool) (actio
   let kind =
     match action with
     | Commenter.Trust -> Parts.Accent
-    | Commenter.Delete -> Parts.Ghost
+    | Commenter.Delete -> Parts.GhostDanger
     | Commenter.Untrust
     | Commenter.Ban
     | Commenter.Unban -> Parts.Secondary
@@ -842,7 +841,7 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
             dd () { commenter.Email }
             dt () { "Status" }
             dd () { Parts.badge (statusTone commenter.Status) (Queue.statusText commenter.Status) }
-            dt () { "First date" }
+            dt () { "Verified" }
             dd () { Dates.dateText commenter.CreatedDate }
           }
 
@@ -876,31 +875,27 @@ let private stateTone (state: Api.PostState) =
 let private postRow (dispatch: Shell.Msg -> unit) (post: Api.Post) =
   let route = Shell.Router >> dispatch
   let editor = Post post.Slug
-  let stats = post.CommentStats
   let date = post.PublishDate |> Option.map Dates.dateText |> Option.defaultValue "No publish date"
 
-  article (id = post.Slug, class' = "card card-body queue-row is-link") {
-    div (class' = "row-top") {
-      p (class' = "strong") {
-        a (class' = "row-link", href = Route.path editor, onClick = follow route editor) { post.Title }
-      }
-
-      div () {
-        Parts.badge (stateTone post.State) (Posts.stateText post.State)
-
-        Show(when' = post.PendingEdit) { Parts.badge Parts.Warn "Pending edit" }
-
-        Show(when' = Posts.showsDeploy post) { Parts.badge (deployTone post.Deploy) (Deploy.badgeText post.Deploy) }
-      }
+  article (id = post.Slug, class' = "card card-body queue-row post-card is-link") {
+    p (class' = "strong") {
+      a (class' = "row-link", href = Route.path editor, onClick = follow route editor) { post.Title }
     }
 
+    div (class' = "badge-line") {
+      Parts.badge (stateTone post.State) (Posts.stateText post.State)
 
-    p (class' = "muted small") { $"{post.Slug} · {date}" }
+      Show(when' = post.PendingEdit) { Parts.badge Parts.Warn "Pending edit" }
 
-    p (class' = "muted small") {
-      $"{stats.New} new, {stats.Approved} approved, {stats.Rejected} rejected comments · "
-      routeLink route (PostComments post.Slug) "Comments"
+      Show(when' = Posts.showsDeploy post) { Parts.badge (deployTone post.Deploy) (Deploy.badgeText post.Deploy) }
     }
+
+    p (class' = "muted small post-meta") {
+      span (class' = "ellipsis") { post.Slug }
+      span (class' = "nowrap") { $"· {date}" }
+    }
+
+    p (class' = "muted small") { routeLink route (PostComments post.Slug) (Posts.commentsText post.CommentStats) }
   }
 
 [<SolidComponent>]
@@ -998,25 +993,22 @@ let private subscriptionsToolbar (dispatch: Shell.Msg -> unit) (model: unit -> S
 
 [<SolidComponent>]
 let private subscriptionRow (dispatch: Shell.Msg -> unit) (subscription: Api.Subscription) =
-  article (id = subscription.Id, class' = "card card-body queue-row subscription-row") {
-    div (class' = "row-top") {
-      div (class' = "grow") {
-        p (class' = "strong ellipsis") {
+  article (id = subscription.Id, class' = "card card-body queue-row subscription-row is-link") {
+    div () {
+      p (class' = "strong badge-line") {
+        button (
+          type' = "button",
+          class' = "row-link ellipsis",
+          ariaHasPopup = "dialog",
+          onClick = fun _ -> dispatch (Shell.Subscriptions(Subscriptions.Opened subscription.Id))
+        ) {
           subscription.Email
-          " "
-          Parts.badge (subscriptionTone subscription) (Subscriptions.statusText subscription)
         }
 
-        p (class' = "muted small ellipsis") { subscription.Name |> Option.defaultValue "No name" }
+        Parts.badge (subscriptionTone subscription) (Subscriptions.statusText subscription)
       }
 
-      Parts
-        .Button(
-          kind = Parts.Ghost,
-          size = Parts.Small,
-          onClick = fun _ -> dispatch (Shell.Subscriptions(Subscriptions.Opened subscription.Id))
-        )
-        .Has(Fragment() { "Details" })
+      p (class' = "muted small ellipsis") { subscription.Name |> Option.defaultValue "No name" }
     }
 
     p (class' = "muted small") { $"Subscribed: {Dates.dateText subscription.CreatedDate}" }
@@ -1051,10 +1043,12 @@ let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions
 [<SolidComponent>]
 let private deliveryRow (delivery: Api.Delivery) =
   li (class' = "delivery") {
-    Parts.badge Parts.Plain (Subscriptions.deliveryText delivery.Type)
-    " "
     a (href = $"{site}/posts/{delivery.PostSlug}/", target = "_blank", rel = "noopener") { delivery.PostTitle }
-    span (class' = "muted small") { $" on {Dates.dateText delivery.CreatedDate}" }
+
+    span (class' = "badge-line") {
+      Parts.badge Parts.Plain (Subscriptions.deliveryText delivery.Type)
+      span (class' = "muted small") { Dates.dateText delivery.CreatedDate }
+    }
   }
 
 [<SolidComponent>]
@@ -1083,7 +1077,7 @@ let private subscriptionAction (dispatch: Shell.Msg -> unit) (subscriptionId: st
   let kind =
     match action with
     | Subscriptions.Cancel -> Parts.Secondary
-    | Subscriptions.Delete -> Parts.Ghost
+    | Subscriptions.Delete -> Parts.GhostDanger
 
   Parts
     .Button(kind = kind, size = Parts.Small, disabled = sending, onClick = fun _ -> choose ())
@@ -1150,8 +1144,14 @@ let private seriesPostTone (post: Api.SeriesPost) =
 let private seriesPostRow (dispatch: Shell.Msg -> unit) (post: Api.SeriesPost) =
   li (class' = "series-post") {
     routeLink (Shell.Router >> dispatch) (Post post.Slug) post.Title
-    " "
-    Parts.badge (seriesPostTone post) (Series.postText post)
+
+    span (class' = "badge-line") {
+      For(each = Array.ofList (Option.toList post.PublishDate)) {
+        yield fun date _ -> span (class' = "muted small") { Dates.dateText date }
+      }
+
+      Parts.badge (seriesPostTone post) (Series.stateText post)
+    }
   }
 
 [<SolidComponent>]
@@ -1204,8 +1204,8 @@ let private seriesList (dispatch: Shell.Msg -> unit) (model: Series.Model) =
 let private seriesPage (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
   Fragment() {
     div (class' = "filter-bar toolbar") {
-      span (class' = "grow") {
-        "Site "
+      span (class' = "grow badge-line") {
+        "Site"
         siteBadge model.SiteDeploy
       }
 
@@ -1268,7 +1268,7 @@ let private seriesSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
           Show(when' = (form () |> Option.bind _.Original).IsSome) {
             Parts
               .Button(
-                kind = Parts.Ghost,
+                kind = Parts.GhostDanger,
                 disabled = not (form () |> Option.exists Series.canDelete),
                 onClick = fun _ -> dispatch (Shell.Opened Shell.DeleteSeriesDialog)
               )
@@ -1376,6 +1376,15 @@ let private notificationsSection (dispatch: Shell.Msg -> unit) (model: Notificat
 
     deviceList dispatch model
   }
+
+[<SolidComponent>]
+let private pageSubtitle (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
+  match model.Router.Route with
+  | PostComments slug ->
+    match Posts.postName slug model.Posts with
+    | Posts.NameWaiting -> Fragment() { div (class' = "page-sub", ariaBusy = true) { Parts.skeleton "30%" } }
+    | Posts.Name name -> Fragment() { p (class' = "muted page-sub") { routeLink (Shell.Router >> dispatch) (Post slug) name } }
+  | _ -> Fragment() { "" }
 
 [<SolidComponent>]
 let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
@@ -1515,8 +1524,11 @@ let view (signIn: SignIn) (push: Push) =
 
     if loaded then model.Router.Fragment else ""
 
+  // The memo keeps a later change of the model, for example the post list, from a second scroll.
+  let fragment = createMemo fragmentToShow
+
   createEffect (fun () ->
-    match fragmentToShow () with
+    match fragment () with
     | "" -> ()
     | id -> scrollToId id)
 
@@ -1620,7 +1632,10 @@ let view (signIn: SignIn) (push: Push) =
       Show(when' = showsNavigation ()) {
         main (class' = "screen") {
           Banner.view dispatch (model ()).Session
-          div (class' = "page-head") { h1 () { Router.title (current ()) } }
+          div (class' = "page-head") {
+            h1 () { Router.title (current ()) }
+            pageSubtitle dispatch (model ())
+          }
 
           // The search input stays outside the page, so a typed letter does not replace the input.
           Show(when' = Route.isSubscriptions (current ())) { subscriptionsToolbar dispatch model }

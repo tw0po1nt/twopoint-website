@@ -176,11 +176,6 @@ let stateText (post: Api.SeriesPost) =
   | Api.SeriesPostState.Draft -> "Draft"
   | Api.SeriesPostState.PendingEdit -> "Pending edit"
 
-let postText (post: Api.SeriesPost) =
-  match post.PublishDate with
-  | Some date -> $"{Dates.dateText date} · {stateText post}"
-  | None -> stateText post
-
 let noticeText (notice: Notice) =
   match notice with
   | NoNotice -> None
