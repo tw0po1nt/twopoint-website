@@ -19,10 +19,8 @@ type Back =
   | BrowserAnimated
 
 type Move =
-  /// The light of the editor spreads from the tap, or goes back into the post.
   | Lamp of Direction
   | CrossFade
-  /// With no View Transitions, the old screen goes at once, and only the new screen animates.
   | NewScreenOnly of Direction
   | NoMove
 

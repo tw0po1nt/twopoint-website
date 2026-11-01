@@ -3,8 +3,7 @@ module TwoPoint.Site.Widgets.Mvu
 
 open Oxpecker.Solid
 
-/// `around` gets the model before and after a message, and the commit of the new model. It can call the
-/// commit later. If the model changed in the meantime, the commit applies the message to the new model.
+/// A commit after a change to the model applies the message again to the newest model.
 let runAround
   (around: 'Model -> 'Model -> (unit -> unit) -> unit)
   (init: 'Model * 'Effect option)

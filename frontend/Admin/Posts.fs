@@ -37,9 +37,14 @@ let init =
     Notice = []
     Generation = 0 }
 
+/// The rows stay until the answer, because a back from the editor aims its light at the row of the post.
 let reload (model: Model) =
   { model with
-      Posts = Waiting
+      Posts =
+        match model.Posts with
+        | Loaded posts -> Loaded posts
+        | Waiting
+        | NotLoaded _ -> Waiting
       Generation = model.Generation + 1 }
 
 let filters =

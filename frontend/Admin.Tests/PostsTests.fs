@@ -74,6 +74,14 @@ let tests =
       let model, effect = Shell.update (Shell.Router(Router.UrlChanged "/posts?filter=pending-edits")) model
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPosts ])) "The posts again"
       Expect.equal model.Router.Route (Posts PostFilter.PendingEdits) "The pending edits"
+      Expect.equal (shown model) [ "edited" ] "The rows of the last load stay until the answer"
+    }
+
+    test "a list that did not load waits again on a back" {
+      let model, _ = start "/posts"
+      let model, _ = Shell.update (Shell.Posts(Posts.Answered(Error Api.Unanswered))) model
+      let model, _ = follow "/comments" model
+      let model, _ = follow "/posts" model
       Expect.equal model.Posts.Posts Posts.Waiting "The list waits"
     }
 

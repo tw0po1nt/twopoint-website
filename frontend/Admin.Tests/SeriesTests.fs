@@ -67,6 +67,13 @@ let tests =
         "The API calls"
     }
 
+    test "a back to the series page keeps the rows of the last load until the answer" {
+      let model, _ = Shell.update (Shell.Router(Router.LinkFollowed "/posts/first")) (listed ())
+      let model, effect = Shell.update (Shell.Router(Router.LinkFollowed "/series")) model
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/series", [ Shell.LoadSeries; Shell.LoadSiteDeploy ]))) "The series again"
+      Expect.equal model.Series.Records (Series.Loaded [ fable; drafts; empty ]) "The rows stay"
+    }
+
     test "the posts of a series are in publish date order, an upcoming post too, and the drafts after them" {
       Expect.equal
         (Series.orderedPosts fable |> List.map _.Slug)

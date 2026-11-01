@@ -1,5 +1,5 @@
 /* The move between the admin and the editor. The light of the editor spreads from the tap, and goes back into the
-   post. The script sets data-transition on <html>, and --lamp-x, --lamp-y, and --lamp-end (the farthest corner). */
+   post. The script sets data-transition on <html>, and --lamp-x, --lamp-y, --lamp-edge, and --lamp-end. */
 
 @property --lamp-r {
   syntax: '<length>';
@@ -22,8 +22,8 @@
 :root[data-transition='lamp-in']::view-transition-new(root),
 :root[data-transition='lamp-out']::view-transition-old(root),
 :root[data-transition='alone-in'] .shell {
-  -webkit-mask-image: radial-gradient(circle at var(--lamp-x) var(--lamp-y), #000 calc(var(--lamp-r) - 180px), transparent var(--lamp-r));
-  mask-image: radial-gradient(circle at var(--lamp-x) var(--lamp-y), #000 calc(var(--lamp-r) - 180px), transparent var(--lamp-r));
+  -webkit-mask-image: radial-gradient(circle at var(--lamp-x) var(--lamp-y), #000 calc(var(--lamp-r) - var(--lamp-edge)), transparent var(--lamp-r));
+  mask-image: radial-gradient(circle at var(--lamp-x) var(--lamp-y), #000 calc(var(--lamp-r) - var(--lamp-edge)), transparent var(--lamp-r));
 }
 
 .lamp-glow {

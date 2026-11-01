@@ -37,7 +37,6 @@ let support () = if hasViewTransitions () then Transition.ViewTransitions else T
 
 let back (event: Event) = if animatedByBrowser event then Transition.BrowserAnimated else Transition.AppAnimates
 
-/// Gives the point of the last tap or click, for 1.5 s after it.
 let taps () =
   let last = ref None
 
@@ -48,6 +47,8 @@ let taps () =
       last.Value <- Some({ X = event.clientX; Y = event.clientY }, now ())),
     true
   )
+
+  document.addEventListener ("keydown", (fun _ -> last.Value <- None), true)
 
   fun () -> last.Value |> Option.filter (fun (_, time) -> now () - time < 1500.) |> Option.map fst
 
@@ -79,11 +80,20 @@ let private origin (tap: unit -> Point option) =
   let focused = document.activeElement |> Option.ofObj |> Option.filter (fun element -> element <> document.body)
   tap () |> Option.orElse (focused |> Option.bind centerOf) |> Option.defaultWith screenCenter
 
+let private softEdge = 180.
+
+/// Longer than the 680 ms light of the CSS, so the cleanup comes after it.
+let private afterLampOn = 900
+
+/// Longer than the 200 ms fade-in of the CSS, so the cleanup comes after it.
+let private afterFadeIn = 400
+
 let private aim (point: Point) =
   let farthest = sqrt ((max point.X (window.innerWidth - point.X)) ** 2. + (max point.Y (window.innerHeight - point.Y)) ** 2.)
   setStyle (root ()) "--lamp-x" $"{point.X}px"
   setStyle (root ()) "--lamp-y" $"{point.Y}px"
-  setStyle (root ()) "--lamp-end" $"{ceil (farthest + 180.)}px"
+  setStyle (root ()) "--lamp-edge" $"{softEdge}px"
+  setStyle (root ()) "--lamp-end" $"{ceil (farthest + softEdge)}px"
 
 let private name (transitionName: string) (element: Element option) =
   element |> Option.iter (fun element -> setStyle element "view-transition-name" transitionName)
@@ -117,7 +127,6 @@ let private start (kind: string) =
   root().setAttribute ("data-transition", kind)
   fun () -> if generation = mine then clear ()
 
-/// Runs the commit of a new route inside the move.
 let run (tap: unit -> Point option) (move: Transition.Move) (commit: unit -> unit) =
   match move with
   | Transition.NoMove -> commit ()
@@ -150,8 +159,8 @@ let run (tap: unit -> Point option) (move: Transition.Move) (commit: unit -> uni
     aim (origin tap)
     addGlow ()
     commit ()
-    window.setTimeout (finish, 900) |> ignore
+    window.setTimeout (finish, afterLampOn) |> ignore
   | Transition.NewScreenOnly(Transition.OutOfEditor _) ->
     let finish = start "alone-out"
     commit ()
-    window.setTimeout (finish, 400) |> ignore
+    window.setTimeout (finish, afterFadeIn) |> ignore
