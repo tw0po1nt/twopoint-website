@@ -101,22 +101,38 @@ let tests =
       Expect.equal model.Editor (Some(Editor.NotLoaded "Post 'missing' not found")) "The reason"
     }
 
-    test "a typed letter marks the post unsaved and starts the autosave timer" {
+    test "a typed letter marks the post unsaved and sends no save" {
       let model, effect = send (Editor.BodyChanged "Some text.\nMore") (opened draft)
-      Expect.equal effect (Some(Shell.Autosave 1)) "The timer for version 1"
+      Expect.isNone effect "No save"
       Expect.equal (document' model).Fields.Body "Some text.\nMore" "The text"
       Expect.equal (status model) "Draft · unsaved changes" "The status"
-      Expect.equal Editor.autosaveDelay 2000 "Two seconds"
     }
 
-    test "the timer of an older input saves nothing, and the timer of the last input saves" {
-      let model, _ = send (Editor.TitleChanged "A") (opened draft)
-      let model, _ = send (Editor.TitleChanged "AB") model
-      let model, early = send (Editor.AutosaveElapsed 1) model
-      Expect.isNone early "The first timer is too early"
+    test "the browser asks before it closes the page until a save answer comes" {
+      let model = opened draft
+      Expect.isFalse (Editor.isAtRisk model.Editor.Value) "Saved"
+
+      let model, _ = send (Editor.BodyChanged "x") model
+      Expect.isTrue (Editor.isAtRisk model.Editor.Value) "Unsaved"
+
+      let model, _ = send Editor.SaveRequested model
+      Expect.isTrue (Editor.isAtRisk model.Editor.Value) "Saving"
+
+      let failed, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Unanswered)) model
+      Expect.isTrue (Editor.isAtRisk failed.Editor.Value) "Save failed"
+
+      let saved, _ = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+      Expect.isFalse (Editor.isAtRisk saved.Editor.Value) "Saved again"
+    }
+
+    test "typed letters stay unsaved until the author saves, and the save sends the last input" {
+      let model, first = send (Editor.TitleChanged "A") (opened draft)
+      let model, second = send (Editor.TitleChanged "AB") model
+      Expect.isNone first "No save"
+      Expect.isNone second "No save"
       Expect.equal (status model) "Draft · unsaved changes" "Still unsaved"
 
-      let model, effect = send (Editor.AutosaveElapsed 2) model
+      let model, effect = send Editor.SaveRequested model
 
       Expect.equal
         effect
@@ -128,17 +144,17 @@ let tests =
 
     test "a save answer shows saved and keeps the new ETag for the next save" {
       let model, _ = send (Editor.ExcerptChanged "New excerpt") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
       Expect.isNone effect "Nothing more to save"
       Expect.equal (status model) "Draft · saved" "Saved"
 
       let model, _ = send (Editor.BodyChanged "x") model
-      let _, effect = send (Editor.AutosaveElapsed 2) model
+      let _, effect = send Editor.SaveRequested model
       Expect.equal (effect |> Option.map (function Shell.Send [ Shell.SavePost request ] -> request.ETag | _ -> None)) (Some(Some "\"v2\"")) "The new ETag"
     }
 
-    test "the keys Command and S save at once, with no timer" {
+    test "the keys Command and S save at once" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, effect = send Editor.SaveRequested model
       Expect.equal effect (Some(Shell.Send [ Shell.SavePost(request (Some "\"v1\"") "My post" "About it." "x" 1) ])) "The save"
@@ -150,20 +166,24 @@ let tests =
       Expect.isNone effect "Nothing to save"
     }
 
-    test "the timer after a save that already ran saves nothing" {
+    test "Command and S during a save with no new text sends no second save" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send Editor.SaveRequested model
-      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let model, effect = send Editor.SaveRequested model
       Expect.isNone effect "The save is in flight"
       Expect.equal (status model) "Draft · saving…" "Still saving"
+
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+      Expect.isNone effect "The API has the text"
+      Expect.equal (status model) "Draft · saved" "Saved"
     }
 
-    test "text typed during a save is unsaved after the answer, and a new timer starts" {
+    test "text typed during a save is unsaved after the answer, and no save starts" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.BodyChanged "xy") model
       let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
-      Expect.equal effect (Some(Shell.Autosave 2)) "A timer for the last input"
+      Expect.isNone effect "No save"
       Expect.equal (status model) "Draft · unsaved changes" "Unsaved"
       Expect.equal (document' model).Fields.Body "xy" "The text stays"
     }
@@ -178,36 +198,36 @@ let tests =
       Expect.equal effect (Some(Shell.Send [ Shell.SavePost(request (Some "\"v2\"") "My post" "About it." "xy" 2) ])) "The second save"
     }
 
-    test "a failed save keeps the text, shows the failure, and tries again after the delay" {
+    test "a failed save keeps the text, shows the failure, and saves again at the next Command and S" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, effect = send (Editor.SaveAnswered("my-post", 1, Error Api.Unanswered)) model
       Expect.equal (status model) "Draft · save failed" "The status"
       Expect.equal (document' model).Fields.Body "x" "The text stays"
-      Expect.equal effect (Some(Shell.Autosave 1)) "A new timer"
+      Expect.isNone effect "No retry"
 
-      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let model, effect = send Editor.SaveRequested model
       Expect.isSome effect "The second try"
       Expect.equal (status model) "Draft · saving…" "Saving again"
     }
 
     test "a save from an old tab fails with a stale answer, keeps the text, and tries nothing more" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, effect = send (Editor.SaveAnswered("my-post", 1, Error Api.Stale)) model
       Expect.isNone effect "No retry"
       Expect.equal (status model) "Draft · changed in another tab" "The status"
       Expect.equal (document' model).Fields.Body "x" "The text stays"
 
       let model, effect = send (Editor.BodyChanged "xy") model
-      Expect.isNone effect "No timer"
+      Expect.isNone effect "No save"
       let _, effect = send Editor.SaveRequested model
       Expect.isNone effect "No save"
     }
 
     test "a refused token on a save offers another account and keeps the text" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Refused)) model
       Expect.equal model.Session.Status Session.Refused "The banner"
       Expect.equal (document' model).Fields.Body "x" "The text stays"
@@ -231,7 +251,7 @@ let tests =
 
     test "an interaction error during a save keeps the text and shows the Sign in again banner" {
       let model, _ = send (Editor.BodyChanged "Words that I typed") (opened draft)
-      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let model, effect = send Editor.SaveRequested model
       let call = effect |> Option.bind (function Shell.Send [ call ] -> Some call | _ -> None) |> Option.get
 
       let model, _ = Shell.update (Shell.Session(Session.InteractionRequired call)) model
@@ -318,7 +338,7 @@ let tests =
 
     test "a leave after a session expiry saves the newest text after the waiting save" {
       let model, _ = send (Editor.BodyChanged "a") (opened draft)
-      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let model, effect = send Editor.SaveRequested model
       let call = effect |> Option.bind (function Shell.Send [ call ] -> Some call | _ -> None) |> Option.get
       let model, _ = Shell.update (Shell.Session(Session.InteractionRequired call)) model
       let model, _ = send (Editor.BodyChanged "ab") model
@@ -374,7 +394,7 @@ let tests =
     test "a save answer with a problem shows the dot, and an answer with no problem clears it" {
       let problem = warning (Api.BodyLine 4) "The image has no alt text."
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       Expect.isFalse (Editor.hasProblems (document' model)) "No answer yet"
 
       let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.Found [ problem ] })) model
@@ -382,14 +402,14 @@ let tests =
       Expect.equal (document' model).Check (Some(Api.Found [ problem ])) "The problem"
 
       let model, _ = send (Editor.BodyChanged "xy") model
-      let model, _ = send (Editor.AutosaveElapsed 2) model
+      let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
       Expect.isFalse (Editor.hasProblems (document' model)) "No dot"
     }
 
     test "a warning shows the dot" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let answer = Ok { savedAs "\"v2\"" with Check = Api.Found [ warning (Api.Field "tags") "Add the tag 2026." ] }
       let model, _ = send (Editor.SaveAnswered("my-post", 1, answer)) model
       Expect.isTrue (Editor.hasProblems (document' model)) "The dot"
@@ -398,10 +418,10 @@ let tests =
     test "a late answer for an older version keeps the problems of the newer answer" {
       let older = Ok { savedAs "\"v2\"" with Check = Api.Found [ warning (Api.BodyLine 2) "Old." ] }
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, older)) model
       let model, _ = send (Editor.BodyChanged "xy") model
-      let model, _ = send (Editor.AutosaveElapsed 2) model
+      let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.SaveAnswered("my-post", 2, Ok(savedAs "\"v3\""))) model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, older)) model
 
@@ -411,7 +431,7 @@ let tests =
 
     test "a check that did not run shows no dot and keeps the save" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.CheckFailed })) model
       Expect.equal (document' model).Check (Some Api.CheckFailed) "The check did not run"
       Expect.isFalse (Editor.hasProblems (document' model)) "No dot"
@@ -445,7 +465,7 @@ let tests =
 
     test "Command and S after a check that did not run saves the same text again" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
-      let model, _ = send (Editor.AutosaveElapsed 1) model
+      let model, _ = send Editor.SaveRequested model
       let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok { savedAs "\"v2\"" with Check = Api.CheckFailed })) model
       let model, effect = send Editor.SaveRequested model
 

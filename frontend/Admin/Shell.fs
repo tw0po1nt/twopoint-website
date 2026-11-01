@@ -113,8 +113,6 @@ type Effect =
   | Subscribe
   | Unsubscribe
   | SetBadge of count: int
-  /// Starts the autosave timer of the editor.
-  | Autosave of version: int
   | WaitToPollDeploy of slug: string * Deploy.Chain
   | WaitToPollPosts of generation: int
   | WaitToPollSiteDeploy of generation: int
@@ -226,7 +224,6 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         |> Option.toList
         |> List.collect (function
           | Editor.Save request -> [ SavePost request ]
-          | Editor.Autosave _
           | Editor.LoadDetailsOptions
           | Editor.UploadSeriesImage _
           | Editor.SaveSeries _
@@ -386,7 +383,6 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         effect
         |> Option.map (fun effect ->
           match effect with
-          | Editor.Autosave version -> Autosave version
           | Editor.Save request -> Send [ SavePost request ]
           | Editor.LoadDetailsOptions -> Send [ LoadDetailsOptions ]
           | Editor.UploadSeriesImage file -> Send [ UploadNewSeriesImage file ]

@@ -29,7 +29,7 @@ type Document =
     /// The ETag of the working blob. A published post with no pending edit has none.
     ETag: string option
     Fields: Fields
-    /// Counts each input. A timer and a save answer name the version that they belong to.
+    /// Counts each input. A save answer names the version that it belongs to.
     Version: int
     /// The newest version that the API has. A version after it has text that only this page has.
     Confirmed: int
@@ -120,7 +120,6 @@ type Msg =
   | TitleChanged of string
   | ExcerptChanged of string
   | BodyChanged of string
-  | AutosaveElapsed of version: int
   | SaveRequested
   | SaveAnswered of slug: string * version: int * Result<Api.SavedPost, Api.Failure>
   | PointerMoved
@@ -174,8 +173,6 @@ type Msg =
   | SentNoticeDismissed
 
 type Effect =
-  /// Starts a timer of `autosaveDelay` milliseconds. The timer sends `AutosaveElapsed`.
-  | Autosave of version: int
   | Save of SaveRequest
   | LoadDetailsOptions
   | UploadSeriesImage of Browser.Types.File
@@ -198,8 +195,6 @@ type Effect =
   /// Starts a timer of `Deploy.pollDelay` milliseconds. The timer sends `DeployMsg(slug, Deploy.PollElapsed)`.
   | WaitToPollDeploy of slug: string * Deploy.Chain
   | RetryDeploy of slug: string
-
-let autosaveDelay = 2000
 
 let init (slug: string) (page: int) = Loading(slug, Deploy.firstChain page)
 
@@ -265,23 +260,21 @@ let private startSave (document: Document) =
 let private editWith (change: Document -> Document) (document: Document) =
   let version = document.Version + 1
 
-  let save, effect =
+  let save =
     match document.Save with
-    | Stale -> Stale, None
-    | Saving _ -> document.Save, Some(Autosave version)
+    | Stale
+    | Saving _ -> document.Save
     | Saved
     | Unsaved
-    | SaveFailed _ -> Unsaved, Some(Autosave version)
+    | SaveFailed _ -> Unsaved
 
-  Loaded
-    { change document with
-        Version = version
-        Save = save
-        Typing = true },
-  effect
+  { change document with
+      Version = version
+      Save = save
+      Typing = true }
 
 let private edit (change: Fields -> Fields) (document: Document) =
-  editWith (fun document -> { document with Fields = change document.Fields }) document
+  Loaded(editWith (fun document -> { document with Fields = change document.Fields }) document), None
 
 let private saveNow (document: Document) =
   match document.Save with
@@ -308,7 +301,7 @@ let private answered (version: int) (result: Result<Api.SavedPost, Api.Failure>)
     elif document.SaveAgain || document.LeaveTo.IsSome then
       startSave { document with Save = Unsaved }
     else
-      Loaded { document with Save = Unsaved }, Some(Autosave document.Version)
+      Loaded { document with Save = Unsaved }, None
   | Saving sent, Error Api.Stale when sent = version ->
     Loaded
       { document with
@@ -317,17 +310,12 @@ let private answered (version: int) (result: Result<Api.SavedPost, Api.Failure>)
           LeaveTo = None },
     None
   | Saving sent, Error failure when sent = version ->
-    let retry =
-      match failure with
-      | Api.Unanswered -> Some(Autosave document.Version)
-      | _ -> None
-
     Loaded
       { document with
           Save = SaveFailed(Api.reason failure)
           SaveAgain = false
           LeaveTo = None },
-    retry
+    None
   | _ -> Loaded document, None
 
 let private detailsChanged (msg: Details.Msg) (document: Document) =
@@ -339,10 +327,15 @@ let private detailsChanged (msg: Details.Msg) (document: Document) =
       | Details.UploadSeriesImage file -> UploadSeriesImage file
       | Details.SaveSeries request -> SaveSeries request)
 
-  if details.Values = document.Details.Values then
-    Loaded { document with Details = details }, effect
-  else
-    editWith (fun document -> { document with Details = details }) document
+  let withDetails (document: Document) = { document with Details = details }
+
+  let document =
+    if details.Values = document.Details.Values then
+      withDetails document
+    else
+      editWith withDetails document
+
+  Loaded document, effect
 
 let private changeDetails (change: Details.Model -> Details.Model) (document: Document) =
   { document with Details = change document.Details }
@@ -360,7 +353,7 @@ let private requestSlugChange (document: Document) =
     )
   | Api.Draft, _, Saved -> Loaded document, None
   | Api.Draft, _, _ ->
-    Loaded(changeDetails (Details.slugChangeRefused "Wait until the post is saved, and then change the slug.") document),
+    Loaded(changeDetails (Details.slugChangeRefused "Save the post first, and then change the slug.") document),
     None
   | (Api.Published | Api.Upcoming), _, _ ->
     Loaded(changeDetails (Details.slugChangeRefused "The slug of a published post is fixed.") document), None
@@ -870,7 +863,6 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, TitleChanged title -> edit (fun fields -> { fields with Title = title }) document
   | Loaded document, ExcerptChanged excerpt -> edit (fun fields -> { fields with Excerpt = excerpt }) document
   | Loaded document, BodyChanged body -> edit (fun fields -> { fields with Body = body }) document
-  | Loaded document, AutosaveElapsed version when version = document.Version -> saveNow document
   | Loaded document, SaveRequested -> saveNow document
   | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug ->
     answered version result document |> resumePublish

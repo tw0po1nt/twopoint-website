@@ -138,7 +138,7 @@ let tests =
     test "a typed tag gives the existing tag with the same slug, and the save has it" {
       let model, effect = detail (Details.TagAdded "functional Programming") (withSheet draft)
       Expect.equal (values model).Tags [ "Functional programming" ] "The existing title"
-      Expect.equal effect (Some(Shell.Autosave 1)) "The autosave timer"
+      Expect.isNone effect "No save before the author saves"
       Expect.equal (saved model).Details.Tags [ "Functional programming" ] "The save"
     }
 
@@ -163,7 +163,7 @@ let tests =
     test "the category Series is not a choice of the category picker" {
       let model, effect = detail (Details.CategoryChosen "series") (withSheet draft)
       Expect.equal (values model).Category None "No category"
-      Expect.isNone effect "No timer"
+      Expect.isNone effect "No save"
     }
 
     test "a series sets the category Series and locks the category picker" {
@@ -187,7 +187,7 @@ let tests =
       let model, effect = detail Details.SeriesRemoved (withSheet post)
       Expect.equal (values model).Series None "No series"
       Expect.equal (values model).Category None "No category"
-      Expect.equal effect (Some(Shell.Autosave 1)) "The autosave timer"
+      Expect.isNone effect "No save before the author saves"
 
       let model, _ = detail (Details.CategoryChosen "Life") model
       Expect.equal (values model).Category (Some "Life") "The picker works again"
@@ -242,7 +242,8 @@ let tests =
 
       Expect.equal (values model).Series (Some "f-for-fun") "The picker selects the series"
       Expect.equal (values model).Category (Some "Series") "The category"
-      Expect.equal effect (Some(Shell.Autosave 1)) "The post saves"
+      Expect.isNone effect "The post is unsaved until the author saves"
+      Expect.equal (Editor.statusText (document' model)) "Draft · unsaved changes" "Unsaved"
       Expect.equal (document' model).Details.NewSeries (Details.Made answer) "The form closes"
 
       match (document' model).Details.Options with
@@ -327,7 +328,7 @@ let tests =
 
     test "a change of the sheet that changes no value starts no save" {
       let _, effect = detail (Details.CategoryTyped "de") (withSheet draft)
-      Expect.isNone effect "No timer"
+      Expect.isNone effect "No save"
     }
 
     test "the slug of a saved draft changes with the ETag, and the author goes to the new address" {
@@ -379,7 +380,7 @@ let tests =
 
       Expect.equal
         (document' model).Details.Slug
-        (Details.ChangeFailed "Wait until the post is saved, and then change the slug.")
+        (Details.ChangeFailed "Save the post first, and then change the slug.")
         "The reason"
     }
 
@@ -408,7 +409,7 @@ let tests =
       let model, _ = detail (Details.SlugTyped "new-slug") (withSheet draft)
       let model, _ = send Editor.SlugChangeRequested model
       let model, _ = send (Editor.BodyChanged "x") model
-      let model, effect = send (Editor.AutosaveElapsed 1) model
+      let model, effect = send Editor.SaveRequested model
       Expect.isNone effect "No save under the old slug"
 
       let model, effect =
