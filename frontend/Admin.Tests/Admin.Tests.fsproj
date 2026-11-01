@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="RouteTests.fs" />
     <Compile Include="RouterTests.fs" />
+    <Compile Include="TransitionTests.fs" />
     <Compile Include="SessionTests.fs" />
     <Compile Include="ShellTests.fs" />
     <Compile Include="RebuildTests.fs" />

@@ -13,6 +13,7 @@
     <Compile Include="BrowserPush.fs" />
     <Compile Include="Route.fs" />
     <Compile Include="Router.fs" />
+    <Compile Include="Transition.fs" />
     <Compile Include="Api.fs" />
     <Compile Include="Dates.fs" />
     <Compile Include="Problem.fs" />
@@ -51,6 +52,7 @@
     <Compile Include="SeriesFormView.fs" />
     <Compile Include="DetailsView.fs" />
     <Compile Include="EditorView.fs" />
+    <Compile Include="Lamp.fs" />
     <Compile Include="ShellView.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Main.fs" />

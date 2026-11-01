@@ -38,9 +38,14 @@ let init =
     Form = None
     Notice = NoNotice }
 
+/// The rows stay until the answer, because a back from the editor aims its light at the link of the post.
 let reload (model: Model) =
   { model with
-      Records = Waiting
+      Records =
+        match model.Records with
+        | Loaded records -> Loaded records
+        | Waiting
+        | NotLoaded _ -> Waiting
       Form = None }
 
 let private stateOrder (post: Api.SeriesPost) =

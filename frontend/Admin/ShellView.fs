@@ -1488,8 +1488,18 @@ let private scrollToId (id: string) : unit = jsNative
 
 [<SolidComponent>]
 let view (signIn: SignIn) (push: Push) =
+  let tap = Lamp.taps ()
+  let back = ref Transition.AppAnimates
+
+  let move (current: Shell.Model) (next: Shell.Model) (commit: unit -> unit) =
+    match Transition.direction current.Router.Route next.Router.Route with
+    | None -> commit ()
+    | Some _ ->
+      let chosen = Transition.choose (Lamp.motion ()) (Lamp.support ()) back.Value current.Router.Route next.Router.Route
+      Lamp.run tap chosen commit
+
   let model, dispatch =
-    Mvu.run (Shell.init (window.location.pathname + window.location.search + window.location.hash)) Shell.update (perform signIn push)
+    Mvu.runAround move (Shell.init (window.location.pathname + window.location.search + window.location.hash)) Shell.update (perform signIn push)
 
   let fragmentToShow () =
     let model = model ()
@@ -1514,7 +1524,13 @@ let view (signIn: SignIn) (push: Push) =
 
   let route = Shell.Router >> dispatch
 
-  window.addEventListener ("popstate", fun _ -> route (Router.UrlChanged(window.location.pathname + window.location.search + window.location.hash)))
+  window.addEventListener (
+    "popstate",
+    fun event ->
+      back.Value <- Lamp.back event
+      route (Router.UrlChanged(window.location.pathname + window.location.search + window.location.hash))
+      back.Value <- Transition.AppAnimates
+  )
 
   let current () = (model ()).Router.Route
   let showsNavigation () = Router.showsNavigation (current ())
