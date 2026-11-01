@@ -103,9 +103,26 @@ let tests =
 
     test "a typed letter marks the post unsaved and sends no save" {
       let model, effect = send (Editor.BodyChanged "Some text.\nMore") (opened draft)
-      Expect.isNone effect "No save and no timer"
+      Expect.isNone effect "No save"
       Expect.equal (document' model).Fields.Body "Some text.\nMore" "The text"
       Expect.equal (status model) "Draft · unsaved changes" "The status"
+    }
+
+    test "the browser asks before it closes the page until a save answer comes" {
+      let model = opened draft
+      Expect.isFalse (Editor.isAtRisk model.Editor.Value) "Saved"
+
+      let model, _ = send (Editor.BodyChanged "x") model
+      Expect.isTrue (Editor.isAtRisk model.Editor.Value) "Unsaved"
+
+      let model, _ = send Editor.SaveRequested model
+      Expect.isTrue (Editor.isAtRisk model.Editor.Value) "Saving"
+
+      let failed, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Unanswered)) model
+      Expect.isTrue (Editor.isAtRisk failed.Editor.Value) "Save failed"
+
+      let saved, _ = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+      Expect.isFalse (Editor.isAtRisk saved.Editor.Value) "Saved again"
     }
 
     test "typed letters stay unsaved until the author saves, and the save sends the last input" {
@@ -137,7 +154,7 @@ let tests =
       Expect.equal (effect |> Option.map (function Shell.Send [ Shell.SavePost request ] -> request.ETag | _ -> None)) (Some(Some "\"v2\"")) "The new ETag"
     }
 
-    test "the keys Command and S save at once, with no timer" {
+    test "the keys Command and S save at once" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, effect = send Editor.SaveRequested model
       Expect.equal effect (Some(Shell.Send [ Shell.SavePost(request (Some "\"v1\"") "My post" "About it." "x" 1) ])) "The save"

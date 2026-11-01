@@ -163,7 +163,7 @@ let tests =
     test "the category Series is not a choice of the category picker" {
       let model, effect = detail (Details.CategoryChosen "series") (withSheet draft)
       Expect.equal (values model).Category None "No category"
-      Expect.isNone effect "No timer"
+      Expect.isNone effect "No save"
     }
 
     test "a series sets the category Series and locks the category picker" {
@@ -328,7 +328,7 @@ let tests =
 
     test "a change of the sheet that changes no value starts no save" {
       let _, effect = detail (Details.CategoryTyped "de") (withSheet draft)
-      Expect.isNone effect "No timer"
+      Expect.isNone effect "No save"
     }
 
     test "the slug of a saved draft changes with the ETag, and the author goes to the new address" {

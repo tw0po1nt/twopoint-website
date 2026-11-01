@@ -268,15 +268,13 @@ let private editWith (change: Document -> Document) (document: Document) =
     | Unsaved
     | SaveFailed _ -> Unsaved
 
-  Loaded
-    { change document with
-        Version = version
-        Save = save
-        Typing = true },
-  None
+  { change document with
+      Version = version
+      Save = save
+      Typing = true }
 
 let private edit (change: Fields -> Fields) (document: Document) =
-  editWith (fun document -> { document with Fields = change document.Fields }) document
+  Loaded(editWith (fun document -> { document with Fields = change document.Fields }) document), None
 
 let private saveNow (document: Document) =
   match document.Save with
@@ -329,10 +327,15 @@ let private detailsChanged (msg: Details.Msg) (document: Document) =
       | Details.UploadSeriesImage file -> UploadSeriesImage file
       | Details.SaveSeries request -> SaveSeries request)
 
-  if details.Values = document.Details.Values then
-    Loaded { document with Details = details }, effect
-  else
-    editWith (fun document -> { document with Details = details }) document
+  let withDetails (document: Document) = { document with Details = details }
+
+  let document =
+    if details.Values = document.Details.Values then
+      withDetails document
+    else
+      editWith withDetails document
+
+  Loaded document, effect
 
 let private changeDetails (change: Details.Model -> Details.Model) (document: Document) =
   { document with Details = change document.Details }
