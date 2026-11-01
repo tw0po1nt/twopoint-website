@@ -40,7 +40,7 @@ let title (route: Route) =
   | Dashboard -> "Dashboard"
   | Posts _ -> "Posts"
   | Post slug -> slug
-  | PostComments slug -> $"Comments on {slug}"
+  | PostComments _ -> "Comments"
   | ModerationQueue -> "Moderation queue"
   | Commenters -> "Commenters"
   | Commenter _ -> "Commenter"

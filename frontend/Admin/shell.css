@@ -276,12 +276,23 @@ h2 + .stat-grid {
   flex-basis: 100%;
 }
 
-.subscription-row .strong .badge {
-  margin-inline-start: var(--s-2);
+.post-card {
+  gap: var(--s-2);
 }
 
-.delivery .badge {
-  margin-inline-end: var(--s-2);
+.post-meta {
+  display: flex;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.post-meta .ellipsis {
+  min-width: 0;
+}
+
+.delivery .badge-line,
+.series-post .badge-line {
+  margin-top: 2px;
 }
 
 .deliveries {
@@ -301,10 +312,6 @@ h2 + .stat-grid {
   gap: var(--s-2);
 }
 
-.series-post .badge {
-  margin-inline-start: var(--s-2);
-}
-
 /* The row link covers the full card. Another link of the card stays above it. */
 .queue-row.is-link {
   position: relative;
@@ -316,6 +323,16 @@ h2 + .stat-grid {
 
 .row-link {
   text-decoration: none;
+}
+
+button.row-link {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 
 .row-link::after {
@@ -511,6 +528,20 @@ h2 + .stat-grid {
 
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-grid.audience {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rebuild-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rebuild-row > .grow {
+    flex: none;
+    align-self: stretch;
   }
 }
 

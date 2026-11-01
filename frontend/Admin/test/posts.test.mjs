@@ -54,6 +54,20 @@ test('the post list shows each post with its state, its publish date, and its co
   assert.doesNotMatch(document.getElementById('live').textContent, /Pending edit/);
 });
 
+test('the badges of a post card have a row of their own under the title, and the comment counts are the link to the comments', () => {
+  const card = document.getElementById('edited');
+  const badges = card.querySelector('.badge-line');
+  assert.equal(badges.previousElementSibling.querySelector('a.row-link').textContent.trim(), card.querySelector('a.row-link').textContent.trim());
+  assert.deepEqual([...badges.querySelectorAll('.badge')].map((item) => item.textContent.trim()), ['Published', 'Pending edit', 'Deployed']);
+
+  const meta = card.querySelector('.post-meta');
+  assert.equal(meta.querySelector('.ellipsis').textContent.trim(), 'edited');
+  assert.ok(meta.querySelector('.nowrap'), 'The date does not break');
+
+  const links = [...card.querySelectorAll('a:not(.row-link)')];
+  assert.deepEqual(links.map((link) => [link.textContent.trim(), link.getAttribute('href')]), [['1 new, 2 approved, 0 rejected comments', '/posts/edited/comments']]);
+});
+
 test('the filters show only the drafts, or only the posts with a pending edit', async () => {
   const before = reads.length;
   tab('Drafts').click();

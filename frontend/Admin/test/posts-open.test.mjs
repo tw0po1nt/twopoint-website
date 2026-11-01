@@ -35,15 +35,15 @@ test('a click on the link of a post card opens the post in the editor', async ()
   assert.ok(document.querySelector('.shell.is-bare'), 'The editor has no navigation');
 });
 
-test('a click on the Comments link of a post card opens the comments of the post', async () => {
+test('a click on the comment counts of a post card opens the comments of the post', async () => {
   const back = new Promise((resolve) => window.addEventListener('popstate', resolve, { once: true }));
   history.back();
   await back;
   await settle();
   assert.equal(location.pathname, '/posts');
 
-  follow('Comments', card());
+  follow('2 new, 5 approved, 0 rejected comments', card());
   await settle();
   assert.equal(location.pathname, '/posts/first/comments');
-  assert.equal(heading(), 'Comments on first');
+  assert.equal(heading(), 'Comments');
 });

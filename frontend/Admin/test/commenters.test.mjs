@@ -98,7 +98,7 @@ test('Delete in the confirmation deletes the commenter and opens the commenter l
 
 test('the commenter list shows each commenter, and the filter shows only the commenters with its status', async () => {
   assert.deepEqual(rows(), ['ada-id', 'grace-id', 'alan-id']);
-  assert.match(document.getElementById('grace-id').textContent, /First date: 2026-01-02/);
+  assert.match(document.getElementById('grace-id').textContent, /Verified: 2026-01-02/);
   assert.equal(tab('All').getAttribute('aria-selected'), 'true');
 
   tab('Banned').click();

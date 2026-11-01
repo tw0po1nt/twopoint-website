@@ -103,6 +103,26 @@ let emptyText (filter: PostFilter) =
   | PostFilter.PendingEdits -> "No post has a pending edit."
   | PostFilter.DeliveriesToStart -> "No post waits for a delivery."
 
+/// The name of a post on the page of its comments.
+type PostName =
+  | NameWaiting
+  | Name of string
+
+/// The slug is the name when the list has no post of the slug or does not load.
+let postName (slug: string) (model: Model) =
+  match model.Posts with
+  | Waiting -> NameWaiting
+  | Loaded posts ->
+    posts
+    |> List.tryFind (fun post -> post.Slug = slug)
+    |> Option.map _.Title
+    |> Option.defaultValue slug
+    |> Name
+  | NotLoaded _ -> Name slug
+
+let commentsText (stats: Api.CommentStats) =
+  $"{stats.New} new, {stats.Approved} approved, {stats.Rejected} rejected comments"
+
 let showsDeploy (post: Api.Post) =
   match post.State with
   | Api.Draft -> false

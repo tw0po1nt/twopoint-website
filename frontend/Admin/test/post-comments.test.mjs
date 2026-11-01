@@ -43,7 +43,9 @@ const tab = (text) => [...document.querySelectorAll('main [role="tab"]')].find((
 const navCount = () => count('nav.side-nav a[href="/comments"]');
 
 test('the page lists each comment of the post with its approval', () => {
-  assert.equal(heading(), 'Comments on first');
+  assert.equal(heading(), 'Comments');
+  const title = document.querySelector('main .page-sub a');
+  assert.deepEqual([title.textContent.trim(), title.getAttribute('href')], ['First', '/posts/first']);
   assert.deepEqual(reads, ['internal/posts/first/comments']);
   assert.deepEqual(rows(), ['c-1', 'c-4', 'c-5']);
   assert.match(row('c-4').textContent, /Grace/);

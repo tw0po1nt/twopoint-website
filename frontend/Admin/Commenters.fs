@@ -41,6 +41,9 @@ let shown (model: Model) =
   | Loaded commenters, Only status -> commenters |> List.filter (fun commenter -> commenter.Status = status)
   | (Waiting | NotLoaded _), _ -> []
 
+let verifiedText (commenter: Api.Commenter) =
+  $"Verified: {Dates.dateText commenter.CreatedDate}"
+
 let emptyText (filter: Filter) =
   match filter with
   | All -> "The blog has no commenters."

@@ -67,6 +67,7 @@ const rows = () => [...document.querySelectorAll('main .queue-row')].map((item) 
 const tab = (text) => [...document.querySelectorAll('main [role="tab"]')].find((item) => item.textContent.trim() === text);
 const search = () => document.querySelector('main .toolbar input[type="search"]');
 const sheet = () => document.getElementById('subscription-sheet');
+const open = (id) => document.getElementById(id).querySelector('.row-link').click();
 
 const type = async (text) => {
   const input = search();
@@ -115,8 +116,9 @@ test('the search keeps its input, and shows the subscriptions that match', async
   assert.deepEqual(rows(), ['ada', 'grace', 'alan']);
 });
 
-test('Details opens the sheet with the fields, the canceled date, and the deliveries, newest first', async () => {
-  press('Details', document.getElementById('grace'));
+test('a tap on a row opens the sheet with the fields, the canceled date, and the deliveries, newest first', async () => {
+  assert.equal(document.getElementById('grace').querySelectorAll('button').length, 1, 'The row has no Details button');
+  open('grace');
   await settle();
 
   assert.equal(sheet().open, true);
@@ -129,10 +131,10 @@ test('Details opens the sheet with the fields, the canceled date, and the delive
 
   const items = [...sheet().querySelectorAll('.deliveries li')];
   assert.deepEqual(
-    items.map((item) => [item.querySelector('.badge').textContent.trim(), item.querySelector('a').textContent.trim(), item.textContent.trim().slice(-13)]),
+    items.map((item) => [item.firstElementChild.textContent.trim(), [...item.querySelectorAll('.badge-line > *')].map((part) => part.textContent.trim())]),
     [
-      ['New post', 'Second', 'on 2026-02-05'],
-      ['Welcome', 'First', 'on 2026-01-03'],
+      ['Second', ['New post', '2026-02-05']],
+      ['First', ['Welcome', '2026-01-03']],
     ],
   );
   assert.deepEqual(
@@ -146,7 +148,7 @@ test('the sheet closes, and a sheet of an active subscription has no canceled da
   await settle();
   assert.equal(sheet().open, false);
 
-  press('Details', document.getElementById('ada'));
+  open('ada');
   await settle();
   assert.equal(sheet().open, true);
   assert.doesNotMatch(sheet().textContent, /Canceled/);
@@ -176,7 +178,7 @@ test('Cancel subscription cancels an active subscription, sets the canceled date
   tab('All').click();
   await settle();
 
-  press('Details', document.getElementById('ada'));
+  open('ada');
   await settle();
   assert.deepEqual(
     [...sheet().querySelectorAll('.actions button')].map((item) => item.textContent.trim()),

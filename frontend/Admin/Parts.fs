@@ -29,6 +29,8 @@ type ButtonKind =
   | Primary
   | Accent
   | Ghost
+  /// For a Delete that opens a confirm dialog.
+  | GhostDanger
   | Danger
 
 type ButtonSize =
@@ -45,6 +47,7 @@ let buttonClass (kind: ButtonKind) (size: ButtonSize) =
     | Primary -> " primary"
     | Accent -> " accent"
     | Ghost -> " ghost"
+    | GhostDanger -> " ghost bad"
     | Danger -> " danger"
 
   let size =
