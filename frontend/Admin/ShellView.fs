@@ -54,6 +54,7 @@ let private fail (call: Shell.Call) =
   | Shell.DiscardPending request -> Shell.Editor(Editor.DiscardAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UnpublishPost request -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, Error Api.Unanswered))
   | Shell.ChangePostDate request -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, Error Api.Unanswered))
+  | Shell.CheckDelete slug -> Shell.Editor(Editor.DeleteCheckAnswered(slug, Error Api.Unanswered))
   | Shell.DeletePost request -> Shell.Editor(Editor.DeleteAnswered(request.Slug, Error Api.Unanswered))
   | Shell.LoadRevisions slug -> Shell.Editor(Editor.RevisionsAnswered(slug, Error Api.Unanswered))
   | Shell.RestoreRevision request -> Shell.Editor(Editor.RestoreAnswered(request.Slug, Error Api.Unanswered))
@@ -217,8 +218,11 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.ChangePostDate request ->
     Api.changePostDate (Config.api ()) token request.Slug request.ETag request.PublishDate
     |> Promise.map (fun result -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, result)))
+  | Shell.CheckDelete slug ->
+    Api.checkDelete (Config.api ()) token slug
+    |> Promise.map (fun result -> Shell.Editor(Editor.DeleteCheckAnswered(slug, result)))
   | Shell.DeletePost request ->
-    Api.deletePost (Config.api ()) token request.Slug request.ETag request.ConfirmSlug
+    Api.deletePost (Config.api ()) token request.Slug request.ETag request.ConfirmSlug request.Edits
     |> Promise.map (fun result -> Shell.Editor(Editor.DeleteAnswered(request.Slug, result)))
   | Shell.LoadRevisions slug ->
     Api.getRevisions (Config.api ()) token slug

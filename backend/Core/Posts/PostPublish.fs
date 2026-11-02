@@ -297,16 +297,36 @@ module PublishSteps =
       | Error _ -> return! write ()
     }
 
+  /// One dispatch rebuilds the change of each post of `slugs`, and each post gets a change with that dispatch.
   /// The change is dated before the dispatch, so the run that the dispatch queues includes the change.
-  let rebuild (dependencies: GatedDependencies) (slug: Slug) : CancellableTask<Rebuilt> =
+  let rebuildAll (dependencies: GatedDependencies) (slugs: Slug list) : CancellableTask<Rebuilt> =
     cancellableTask {
       let changedDate = dependencies.GetUtcNow()
       let! dispatched = dependencies.DispatchSite()
-      let! tracked = dependencies.RecordChange(PostChange.ofDispatch slug changedDate dispatched)
+      let recorded = ResizeArray<Result<unit, DependencyError>>()
+
+      for slug in slugs do
+        let! result = dependencies.RecordChange(PostChange.ofDispatch slug changedDate dispatched)
+        recorded.Add result
+
+      let tracked =
+        match recorded |> Seq.tryPick (Result.either (fun () -> None) Some) with
+        | Some error -> Error error
+        | None -> Ok()
 
       return
         { Production = SiteDispatch.production dispatched
           Warnings = Logic.rebuildWarnings dispatched tracked }
+    }
+
+  let rebuild (dependencies: GatedDependencies) (slug: Slug) : CancellableTask<Rebuilt> = rebuildAll dependencies [ slug ]
+
+  /// The steps of a publish after the published write, with no dispatch: the post row and the delete of the working blob.
+  let settle (dependencies: Dependencies) (post: PostRow) (workingETag: string) : CancellableTask<Warning list> =
+    cancellableTask {
+      let! row = retryOnce (fun () -> dependencies.UpsertPostRow post)
+      let! deleted = dependencies.DeleteWorkingBlob post.Slug workingETag
+      return Logic.rowWarnings row deleted
     }
 
   let complete
@@ -316,16 +336,14 @@ module PublishSteps =
     (publishedAt: DateTime)
     : CancellableTask<Outcome> =
     cancellableTask {
-      let! row = retryOnce (fun () -> dependencies.UpsertPostRow post)
-
-      let! deleted = dependencies.DeleteWorkingBlob post.Slug workingETag
+      let! settled = settle dependencies post workingETag
       let! rebuilt = rebuild dependencies post.Slug
 
       return
         { PublishDate = post.CreatedDate
           State = Logic.state publishedAt post.CreatedDate
           Production = rebuilt.Production
-          Warnings = Logic.rowWarnings row deleted @ rebuilt.Warnings }
+          Warnings = settled @ rebuilt.Warnings }
     }
 
 // ====================================================================================================================
