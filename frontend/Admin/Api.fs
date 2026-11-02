@@ -252,6 +252,21 @@ type UpcomingChange =
 
 type DeletedPost = { Warnings: ChangeWarning list }
 
+/// A pending edit that the delete publishes first. `ETag` is the ETag of its working blob.
+type DeleteEdit =
+  { Slug: string
+    Title: string
+    ETag: string }
+
+/// The outcome of the delete check of a published post.
+type DeleteCheck =
+  /// No published post links to the post.
+  | PlainDelete
+  /// The delete publishes these pending edits first. They remove each link to the post.
+  | PublishAndDelete of DeleteEdit list
+  /// A link to the post stays, or a pending edit cannot publish.
+  | Blocked of Problem list
+
 type SeriesWarning =
   | SeriesRebuild of PublishWarning
   /// The rename wrote the new record, and the record at the old slug stays.
@@ -455,6 +470,21 @@ let private changeWarning: Decoder<ChangeWarning> =
     | "comments" -> Decode.succeed CommentsKept
     | _ -> publishWarning |> Decode.map PublishStep)
 
+let private deleteEdit: Decoder<DeleteEdit> =
+  Decode.object (fun get ->
+    { Slug = get.Required.Field "slug" Decode.string
+      Title = get.Required.Field "title" Decode.string
+      ETag = get.Required.Field "eTag" Decode.string })
+
+let private deleteCheck: Decoder<DeleteCheck> =
+  Decode.field "outcome" Decode.string
+  |> Decode.andThen (fun outcome ->
+    match outcome with
+    | "plain" -> Decode.succeed PlainDelete
+    | "publish-and-delete" -> Decode.field "edits" (Decode.list deleteEdit) |> Decode.map PublishAndDelete
+    | "blocked" -> Decode.field "problems" (Decode.list problem) |> Decode.map Blocked
+    | _ -> Decode.fail $"The delete check outcome '{outcome}' is not known.")
+
 let private seriesPostState: Decoder<SeriesPostState> =
   Decode.string
   |> Decode.andThen (fun name ->
@@ -483,6 +513,7 @@ let private coders =
   |> Extra.withCustom (severityName >> Encode.string) severity
   |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
   |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check
+  |> Extra.withCustom (fun (_: DeleteCheck) -> failwith "The admin sends no delete check.") deleteCheck
   |> Extra.withCustom (fun (_: PublishWarning) -> failwith "The admin sends no publish warning.") publishWarning
   |> Extra.withCustom (fun (_: ChangeWarning) -> failwith "The admin sends no change warning.") changeWarning
   |> Extra.withCustom (fun (_: SeriesPostState) -> failwith "The admin sends no series post state.") seriesPostState
@@ -866,20 +897,33 @@ let changePostDate
   let json = Encode.object [ "publishDate", Encode.string iso ] |> Encode.toString 0
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "date" ]) (Some(Json json)) [ workingPrecondition eTag ]
 
-/// `confirmSlug` is the text that the author typed, and `None` for a draft.
+let checkDelete (api: string) (token: string) (slug: string) : JS.Promise<Result<DeleteCheck, Failure>> =
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "delete"; "check" ]) (Some(Json "{}")) []
+
+/// `confirmSlug` is the text that the author typed, and `None` for a draft. `edits` are the pending edits of the delete check.
 let deletePost
   (api: string)
   (token: string)
   (slug: string)
   (eTag: string option)
   (confirmSlug: string option)
+  (edits: DeleteEdit list)
   : JS.Promise<Result<DeletedPost, Failure>> =
   let confirmation =
     match confirmSlug with
     | Some typed -> Encode.string typed
     | None -> Encode.nil
 
-  let json = Encode.object [ "confirmSlug", confirmation ] |> Encode.toString 0
+  let json =
+    Encode.object [
+      "confirmSlug", confirmation
+      "edits",
+      edits
+      |> List.map (fun edit -> Encode.object [ "slug", Encode.string edit.Slug; "ifMatch", Encode.string edit.ETag ])
+      |> Encode.list
+    ]
+    |> Encode.toString 0
+
   sendWith HttpMethod.DELETE api token (internalPath [ "posts"; slug ]) (Some(Json json)) [ workingPrecondition eTag ]
 
 let getRevisions (api: string) (token: string) (slug: string) : JS.Promise<Result<Revision list, Failure>> =

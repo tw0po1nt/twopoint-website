@@ -54,6 +54,19 @@ let private typing text model = fst (send (Editor.DeleteTyped text) model)
 
 let private requested model = fst (send Editor.DeleteRequested model)
 
+let private checkedAs outcome model =
+  fst (send (Editor.DeleteCheckAnswered("my-post", Ok outcome)) model)
+
+/// The dialog is open, and the check found no link to the post.
+let private ready model = checkedAs Api.PlainDelete (requested model)
+
+let private edit slug title: Api.DeleteEdit = { Slug = slug; Title = title; ETag = $"\"{slug}-w\"" }
+
+let private problem message: Api.Problem =
+  { Severity = Api.Severity.Error
+    Place = None
+    Message = message }
+
 let private step model = Editor.deleteStep (document' model)
 
 let private deleteItem model =
@@ -93,7 +106,7 @@ let tests =
     }
 
     test "the delete of a published post stays disabled until the typed text equals the slug" {
-      let model = requested (opened live)
+      let model = ready (opened live)
       Expect.equal (step model) Editor.WaitingForSlug "No text yet"
 
       for text in [ "my"; "my-pos"; "my-post "; "My-Post"; "my-posts" ] do
@@ -103,27 +116,27 @@ let tests =
     }
 
     test "a confirm before the slug matches sends nothing" {
-      let model, effect = send Editor.DeleteConfirmed (typing "my" (requested (opened live)))
+      let model, effect = send Editor.DeleteConfirmed (typing "my" (ready (opened live)))
       Expect.isNone effect "No call"
       Expect.equal (step model) Editor.WaitingForSlug "Still waiting"
     }
 
     test "the delete of a published post sends the typed text and no ETag when there is no pending edit" {
-      let model, effect = send Editor.DeleteConfirmed (typing "my-post" (requested (opened live)))
+      let model, effect = send Editor.DeleteConfirmed (typing "my-post" (ready (opened live)))
       Expect.equal (step model) Editor.DeleteRuns "Sending"
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = None; ConfirmSlug = Some "my-post" } ]))
+        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = None; ConfirmSlug = Some "my-post"; Edits = [] } ]))
         "The call"
     }
 
     test "the delete of a published post with a pending edit sends the ETag of the pending edit" {
-      let _, effect = send Editor.DeleteConfirmed (typing "my-post" (requested (opened pending)))
+      let _, effect = send Editor.DeleteConfirmed (typing "my-post" (ready (opened pending)))
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = Some "\"w2\""; ConfirmSlug = Some "my-post" } ]))
+        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = Some "\"w2\""; ConfirmSlug = Some "my-post"; Edits = [] } ]))
         "The call"
     }
 
@@ -134,13 +147,13 @@ let tests =
 
       Expect.equal
         effect
-        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = Some "\"w1\""; ConfirmSlug = None } ]))
+        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = Some "\"w1\""; ConfirmSlug = None; Edits = [] } ]))
         "The call"
     }
 
     test "Keep closes the dialog with no call, but not while the delete is in flight" {
       for document in [ live; draft ] do
-        let model = typing "my-post" (requested (opened document))
+        let model = typing "my-post" (ready (opened document))
         let closed, effect = send Editor.DeleteClosed model
         Expect.equal (step closed) Editor.NoDeleteDialog "Closed"
         Expect.isNone effect "No call"
@@ -151,7 +164,7 @@ let tests =
     }
 
     test "a delete that succeeded goes to the post list, and the post list shows the warnings" {
-      let model, _ = send Editor.DeleteConfirmed (typing "my-post" (requested (opened live)))
+      let model, _ = send Editor.DeleteConfirmed (typing "my-post" (ready (opened live)))
       let answered: Api.DeletedPost = { Warnings = [ Api.CommentsKept ] }
       let model, _ = send (Editor.DeleteAnswered("my-post", Ok answered)) model
       Expect.equal model.Router.Route (Route.Posts PostFilter.All) "The post list"
@@ -163,10 +176,13 @@ let tests =
 
     test "a refused delete shows the reason, keeps the typed text, and lets the author try again" {
       let reason = "If you delete the post, a link in another post breaks. The admin does not delete the post."
-      let model, _ = send Editor.DeleteConfirmed (typing "my-post" (requested (opened live)))
-      let model, _ = send (Editor.DeleteAnswered("my-post", Error(Api.Failed reason))) model
+      let model, _ = send Editor.DeleteConfirmed (typing "my-post" (ready (opened live)))
+      let model, effect = send (Editor.DeleteAnswered("my-post", Error(Api.Failed reason))) model
       Expect.equal (Editor.deleteReason (document' model)) (Some reason) "The reason"
       Expect.equal model.Router.Route (Route.Post "my-post") "The editor stays"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check runs again"
+      Expect.equal (step model) Editor.CheckingDelete "Disabled during the check"
+      let model = checkedAs Api.PlainDelete model
       Expect.equal (step model) Editor.ReadyToDelete "Enabled again"
       let _, effect = send Editor.DeleteConfirmed model
       Expect.isSome effect "A second call"
@@ -180,7 +196,7 @@ let tests =
     }
 
     test "a delete that the API refuses for the account signs the author out" {
-      let model, _ = send Editor.DeleteConfirmed (typing "my-post" (requested (opened live)))
+      let model, _ = send Editor.DeleteConfirmed (typing "my-post" (ready (opened live)))
       let next, _ = send (Editor.DeleteAnswered("my-post", Error Api.Refused)) model
       Expect.notEqual next.Session model.Session "The session changes"
     }
@@ -189,5 +205,93 @@ let tests =
       let model = requested (opened live)
       Expect.isTrue (Editor.isDeleteOpen (document' model)) "Open"
       Expect.isFalse (Editor.isDeleteOpen (document' (fst (send Editor.DeleteClosed model)))) "Closed"
+    }
+
+    test "the dialog of a published post runs the check one time when it opens" {
+      let model, effect = send Editor.DeleteRequested (opened live)
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check"
+      Expect.equal (step model) Editor.CheckingDelete "The check runs"
+      Expect.equal (step (typing "my-post" model)) Editor.CheckingDelete "The typed slug waits for the check"
+      let _, confirmed = send Editor.DeleteConfirmed (typing "my-post" model)
+      Expect.isNone confirmed "No delete during the check"
+      let _, typedEffect = send (Editor.DeleteTyped "my-post") model
+      Expect.isNone typedEffect "No second check"
+    }
+
+    test "the dialog of a draft runs no check" {
+      let _, effect = send Editor.DeleteRequested (opened draft)
+      Expect.isNone effect "No check"
+    }
+
+    test "a plain delete shows the Delete button and sends no edits" {
+      let model = typing "my-post" (ready (opened live))
+      Expect.equal (Editor.deleteButtonText (document' model)) "Delete" "The button"
+      Expect.isEmpty (Editor.deleteEdits (document' model)) "No edits"
+      Expect.equal (step model) Editor.ReadyToDelete "Enabled"
+    }
+
+    test "a publish and delete lists the posts, gives the number of edits on the button, and sends each edit with its ETag" {
+      let edits = [ edit "a-post" "A post"; edit "c-post" "C post" ]
+      let model = typing "my-post" (checkedAs (Api.PublishAndDelete edits) (requested (opened live)))
+      Expect.equal (Editor.deleteEdits (document' model)) edits "The posts"
+      Expect.equal (Editor.deleteButtonText (document' model)) "Publish 2 edits and delete" "The button"
+      Expect.equal (step model) Editor.ReadyToDelete "Enabled"
+      let one = checkedAs (Api.PublishAndDelete [ edit "a-post" "A post" ]) (requested (opened live))
+      Expect.equal (Editor.deleteButtonText (document' one)) "Publish 1 edit and delete" "One edit"
+
+      let _, effect = send Editor.DeleteConfirmed model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.DeletePost { Slug = "my-post"; ETag = None; ConfirmSlug = Some "my-post"; Edits = edits } ]))
+        "The call"
+    }
+
+    test "a publish and delete still needs the typed slug" {
+      let model = checkedAs (Api.PublishAndDelete [ edit "a-post" "A post" ]) (requested (opened live))
+      Expect.equal (step (typing "my" model)) Editor.WaitingForSlug "Disabled"
+    }
+
+    test "a blocked check shows the problems and disables the delete, also with the typed slug" {
+      let problems = [ problem "The post 'c-post' links to the post and has no pending edit." ]
+      let model = typing "my-post" (checkedAs (Api.Blocked problems) (requested (opened live)))
+      Expect.equal (step model) Editor.DeleteBlocked "Disabled"
+      Expect.equal (Editor.deleteProblems (document' model)) problems "The problems"
+      Expect.equal (Editor.deleteButtonText (document' model)) "Delete" "The button"
+      let _, effect = send Editor.DeleteConfirmed model
+      Expect.isNone effect "No call"
+    }
+
+    test "a check that fails disables the delete and gives the reason" {
+      let model = fst (send (Editor.DeleteCheckAnswered("my-post", Error Api.Unanswered)) (requested (opened live)))
+      let model = typing "my-post" model
+      Expect.equal (step model) Editor.DeleteBlocked "Disabled"
+      Expect.equal (document' model).DeleteCheck (Editor.DeleteCheckFailed "The API did not answer.") "The reason"
+    }
+
+    test "a refused delete runs the check again, and the dialog shows the new outcome" {
+      let model = typing "my-post" (checkedAs (Api.PublishAndDelete [ edit "a-post" "A post" ]) (requested (opened live)))
+      let model, _ = send Editor.DeleteConfirmed model
+      let model, effect = send (Editor.DeleteAnswered("my-post", Error(Api.Failed "The pending edits changed."))) model
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check runs again"
+      let problems = [ problem "A link stays." ]
+      let model = checkedAs (Api.Blocked problems) model
+      Expect.equal (step model) Editor.DeleteBlocked "The new outcome"
+      Expect.equal (Editor.deleteProblems (document' model)) problems "The problems"
+      Expect.equal (Typed.typed (document' model).Delete) "my-post" "The typed slug stays"
+    }
+
+    test "a check answer after the dialog closes changes nothing" {
+      let model = requested (opened live)
+      let closed, _ = send Editor.DeleteClosed model
+      let late = checkedAs Api.PlainDelete closed
+      Expect.equal (step late) Editor.NoDeleteDialog "Closed"
+      Expect.equal (document' late).DeleteCheck Editor.DeleteNotChecked "No check"
+    }
+
+    test "a check that the API refuses for the account signs the author out" {
+      let model = requested (opened live)
+      let next, _ = send (Editor.DeleteCheckAnswered("my-post", Error Api.Refused)) model
+      Expect.notEqual next.Session model.Session "The session changes"
     }
   ]

@@ -43,6 +43,7 @@ type Call =
   | DiscardPending of Editor.DiscardRequest
   | UnpublishPost of Editor.UnpublishRequest
   | ChangePostDate of Editor.ChangeDateRequest
+  | CheckDelete of slug: string
   | DeletePost of Editor.DeleteRequest
   | LoadRevisions of slug: string
   | RestoreRevision of Editor.RestoreRequest
@@ -241,6 +242,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.DiscardPending _
           | Editor.UnpublishPost _
           | Editor.ChangePostDate _
+          | Editor.CheckDelete _
           | Editor.DeletePost _
           | Editor.LoadRevisions _
           | Editor.RestoreRevision _
@@ -373,6 +375,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
       | Editor.DeployMsg(_, Deploy.Retried(Error Api.Refused)), _
       | Editor.UnpublishAnswered(_, Error Api.Refused), _
       | Editor.ChangeDateAnswered(_, Error Api.Refused), _
+      | Editor.DeleteCheckAnswered(_, Error Api.Refused), _
       | Editor.DeleteAnswered(_, Error Api.Refused), _
       | Editor.RevisionsAnswered(_, Error Api.Refused), _
       | Editor.RestoreAnswered(_, Error Api.Refused), _
@@ -401,6 +404,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
           | Editor.DiscardPending request -> Send [ DiscardPending request ]
           | Editor.UnpublishPost request -> Send [ UnpublishPost request ]
           | Editor.ChangePostDate request -> Send [ ChangePostDate request ]
+          | Editor.CheckDelete slug -> Send [ CheckDelete slug ]
           | Editor.DeletePost request -> Send [ DeletePost request ]
           | Editor.LoadRevisions slug -> Send [ LoadRevisions slug ]
           | Editor.RestoreRevision request -> Send [ RestoreRevision request ]

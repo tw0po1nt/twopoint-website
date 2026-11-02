@@ -220,4 +220,48 @@ let tests =
       let other = publishedPost "b-post" "Text.\n\nRead [nothing](/posts/nothing/)."
       Expect.isEmpty (Check.withoutPost Stage.Production [ target; other ] "a-post") "The link was broken before"
     }
+
+    test "linkingPosts gives each post with a link that breaks when the post leaves the site" {
+      let linking = publishedPost "b-post" "Read [the step](/posts/a-post/#first-step)."
+      let alsoLinking = publishedPost "c-post" "Read [it](/posts/a-post/)."
+      let other = publishedPost "d-post" "Read [nothing](/posts/nothing/)."
+
+      Expect.equal
+        (Check.linkingPosts Stage.Production [ target; linking; alsoLinking; other ] "a-post")
+        [ "b-post"; "c-post" ]
+        "The posts that link to the post"
+
+      Expect.isEmpty (Check.linkingPosts Stage.Production [ target; other ] "a-post") "A broken link from before"
+    }
+
+    test "withoutPostAndEdits counts the edit in place of the published text" {
+      let linking = publishedPost "b-post" "Read [it](/posts/a-post/)."
+      let fixedEdit = publishedPost "b-post" "No link now."
+      Expect.isEmpty (Check.withoutPostAndEdits Stage.Production [ target; linking ] "a-post" [ fixedEdit ]) "The edit removes the link"
+    }
+
+    test "withoutPostAndEdits names each post that keeps a broken link" {
+      let linking = publishedPost "b-post" "Read [it](/posts/a-post/)."
+      let alsoLinking = publishedPost "c-post" "Read [it](/posts/a-post/)."
+      let fixedEdit = publishedPost "b-post" "No link now."
+
+      Expect.equal
+        (Check.withoutPostAndEdits Stage.Production [ target; linking; alsoLinking ] "a-post" [ fixedEdit ])
+        [ Problem.error
+            (Place.Post 1)
+            "The change breaks a link in the post 'c-post', on body line 2: The output has no page at /posts/a-post/." ]
+        "The post with no edit"
+    }
+
+    test "withoutPostAndEdits counts each link problem of an edit, also a link that was broken before" {
+      let linking = publishedPost "b-post" "Read [it](/posts/a-post/)."
+      let badEdit = publishedPost "b-post" "Read [nothing](/posts/nothing/)."
+
+      Expect.equal
+        (Check.withoutPostAndEdits Stage.Production [ target; linking ] "a-post" [ badEdit ])
+        [ Problem.error
+            (Place.Post 1)
+            "The change breaks a link in the post 'b-post', on body line 2: The output has no page at /posts/nothing/." ]
+        "The broken link of the edit"
+    }
   ]

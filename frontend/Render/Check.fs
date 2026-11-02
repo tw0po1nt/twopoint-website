@@ -41,25 +41,42 @@ let private linkProblems (stage: Stage) (posts: Post list) =
   |> List.map (fun problems -> problems.File, problems)
   |> Map.ofList
 
-let private brokenElsewhere (published: Post list) (changedFile: string) (before: Map<string, FileProblems>) (after: Map<string, FileProblems>) =
+/// The link problems of each file of `after` that `before` does not have. Each problem of a file in `counted` is new.
+let private newLinkProblems
+  (skipped: string)
+  (counted: Set<string>)
+  (before: Map<string, FileProblems>)
+  (after: Map<string, FileProblems>)
+  =
+  [ for KeyValue(otherFile, problems) in after do
+      if otherFile <> skipped then
+        let earlier =
+          if counted.Contains otherFile then
+            Set.empty
+          else
+            before.TryFind otherFile
+            |> Option.map (fun problems -> problems.Problems |> List.map _.Place |> Set.ofList)
+            |> Option.defaultValue Set.empty
+
+        match problems.Problems |> List.filter (fun problem -> not (earlier.Contains problem.Place)) with
+        | [] -> ()
+        | fresh -> otherFile, problems, fresh ]
+
+let private breakErrors (published: Post list) (found: (string * FileProblems * Problem list) list) =
   let names =
     published
     |> List.map (fun other -> other.File, $"the post '{other.Slug}'")
     |> Map.ofList
     |> Map.add Privacy.file "the privacy page"
 
-  [ for KeyValue(otherFile, problems) in after do
-      if otherFile <> changedFile then
-        let earlier =
-          before.TryFind otherFile
-          |> Option.map (fun problems -> problems.Problems |> List.map _.Place |> Set.ofList)
-          |> Option.defaultValue Set.empty
+  [ for otherFile, problems, fresh in found do
+      for problem in fresh do
+        Problem.error
+          (Place.Post 1)
+          $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
 
-        for problem in problems.Problems do
-          if not (earlier.Contains problem.Place) then
-            Problem.error
-              (Place.Post 1)
-              $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
+let private brokenElsewhere (published: Post list) (changedFile: string) (before: Map<string, FileProblems>) (after: Map<string, FileProblems>) =
+  newLinkProblems changedFile Set.empty before after |> breakErrors published
 
 let private check
   (ownProblems: Post -> Problem list)
@@ -140,6 +157,28 @@ let draft
   : CheckedPost =
   check missingCategory (Post.parseDraft images stage series previewTime (file slug) text) stage published slug
 
-let withoutPost (stage: Stage) (published: Post list) (slug: string) : Problem list =
+/// The slugs of the published posts with a link that breaks when the post `slug` leaves the site.
+let linkingPosts (stage: Stage) (published: Post list) (slug: string) : string list =
   let remaining = published |> List.filter (fun other -> other.Slug <> slug)
-  brokenElsewhere published (file slug) (linkProblems stage published) (linkProblems stage remaining)
+
+  let files =
+    newLinkProblems (file slug) Set.empty (linkProblems stage published) (linkProblems stage remaining)
+    |> List.map (fun (otherFile, _, _) -> otherFile)
+    |> Set.ofList
+
+  published |> List.filter (fun other -> files.Contains other.File) |> List.map _.Slug
+
+/// The errors of a delete of the post `slug` that publishes each post of `edits` in place of its published text.
+/// Each link problem of an edit counts. A link problem of another post counts only when it is new.
+let withoutPostAndEdits (stage: Stage) (published: Post list) (slug: string) (edits: Post list) : Problem list =
+  let edited = edits |> List.map _.Slug |> Set.ofList
+
+  let result =
+    edits
+    @ (published |> List.filter (fun other -> other.Slug <> slug && not (edited.Contains other.Slug)))
+
+  newLinkProblems (file slug) (edits |> List.map _.File |> Set.ofList) (linkProblems stage published) (linkProblems stage result)
+  |> breakErrors published
+
+let withoutPost (stage: Stage) (published: Post list) (slug: string) : Problem list =
+  withoutPostAndEdits stage published slug []

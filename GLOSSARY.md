@@ -26,6 +26,15 @@ A saved change to a published post that the site does not show yet. The author p
 discards it.
 _Avoid_: Working copy, unpublished changes
 
+**Linking post**:
+A published post with a link to a post that the author deletes. The link breaks when the post is
+deleted.
+
+**Delete check**:
+The check before the delete of a published post. Its outcome is a plain delete, a publish and
+delete, or blocked. A publish and delete publishes the pending edit of each linking post first,
+because those edits remove each link to the post.
+
 **Revision**:
 The content of a post at one publish. The author can restore a revision as a pending edit.
 _Avoid_: Version, snapshot

@@ -75,6 +75,15 @@ It then writes the `revisions` blob, the `published` blob, and the post-table ro
 that fails gives a warning, and the post stays published. `Admin-Posts-CheckPublish` gives the
 problems for the dialog before the author confirms.
 
+The delete dialog of a published post runs the delete check one time when it opens, through
+`Admin-Posts-CheckDelete` (`POST internal/posts/{slug}/delete/check`). The rule is the pure
+function `DeleteCheck.Logic.outcome`. A publish and delete sends the slug and the working ETag of
+each pending edit to publish. The backend runs the check again, and a different list or ETag gets
+`409` and writes nothing. The delete publishes each pending edit with the publish steps of
+`PublishChanges` and no dispatch, then deletes the post, then dispatches `site.yml` one time. Each
+published edit and the delete record their change with that dispatch. A failed publish of an edit
+after the first keeps the post, and the dispatch still runs.
+
 The Series page lists, makes, and edits each series record. `GET internal/series` gives each record
 with its posts. `PUT internal/series/{slug}` saves a record and dispatches `site.yml` as "Rebuild
 site" does, and the page shows the deploy state of the site. A series save stores no change in

@@ -57,6 +57,42 @@ module PendingGate =
       | Some date -> Decision.success date
       | None -> Decision.failure (NoPublishDate slug)
 
+  /// The gate of a pending edit after the load. Only the card image check of `dependencies.Images` reads anything.
+  let gate
+    (dependencies: PublishGate.Dependencies)
+    (now: DateTime)
+    (series: TwoPoint.Site.Render.Series list, parsed: TwoPoint.Site.Render.Post list)
+    (slug: Slug)
+    (published: StoredBlob)
+    (working: StoredBlob)
+    (updateDate: DateTime option)
+    : Result<Gated, Refusal> =
+    result {
+      let! publishDate = Logic.publishDate slug published.Text
+
+      let! dated =
+        TwoPoint.Site.Render.PostText.withPublishDate working.Text publishDate
+        |> Result.mapError FrontMatterUnreadable
+
+      let! text =
+        match updateDate with
+        | None -> Ok dated
+        | Some date -> TwoPoint.Site.Render.PostText.withUpdateDate dated (DateTimeOffset date)
+        |> Result.mapError FrontMatterUnreadable
+
+      let checkedPost =
+        TwoPoint.Site.Render.Check.forPublish dependencies.Stage dependencies.Images series parsed (Slug.value slug) text
+
+      return
+        { Slug = slug
+          PublishDate = publishDate.UtcDateTime
+          PublishedAt = PublishTime.whole now
+          Text = text
+          Published = published
+          Working = working
+          Problems = checkedPost.Problems }
+    }
+
   let private evaluate
     (dependencies: PublishGate.Dependencies)
     (slug: Slug)
@@ -70,31 +106,11 @@ module PendingGate =
       let! (published: StoredBlob), (working: StoredBlob) =
         Logic.pending slug loaded.Published loaded.Working ifMatch |> Result.mapError ActionError<Refusal>.Logic
 
-      let! publishDate = Logic.publishDate slug published.Text |> Result.mapError ActionError<Refusal>.Logic
+      let parsed = dependencies.ParsePublished loaded.Posts loaded.Series
 
-      let! dated =
-        TwoPoint.Site.Render.PostText.withPublishDate working.Text publishDate
-        |> Result.mapError (FrontMatterUnreadable >> ActionError<Refusal>.Logic)
-
-      let! text =
-        match updateDate with
-        | None -> Ok dated
-        | Some date -> TwoPoint.Site.Render.PostText.withUpdateDate dated (DateTimeOffset date)
-        |> Result.mapError (FrontMatterUnreadable >> ActionError<Refusal>.Logic)
-
-      let series, parsed = dependencies.ParsePublished loaded.Posts loaded.Series
-
-      let checkedPost =
-        TwoPoint.Site.Render.Check.forPublish dependencies.Stage dependencies.Images series parsed (Slug.value slug) text
-
-      return
-        { Slug = slug
-          PublishDate = publishDate.UtcDateTime
-          PublishedAt = PublishTime.whole now
-          Text = text
-          Published = published
-          Working = working
-          Problems = checkedPost.Problems }
+      return!
+        gate dependencies now parsed slug published working updateDate
+        |> Result.mapError ActionError<Refusal>.Logic
     }
 
   let prepare (dependencies: PublishGate.Dependencies) (dto: Dto) : CancellableTask<ActionResult<Gated, Refusal>> =

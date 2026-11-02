@@ -155,6 +155,33 @@ let private deleteReason (model: Shell.Model) =
   | Some document -> Editor.deleteReason document
   | None -> None
 
+let private deleteCheck (model: Shell.Model) =
+  match document model with
+  | Some document -> document.DeleteCheck
+  | None -> Editor.DeleteNotChecked
+
+let private deleteCheckFailure (model: Shell.Model) =
+  match deleteCheck model with
+  | Editor.DeleteCheckFailed reason -> Some reason
+  | Editor.DeleteNotChecked
+  | Editor.DeleteChecking
+  | Editor.DeleteChecked _ -> None
+
+let private deleteEdits (model: Shell.Model) =
+  match document model with
+  | Some document -> Array.ofList (Editor.deleteEdits document)
+  | None -> [||]
+
+let private deleteProblems (model: Shell.Model) =
+  match document model with
+  | Some document -> Array.ofList (Editor.deleteProblems document)
+  | None -> [||]
+
+let private deleteButtonText (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.deleteButtonText document
+  | None -> "Delete"
+
 let private changeWarnings (model: Shell.Model) =
   match document model with
   | Some document -> Array.ofList document.ChangeWarnings
@@ -718,6 +745,32 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
       ) {
         p () { "The admin deletes the post, its pending edit, its revisions, and its comments permanently. The site rebuilds without the post. The delivery records stay." }
 
+        Show(when' = (deleteCheck (model ()) = Editor.DeleteChecking)) {
+          p (class' = "muted small", role = "status") { "The check of the links to the post runs." }
+        }
+
+        Show(when' = ((deleteEdits (model ())).Length > 0)) {
+          p () { "Other posts link to this post. Their pending edits remove the links. The admin publishes these pending edits first, and then deletes the post. The site rebuilds one time." }
+
+          ul (class' = "delete-edits", ariaLabel = "Pending edits to publish") {
+            For(each = deleteEdits (model ())) { yield fun edit _ -> li () { edit.Title } }
+          }
+        }
+
+        Show(when' = ((deleteProblems (model ())).Length > 0)) {
+          Parts.Alert(tone = Parts.Bad, title = "The admin cannot delete the post. A link to it stays.").Has(
+            ul (class' = "preview-problems", ariaLabel = "Problems") {
+              For(each = deleteProblems (model ())) { yield fun problem _ -> li (class' = "preview-problem") { Preview.problemText problem } }
+            }
+          )
+        }
+
+        Show(when' = (deleteCheckFailure (model ())).IsSome) {
+          Parts.Alert(tone = Parts.Bad, title = "The check of the links to the post did not run. Close the dialog and try again.").Has(
+            p () { deleteCheckFailure (model ()) |> Option.defaultValue "" }
+          )
+        }
+
         Parts
           .Field(id = "delete-slug", label = "Type the slug of the post to confirm")
           .Has(
@@ -748,7 +801,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
         disabled = (deleteStep (model ()) <> Editor.ReadyToDelete),
         onClick = fun _ -> send Editor.DeleteConfirmed
       )
-        .Has(Fragment() { "Delete" })
+        .Has(Fragment() { deleteButtonText (model ()) })
     }
   }
 
