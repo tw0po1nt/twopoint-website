@@ -136,8 +136,9 @@ _Avoid_: Unsent post, pending delivery
 
 **Commenter**:
 A person who verified an email address to comment on posts. A commenter is new, trusted, or
-banned. A delete removes the commenter and each comment of the commenter. The email address can
-then verify again, and it becomes a new commenter.
+banned. A delete removes the commenter, each comment of the commenter, and each thread that a
+comment of the commenter starts. The email address can then verify again, and it becomes a new
+commenter.
 _Avoid_: User, reader
 
 **Comment**:
@@ -152,11 +153,12 @@ _Avoid_: Parent comment, root comment
 **Reply**:
 A comment that answers one top-level comment of the same post. A reply cannot answer a reply. A
 reply from the author is approved when the author posts it. When the author replies to a new
-comment, that comment becomes approved.
+comment, that comment becomes approved. A commenter can reply only to an approved top-level
+comment. Readers see a reply only when the reply and its top-level comment are approved.
 _Avoid_: Response, child comment, nested comment
 
 **Thread**:
-A top-level comment and its replies.
+A top-level comment and its replies. A delete of the top-level comment removes the thread.
 _Avoid_: Conversation, discussion
 
 **Trusted commenter**:
