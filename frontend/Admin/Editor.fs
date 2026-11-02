@@ -721,7 +721,7 @@ let deleteStep (document: Document) =
     | DeleteNotChecked
     | DeleteChecking -> CheckingDelete
     | DeleteCheckFailed _
-    | DeleteChecked(Api.DeleteBlocked _) -> DeleteBlocked
+    | DeleteChecked(Api.Blocked _) -> DeleteBlocked
     | DeleteChecked(Api.PlainDelete | Api.PublishAndDelete _) ->
       if typed = document.Slug then ReadyToDelete else WaitingForSlug
 
@@ -729,14 +729,14 @@ let deleteStep (document: Document) =
 let deleteEdits (document: Document) =
   match document.DeleteCheck with
   | DeleteChecked(Api.PublishAndDelete edits) -> edits
-  | DeleteChecked(Api.PlainDelete | Api.DeleteBlocked _)
+  | DeleteChecked(Api.PlainDelete | Api.Blocked _)
   | DeleteNotChecked
   | DeleteChecking
   | DeleteCheckFailed _ -> []
 
 let deleteProblems (document: Document) =
   match document.DeleteCheck with
-  | DeleteChecked(Api.DeleteBlocked problems) -> problems
+  | DeleteChecked(Api.Blocked problems) -> problems
   | DeleteChecked(Api.PlainDelete | Api.PublishAndDelete _)
   | DeleteNotChecked
   | DeleteChecking
@@ -805,7 +805,6 @@ let private deleteConfirmed (document: Document) =
     )
   | (NoDeleteDialog | CheckingDelete | DeleteBlocked | WaitingForSlug | DeleteRuns), _ -> Loaded document, None
 
-/// A failed delete of a published post runs the check again, because the pending edits or the links can have changed.
 let private deleteAnswered (result: Result<Api.DeletedPost, Api.Failure>) (document: Document) =
   match deleteStep document, deleteConfirm document, result with
   | DeleteRuns, PlainConfirm, Ok _ -> Loaded { document with DeleteDraft = Confirm.Closed }, None

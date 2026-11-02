@@ -62,18 +62,34 @@ module DeleteMapping =
   let warnings (outcome : DeletePost.Outcome) =
     match outcome with
     | DeletePost.DraftDeleted warnings
-    | DeletePost.PublishedDeleted(_, _, warnings)
-    | DeletePost.PostKept(_, _, _, warnings) -> warnings
+    | DeletePost.PublishedDeleted(_, _, warnings) -> warnings
+    | DeletePost.PostKept(_, _, _, warnings) -> List.map Step warnings
 
-  let deleted (edits : Slug list) (production : ProductionDispatch option) (warnings : ChangeWarning list) : DeletedPostDto =
+  let deleted (outcome : DeletePost.Outcome) : DeletedPostDto =
+    let edits, production =
+      match outcome with
+      | DeletePost.DraftDeleted _ -> [], None
+      | DeletePost.PublishedDeleted(edits, production, _)
+      | DeletePost.PostKept(edits, _, production, _) -> edits, Some production
+
     { ProductionRun = production |> Option.bind ProductionDispatch.runNumber |> Option.map _.Value |> Option.toNullable
       Edits = edits |> List.map Slug.value
-      Warnings = warnings |> List.map UpcomingMapping.warning }
+      Warnings = warnings outcome |> List.map UpcomingMapping.warning }
 
   let names (slugs : Slug list) = slugs |> List.map (fun slug -> $"'{slug}'") |> String.concat ", "
 
-  /// The delete published the pending edits and kept the post. The answer is a failure, so that the editor checks again.
-  let kept (slug : string) (edits : Slug list) (reason : DeletePost.KeptReason) =
+  let keptWarning (warning : PublishSteps.Warning) =
+    match warning with
+    | PublishSteps.CommentRowNotWritten _ -> "The post table has no row for a published edit, so readers cannot comment on that post yet."
+    | PublishSteps.PendingEditKept _ -> "A published edit keeps its pending edit. The published text is correct."
+    | PublishSteps.NewerTextKept -> "Another tab saved newer text during the delete. That text is a pending edit."
+    | PublishSteps.ProductionRebuildFailed _ -> "The production rebuild did not start. Select Rebuild site on the dashboard."
+    | PublishSteps.StagingRebuildFailed _ -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
+    | PublishSteps.SiteNotRebuilt _ -> "The site rebuild did not start. Select Rebuild site on the dashboard."
+    | PublishSteps.DeployNotTracked _ -> "The admin cannot show the deploy state of the published edits. The site still builds."
+
+  /// The delete published the pending edits and kept the post.
+  let kept (slug : string) (edits : Slug list) (reason : DeletePost.KeptReason) (warnings : PublishSteps.Warning list) =
     let because, statusCode =
       match reason with
       | DeletePost.EditNotPublished(edit, PublishSteps.WriteFailed _) ->
@@ -83,8 +99,10 @@ module DeleteMapping =
       | DeletePost.PublishedBlobKept -> "The published text of the post changed during the delete.", HttpStatusCode.Conflict
       | DeletePost.PublishedDeleteFailed _ -> "The delete of the published text failed.", HttpStatusCode.InternalServerError
 
-    $"The admin published the pending edits of the posts {names edits} and did not delete the post '{slug}'. {because}",
-    statusCode
+    let message =
+      $"The admin published the pending edits of the posts {names edits} and did not delete the post '{slug}'. {because}"
+
+    String.concat " " (message :: List.map keptWarning warnings), statusCode
 
   let error (error : DeletePost.Error) =
     match error with
@@ -211,37 +229,35 @@ type DeletePost(
                 ConfirmSlug = DeleteMapping.confirmation json
                 Edits = DeleteMapping.edits json }
 
-          match result with
-          | Ok(DeletePost.Event.PostDeleted(DeletePost.PostKept(edits, reason, _, _) as outcome)) ->
-            logger.LogWarning(
-              "The delete of the post '{slug}' published the pending edits of {edits} and kept the post: {reason}",
-              slug,
-              DeleteMapping.names edits,
-              reason
-            )
-
-            for warning in DeleteMapping.warnings outcome do
-              logger.LogWarning("The delete of the post '{slug}' kept the post, and a step failed: {warning}", slug, warning)
-          | Ok(DeletePost.Event.PostDeleted outcome) ->
-            for warning in DeleteMapping.warnings outcome do
-              logger.LogWarning("The post '{slug}' is deleted, and a step after the delete failed: {warning}", slug, warning)
-          | Error _ -> ()
+          let answer () =
+            result
+            |> ActionResult.toApiResponse
+              (fun (DeletePost.Event.PostDeleted outcome) -> Some(DeleteMapping.deleted outcome))
+              DeleteMapping.error
 
           let apiResponse, statusCode =
             match result with
-            | Ok(DeletePost.Event.PostDeleted(DeletePost.PostKept(edits, reason, _, _))) ->
-              let message, statusCode = DeleteMapping.kept slug edits reason
-              ({ Success = false; Message = Some message; Data = None } : ApiResponse<DeletedPostDto>), statusCode
-            | _ ->
-              result
-              |> ActionResult.toApiResponse
-                (fun (DeletePost.Event.PostDeleted outcome) ->
-                  match outcome with
-                  | DeletePost.DraftDeleted warnings -> Some(DeleteMapping.deleted [] None warnings)
-                  | DeletePost.PublishedDeleted(edits, production, warnings) ->
-                    Some(DeleteMapping.deleted edits (Some production) warnings)
-                  | DeletePost.PostKept _ -> None)
-                DeleteMapping.error
+            | Ok(DeletePost.Event.PostDeleted(DeletePost.PostKept(edits, reason, _, warnings) as outcome)) ->
+              logger.LogWarning(
+                "The delete of the post '{slug}' published the pending edits of {edits} and kept the post: {reason}",
+                slug,
+                DeleteMapping.names edits,
+                reason
+              )
+
+              for warning in warnings do
+                logger.LogWarning("The delete of the post '{slug}' kept the post, and a step failed: {warning}", slug, warning)
+
+              let message, statusCode = DeleteMapping.kept slug edits reason warnings
+
+              ({ Success = false; Message = Some message; Data = Some(DeleteMapping.deleted outcome) } : ApiResponse<DeletedPostDto>),
+              statusCode
+            | Ok(DeletePost.Event.PostDeleted outcome) ->
+              for warning in DeleteMapping.warnings outcome do
+                logger.LogWarning("The post '{slug}' is deleted, and a step after the delete failed: {warning}", slug, warning)
+
+              answer ()
+            | Error _ -> answer ()
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

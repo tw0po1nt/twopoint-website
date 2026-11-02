@@ -1358,8 +1358,8 @@ let private deleteRefusedWith expected result =
 let private deleteWarningsOf outcome =
   match outcome with
   | DeletePost.DraftDeleted warnings -> warnings
-  | DeletePost.PublishedDeleted(_, _, warnings)
-  | DeletePost.PostKept(_, _, _, warnings) -> warnings
+  | DeletePost.PublishedDeleted(_, _, warnings) -> warnings
+  | DeletePost.PostKept(_, _, _, warnings) -> List.map Step warnings
 
 let private otherPost =
   "---\npublishDate: 2026-01-02T00:00:00Z\nauthor: A\ntitle: Other\nexcerpt: E\ncategory: One-offs\n---\n\nOther body.\n"
@@ -1750,6 +1750,17 @@ let publishAndDeleteTests =
       Expect.equal (fake.Log |> List.filter ((=) "dispatch")) [ "dispatch" ] "One dispatch"
       Expect.isFalse (List.contains "delete published" fake.Log) "The post is not deleted"
       Expect.equal (fake.Changes |> List.map _.Slug) [ slug "other" ] "A change for the published edit only"
+    }
+
+    test "a failed dispatch after the post is kept is a warning of the kept post" {
+      let fake = store [ "live", livePost; "other", linkingPost; "third", thirdPost ] [ "other", fixingEdit; "third", thirdFix ]
+      fake.PublishedWriteFailsFor <- Set.ofList [ "third" ]
+      fake.Dispatch <- WholeCallFails
+
+      match deleteWith fake "live" (Some "live") [ "other", "w1"; "third", "w1" ] |> deletedOf with
+      | DeletePost.PostKept(_, _, _, warnings) ->
+        Expect.exists warnings (function PublishSteps.SiteNotRebuilt _ -> true | _ -> false) "The warning"
+      | other -> failtestf "Expected PostKept, got %A" other
     }
 
     test "a failed write of the first edit writes nothing and dispatches nothing" {

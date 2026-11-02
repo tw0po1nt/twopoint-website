@@ -64,15 +64,15 @@ module DeleteCheck =
         TwoPoint.Site.Render.Check.withoutPostAndEdits stage published (Slug.value slug) (used |> List.choose _.Post)
         |> List.filter TwoPoint.Site.Render.Problem.isError
 
-      match linking, unfixed @ resultErrors @ List.collect editErrors used with
-      | [], _ -> PlainDelete
-      | _, [] ->
+      match unfixed @ resultErrors @ List.collect editErrors used with
+      | [] when List.isEmpty linking -> PlainDelete
+      | [] ->
         PublishAndDelete
           [ for fix in used ->
               { Slug = fix.Slug
                 Title = fix.Title
                 ETag = fix.ETag } ]
-      | _, problems -> Blocked problems
+      | problems -> Blocked problems
 
     /// The problem of a pending edit that the gate refuses. The outcome names the post.
     let refusal (refusal: PendingGate.Refusal) =
@@ -155,9 +155,7 @@ module DeleteCheck =
 
       let gated =
         match outcome with
-        | PublishAndDelete edits ->
-          edits
-          |> List.choose (fun edit -> found |> List.tryPick (fun (fix, gated) -> if fix.Slug = edit.Slug then gated else None))
+        | PublishAndDelete _ -> found |> List.choose snd
         | PlainDelete
         | Blocked _ -> []
 
@@ -228,7 +226,7 @@ module DeletePost =
     /// `edits` are the posts whose pending edits the delete published first.
     | PublishedDeleted of edits: Slug list * production: ProductionDispatch * warnings: ChangeWarning list
     /// The delete published the pending edits of `edits`, and a step after that failed. The post stays.
-    | PostKept of edits: Slug list * reason: KeptReason * production: ProductionDispatch * warnings: ChangeWarning list
+    | PostKept of edits: Slug list * reason: KeptReason * production: ProductionDispatch * warnings: PublishSteps.Warning list
 
   type Event = PostDeleted of Outcome
 
@@ -266,8 +264,7 @@ module DeletePost =
       | Some _, _ when confirmSlug <> Some(Slug.value slug) -> Decision.failure (SlugNotConfirmed slug)
       | Some published, working -> Decision.success (DeletePublished(published, working))
 
-    /// The pending edits to publish, when the request names the pending edits of the delete check.
-    let confirm (requested: EditRef list) (outcome: DeleteCheck.Outcome) : Decision<DeleteCheck.Edit list, Error> =
+    let confirm (requested: EditRef list) (outcome: DeleteCheck.Outcome) : Decision<unit, Error> =
       let asked = requested |> List.map (fun edit -> edit.Slug, edit.IfMatch)
 
       let matches (edits: DeleteCheck.Edit list) =
@@ -275,8 +272,8 @@ module DeletePost =
 
       match outcome with
       | DeleteCheck.Blocked problems -> Decision.failure (BreaksLinks problems)
-      | DeleteCheck.PlainDelete when List.isEmpty asked -> Decision.success []
-      | DeleteCheck.PublishAndDelete edits when matches edits -> Decision.success edits
+      | DeleteCheck.PlainDelete when List.isEmpty asked -> Decision.success ()
+      | DeleteCheck.PublishAndDelete edits when matches edits -> Decision.success ()
       | DeleteCheck.PlainDelete
       | DeleteCheck.PublishAndDelete _ -> Decision.failure EditsChanged
 
@@ -332,7 +329,7 @@ module DeletePost =
 
   type private EditsPublished =
     { Published: Slug list
-      Warnings: ChangeWarning list
+      Warnings: PublishSteps.Warning list
       Failure: (Slug * PublishSteps.WriteFailure) option }
 
   /// Each edit has the publish steps of `PublishChanges`, with no dispatch. The first failed write stops the publish.
@@ -340,7 +337,7 @@ module DeletePost =
     (dependencies: Dependencies)
     (edits: (PendingGate.Gated * PostRow) list)
     (published: Slug list)
-    (warnings: ChangeWarning list)
+    (warnings: PublishSteps.Warning list)
     : CancellableTask<EditsPublished> =
     cancellableTask {
       match edits with
@@ -367,7 +364,7 @@ module DeletePost =
               Failure = Some(gated.Slug, failure) }
         | Ok() ->
           let! settled = PublishSteps.settle dependencies post gated.Working.ETag
-          return! publishEdits dependencies rest (gated.Slug :: published) (warnings @ List.map Step settled)
+          return! publishEdits dependencies rest (gated.Slug :: published) (warnings @ settled)
     }
 
   let private keep
@@ -377,7 +374,7 @@ module DeletePost =
     : CancellableTask<ActionResult<Outcome, Error>> =
     cancellableTask {
       let! rebuilt = PublishSteps.rebuildAll dependencies edits.Published
-      return Ok(PostKept(edits.Published, reason, rebuilt.Production, edits.Warnings @ List.map Step rebuilt.Warnings))
+      return Ok(PostKept(edits.Published, reason, rebuilt.Production, edits.Warnings @ rebuilt.Warnings))
     }
 
   let private deletePublished
@@ -407,7 +404,7 @@ module DeletePost =
             | Some blob -> dependencies.DeleteWorkingBlob slug blob.ETag |> CancellableTask.map Logic.workingWarnings
             | None -> CancellableTask.singleton []
 
-          let! outcome = finishPublished dependencies slug publishedEdits.Published (publishedEdits.Warnings @ workingWarnings)
+          let! outcome = finishPublished dependencies slug publishedEdits.Published (List.map Step publishedEdits.Warnings @ workingWarnings)
           return Ok outcome
     }
 
@@ -426,9 +423,8 @@ module DeletePost =
       return DraftDeleted records
     }
 
-  let private rowsOf (checkedDelete: DeleteCheck.Checked) (edits: DeleteCheck.Edit list) =
-    edits
-    |> List.choose (fun edit -> checkedDelete.Gated |> List.tryFind (fun gated -> gated.Slug = edit.Slug))
+  let private rowsOf (checkedDelete: DeleteCheck.Checked) =
+    checkedDelete.Gated
     |> List.map (fun gated -> PublishSteps.row gated.Slug gated.PublishDate gated.Text |> Result.map (fun post -> gated, post))
     |> List.sequenceResultM
 
@@ -456,8 +452,8 @@ module DeletePost =
             let! (checkedDelete: DeleteCheck.Checked) =
               DeleteCheck.evaluate dependencies slug loaded |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-            let! edits = Logic.confirm dto.Edits checkedDelete.Outcome |> Result.mapError ActionError<Error>.Logic
-            let! rows = rowsOf checkedDelete edits |> Result.mapError ActionError<Error>.Validation
+            do! Logic.confirm dto.Edits checkedDelete.Outcome |> Result.mapError ActionError<Error>.Logic
+            let! rows = rowsOf checkedDelete |> Result.mapError ActionError<Error>.Validation
             return! deletePublished dependencies slug published working rows
           }
 

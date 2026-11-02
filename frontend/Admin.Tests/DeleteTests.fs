@@ -254,7 +254,7 @@ let tests =
 
     test "a blocked check shows the problems and disables the delete, also with the typed slug" {
       let problems = [ problem "The post 'c-post' links to the post and has no pending edit." ]
-      let model = typing "my-post" (checkedAs (Api.DeleteBlocked problems) (requested (opened live)))
+      let model = typing "my-post" (checkedAs (Api.Blocked problems) (requested (opened live)))
       Expect.equal (step model) Editor.DeleteBlocked "Disabled"
       Expect.equal (Editor.deleteProblems (document' model)) problems "The problems"
       Expect.equal (Editor.deleteButtonText (document' model)) "Delete" "The button"
@@ -275,7 +275,7 @@ let tests =
       let model, effect = send (Editor.DeleteAnswered("my-post", Error(Api.Failed "The pending edits changed."))) model
       Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check runs again"
       let problems = [ problem "A link stays." ]
-      let model = checkedAs (Api.DeleteBlocked problems) model
+      let model = checkedAs (Api.Blocked problems) model
       Expect.equal (step model) Editor.DeleteBlocked "The new outcome"
       Expect.equal (Editor.deleteProblems (document' model)) problems "The problems"
       Expect.equal (Typed.typed (document' model).Delete) "my-post" "The typed slug stays"

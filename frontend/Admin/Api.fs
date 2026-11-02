@@ -258,14 +258,14 @@ type DeleteEdit =
     Title: string
     ETag: string }
 
-/// The result of a delete of a published post.
+/// The outcome of the delete check of a published post.
 type DeleteCheck =
   /// No published post links to the post.
   | PlainDelete
   /// The delete publishes these pending edits first. They remove each link to the post.
   | PublishAndDelete of DeleteEdit list
   /// A link to the post stays, or a pending edit cannot publish.
-  | DeleteBlocked of Problem list
+  | Blocked of Problem list
 
 type SeriesWarning =
   | SeriesRebuild of PublishWarning
@@ -482,7 +482,7 @@ let private deleteCheck: Decoder<DeleteCheck> =
     match outcome with
     | "plain" -> Decode.succeed PlainDelete
     | "publish-and-delete" -> Decode.field "edits" (Decode.list deleteEdit) |> Decode.map PublishAndDelete
-    | "blocked" -> Decode.field "problems" (Decode.list problem) |> Decode.map DeleteBlocked
+    | "blocked" -> Decode.field "problems" (Decode.list problem) |> Decode.map Blocked
     | _ -> Decode.fail $"The delete check outcome '{outcome}' is not known.")
 
 let private seriesPostState: Decoder<SeriesPostState> =
