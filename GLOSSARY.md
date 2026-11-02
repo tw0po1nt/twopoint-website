@@ -181,6 +181,15 @@ _Avoid_: Hidden comment, deleted comment
 The new comments on all posts, oldest first. The author approves or rejects each one.
 _Avoid_: Inbox, pending comments
 
+**Reply email**:
+An email that tells the commenter of a top-level comment about a new reply in the thread. The
+commenter asks for reply emails when they post the top-level comment, and only for that comment. A
+reply sends one reply email at its first approval, if the top-level comment is approved at that
+time. A reply from the commenter of the top-level comment sends none. A banned commenter gets no
+reply email. Each reply email lets the commenter stop the reply emails of that comment. After a
+stop, the reply emails of that comment do not start again.
+_Avoid_: Reply notification, delivery, comment subscription
+
 ### Admin
 
 **Author**:
@@ -194,7 +203,7 @@ _Avoid_: CMS, back office, admin app
 
 **Notification**:
 A push message to a registered device.
-_Avoid_: Alert. Do not use this term for an email to a subscription.
+_Avoid_: Alert. Do not use this term for an email to a subscription or for a reply email.
 
 **Registered device**:
 A browser or a Home Screen web app where the author turned on notifications.
