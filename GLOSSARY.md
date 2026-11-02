@@ -143,7 +143,19 @@ _Avoid_: User, reader
 **Comment**:
 The text that a commenter posts on one post. A comment is new, approved, or rejected. Readers see
 only approved comments.
-_Avoid_: Reply, response
+_Avoid_: Response
+
+**Top-level comment**:
+A comment that is not a reply.
+_Avoid_: Parent comment, root comment
+
+**Reply**:
+A comment that answers one top-level comment of the same post. A reply cannot answer a reply.
+_Avoid_: Response, child comment, nested comment
+
+**Thread**:
+A top-level comment and its replies.
+_Avoid_: Conversation, discussion
 
 **Trusted commenter**:
 A commenter whose comments are approved at the time of the post. Only the author makes a commenter
