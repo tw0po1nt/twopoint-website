@@ -141,8 +141,8 @@ then verify again, and it becomes a new commenter.
 _Avoid_: User, reader
 
 **Comment**:
-The text that a commenter posts on one post. A comment is new, approved, or rejected. Readers see
-only approved comments.
+The text that a commenter or the author posts on one post. The author posts only replies. A comment
+is new, approved, or rejected. Readers see only approved comments.
 _Avoid_: Response
 
 **Top-level comment**:
@@ -150,7 +150,9 @@ A comment that is not a reply.
 _Avoid_: Parent comment, root comment
 
 **Reply**:
-A comment that answers one top-level comment of the same post. A reply cannot answer a reply.
+A comment that answers one top-level comment of the same post. A reply cannot answer a reply. A
+reply from the author is approved when the author posts it. When the author replies to a new
+comment, that comment becomes approved.
 _Avoid_: Response, child comment, nested comment
 
 **Thread**:
