@@ -25,6 +25,9 @@ open System.Threading
 
 type ChangeDateJson = { PublishDate : string }
 
+/// A null `Edits` is a plain removal.
+type UnpublishPostJson = { Edits : RemovalEditJson list }
+
 /// `PublishDate` is null after an unpublish. `ETag` is the ETag of the working blob, or null when the post has no working blob.
 /// Each warning is `comment-row`, `pending-edit`, `newer-text`, `production-rebuild`, `staging-rebuild`, `site-rebuild`,
 /// `deploy-tracking`, `pending-date`, `post-row`, `revisions`, or `comments`.
@@ -62,8 +65,35 @@ module UpcomingMapping =
     | UpcomingGate.Gate gate -> PendingMapping.refusal gate
     | UpcomingGate.NotUpcoming live -> $"The post '{live}' is not upcoming. Its publish date is in the past", HttpStatusCode.Conflict
 
-  let errors (problems : TwoPoint.Site.Render.Problem list) =
-    problems |> List.map _.Message |> String.concat " "
+module UnpublishMapping =
+
+  let edits (json : UnpublishPostJson) =
+    json |> Option.ofObj |> Option.bind (fun json -> Option.ofObj json.Edits) |> RemovalMapping.edits
+
+  /// The unpublish published the pending edits and kept the post upcoming.
+  let kept (slug : string) (edits : Slug list) (reason : Unpublish.KeptReason) (warnings : PublishSteps.Warning list) =
+    let draftWritten = "The post now has a pending edit with no publish date. Reload the post before you continue."
+
+    let because =
+      match reason with
+      | Unpublish.EditNotPublished(edit, failure) -> RemovalMapping.editNotPublished "unpublish" edit failure
+      | Unpublish.WorkingBlobKept -> "Another tab saved the post during the unpublish.", HttpStatusCode.Conflict
+      | Unpublish.WorkingWriteFailed _ -> "The write of the draft text failed.", HttpStatusCode.InternalServerError
+      | Unpublish.PublishedBlobKept ->
+        $"The published text of the post changed during the unpublish. {draftWritten}", HttpStatusCode.Conflict
+      | Unpublish.PublishedDeleteFailed _ ->
+        $"The delete of the published text failed. {draftWritten}", HttpStatusCode.InternalServerError
+
+    RemovalMapping.kept "unpublish" slug edits because warnings
+
+  let error (error : Unpublish.Error) =
+    match error with
+    | Unpublish.Refused refusal -> UpcomingMapping.refusal refusal
+    | Unpublish.BreaksLinks problems ->
+      $"The unpublish breaks a link in another post and is not done. {RemovalMapping.errors problems}", HttpStatusCode.UnprocessableEntity
+    | Unpublish.EditsChanged ->
+      "The pending edits that remove the links to the post changed. The admin did not unpublish the post. Check the unpublish again.",
+      HttpStatusCode.Conflict
 
 type UnpublishPost(
   config : Config,
@@ -100,6 +130,7 @@ type UnpublishPost(
         match SaveDraftHeaders.precondition req with
         | Missing -> return! PreconditionResponse.missingOrNone<UpcomingChangeDto> req
         | precondition ->
+          let! json = req.ReadFromJsonAsync<UnpublishPostJson> ct
           let postStore = PostStore(postStoreClient, logger, texts)
 
           let postDependencies =
@@ -109,22 +140,35 @@ type UnpublishPost(
           let gate = PublishGateStore(config, images, parseCache, postStore)
           let unpublish = Unpublish.withDependencies (PostPublishing(gate, postStore, postDependencies, rebuilder))
 
-          let! result = unpublish { Slug = slug; IfMatch = SaveDraftHeaders.ifMatch precondition }
+          let! result =
+            unpublish
+              { Slug = slug
+                IfMatch = SaveDraftHeaders.ifMatch precondition
+                Edits = UnpublishMapping.edits json }
 
-          match result with
-          | Ok(Unpublish.Event.Unpublished change) ->
-            for warning in change.Warnings do
-              logger.LogWarning("The post '{slug}' is unpublished, and a step after the write failed: {warning}", slug, warning)
-          | Error _ -> ()
+          let answer = ActionResult.toApiResponse (UpcomingMapping.change >> Some) UnpublishMapping.error
 
           let apiResponse, statusCode =
-            result
-            |> ActionResult.toApiResponse
-              (fun (Unpublish.Event.Unpublished change) -> Some(UpcomingMapping.change change))
-              (function
-                | Unpublish.Error.Refused refusal -> UpcomingMapping.refusal refusal
-                | Unpublish.Error.HasErrors problems ->
-                  $"The unpublish breaks a link in another post and is not done. {UpcomingMapping.errors problems}", HttpStatusCode.UnprocessableEntity)
+            match result with
+            | Ok(Unpublish.Event.PostKept(edits, reason, _, warnings)) ->
+              logger.LogWarning(
+                "The unpublish of the post '{slug}' published the pending edits of {edits} and kept the post: {reason}",
+                slug,
+                RemovalMapping.names edits,
+                reason
+              )
+
+              for warning in warnings do
+                logger.LogWarning("The unpublish of the post '{slug}' kept the post, and a step failed: {warning}", slug, warning)
+
+              let message, statusCode = UnpublishMapping.kept slug edits reason warnings
+              ({ Success = false; Message = Some message; Data = None } : ApiResponse<UpcomingChangeDto>), statusCode
+            | Ok(Unpublish.Event.Unpublished change) ->
+              for warning in change.Warnings do
+                logger.LogWarning("The post '{slug}' is unpublished, and a step after the write failed: {warning}", slug, warning)
+
+              answer (Ok change)
+            | Error error -> answer (Error error)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

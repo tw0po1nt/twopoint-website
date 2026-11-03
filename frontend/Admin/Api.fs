@@ -252,18 +252,18 @@ type UpcomingChange =
 
 type DeletedPost = { Warnings: ChangeWarning list }
 
-/// A pending edit that the delete publishes first. `ETag` is the ETag of its working blob.
-type DeleteEdit =
+/// A pending edit that the removal publishes first. `ETag` is the ETag of its working blob.
+type RemovalEdit =
   { Slug: string
     Title: string
     ETag: string }
 
-/// The outcome of the delete check of a published post.
-type DeleteCheck =
+/// The outcome of the removal check of a published post, before a delete or an unpublish.
+type RemovalCheck =
   /// No published post links to the post.
-  | PlainDelete
-  /// The delete publishes these pending edits first. They remove each link to the post.
-  | PublishAndDelete of DeleteEdit list
+  | PlainRemoval
+  /// The removal publishes these pending edits first. They remove each link to the post.
+  | PublishAndRemove of RemovalEdit list
   /// A link to the post stays, or a pending edit cannot publish.
   | Blocked of Problem list
 
@@ -470,20 +470,20 @@ let private changeWarning: Decoder<ChangeWarning> =
     | "comments" -> Decode.succeed CommentsKept
     | _ -> publishWarning |> Decode.map PublishStep)
 
-let private deleteEdit: Decoder<DeleteEdit> =
+let private removalEdit: Decoder<RemovalEdit> =
   Decode.object (fun get ->
     { Slug = get.Required.Field "slug" Decode.string
       Title = get.Required.Field "title" Decode.string
       ETag = get.Required.Field "eTag" Decode.string })
 
-let private deleteCheck: Decoder<DeleteCheck> =
+let private removalCheck: Decoder<RemovalCheck> =
   Decode.field "outcome" Decode.string
   |> Decode.andThen (fun outcome ->
     match outcome with
-    | "plain" -> Decode.succeed PlainDelete
-    | "publish-and-delete" -> Decode.field "edits" (Decode.list deleteEdit) |> Decode.map PublishAndDelete
+    | "plain" -> Decode.succeed PlainRemoval
+    | "publish-and-remove" -> Decode.field "edits" (Decode.list removalEdit) |> Decode.map PublishAndRemove
     | "blocked" -> Decode.field "problems" (Decode.list problem) |> Decode.map Blocked
-    | _ -> Decode.fail $"The delete check outcome '{outcome}' is not known.")
+    | _ -> Decode.fail $"The removal check outcome '{outcome}' is not known.")
 
 let private seriesPostState: Decoder<SeriesPostState> =
   Decode.string
@@ -513,7 +513,7 @@ let private coders =
   |> Extra.withCustom (severityName >> Encode.string) severity
   |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
   |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check
-  |> Extra.withCustom (fun (_: DeleteCheck) -> failwith "The admin sends no delete check.") deleteCheck
+  |> Extra.withCustom (fun (_: RemovalCheck) -> failwith "The admin sends no removal check.") removalCheck
   |> Extra.withCustom (fun (_: PublishWarning) -> failwith "The admin sends no publish warning.") publishWarning
   |> Extra.withCustom (fun (_: ChangeWarning) -> failwith "The admin sends no change warning.") changeWarning
   |> Extra.withCustom (fun (_: SeriesPostState) -> failwith "The admin sends no series post state.") seriesPostState
@@ -883,8 +883,21 @@ let workingPrecondition (eTag: string option) =
   | Some eTag -> IfMatch eTag
   | None -> IfNoneMatch "*"
 
-let unpublishPost (api: string) (token: string) (slug: string) (eTag: string option) : JS.Promise<Result<UpcomingChange, Failure>> =
-  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "unpublish" ]) (Some(Json "{}")) [ workingPrecondition eTag ]
+let private removalEdits (edits: RemovalEdit list) =
+  edits
+  |> List.map (fun edit -> Encode.object [ "slug", Encode.string edit.Slug; "ifMatch", Encode.string edit.ETag ])
+  |> Encode.list
+
+/// `edits` are the pending edits of the removal check.
+let unpublishPost
+  (api: string)
+  (token: string)
+  (slug: string)
+  (eTag: string option)
+  (edits: RemovalEdit list)
+  : JS.Promise<Result<UpcomingChange, Failure>> =
+  let json = Encode.object [ "edits", removalEdits edits ] |> Encode.toString 0
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "unpublish" ]) (Some(Json json)) [ workingPrecondition eTag ]
 
 /// `iso` is an ISO 8601 UTC time, for example `2026-11-02T13:00:00Z`.
 let changePostDate
@@ -897,17 +910,17 @@ let changePostDate
   let json = Encode.object [ "publishDate", Encode.string iso ] |> Encode.toString 0
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "date" ]) (Some(Json json)) [ workingPrecondition eTag ]
 
-let checkDelete (api: string) (token: string) (slug: string) : JS.Promise<Result<DeleteCheck, Failure>> =
-  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "delete"; "check" ]) (Some(Json "{}")) []
+let checkRemoval (api: string) (token: string) (slug: string) : JS.Promise<Result<RemovalCheck, Failure>> =
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "removal"; "check" ]) (Some(Json "{}")) []
 
-/// `confirmSlug` is the text that the author typed, and `None` for a draft. `edits` are the pending edits of the delete check.
+/// `confirmSlug` is the text that the author typed, and `None` for a draft. `edits` are the pending edits of the removal check.
 let deletePost
   (api: string)
   (token: string)
   (slug: string)
   (eTag: string option)
   (confirmSlug: string option)
-  (edits: DeleteEdit list)
+  (edits: RemovalEdit list)
   : JS.Promise<Result<DeletedPost, Failure>> =
   let confirmation =
     match confirmSlug with
@@ -917,10 +930,7 @@ let deletePost
   let json =
     Encode.object [
       "confirmSlug", confirmation
-      "edits",
-      edits
-      |> List.map (fun edit -> Encode.object [ "slug", Encode.string edit.Slug; "ifMatch", Encode.string edit.ETag ])
-      |> Encode.list
+      "edits", removalEdits edits
     ]
     |> Encode.toString 0
 

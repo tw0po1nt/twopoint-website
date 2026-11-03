@@ -55,12 +55,12 @@ let private typing text model = fst (send (Editor.DeleteTyped text) model)
 let private requested model = fst (send Editor.DeleteRequested model)
 
 let private checkedAs outcome model =
-  fst (send (Editor.DeleteCheckAnswered("my-post", Ok outcome)) model)
+  fst (send (Editor.RemovalCheckAnswered("my-post", Editor.DeleteDialog, Ok outcome)) model)
 
 /// The dialog is open, and the check found no link to the post.
-let private ready model = checkedAs Api.PlainDelete (requested model)
+let private ready model = checkedAs Api.PlainRemoval (requested model)
 
-let private edit slug title: Api.DeleteEdit = { Slug = slug; Title = title; ETag = $"\"{slug}-w\"" }
+let private edit slug title: Api.RemovalEdit = { Slug = slug; Title = title; ETag = $"\"{slug}-w\"" }
 
 let private problem message: Api.Problem =
   { Severity = Api.Severity.Error
@@ -180,9 +180,9 @@ let tests =
       let model, effect = send (Editor.DeleteAnswered("my-post", Error(Api.Failed reason))) model
       Expect.equal (Editor.deleteReason (document' model)) (Some reason) "The reason"
       Expect.equal model.Router.Route (Route.Post "my-post") "The editor stays"
-      Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check runs again"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckRemoval("my-post", Editor.DeleteDialog) ])) "The check runs again"
       Expect.equal (step model) Editor.CheckingDelete "Disabled during the check"
-      let model = checkedAs Api.PlainDelete model
+      let model = checkedAs Api.PlainRemoval model
       Expect.equal (step model) Editor.ReadyToDelete "Enabled again"
       let _, effect = send Editor.DeleteConfirmed model
       Expect.isSome effect "A second call"
@@ -209,7 +209,7 @@ let tests =
 
     test "the dialog of a published post runs the check one time when it opens" {
       let model, effect = send Editor.DeleteRequested (opened live)
-      Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckRemoval("my-post", Editor.DeleteDialog) ])) "The check"
       Expect.equal (step model) Editor.CheckingDelete "The check runs"
       Expect.equal (step (typing "my-post" model)) Editor.CheckingDelete "The typed slug waits for the check"
       let _, confirmed = send Editor.DeleteConfirmed (typing "my-post" model)
@@ -232,11 +232,11 @@ let tests =
 
     test "a publish and delete lists the posts, gives the number of edits on the button, and sends each edit with its ETag" {
       let edits = [ edit "a-post" "A post"; edit "c-post" "C post" ]
-      let model = typing "my-post" (checkedAs (Api.PublishAndDelete edits) (requested (opened live)))
+      let model = typing "my-post" (checkedAs (Api.PublishAndRemove edits) (requested (opened live)))
       Expect.equal (Editor.deleteEdits (document' model)) edits "The posts"
       Expect.equal (Editor.deleteButtonText (document' model)) "Publish 2 edits and delete" "The button"
       Expect.equal (step model) Editor.ReadyToDelete "Enabled"
-      let one = checkedAs (Api.PublishAndDelete [ edit "a-post" "A post" ]) (requested (opened live))
+      let one = checkedAs (Api.PublishAndRemove [ edit "a-post" "A post" ]) (requested (opened live))
       Expect.equal (Editor.deleteButtonText (document' one)) "Publish 1 edit and delete" "One edit"
 
       let _, effect = send Editor.DeleteConfirmed model
@@ -248,7 +248,7 @@ let tests =
     }
 
     test "a publish and delete still needs the typed slug" {
-      let model = checkedAs (Api.PublishAndDelete [ edit "a-post" "A post" ]) (requested (opened live))
+      let model = checkedAs (Api.PublishAndRemove [ edit "a-post" "A post" ]) (requested (opened live))
       Expect.equal (step (typing "my" model)) Editor.WaitingForSlug "Disabled"
     }
 
@@ -263,17 +263,17 @@ let tests =
     }
 
     test "a check that fails disables the delete and gives the reason" {
-      let model = fst (send (Editor.DeleteCheckAnswered("my-post", Error Api.Unanswered)) (requested (opened live)))
+      let model = fst (send (Editor.RemovalCheckAnswered("my-post", Editor.DeleteDialog, Error Api.Unanswered)) (requested (opened live)))
       let model = typing "my-post" model
       Expect.equal (step model) Editor.DeleteBlocked "Disabled"
-      Expect.equal (document' model).DeleteCheck (Editor.DeleteCheckFailed "The API did not answer.") "The reason"
+      Expect.equal (document' model).DeleteCheck (RemovalCheck.Failed "The API did not answer.") "The reason"
     }
 
     test "a refused delete runs the check again, and the dialog shows the new outcome" {
-      let model = typing "my-post" (checkedAs (Api.PublishAndDelete [ edit "a-post" "A post" ]) (requested (opened live)))
+      let model = typing "my-post" (checkedAs (Api.PublishAndRemove [ edit "a-post" "A post" ]) (requested (opened live)))
       let model, _ = send Editor.DeleteConfirmed model
       let model, effect = send (Editor.DeleteAnswered("my-post", Error(Api.Failed "The pending edits changed."))) model
-      Expect.equal effect (Some(Shell.Send [ Shell.CheckDelete "my-post" ])) "The check runs again"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckRemoval("my-post", Editor.DeleteDialog) ])) "The check runs again"
       let problems = [ problem "A link stays." ]
       let model = checkedAs (Api.Blocked problems) model
       Expect.equal (step model) Editor.DeleteBlocked "The new outcome"
@@ -284,14 +284,14 @@ let tests =
     test "a check answer after the dialog closes changes nothing" {
       let model = requested (opened live)
       let closed, _ = send Editor.DeleteClosed model
-      let late = checkedAs Api.PlainDelete closed
+      let late = checkedAs Api.PlainRemoval closed
       Expect.equal (step late) Editor.NoDeleteDialog "Closed"
-      Expect.equal (document' late).DeleteCheck Editor.DeleteNotChecked "No check"
+      Expect.equal (document' late).DeleteCheck RemovalCheck.NotChecked "No check"
     }
 
     test "a check that the API refuses for the account signs the author out" {
       let model = requested (opened live)
-      let next, _ = send (Editor.DeleteCheckAnswered("my-post", Error Api.Refused)) model
+      let next, _ = send (Editor.RemovalCheckAnswered("my-post", Editor.DeleteDialog, Error Api.Refused)) model
       Expect.notEqual next.Session model.Session "The session changes"
     }
   ]

@@ -29,6 +29,7 @@
     <Compile Include="Endpoints\Admin\SiteRebuilder.fs" />
     <Compile Include="Endpoints\Admin\PublishPost.fs" />
     <Compile Include="Endpoints\Admin\PublishChanges.fs" />
+    <Compile Include="Endpoints\Admin\RemovalCheck.fs" />
     <Compile Include="Endpoints\Admin\UpcomingChange.fs" />
     <Compile Include="Endpoints\Admin\DeletePost.fs" />
     <Compile Include="Endpoints\Admin\Revisions.fs" />

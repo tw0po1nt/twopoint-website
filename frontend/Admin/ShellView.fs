@@ -54,7 +54,7 @@ let private fail (call: Shell.Call) =
   | Shell.DiscardPending request -> Shell.Editor(Editor.DiscardAnswered(request.Slug, Error Api.Unanswered))
   | Shell.UnpublishPost request -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, Error Api.Unanswered))
   | Shell.ChangePostDate request -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, Error Api.Unanswered))
-  | Shell.CheckDelete slug -> Shell.Editor(Editor.DeleteCheckAnswered(slug, Error Api.Unanswered))
+  | Shell.CheckRemoval(slug, dialog) -> Shell.Editor(Editor.RemovalCheckAnswered(slug, dialog, Error Api.Unanswered))
   | Shell.DeletePost request -> Shell.Editor(Editor.DeleteAnswered(request.Slug, Error Api.Unanswered))
   | Shell.LoadRevisions slug -> Shell.Editor(Editor.RevisionsAnswered(slug, Error Api.Unanswered))
   | Shell.RestoreRevision request -> Shell.Editor(Editor.RestoreAnswered(request.Slug, Error Api.Unanswered))
@@ -213,14 +213,14 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
     Api.discardPending (Config.api ()) token request.Slug request.ETag
     |> Promise.map (fun result -> Shell.Editor(Editor.DiscardAnswered(request.Slug, result)))
   | Shell.UnpublishPost request ->
-    Api.unpublishPost (Config.api ()) token request.Slug request.ETag
+    Api.unpublishPost (Config.api ()) token request.Slug request.ETag request.Edits
     |> Promise.map (fun result -> Shell.Editor(Editor.UnpublishAnswered(request.Slug, result)))
   | Shell.ChangePostDate request ->
     Api.changePostDate (Config.api ()) token request.Slug request.ETag request.PublishDate
     |> Promise.map (fun result -> Shell.Editor(Editor.ChangeDateAnswered(request.Slug, result)))
-  | Shell.CheckDelete slug ->
-    Api.checkDelete (Config.api ()) token slug
-    |> Promise.map (fun result -> Shell.Editor(Editor.DeleteCheckAnswered(slug, result)))
+  | Shell.CheckRemoval(slug, dialog) ->
+    Api.checkRemoval (Config.api ()) token slug
+    |> Promise.map (fun result -> Shell.Editor(Editor.RemovalCheckAnswered(slug, dialog, result)))
   | Shell.DeletePost request ->
     Api.deletePost (Config.api ()) token request.Slug request.ETag request.ConfirmSlug request.Edits
     |> Promise.map (fun result -> Shell.Editor(Editor.DeleteAnswered(request.Slug, result)))

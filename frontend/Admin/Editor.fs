@@ -21,13 +21,6 @@ type ChangesDialog =
   | ChangesHidden
   | ChangesShown
 
-/// The delete check of a published post. The dialog runs it when it opens, and again after a failed delete.
-type DeleteCheckState =
-  | DeleteNotChecked
-  | DeleteChecking
-  | DeleteChecked of Api.DeleteCheck
-  | DeleteCheckFailed of reason: string
-
 type Document =
   { Slug: string
     State: Api.PostState
@@ -55,8 +48,9 @@ type Document =
     Changes: ChangesDialog
     Discard: Confirm.State
     Unpublish: Confirm.State
+    UnpublishCheck: RemovalCheck.State
     Delete: Typed.State
-    DeleteCheck: DeleteCheckState
+    DeleteCheck: RemovalCheck.State
     DeleteDraft: Confirm.State
     ChangeDate: Typed.State
     ChangeWarnings: Api.ChangeWarning list
@@ -101,8 +95,11 @@ type PublishRequest =
 
 type DiscardRequest = { Slug: string; ETag: string }
 
-/// `ETag` is `None` when the post has no pending edit.
-type UnpublishRequest = { Slug: string; ETag: string option }
+/// `ETag` is `None` when the post has no pending edit. `Edits` are the pending edits that the unpublish publishes first.
+type UnpublishRequest =
+  { Slug: string
+    ETag: string option
+    Edits: Api.RemovalEdit list }
 
 /// `ETag` is `None` when the post has no working blob. `ConfirmSlug` is the typed text of a published post, and `None` for a draft.
 /// `Edits` are the pending edits that the delete publishes first.
@@ -110,7 +107,7 @@ type DeleteRequest =
   { Slug: string
     ETag: string option
     ConfirmSlug: string option
-    Edits: Api.DeleteEdit list }
+    Edits: Api.RemovalEdit list }
 
 type ChangeDateRequest =
   { Slug: string
@@ -124,6 +121,10 @@ type RestoreRequest =
     Revision: string }
 
 type DeliveryRequest = { Slug: string; Intro: string }
+
+type RemovalDialog =
+  | DeleteDialog
+  | UnpublishDialog
 
 type Msg =
   | Answered of slug: string * Result<Api.PostDocument, Api.Failure>
@@ -167,7 +168,7 @@ type Msg =
   | ChangeNoticeDismissed
   | DeleteRequested
   | DeleteTyped of string
-  | DeleteCheckAnswered of slug: string * Result<Api.DeleteCheck, Api.Failure>
+  | RemovalCheckAnswered of slug: string * dialog: RemovalDialog * Result<Api.RemovalCheck, Api.Failure>
   | DeleteConfirmed
   | DeleteAnswered of slug: string * Result<Api.DeletedPost, Api.Failure>
   | DeleteClosed
@@ -195,7 +196,7 @@ type Effect =
   | DiscardPending of DiscardRequest
   | UnpublishPost of UnpublishRequest
   | ChangePostDate of ChangeDateRequest
-  | CheckDelete of slug: string
+  | CheckRemoval of slug: string * dialog: RemovalDialog
   | DeletePost of DeleteRequest
   | LoadRevisions of slug: string
   | RestoreRevision of RestoreRequest
@@ -235,8 +236,9 @@ let private loaded (chain: Deploy.Chain) (post: Api.PostDocument) =
       Changes = ChangesHidden
       Discard = Confirm.Closed
       Unpublish = Confirm.Closed
+      UnpublishCheck = RemovalCheck.NotChecked
       Delete = Typed.Closed
-      DeleteCheck = DeleteNotChecked
+      DeleteCheck = RemovalCheck.NotChecked
       DeleteDraft = Confirm.Closed
       ChangeDate = Typed.Closed
       ChangeWarnings = []
@@ -605,17 +607,35 @@ let private upcomingChangeAvailability (document: Document) =
 
 let private unpublishRequested (document: Document) =
   match upcomingChangeAvailability document with
-  | Available -> Loaded { document with Unpublish = Confirm.Confirming }, None
+  | Available ->
+    Loaded
+      { document with
+          Unpublish = Confirm.Confirming
+          UnpublishCheck = RemovalCheck.Checking },
+    Some(CheckRemoval(document.Slug, UnpublishDialog))
   | Unavailable _ -> Loaded document, None
 
-let private unpublishConfirmed (document: Document) =
+let canUnpublish (document: Document) =
   match document.Unpublish with
   | Confirm.Confirming
-  | Confirm.Failed _ ->
-    Loaded { document with Unpublish = Confirm.Sending },
-    Some(UnpublishPost { Slug = document.Slug; ETag = document.ETag })
+  | Confirm.Failed _ -> RemovalCheck.allows document.UnpublishCheck
   | Confirm.Closed
-  | Confirm.Sending -> Loaded document, None
+  | Confirm.Sending -> false
+
+let unpublishButtonText (document: Document) =
+  RemovalCheck.buttonText "Unpublish" "unpublish" document.UnpublishCheck
+
+let private unpublishConfirmed (document: Document) =
+  if canUnpublish document then
+    Loaded { document with Unpublish = Confirm.Sending },
+    Some(
+      UnpublishPost
+        { Slug = document.Slug
+          ETag = document.ETag
+          Edits = RemovalCheck.edits document.UnpublishCheck }
+    )
+  else
+    Loaded document, None
 
 let private afterChange (change: Api.UpcomingChange) (document: Document) =
   { document with
@@ -633,16 +653,26 @@ let private unpublishAnswered (result: Result<Api.UpcomingChange, Api.Failure>) 
           ETag = change.ETag
           PendingEdit = false
           Published = None
-          Unpublish = Confirm.Closed },
+          Unpublish = Confirm.Closed
+          UnpublishCheck = RemovalCheck.NotChecked },
     Some(ReadDeploy document.Slug)
-  | Confirm.Sending, Error failure -> Loaded { document with Unpublish = Confirm.Failed(Api.reason failure) }, None
+  | Confirm.Sending, Error failure ->
+    Loaded
+      { document with
+          Unpublish = Confirm.Failed(Api.reason failure)
+          UnpublishCheck = RemovalCheck.Checking },
+    Some(CheckRemoval(document.Slug, UnpublishDialog))
   | _ -> Loaded document, None
 
 let private unpublishClosed (document: Document) =
   if Confirm.isSending document.Unpublish then
     Loaded document, None
   else
-    Loaded { document with Unpublish = Confirm.Closed }, None
+    Loaded
+      { document with
+          Unpublish = Confirm.Closed
+          UnpublishCheck = RemovalCheck.NotChecked },
+    None
 
 let private changeDateRequested (document: Document) =
   match upcomingChangeAvailability document with
@@ -718,35 +748,20 @@ let deleteStep (document: Document) =
   | TypeSlug, _, Typed.Closed -> NoDeleteDialog
   | TypeSlug, _, (Typed.Typing typed | Typed.Failed(typed, _)) ->
     match document.DeleteCheck with
-    | DeleteNotChecked
-    | DeleteChecking -> CheckingDelete
-    | DeleteCheckFailed _
-    | DeleteChecked(Api.Blocked _) -> DeleteBlocked
-    | DeleteChecked(Api.PlainDelete | Api.PublishAndDelete _) ->
+    | RemovalCheck.NotChecked
+    | RemovalCheck.Checking -> CheckingDelete
+    | RemovalCheck.Failed _
+    | RemovalCheck.Checked(Api.Blocked _) -> DeleteBlocked
+    | RemovalCheck.Checked(Api.PlainRemoval | Api.PublishAndRemove _) ->
       if typed = document.Slug then ReadyToDelete else WaitingForSlug
 
 /// The pending edits that the delete publishes first.
-let deleteEdits (document: Document) =
-  match document.DeleteCheck with
-  | DeleteChecked(Api.PublishAndDelete edits) -> edits
-  | DeleteChecked(Api.PlainDelete | Api.Blocked _)
-  | DeleteNotChecked
-  | DeleteChecking
-  | DeleteCheckFailed _ -> []
+let deleteEdits (document: Document) = RemovalCheck.edits document.DeleteCheck
 
-let deleteProblems (document: Document) =
-  match document.DeleteCheck with
-  | DeleteChecked(Api.Blocked problems) -> problems
-  | DeleteChecked(Api.PlainDelete | Api.PublishAndDelete _)
-  | DeleteNotChecked
-  | DeleteChecking
-  | DeleteCheckFailed _ -> []
+let deleteProblems (document: Document) = RemovalCheck.problems document.DeleteCheck
 
 let deleteButtonText (document: Document) =
-  match deleteEdits document with
-  | [] -> "Delete"
-  | [ _ ] -> "Publish 1 edit and delete"
-  | edits -> $"Publish {edits.Length} edits and delete"
+  RemovalCheck.buttonText "Delete" "delete" document.DeleteCheck
 
 let private deleteAvailability (document: Document) =
   match requireSaved document.Save with
@@ -765,8 +780,8 @@ let private deleteRequested (document: Document) =
       Loaded
         { document with
             Delete = Typed.Typing ""
-            DeleteCheck = DeleteChecking },
-      Some(CheckDelete document.Slug)
+            DeleteCheck = RemovalCheck.Checking },
+      Some(CheckRemoval(document.Slug, DeleteDialog))
 
 let private deleteTyped (typed: string) (document: Document) =
   match document.Delete with
@@ -775,11 +790,14 @@ let private deleteTyped (typed: string) (document: Document) =
   | Typed.Closed
   | Typed.Sending _ -> Loaded document, None
 
-let private deleteCheckAnswered (result: Result<Api.DeleteCheck, Api.Failure>) (document: Document) =
-  match document.DeleteCheck, Typed.isOpen document.Delete, result with
-  | DeleteChecking, true, Ok outcome -> Loaded { document with DeleteCheck = DeleteChecked outcome }, None
-  | DeleteChecking, true, Error failure -> Loaded { document with DeleteCheck = DeleteCheckFailed(Api.reason failure) }, None
-  | _ -> Loaded document, None
+let private removalCheckAnswered (dialog: RemovalDialog) (result: Result<Api.RemovalCheck, Api.Failure>) (document: Document) =
+  match dialog with
+  | DeleteDialog when Typed.isOpen document.Delete ->
+    Loaded { document with DeleteCheck = RemovalCheck.answered result document.DeleteCheck }, None
+  | UnpublishDialog when Confirm.isOpen document.Unpublish ->
+    Loaded { document with UnpublishCheck = RemovalCheck.answered result document.UnpublishCheck }, None
+  | DeleteDialog
+  | UnpublishDialog -> Loaded document, None
 
 let private deleteConfirmed (document: Document) =
   match deleteStep document, deleteConfirm document with
@@ -812,7 +830,7 @@ let private deleteAnswered (result: Result<Api.DeletedPost, Api.Failure>) (docum
     Loaded
       { document with
           Delete = Typed.Closed
-          DeleteCheck = DeleteNotChecked },
+          DeleteCheck = RemovalCheck.NotChecked },
     None
   | DeleteRuns, PlainConfirm, Error failure ->
     Loaded { document with DeleteDraft = Confirm.Failed(Api.reason failure) }, None
@@ -820,8 +838,8 @@ let private deleteAnswered (result: Result<Api.DeletedPost, Api.Failure>) (docum
     Loaded
       { document with
           Delete = Typed.Failed(Typed.typed document.Delete, Api.reason failure)
-          DeleteCheck = DeleteChecking },
-    Some(CheckDelete document.Slug)
+          DeleteCheck = RemovalCheck.Checking },
+    Some(CheckRemoval(document.Slug, DeleteDialog))
   | (NoDeleteDialog | CheckingDelete | DeleteBlocked | WaitingForSlug | ReadyToDelete), _, _ -> Loaded document, None
 
 let private deleteClosed (document: Document) =
@@ -835,7 +853,7 @@ let private deleteClosed (document: Document) =
     Loaded
       { document with
           Delete = Typed.Closed
-          DeleteCheck = DeleteNotChecked
+          DeleteCheck = RemovalCheck.NotChecked
           DeleteDraft = Confirm.Closed },
     None
 
@@ -988,7 +1006,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, ChangeNoticeDismissed -> Loaded { document with ChangeWarnings = [] }, None
   | Loaded document, DeleteRequested -> deleteRequested document
   | Loaded document, DeleteTyped typed -> deleteTyped typed document
-  | Loaded document, DeleteCheckAnswered(slug, result) when slug = document.Slug -> deleteCheckAnswered result document
+  | Loaded document, RemovalCheckAnswered(slug, dialog, result) when slug = document.Slug -> removalCheckAnswered dialog result document
   | Loaded document, DeleteConfirmed -> deleteConfirmed document
   | Loaded document, DeleteAnswered(slug, result) when slug = document.Slug -> deleteAnswered result document
   | Loaded document, DeleteClosed -> deleteClosed document

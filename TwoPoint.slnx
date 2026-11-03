@@ -6,6 +6,7 @@
     <Project Path="backend/Dependencies.Tests/Dependencies.Tests.fsproj" />
     <Project Path="backend/Dependencies/Dependencies.fsproj" />
     <Project Path="backend/Http/Http.fsproj" />
+    <Project Path="backend/Http.Tests/Http.Tests.fsproj" />
   </Folder>
   <Folder Name="/frontend/">
     <Project Path="frontend/Admin.Dev/Admin.Dev.fsproj" />

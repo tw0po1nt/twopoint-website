@@ -61,6 +61,21 @@ let private change state publishDate eTag warnings : Api.UpcomingChange =
     ETag = eTag
     Warnings = warnings }
 
+let private requested post = fst (send Editor.UnpublishRequested (opened post))
+
+let private checkedAs outcome model =
+  fst (send (Editor.RemovalCheckAnswered("my-post", Editor.UnpublishDialog, Ok outcome)) model)
+
+/// The dialog is open, and the check found no link to the post.
+let private ready post = checkedAs Api.PlainRemoval (requested post)
+
+let private edit slug title: Api.RemovalEdit = { Slug = slug; Title = title; ETag = $"\"{slug}-w\"" }
+
+let private problem message: Api.Problem =
+  { Severity = Api.Severity.Error
+    Place = None
+    Message = message }
+
 [<Tests>]
 let menuTests =
   testList "Move menu" [
@@ -94,43 +109,105 @@ let menuTests =
 [<Tests>]
 let unpublishTests =
   testList "Unpublish" [
-    test "the unpublish asks first, and Keep closes the dialog with no call" {
+    test "the dialog runs the check one time when it opens, and Keep closes the dialog with no call" {
       let model, effect = send Editor.UnpublishRequested (opened upcoming)
       Expect.equal (document' model).Unpublish Confirm.Confirming "The dialog"
-      Expect.isNone effect "No call"
+      Expect.equal (document' model).UnpublishCheck RemovalCheck.Checking "The check runs"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckRemoval("my-post", Editor.UnpublishDialog) ])) "The check"
       let model, effect = send Editor.UnpublishClosed model
       Expect.equal (document' model).Unpublish Confirm.Closed "Closed"
+      Expect.equal (document' model).UnpublishCheck RemovalCheck.NotChecked "No check"
       Expect.isNone effect "No call"
     }
 
     test "a request for an unpublish that is not available does nothing" {
-      let model, _ = send Editor.UnpublishRequested (opened live)
+      let model, effect = send Editor.UnpublishRequested (opened live)
       Expect.equal (document' model).Unpublish Confirm.Closed "No dialog"
+      Expect.isNone effect "No check"
     }
 
-    test "the confirm sends the unpublish with the ETag of the pending edit" {
-      let model, _ = send Editor.UnpublishRequested (opened upcomingPending)
+    test "the Unpublish button is disabled while the check runs" {
+      let model = requested upcoming
+      Expect.isFalse (Editor.canUnpublish (document' model)) "Disabled"
+      Expect.equal (Editor.unpublishButtonText (document' model)) "Unpublish" "The button"
+      let _, effect = send Editor.UnpublishConfirmed model
+      Expect.isNone effect "No unpublish during the check"
+    }
+
+    test "the confirm sends the unpublish with the ETag of the pending edit and no edits" {
+      let model = ready upcomingPending
+      Expect.isTrue (Editor.canUnpublish (document' model)) "Enabled"
       let model, effect = send Editor.UnpublishConfirmed model
       Expect.equal (document' model).Unpublish Confirm.Sending "Sending"
-      Expect.equal effect (Some(Shell.Send [ Shell.UnpublishPost { Slug = "my-post"; ETag = Some "\"w1\"" } ])) "The call"
+      Expect.isFalse (Editor.canUnpublish (document' model)) "Disabled while it runs"
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.UnpublishPost { Slug = "my-post"; ETag = Some "\"w1\""; Edits = [] } ]))
+        "The call"
     }
 
     test "the confirm for a post with no pending edit sends no ETag" {
-      let model, _ = send Editor.UnpublishRequested (opened upcoming)
+      let _, effect = send Editor.UnpublishConfirmed (ready upcoming)
+      Expect.equal effect (Some(Shell.Send [ Shell.UnpublishPost { Slug = "my-post"; ETag = None; Edits = [] } ])) "The call"
+    }
+
+    test "a publish and remove lists the posts, gives the number of edits on the button, and sends each edit with its ETag" {
+      let edits = [ edit "a-post" "A post"; edit "c-post" "C post" ]
+      let model = checkedAs (Api.PublishAndRemove edits) (requested upcoming)
+      Expect.equal (RemovalCheck.edits (document' model).UnpublishCheck) edits "The posts"
+      Expect.equal (Editor.unpublishButtonText (document' model)) "Publish 2 edits and unpublish" "The button"
+      Expect.isTrue (Editor.canUnpublish (document' model)) "Enabled"
+      let one = checkedAs (Api.PublishAndRemove [ edit "a-post" "A post" ]) (requested upcoming)
+      Expect.equal (Editor.unpublishButtonText (document' one)) "Publish 1 edit and unpublish" "One edit"
+
       let _, effect = send Editor.UnpublishConfirmed model
-      Expect.equal effect (Some(Shell.Send [ Shell.UnpublishPost { Slug = "my-post"; ETag = None } ])) "The call"
+      Expect.equal effect (Some(Shell.Send [ Shell.UnpublishPost { Slug = "my-post"; ETag = None; Edits = edits } ])) "The call"
+    }
+
+    test "a blocked check shows the problems and disables the unpublish" {
+      let problems = [ problem "The post 'c-post' links to the post and has no pending edit." ]
+      let model = checkedAs (Api.Blocked problems) (requested upcoming)
+      Expect.isFalse (Editor.canUnpublish (document' model)) "Disabled"
+      Expect.equal (RemovalCheck.problems (document' model).UnpublishCheck) problems "The problems"
+      Expect.equal (Editor.unpublishButtonText (document' model)) "Unpublish" "The button"
+      let _, effect = send Editor.UnpublishConfirmed model
+      Expect.isNone effect "No call"
+    }
+
+    test "a check that fails disables the unpublish and gives the reason" {
+      let model =
+        fst (send (Editor.RemovalCheckAnswered("my-post", Editor.UnpublishDialog, Error Api.Unanswered)) (requested upcoming))
+
+      Expect.isFalse (Editor.canUnpublish (document' model)) "Disabled"
+      Expect.equal (document' model).UnpublishCheck (RemovalCheck.Failed "The API did not answer.") "The reason"
+    }
+
+    test "a check answer after the dialog closes, or for the delete dialog, changes nothing" {
+      let closed, _ = send Editor.UnpublishClosed (requested upcoming)
+      Expect.equal (document' (checkedAs Api.PlainRemoval closed)).UnpublishCheck RemovalCheck.NotChecked "Closed"
+      let model = requested upcoming
+
+      let other =
+        fst (send (Editor.RemovalCheckAnswered("my-post", Editor.DeleteDialog, Ok Api.PlainRemoval)) model)
+
+      Expect.equal (document' other).UnpublishCheck RemovalCheck.Checking "The unpublish check still runs"
+    }
+
+    test "a check that the API refuses for the account signs the author out" {
+      let model = requested upcoming
+      let next, _ = send (Editor.RemovalCheckAnswered("my-post", Editor.UnpublishDialog, Error Api.Refused)) model
+      Expect.notEqual next.Session model.Session "The session changes"
     }
 
     test "the dialog stays open while the unpublish is in flight" {
-      let model, _ = send Editor.UnpublishRequested (opened upcoming)
-      let model, _ = send Editor.UnpublishConfirmed model
+      let model, _ = send Editor.UnpublishConfirmed (ready upcoming)
       let model, _ = send Editor.UnpublishClosed model
       Expect.equal (document' model).Unpublish Confirm.Sending "Still sending"
     }
 
     test "an unpublish that succeeded shows a draft with the new ETag, and restarts the deploy reads" {
-      let model, _ = send Editor.UnpublishRequested (opened upcomingPending)
-      let model, _ = send Editor.UnpublishConfirmed model
+      let model, _ = send Editor.UnpublishConfirmed (ready upcomingPending)
       let before = (document' model).Deploy
       let answer = Ok(change Api.Draft None (Some "\"w2\"") [])
       let model, effect = send (Editor.UnpublishAnswered("my-post", answer)) model
@@ -142,6 +219,7 @@ let unpublishTests =
       Expect.isFalse document.PendingEdit "A draft has no pending edit"
       Expect.isNone document.Published "No published text"
       Expect.equal document.Unpublish Confirm.Closed "Closed"
+      Expect.equal document.UnpublishCheck RemovalCheck.NotChecked "No check"
       Expect.equal document.Fields.Body "Some text.\n" "The text stays"
       Expect.equal document.Deploy.Chain.Number (before.Chain.Number + 1) "A new chain of deploy reads"
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The deploy read"
@@ -150,8 +228,7 @@ let unpublishTests =
     }
 
     test "the draft can publish with the ETag that the unpublish gave" {
-      let model, _ = send Editor.UnpublishRequested (opened upcoming)
-      let model, _ = send Editor.UnpublishConfirmed model
+      let model, _ = send Editor.UnpublishConfirmed (ready upcoming)
       let model, _ = send (Editor.UnpublishAnswered("my-post", Ok(change Api.Draft None (Some "\"w1\"") []))) model
       let _, effect = send Editor.PublishClicked model
 
@@ -161,27 +238,27 @@ let unpublishTests =
     }
 
     test "the warnings of an unpublish show until the author dismisses them" {
-      let model, _ = send Editor.UnpublishRequested (opened upcoming)
-      let model, _ = send Editor.UnpublishConfirmed model
+      let model, _ = send Editor.UnpublishConfirmed (ready upcoming)
       let model, _ = send (Editor.UnpublishAnswered("my-post", Ok(change Api.Draft None (Some "\"w1\"") [ Api.PostRowKept ]))) model
       Expect.equal (document' model).ChangeWarnings [ Api.PostRowKept ] "The warning"
       let model, _ = send Editor.ChangeNoticeDismissed model
       Expect.isEmpty (document' model).ChangeWarnings "Dismissed"
     }
 
-    test "a refused unpublish shows the reason and lets the author try again" {
-      let model, _ = send Editor.UnpublishRequested (opened upcoming)
-      let model, _ = send Editor.UnpublishConfirmed model
-      let model, _ = send (Editor.UnpublishAnswered("my-post", Error(Api.Failed "The post 'my-post' is not upcoming. Its publish date is in the past"))) model
+    test "a refused unpublish shows the reason, runs the check again, and lets the author try again" {
+      let model, _ = send Editor.UnpublishConfirmed (ready upcoming)
+      let model, effect = send (Editor.UnpublishAnswered("my-post", Error(Api.Failed "The post 'my-post' is not upcoming. Its publish date is in the past"))) model
       Expect.equal (Confirm.reason (document' model).Unpublish) (Some "The post 'my-post' is not upcoming. Its publish date is in the past") "The reason"
       Expect.equal (document' model).State Api.Upcoming "Still upcoming"
+      Expect.equal effect (Some(Shell.Send [ Shell.CheckRemoval("my-post", Editor.UnpublishDialog) ])) "The check runs again"
       let _, effect = send Editor.UnpublishConfirmed model
+      Expect.isNone effect "No call during the check"
+      let _, effect = send Editor.UnpublishConfirmed (checkedAs Api.PlainRemoval model)
       Expect.isSome effect "A second call"
     }
 
     test "an unpublish that the API refuses for the account signs the author out" {
-      let model, _ = send Editor.UnpublishRequested (opened upcoming)
-      let model, _ = send Editor.UnpublishConfirmed model
+      let model, _ = send Editor.UnpublishConfirmed (ready upcoming)
       let next, _ = send (Editor.UnpublishAnswered("my-post", Error Api.Refused)) model
       Expect.notEqual next.Session model.Session "The session changes"
     }
