@@ -122,7 +122,6 @@ type RestoreRequest =
 
 type DeliveryRequest = { Slug: string; Intro: string }
 
-/// The dialog that runs the removal check.
 type RemovalDialog =
   | DeleteDialog
   | UnpublishDialog
@@ -616,7 +615,6 @@ let private unpublishRequested (document: Document) =
     Some(CheckRemoval(document.Slug, UnpublishDialog))
   | Unavailable _ -> Loaded document, None
 
-/// The unpublish dialog is open, and the check allows the unpublish.
 let canUnpublish (document: Document) =
   match document.Unpublish with
   | Confirm.Confirming

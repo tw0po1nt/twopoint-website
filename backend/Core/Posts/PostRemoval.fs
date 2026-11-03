@@ -207,17 +207,23 @@ module RemovalSteps =
   /// A pending edit that the removal publishes, with the post-table row of its post.
   type GatedEdit = PendingGate.Gated * PostRow
 
-  /// `Failure` is the first failed write. It stops the publish of the edits after it.
   type EditsPublished =
     { Published: Slug list
-      Warnings: PublishSteps.Warning list
-      Failure: (Slug * PublishSteps.WriteFailure) option }
+      Warnings: PublishSteps.Warning list }
+
+  /// `StoppedAt` has the first failed write. The edits after it do not publish.
+  type EditsStep =
+    | AllPublished of EditsPublished
+    | StoppedAt of EditsPublished * edit: Slug * failure: PublishSteps.WriteFailure
 
   /// The post stays, and the dispatch ran for the published edits of `Edits`.
   type Kept =
     { Edits: Slug list
       Production: ProductionDispatch
       Warnings: PublishSteps.Warning list }
+
+  /// A failed step after the edits. With no published edit, the removal refuses with the error.
+  type Fail<'outcome, 'error, 'reason> = ActionError<'error> -> 'reason -> CancellableTask<ActionResult<'outcome, 'error>>
 
   [<RequireQualifiedAccess>]
   module Logic =
@@ -247,7 +253,7 @@ module RemovalSteps =
     |> List.map (fun gated -> PublishSteps.row gated.Slug gated.PublishDate gated.Text |> Result.map (fun post -> gated, post))
     |> List.sequenceResultM
 
-  /// Runs the removal check again and compares the request with its outcome. `loaded` is the load of the post that leaves the site.
+  /// `loaded` is the load of the post that leaves the site.
   let prepare
     (dependencies: PublishGate.Dependencies)
     (slug: Slug)
@@ -267,14 +273,14 @@ module RemovalSteps =
     (edits: GatedEdit list)
     (published: Slug list)
     (warnings: PublishSteps.Warning list)
-    : CancellableTask<EditsPublished> =
+    : CancellableTask<EditsStep> =
     cancellableTask {
+      let publishedSoFar =
+        { Published = List.rev published
+          Warnings = warnings }
+
       match edits with
-      | [] ->
-        return
-          { Published = List.rev published
-            Warnings = warnings
-            Failure = None }
+      | [] -> return AllPublished publishedSoFar
       | (gated, post) :: rest ->
         let! written =
           PublishSteps.writeRevisionAndPublished
@@ -286,28 +292,18 @@ module RemovalSteps =
             (MatchesETag gated.Published.ETag)
 
         match written with
-        | Error failure ->
-          return
-            { Published = List.rev published
-              Warnings = warnings
-              Failure = Some(gated.Slug, failure) }
+        | Error failure -> return StoppedAt(publishedSoFar, gated.Slug, failure)
         | Ok() ->
           let! settled = PublishSteps.settle dependencies post gated.Working.ETag
           return! publishFrom dependencies rest (gated.Slug :: published) (warnings @ settled)
     }
 
-  /// Each edit has the publish steps of `PublishChanges`, with no dispatch.
-  let publishEdits (dependencies: PublishSteps.GatedDependencies) (edits: GatedEdit list) : CancellableTask<EditsPublished> =
-    publishFrom dependencies edits [] []
-
-  /// A step after the edits failed. With no published edit, the removal refuses with `refusal`. Otherwise the post stays,
-  /// and the dispatch runs for the published edits.
-  let fail
+  let private keepOrRefuse
     (dependencies: PublishSteps.GatedDependencies)
     (edits: EditsPublished)
     (refusal: ActionError<'error>)
     (kept: Kept -> 'outcome)
-    : CancellableTask<Result<'outcome, ActionError<'error>>> =
+    : CancellableTask<ActionResult<'outcome, 'error>> =
     cancellableTask {
       match edits.Published with
       | [] -> return Result.Error refusal
@@ -321,4 +317,27 @@ module RemovalSteps =
                 Production = rebuilt.Production
                 Warnings = edits.Warnings @ rebuilt.Warnings }
           )
+    }
+
+  /// Each edit has the publish steps of `PublishChanges`, with no dispatch. `remove` runs only when each edit is published.
+  let publishEditsThen
+    (dependencies: PublishSteps.GatedDependencies)
+    (refusal: Refusal -> 'error)
+    (editNotPublished: Slug * PublishSteps.WriteFailure -> 'reason)
+    (kept: 'reason -> Kept -> 'outcome)
+    (edits: GatedEdit list)
+    (remove: EditsPublished -> Fail<'outcome, 'error, 'reason> -> CancellableTask<ActionResult<'outcome, 'error>>)
+    : CancellableTask<ActionResult<'outcome, 'error>> =
+    cancellableTask {
+      match! publishFrom dependencies edits [] [] with
+      | StoppedAt(published, edit, failure) ->
+        return!
+          keepOrRefuse
+            dependencies
+            published
+            (Logic.firstEditError failure |> ActionError.mapLogic refusal)
+            (kept (editNotPublished (edit, failure)))
+      | AllPublished published ->
+        let fail refusal reason = keepOrRefuse dependencies published refusal (kept reason)
+        return! remove published fail
     }

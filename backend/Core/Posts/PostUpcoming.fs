@@ -147,42 +147,33 @@ module Unpublish =
     (draftText: string)
     (edits: RemovalSteps.GatedEdit list)
     : CancellableTask<ActionResult<Event, Error>> =
-    cancellableTask {
-      let! publishedEdits = RemovalSteps.publishEdits dependencies edits
-      let fail refusal reason = RemovalSteps.fail dependencies publishedEdits refusal (kept reason)
+    RemovalSteps.publishEditsThen dependencies Logic.refusal EditNotPublished kept edits
+    <| fun publishedEdits fail -> cancellableTask {
+      match! dependencies.WriteWorkingBlob slug draftText (condition upcoming.Working) with
+      | Error error -> return! fail (ActionError.Dependency error) (WorkingWriteFailed error)
+      | Ok ConditionFailed -> return! fail (refused PendingGate.WorkingBlobChanged) WorkingBlobKept
+      | Ok(Written draftETag) ->
+        match! dependencies.DeletePublishedBlob slug upcoming.Published.ETag with
+        | Error error -> return! fail (ActionError.Dependency error) (PublishedDeleteFailed error)
+        | Ok DeleteConditionFailed -> return! fail (refused PendingGate.PublishedBlobChanged) PublishedBlobKept
+        | Ok Deleted ->
+          let! row = PublishSteps.retryOnce (fun () -> dependencies.DeletePostRow slug)
+          let! rebuilt = PublishSteps.rebuildAll dependencies (publishedEdits.Published @ [ slug ])
 
-      match publishedEdits.Failure with
-      | Some(editSlug, failure) ->
-        return!
-          fail
-            (RemovalSteps.Logic.firstEditError failure |> ActionError.mapLogic Logic.refusal)
-            (EditNotPublished(editSlug, failure))
-      | None ->
-        match! dependencies.WriteWorkingBlob slug draftText (condition upcoming.Working) with
-        | Error error -> return! fail (ActionError.Dependency error) (WorkingWriteFailed error)
-        | Ok ConditionFailed -> return! fail (refused PendingGate.WorkingBlobChanged) WorkingBlobKept
-        | Ok(Written draftETag) ->
-          match! dependencies.DeletePublishedBlob slug upcoming.Published.ETag with
-          | Error error -> return! fail (ActionError.Dependency error) (PublishedDeleteFailed error)
-          | Ok DeleteConditionFailed -> return! fail (refused PendingGate.PublishedBlobChanged) PublishedBlobKept
-          | Ok Deleted ->
-            let! row = PublishSteps.retryOnce (fun () -> dependencies.DeletePostRow slug)
-            let! rebuilt = PublishSteps.rebuildAll dependencies (publishedEdits.Published @ [ slug ])
+          let rowWarnings =
+            match row with
+            | Ok() -> []
+            | Error error -> [ PostRowKept error ]
 
-            let rowWarnings =
-              match row with
-              | Ok() -> []
-              | Error error -> [ PostRowKept error ]
-
-            return
-              Ok(
-                Unpublished
-                  { PublishDate = None
-                    State = PostState.Draft
-                    WorkingETag = Some draftETag
-                    Production = rebuilt.Production
-                    Warnings = List.map Step publishedEdits.Warnings @ rowWarnings @ List.map Step rebuilt.Warnings }
-              )
+          return
+            Ok(
+              Unpublished
+                { PublishDate = None
+                  State = PostState.Draft
+                  WorkingETag = Some draftETag
+                  Production = rebuilt.Production
+                  Warnings = List.map Step publishedEdits.Warnings @ rowWarnings @ List.map Step rebuilt.Warnings }
+            )
     }
 
   let withDependencies (dependencies: Dependencies) : Action =

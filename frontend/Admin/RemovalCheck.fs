@@ -15,7 +15,6 @@ let answered (result: Result<Api.RemovalCheck, Api.Failure>) (state: State) =
   | Checking, Error failure -> Failed(Api.reason failure)
   | (NotChecked | Checked _ | Failed _), _ -> state
 
-/// The check allows the removal.
 let allows (state: State) =
   match state with
   | Checked(Api.PlainRemoval | Api.PublishAndRemove _) -> true
@@ -24,7 +23,6 @@ let allows (state: State) =
   | Checking
   | Failed _ -> false
 
-/// The pending edits that the removal publishes first.
 let edits (state: State) =
   match state with
   | Checked(Api.PublishAndRemove edits) -> edits

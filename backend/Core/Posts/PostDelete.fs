@@ -135,28 +135,19 @@ module DeletePost =
     (working: StoredBlob option)
     (edits: RemovalSteps.GatedEdit list)
     : CancellableTask<ActionResult<Outcome, Error>> =
-    cancellableTask {
-      let! publishedEdits = RemovalSteps.publishEdits dependencies edits
-      let fail refusal reason = RemovalSteps.fail dependencies publishedEdits refusal (kept reason)
+    RemovalSteps.publishEditsThen dependencies Logic.refusal EditNotPublished kept edits
+    <| fun publishedEdits fail -> cancellableTask {
+      match! dependencies.DeletePublishedBlob slug published.ETag with
+      | Error error -> return! fail (ActionError.Dependency error) (PublishedDeleteFailed error)
+      | Ok DeleteConditionFailed -> return! fail (ActionError.Logic PublishedBlobChanged) PublishedBlobKept
+      | Ok Deleted ->
+        let! workingWarnings =
+          match working with
+          | Some blob -> dependencies.DeleteWorkingBlob slug blob.ETag |> CancellableTask.map Logic.workingWarnings
+          | None -> CancellableTask.singleton []
 
-      match publishedEdits.Failure with
-      | Some(editSlug, failure) ->
-        return!
-          fail
-            (RemovalSteps.Logic.firstEditError failure |> ActionError.mapLogic Logic.refusal)
-            (EditNotPublished(editSlug, failure))
-      | None ->
-        match! dependencies.DeletePublishedBlob slug published.ETag with
-        | Error error -> return! fail (ActionError.Dependency error) (PublishedDeleteFailed error)
-        | Ok DeleteConditionFailed -> return! fail (ActionError.Logic PublishedBlobChanged) PublishedBlobKept
-        | Ok Deleted ->
-          let! workingWarnings =
-            match working with
-            | Some blob -> dependencies.DeleteWorkingBlob slug blob.ETag |> CancellableTask.map Logic.workingWarnings
-            | None -> CancellableTask.singleton []
-
-          let! outcome = finishPublished dependencies slug publishedEdits.Published (List.map Step publishedEdits.Warnings @ workingWarnings)
-          return Ok outcome
+        let! outcome = finishPublished dependencies slug publishedEdits.Published (List.map Step publishedEdits.Warnings @ workingWarnings)
+        return Ok outcome
     }
 
   let private deleteDraft (dependencies: Dependencies) (slug: Slug) (working: StoredBlob) : CancellableTask<ActionResult<Outcome, Error>> =

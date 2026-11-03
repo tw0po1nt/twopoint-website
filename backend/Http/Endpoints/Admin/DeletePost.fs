@@ -136,11 +136,7 @@ type DeletePost(
                 ConfirmSlug = DeleteMapping.confirmation json
                 Edits = DeleteMapping.edits json }
 
-          let answer () =
-            result
-            |> ActionResult.toApiResponse
-              (fun (DeletePost.Event.PostDeleted outcome) -> Some(DeleteMapping.deleted outcome))
-              DeleteMapping.error
+          let answer = ActionResult.toApiResponse (DeleteMapping.deleted >> Some) DeleteMapping.error
 
           let apiResponse, statusCode =
             match result with
@@ -163,8 +159,8 @@ type DeletePost(
               for warning in DeleteMapping.warnings outcome do
                 logger.LogWarning("The post '{slug}' is deleted, and a step after the delete failed: {warning}", slug, warning)
 
-              answer ()
-            | Error _ -> answer ()
+              answer (Ok outcome)
+            | Error error -> answer (Error error)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

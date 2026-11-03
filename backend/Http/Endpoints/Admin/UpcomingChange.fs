@@ -72,13 +72,17 @@ module UnpublishMapping =
 
   /// The unpublish published the pending edits and kept the post upcoming.
   let kept (slug : string) (edits : Slug list) (reason : Unpublish.KeptReason) (warnings : PublishSteps.Warning list) =
+    let draftWritten = "The post now has a pending edit with no publish date. Reload the post before you continue."
+
     let because =
       match reason with
       | Unpublish.EditNotPublished(edit, failure) -> RemovalMapping.editNotPublished "unpublish" edit failure
       | Unpublish.WorkingBlobKept -> "Another tab saved the post during the unpublish.", HttpStatusCode.Conflict
       | Unpublish.WorkingWriteFailed _ -> "The write of the draft text failed.", HttpStatusCode.InternalServerError
-      | Unpublish.PublishedBlobKept -> "The published text of the post changed during the unpublish.", HttpStatusCode.Conflict
-      | Unpublish.PublishedDeleteFailed _ -> "The delete of the published text failed.", HttpStatusCode.InternalServerError
+      | Unpublish.PublishedBlobKept ->
+        $"The published text of the post changed during the unpublish. {draftWritten}", HttpStatusCode.Conflict
+      | Unpublish.PublishedDeleteFailed _ ->
+        $"The delete of the published text failed. {draftWritten}", HttpStatusCode.InternalServerError
 
     RemovalMapping.kept "unpublish" slug edits because warnings
 
@@ -142,13 +146,7 @@ type UnpublishPost(
                 IfMatch = SaveDraftHeaders.ifMatch precondition
                 Edits = UnpublishMapping.edits json }
 
-          let answer () =
-            result
-            |> ActionResult.toApiResponse
-              (function
-                | Unpublish.Event.Unpublished change -> Some(UpcomingMapping.change change)
-                | Unpublish.Event.PostKept _ -> None)
-              UnpublishMapping.error
+          let answer = ActionResult.toApiResponse (UpcomingMapping.change >> Some) UnpublishMapping.error
 
           let apiResponse, statusCode =
             match result with
@@ -169,8 +167,8 @@ type UnpublishPost(
               for warning in change.Warnings do
                 logger.LogWarning("The post '{slug}' is unpublished, and a step after the write failed: {warning}", slug, warning)
 
-              answer ()
-            | Error _ -> answer ()
+              answer (Ok change)
+            | Error error -> answer (Error error)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)
