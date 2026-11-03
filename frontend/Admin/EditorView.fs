@@ -125,6 +125,21 @@ let private unpublishState (model: Shell.Model) =
   | Some document -> document.Unpublish
   | None -> Confirm.Closed
 
+let private unpublishCheck (model: Shell.Model) =
+  match document model with
+  | Some document -> document.UnpublishCheck
+  | None -> RemovalCheck.NotChecked
+
+let private canUnpublish (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.canUnpublish document
+  | None -> false
+
+let private unpublishButtonText (model: Shell.Model) =
+  match document model with
+  | Some document -> Editor.unpublishButtonText document
+  | None -> "Unpublish"
+
 let private changeDateState (model: Shell.Model) =
   match document model with
   | Some document -> document.ChangeDate
@@ -158,24 +173,7 @@ let private deleteReason (model: Shell.Model) =
 let private deleteCheck (model: Shell.Model) =
   match document model with
   | Some document -> document.DeleteCheck
-  | None -> Editor.DeleteNotChecked
-
-let private deleteCheckFailure (model: Shell.Model) =
-  match deleteCheck model with
-  | Editor.DeleteCheckFailed reason -> Some reason
-  | Editor.DeleteNotChecked
-  | Editor.DeleteChecking
-  | Editor.DeleteChecked _ -> None
-
-let private deleteEdits (model: Shell.Model) =
-  match document model with
-  | Some document -> Array.ofList (Editor.deleteEdits document)
-  | None -> [||]
-
-let private deleteProblems (model: Shell.Model) =
-  match document model with
-  | Some document -> Array.ofList (Editor.deleteProblems document)
-  | None -> [||]
+  | None -> RemovalCheck.NotChecked
 
 let private deleteButtonText (model: Shell.Model) =
   match document model with
@@ -691,6 +689,42 @@ let private revisionsDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
     }
   }
 
+/// `removes` ends the text about the pending edits, for example `deletes the post`. `blocked` is the title of the alert of a
+/// blocked check.
+[<SolidComponent>]
+let private removalCheckView (check: unit -> RemovalCheck.State) (removes: string) (blocked: string) =
+  Fragment() {
+    Show(when' = (check () = RemovalCheck.Checking)) {
+      p (class' = "muted small", role = "status") { "The check of the links to the post runs." }
+    }
+
+    Show(when' = not (List.isEmpty (RemovalCheck.edits (check ())))) {
+      p () {
+        $"Other posts link to this post. Their pending edits remove the links. The admin publishes these pending edits first, and then {removes}. The site rebuilds one time."
+      }
+
+      ul (class' = "removal-edits", ariaLabel = "Pending edits to publish") {
+        For(each = Array.ofList (RemovalCheck.edits (check ()))) { yield fun edit _ -> li () { edit.Title } }
+      }
+    }
+
+    Show(when' = not (List.isEmpty (RemovalCheck.problems (check ())))) {
+      Parts.Alert(tone = Parts.Bad, title = blocked).Has(
+        ul (class' = "preview-problems", ariaLabel = "Problems") {
+          For(each = Array.ofList (RemovalCheck.problems (check ()))) {
+            yield fun problem _ -> li (class' = "preview-problem") { Preview.problemText problem }
+          }
+        }
+      )
+    }
+
+    Show(when' = (RemovalCheck.failure (check ())).IsSome) {
+      Parts.Alert(tone = Parts.Bad, title = "The check of the links to the post did not run. Close the dialog and try again.").Has(
+        p () { RemovalCheck.failure (check ()) |> Option.defaultValue "" }
+      )
+    }
+  }
+
 [<SolidComponent>]
 let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let send msg = dispatch (Shell.Editor msg)
@@ -706,6 +740,8 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
     div (class' = "dialog-body") {
       p () { "The post becomes a draft with no publish date, and the site no longer shows it. The pending edit stays as the draft text." }
 
+      removalCheckView (fun () -> unpublishCheck (model ())) "unpublishes the post" "The admin cannot unpublish the post. A link to it stays."
+
       Show(when' = (Confirm.reason (unpublishState (model ()))).IsSome) {
         Parts.Alert(tone = Parts.Bad, title = "The post is not unpublished.").Has(
           p () { Confirm.reason (unpublishState (model ())) |> Option.defaultValue "" }
@@ -716,12 +752,8 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
     div (class' = "actions") {
       Parts.Button(disabled = Confirm.isSending (unpublishState (model ())), onClick = fun _ -> send Editor.UnpublishClosed).Has(Fragment() { "Keep" })
 
-      Parts.Button(
-        kind = Parts.Danger,
-        disabled = Confirm.isSending (unpublishState (model ())),
-        onClick = fun _ -> send Editor.UnpublishConfirmed
-      )
-        .Has(Fragment() { "Unpublish" })
+      Parts.Button(kind = Parts.Danger, disabled = not (canUnpublish (model ())), onClick = fun _ -> send Editor.UnpublishConfirmed)
+        .Has(Fragment() { unpublishButtonText (model ()) })
     }
   }
 
@@ -745,31 +777,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
       ) {
         p () { "The admin deletes the post, its pending edit, its revisions, and its comments permanently. The site rebuilds without the post. The delivery records stay." }
 
-        Show(when' = (deleteCheck (model ()) = Editor.DeleteChecking)) {
-          p (class' = "muted small", role = "status") { "The check of the links to the post runs." }
-        }
-
-        Show(when' = ((deleteEdits (model ())).Length > 0)) {
-          p () { "Other posts link to this post. Their pending edits remove the links. The admin publishes these pending edits first, and then deletes the post. The site rebuilds one time." }
-
-          ul (class' = "delete-edits", ariaLabel = "Pending edits to publish") {
-            For(each = deleteEdits (model ())) { yield fun edit _ -> li () { edit.Title } }
-          }
-        }
-
-        Show(when' = ((deleteProblems (model ())).Length > 0)) {
-          Parts.Alert(tone = Parts.Bad, title = "The admin cannot delete the post. A link to it stays.").Has(
-            ul (class' = "preview-problems", ariaLabel = "Problems") {
-              For(each = deleteProblems (model ())) { yield fun problem _ -> li (class' = "preview-problem") { Preview.problemText problem } }
-            }
-          )
-        }
-
-        Show(when' = (deleteCheckFailure (model ())).IsSome) {
-          Parts.Alert(tone = Parts.Bad, title = "The check of the links to the post did not run. Close the dialog and try again.").Has(
-            p () { deleteCheckFailure (model ()) |> Option.defaultValue "" }
-          )
-        }
+        removalCheckView (fun () -> deleteCheck (model ())) "deletes the post" "The admin cannot delete the post. A link to it stays."
 
         Parts
           .Field(id = "delete-slug", label = "Type the slug of the post to confirm")

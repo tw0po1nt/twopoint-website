@@ -33,6 +33,7 @@
     <Compile Include="Diff.fs" />
     <Compile Include="Confirm.fs" />
     <Compile Include="Typed.fs" />
+    <Compile Include="RemovalCheck.fs" />
     <Compile Include="Revisions.fs" />
     <Compile Include="Publish.fs" />
     <Compile Include="ChangeDate.fs" />

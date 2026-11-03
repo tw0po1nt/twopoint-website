@@ -27,13 +27,14 @@ discards it.
 _Avoid_: Working copy, unpublished changes
 
 **Linking post**:
-A published post with a link to a post that the author deletes. The link breaks when the post is
-deleted.
+A published post with a link to a post that leaves the site, by a delete or an unpublish. The link
+breaks when the post leaves the site.
 
-**Delete check**:
-The check before the delete of a published post. Its outcome is a plain delete, a publish and
-delete, or blocked. A publish and delete publishes the pending edit of each linking post first,
+**Removal check**:
+The check before a published post leaves the site. Its outcome is a plain removal, a publish and
+remove, or blocked. A publish and remove publishes the pending edit of each linking post first,
 because those edits remove each link to the post.
+_Avoid_: Delete check
 
 **Revision**:
 The content of a post at one publish. The author can restore a revision as a pending edit.

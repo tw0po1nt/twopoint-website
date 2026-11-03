@@ -24,11 +24,8 @@ open System.Net
 open System.Net.Http
 open System.Threading
 
-/// `IfMatch` is the ETag of the working blob that the delete check gave.
-type DeleteEditJson = { Slug : string; IfMatch : string }
-
 /// A null `ConfirmSlug` confirms nothing. A null `Edits` is a plain delete.
-type DeletePostJson = { ConfirmSlug : string; Edits : DeleteEditJson list }
+type DeletePostJson = { ConfirmSlug : string; Edits : RemovalEditJson list }
 
 type DeletedPostDto =
   { /// Null for a draft, which dispatches no rebuild.
@@ -38,26 +35,13 @@ type DeletedPostDto =
     /// Each warning is one of the warnings of `UpcomingChangeDto`, or `revisions` or `comments`.
     Warnings : string list }
 
-type DeleteCheckEditDto = { Slug : string; Title : string; ETag : string }
-
-/// `Outcome` is `plain`, `publish-and-delete`, or `blocked`. `Edits` are the pending edits that a publish and delete publishes.
-/// `Problems` are the problems that block the delete.
-type DeleteCheckDto =
-  { Outcome : string
-    Edits : DeleteCheckEditDto list
-    Problems : ProblemDto list }
-
 module DeleteMapping =
 
   let confirmation (json : DeletePostJson) =
     json |> Option.ofObj |> Option.bind (fun json -> Option.ofObj json.ConfirmSlug)
 
-  let edits (json : DeletePostJson) : DeletePost.EditRef list =
-    json
-    |> Option.ofObj
-    |> Option.bind (fun json -> Option.ofObj json.Edits)
-    |> Option.defaultValue []
-    |> List.map (fun edit -> { Slug = edit.Slug; IfMatch = edit.IfMatch })
+  let edits (json : DeletePostJson) =
+    json |> Option.ofObj |> Option.bind (fun json -> Option.ofObj json.Edits) |> RemovalMapping.edits
 
   let warnings (outcome : DeletePost.Outcome) =
     match outcome with
@@ -76,33 +60,15 @@ module DeleteMapping =
       Edits = edits |> List.map Slug.value
       Warnings = warnings outcome |> List.map UpcomingMapping.warning }
 
-  let names (slugs : Slug list) = slugs |> List.map (fun slug -> $"'{slug}'") |> String.concat ", "
-
-  let keptWarning (warning : PublishSteps.Warning) =
-    match warning with
-    | PublishSteps.CommentRowNotWritten _ -> "The post table has no row for a published edit, so readers cannot comment on that post yet."
-    | PublishSteps.PendingEditKept _ -> "A published edit keeps its pending edit. The published text is correct."
-    | PublishSteps.NewerTextKept -> "Another tab saved newer text during the delete. That text is a pending edit."
-    | PublishSteps.ProductionRebuildFailed _ -> "The production rebuild did not start. Select Rebuild site on the dashboard."
-    | PublishSteps.StagingRebuildFailed _ -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
-    | PublishSteps.SiteNotRebuilt _ -> "The site rebuild did not start. Select Rebuild site on the dashboard."
-    | PublishSteps.DeployNotTracked _ -> "The admin cannot show the deploy state of the published edits. The site still builds."
-
   /// The delete published the pending edits and kept the post.
   let kept (slug : string) (edits : Slug list) (reason : DeletePost.KeptReason) (warnings : PublishSteps.Warning list) =
-    let because, statusCode =
+    let because =
       match reason with
-      | DeletePost.EditNotPublished(edit, PublishSteps.WriteFailed _) ->
-        $"The pending edit of the post '{edit}' did not publish.", HttpStatusCode.InternalServerError
-      | DeletePost.EditNotPublished(edit, (PublishSteps.RevisionTaken | PublishSteps.PublishedConditionFailed)) ->
-        $"The post '{edit}' changed during the delete, so its pending edit did not publish.", HttpStatusCode.Conflict
+      | DeletePost.EditNotPublished(edit, failure) -> RemovalMapping.editNotPublished "delete" edit failure
       | DeletePost.PublishedBlobKept -> "The published text of the post changed during the delete.", HttpStatusCode.Conflict
       | DeletePost.PublishedDeleteFailed _ -> "The delete of the published text failed.", HttpStatusCode.InternalServerError
 
-    let message =
-      $"The admin published the pending edits of the posts {names edits} and did not delete the post '{slug}'. {because}"
-
-    String.concat " " (message :: List.map keptWarning warnings), statusCode
+    RemovalMapping.kept "delete" slug edits because warnings
 
   let error (error : DeletePost.Error) =
     match error with
@@ -111,70 +77,11 @@ module DeleteMapping =
     | DeletePost.PublishedBlobChanged -> "The published text changed since you opened the post", HttpStatusCode.Conflict
     | DeletePost.SlugNotConfirmed slug -> $"Type the slug '{slug}' to delete the published post", HttpStatusCode.UnprocessableEntity
     | DeletePost.BreaksLinks problems ->
-      $"If you delete the post, a link in another post breaks. The admin does not delete the post. {UpcomingMapping.errors problems}",
+      $"If you delete the post, a link in another post breaks. The admin does not delete the post. {RemovalMapping.errors problems}",
       HttpStatusCode.UnprocessableEntity
     | DeletePost.EditsChanged ->
       "The pending edits that remove the links to the post changed. The admin did not delete the post. Check the delete again.",
       HttpStatusCode.Conflict
-
-  let check (outcome : DeleteCheck.Outcome) : DeleteCheckDto =
-    match outcome with
-    | DeleteCheck.PlainDelete -> { Outcome = "plain"; Edits = []; Problems = [] }
-    | DeleteCheck.PublishAndDelete edits ->
-      { Outcome = "publish-and-delete"
-        Edits = edits |> List.map (fun edit -> { Slug = Slug.value edit.Slug; Title = edit.Title; ETag = edit.ETag })
-        Problems = [] }
-    | DeleteCheck.Blocked problems ->
-      { Outcome = "blocked"
-        Edits = []
-        Problems = problems |> List.map ProblemMapping.problem }
-
-  let checkError (error : CheckDelete.Error) =
-    match error with
-    | CheckDelete.PostNotFound missing -> $"Post '{missing}' not found", HttpStatusCode.NotFound
-    | CheckDelete.NotPublished draft -> $"The post '{draft}' is a draft. A draft needs no delete check", HttpStatusCode.Conflict
-
-type CheckDelete(
-  config : Config,
-  images : TwoPoint.Site.Render.IImageSize,
-  logger : ILogger<CheckDelete>,
-  parseCache : PublishedParseCache,
-  postStoreClient : BlobServiceClient,
-  texts : BlobTextCache
-) =
-
-  [<Function("Admin-Posts-CheckDelete")>]
-  member _.Run (
-    [<HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "internal/posts/{slug}/delete/check")>] req : HttpRequestData,
-    context : FunctionContext,
-    slug : string,
-    ct : CancellationToken
-  ) =
-    let op = "Admin.Posts.CheckDelete"
-    let httpContext = context.GetHttpContext() |> Option.ofObj
-    let claimsPrincipal = httpContext |> Option.map _.User
-
-    ct |> (
-      Auth.runIfAuthorized logger req claimsPrincipal op
-      <| fun _ -> cancellableTask {
-        let! ct = CancellableTask.getCancellationToken()
-        logger.LogInformation("Processing '{op}' request with slug '{slug}'", op, slug)
-        let response = req.CreateResponse HttpStatusCode.OK
-
-        let gate = PublishGateStore(config, images, parseCache, PostStore(postStoreClient, logger, texts))
-        let! result = CheckDelete.withDependencies gate { Slug = slug }
-
-        let apiResponse, statusCode =
-          result
-          |> ActionResult.toApiResponse
-            (fun (CheckDelete.Event.Checked outcome) -> Some(DeleteMapping.check outcome))
-            DeleteMapping.checkError
-
-        response.StatusCode <- statusCode
-        do! response.WriteAsJsonAsync(apiResponse, ct)
-        return response
-      }
-    )
 
 type DeletePost(
   config : Config,
@@ -241,7 +148,7 @@ type DeletePost(
               logger.LogWarning(
                 "The delete of the post '{slug}' published the pending edits of {edits} and kept the post: {reason}",
                 slug,
-                DeleteMapping.names edits,
+                RemovalMapping.names edits,
                 reason
               )
 

@@ -28,7 +28,7 @@ const plain = { outcome: 'plain', edits: [], problems: [] };
 let checkAnswer = plain;
 
 const respond = (url, init = {}) => {
-  if (url.endsWith('/api/internal/posts/my-post/delete/check') && init.method === 'POST') {
+  if (url.endsWith('/api/internal/posts/my-post/removal/check') && init.method === 'POST') {
     checks += 1;
     return ok(checkAnswer);
   }
@@ -112,7 +112,7 @@ test('a blocked check shows the problems and keeps the delete disabled', async (
 
 test('a publish and delete lists the posts and gives the number of edits on the button', async () => {
   checkAnswer = {
-    outcome: 'publish-and-delete',
+    outcome: 'publish-and-remove',
     edits: [
       { slug: 'a-post', title: 'A post', eTag: '"a1"' },
       { slug: 'c-post', title: 'C post', eTag: '"c1"' },
@@ -121,7 +121,7 @@ test('a publish and delete lists the posts and gives the number of edits on the 
   };
 
   await open();
-  const titles = [...dialog().querySelectorAll('.delete-edits li')].map((item) => item.textContent.trim());
+  const titles = [...dialog().querySelectorAll('.removal-edits li')].map((item) => item.textContent.trim());
   assert.deepEqual(titles, ['A post', 'C post']);
   assert.equal(button('Publish 2 edits and delete').disabled, true);
 

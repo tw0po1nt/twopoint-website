@@ -89,13 +89,30 @@ module UpcomingGate =
 module Unpublish =
 
   /// `IfMatch` is the ETag of the working blob that the editor read. `None` means that the post has no pending edit.
-  type Dto = { Slug: string; IfMatch: string option }
+  /// `Edits` are the pending edits of the removal check. An empty list is a plain removal.
+  type Dto =
+    { Slug: string
+      IfMatch: string option
+      Edits: RemovalSteps.EditRef list }
 
   type Error =
     | Refused of UpcomingGate.Refusal
-    | HasErrors of TwoPoint.Site.Render.Problem list
+    | BreaksLinks of TwoPoint.Site.Render.Problem list
+    /// The pending edits of the request are not the pending edits of the removal check.
+    | EditsChanged
 
-  type Event = Unpublished of UpcomingChange
+  /// Why the unpublish kept the post upcoming after it published one or more pending edits.
+  type KeptReason =
+    | EditNotPublished of Slug * PublishSteps.WriteFailure
+    | WorkingBlobKept
+    | WorkingWriteFailed of DependencyError
+    | PublishedBlobKept
+    | PublishedDeleteFailed of DependencyError
+
+  type Event =
+    | Unpublished of UpcomingChange
+    /// The unpublish published the pending edits of `edits`, and a step after that failed. The post stays upcoming.
+    | PostKept of edits: Slug list * reason: KeptReason * production: ProductionDispatch * warnings: PublishSteps.Warning list
 
   type Dependencies =
     inherit UpcomingGate.Dependencies
@@ -104,10 +121,69 @@ module Unpublish =
 
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
+  [<RequireQualifiedAccess>]
+  module Logic =
+
+    let refusal (refusal: RemovalSteps.Refusal) : Error =
+      match refusal with
+      | RemovalSteps.BreaksLinks problems -> BreaksLinks problems
+      | RemovalSteps.EditsChanged -> EditsChanged
+
   let private condition (working: StoredBlob option) =
     match working with
     | Some blob -> MatchesETag blob.ETag
     | None -> MustNotExist
+
+  let private kept (reason: KeptReason) (kept: RemovalSteps.Kept) =
+    PostKept(kept.Edits, reason, kept.Production, kept.Warnings)
+
+  let private refused (gate: PendingGate.Refusal) : ActionError<Error> =
+    ActionError.Logic(Refused(UpcomingGate.Gate gate))
+
+  let private unpublish
+    (dependencies: Dependencies)
+    (slug: Slug)
+    (upcoming: UpcomingGate.UpcomingPost)
+    (draftText: string)
+    (edits: RemovalSteps.GatedEdit list)
+    : CancellableTask<ActionResult<Event, Error>> =
+    cancellableTask {
+      let! publishedEdits = RemovalSteps.publishEdits dependencies edits
+      let fail refusal reason = RemovalSteps.fail dependencies publishedEdits refusal (kept reason)
+
+      match publishedEdits.Failure with
+      | Some(editSlug, failure) ->
+        return!
+          fail
+            (RemovalSteps.Logic.firstEditError failure |> ActionError.mapLogic Logic.refusal)
+            (EditNotPublished(editSlug, failure))
+      | None ->
+        match! dependencies.WriteWorkingBlob slug draftText (condition upcoming.Working) with
+        | Error error -> return! fail (ActionError.Dependency error) (WorkingWriteFailed error)
+        | Ok ConditionFailed -> return! fail (refused PendingGate.WorkingBlobChanged) WorkingBlobKept
+        | Ok(Written draftETag) ->
+          match! dependencies.DeletePublishedBlob slug upcoming.Published.ETag with
+          | Error error -> return! fail (ActionError.Dependency error) (PublishedDeleteFailed error)
+          | Ok DeleteConditionFailed -> return! fail (refused PendingGate.PublishedBlobChanged) PublishedBlobKept
+          | Ok Deleted ->
+            let! row = PublishSteps.retryOnce (fun () -> dependencies.DeletePostRow slug)
+            let! rebuilt = PublishSteps.rebuildAll dependencies (publishedEdits.Published @ [ slug ])
+
+            let rowWarnings =
+              match row with
+              | Ok() -> []
+              | Error error -> [ PostRowKept error ]
+
+            return
+              Ok(
+                Unpublished
+                  { PublishDate = None
+                    State = PostState.Draft
+                    WorkingETag = Some draftETag
+                    Production = rebuilt.Production
+                    Warnings = List.map Step publishedEdits.Warnings @ rowWarnings @ List.map Step rebuilt.Warnings }
+              )
+    }
 
   let withDependencies (dependencies: Dependencies) : Action =
     fun dto -> cancellableTaskResult {
@@ -126,50 +202,11 @@ module Unpublish =
         TwoPoint.Site.Render.PostText.withoutPublishDate source
         |> Result.mapError (PendingGate.FrontMatterUnreadable >> UpcomingGate.Gate >> Refused >> ActionError<Error>.Logic)
 
-      let _, parsed = dependencies.ParsePublished loaded.Posts loaded.Series
+      let! edits =
+        RemovalSteps.prepare dependencies slug loaded dto.Edits
+        |> CancellableTask.map (Result.mapError (ActionError.mapLogic Logic.refusal))
 
-      let errors =
-        TwoPoint.Site.Render.Check.withoutPost dependencies.Stage parsed (Slug.value slug)
-        |> List.filter TwoPoint.Site.Render.Problem.isError
-
-      do!
-        match errors with
-        | [] -> Ok()
-        | _ -> Result.Error(ActionError.Logic(HasErrors errors))
-
-      let! written =
-        dependencies.WriteWorkingBlob slug draftText (condition upcoming.Working)
-        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-
-      let! draftETag =
-        match written with
-        | Written eTag -> Ok eTag
-        | ConditionFailed -> Result.Error(ActionError.Logic(Refused(UpcomingGate.Gate PendingGate.WorkingBlobChanged)))
-
-      let! deleted =
-        dependencies.DeletePublishedBlob slug upcoming.Published.ETag
-        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
-
-      do!
-        match deleted with
-        | Deleted -> Ok()
-        | DeleteConditionFailed -> Result.Error(ActionError.Logic(Refused(UpcomingGate.Gate PendingGate.PublishedBlobChanged)))
-
-      let! row = PublishSteps.retryOnce (fun () -> dependencies.DeletePostRow slug)
-      let! rebuilt = PublishSteps.rebuild dependencies slug
-
-      let rowWarnings =
-        match row with
-        | Ok() -> []
-        | Error error -> [ PostRowKept error ]
-
-      return
-        Unpublished
-          { PublishDate = None
-            State = PostState.Draft
-            WorkingETag = Some draftETag
-            Production = rebuilt.Production
-            Warnings = rowWarnings @ List.map Step rebuilt.Warnings }
+      return! unpublish dependencies slug upcoming draftText edits
     }
 
 [<RequireQualifiedAccess>]

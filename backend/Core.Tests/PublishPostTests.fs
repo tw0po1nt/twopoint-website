@@ -71,6 +71,8 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   let mutable comments = Map.empty<string, string list>
   let mutable deliveries = Map.empty<string, string list>
   let mutable commentDeleteFails = false
+  let mutable workingWriteFails = false
+  let mutable publishedDeleteFails = false
 
   let writeWorking (slug : Slug) (text : string) (condition : WriteCondition) : DependencyResult<WriteOutcome> =
     let name = Slug.value slug
@@ -81,7 +83,9 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       | MatchesETag eTag, Some _ -> eTag = $"w{version}"
       | _ -> false
 
-    if allowed then
+    if workingWriteFails then
+      CancellableTaskResult.error (down "The working container")
+    elif allowed then
       log.Add "working"
       version <- version + 1
       working <- working |> Map.add name text
@@ -99,6 +103,8 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
   member _.Comments = comments
   member _.Deliveries = deliveries
   member _.CommentDeleteFails with set value = commentDeleteFails <- value
+  member _.WorkingWriteFails with set value = workingWriteFails <- value
+  member _.PublishedDeleteFails with set value = publishedDeleteFails <- value
   member _.AddComments (name : string) (ids : string list) = comments <- comments |> Map.add name ids
   member _.AddDeliveries (name : string) (ids : string list) = deliveries <- deliveries |> Map.add name ids
   member _.Changes = changes
@@ -237,6 +243,7 @@ type private FakeStore(published : Map<string, string>, working : Map<string, st
       log.Add "delete published"
 
       match published |> Map.tryFind (Slug.value slug) with
+      | _ when publishedDeleteFails -> CancellableTaskResult.error (down "The published container")
       | Some _ when eTag = $"p{publishedVersion (Slug.value slug)}" ->
         published <- published |> Map.remove (Slug.value slug)
         CancellableTaskResult.singleton Deleted
@@ -1052,7 +1059,7 @@ let private upcomingStore published working =
   fake
 
 let private unpublish (fake : FakeStore) name ifMatch =
-  run (Unpublish.withDependencies fake { Slug = name; IfMatch = ifMatch })
+  run (Unpublish.withDependencies fake { Slug = name; IfMatch = ifMatch; Edits = [] })
 
 let private changeDate (fake : FakeStore) name ifMatch date =
   run (ChangeDate.withDependencies fake { Slug = name; IfMatch = ifMatch; PublishDate = date })
@@ -1060,7 +1067,7 @@ let private changeDate (fake : FakeStore) name ifMatch date =
 let private unpublishedOf result =
   match result with
   | Ok(Unpublish.Event.Unpublished moved) -> moved
-  | Error error -> failtestf "Expected an unpublish, got %A" error
+  | other -> failtestf "Expected an unpublish, got %A" other
 
 let private dateChangedOf result =
   match result with
@@ -1170,9 +1177,9 @@ let unpublishTests =
       let fake = upcomingStore [ "soon", upcomingPost; "other", linking ] []
 
       match unpublish fake "soon" None with
-      | Error(ActionError.Logic(Unpublish.HasErrors problems)) ->
+      | Error(ActionError.Logic(Unpublish.BreaksLinks problems)) ->
         Expect.isTrue (problems |> List.exists (fun problem -> problem.Message.Contains "other")) "The problem names the other post"
-      | other -> failtestf "Expected HasErrors, got %A" other
+      | other -> failtestf "Expected BreaksLinks, got %A" other
 
       Expect.isEmpty fake.Log "No write and no dispatch"
     }
@@ -1540,66 +1547,66 @@ let private deleteWith (fake : FakeStore) name confirm (edits : (string * string
       { Slug = name
         IfMatch = None
         ConfirmSlug = confirm
-        Edits = edits |> List.map (fun (name, eTag) -> ({ Slug = name; IfMatch = eTag } : DeletePost.EditRef)) }
+        Edits = edits |> List.map (fun (name, eTag) -> ({ Slug = name; IfMatch = eTag } : RemovalSteps.EditRef)) }
   )
 
-let private checkDelete (fake : FakeStore) name =
-  match run (CheckDelete.withDependencies fake { Slug = name }) with
-  | Ok(CheckDelete.Event.Checked outcome) -> outcome
+let private checkRemoval (fake : FakeStore) name =
+  match run (CheckRemoval.withDependencies fake { Slug = name }) with
+  | Ok(CheckRemoval.Event.Checked outcome) -> outcome
   | Error error -> failtestf "Expected a check, got %A" error
 
 let private parsedPost name text =
   Check.published Stage.Staging [] name text |> Result.mapError _.Problems |> ok
 
-let private fix name text problems : DeleteCheck.Fix =
+let private fix name text problems : RemovalCheck.Fix =
   { Slug = slug name
     Title = "Fixed"
     ETag = "w1"
     Post = Some(parsedPost name text)
     Problems = problems }
 
-let private edit name title : DeleteCheck.Edit = { Slug = slug name; Title = title; ETag = "w1" }
+let private edit name title : RemovalCheck.Edit = { Slug = slug name; Title = title; ETag = "w1" }
 
 let private blockedProblems outcome =
   match outcome with
-  | DeleteCheck.Blocked problems -> problems
+  | RemovalCheck.Blocked problems -> problems
   | other -> failtestf "Expected a blocked check, got %A" other
 
 let private mentions (name : string) (problems : Problem list) =
   problems |> List.exists (fun problem -> problem.Message.Contains $"'{name}'")
 
 [<Tests>]
-let deleteCheckTests =
+let removalCheckTests =
   let published = [ parsedPost "live" livePost; parsedPost "other" linkingPost; parsedPost "third" thirdPost ]
-  let outcome = DeleteCheck.Logic.outcome Stage.Staging
+  let outcome = RemovalCheck.Logic.outcome Stage.Staging
 
-  testList "The delete check" [
-    test "a post that no published post links to is a plain delete" {
-      Expect.equal (outcome [ parsedPost "live" livePost; parsedPost "other" otherPost ] (slug "live") []) DeleteCheck.PlainDelete "Plain"
+  testList "The removal check" [
+    test "a post that no published post links to is a plain removal" {
+      Expect.equal (outcome [ parsedPost "live" livePost; parsedPost "other" otherPost ] (slug "live") []) RemovalCheck.PlainRemoval "Plain"
     }
 
-    test "each linking post with a pending edit that removes the link is a publish and delete" {
+    test "each linking post with a pending edit that removes the link is a publish and remove" {
       Expect.equal
         (outcome published (slug "live") [ fix "other" fixingEdit []; fix "third" thirdFix [] ])
-        (DeleteCheck.PublishAndDelete [ edit "other" "Fixed"; edit "third" "Fixed" ])
+        (RemovalCheck.PublishAndRemove [ edit "other" "Fixed"; edit "third" "Fixed" ])
         "Both edits"
     }
 
-    test "a linking post with no pending edit blocks the delete and is named" {
+    test "a linking post with no pending edit blocks the removal and is named" {
       let problems = outcome published (slug "live") [ fix "other" fixingEdit [] ] |> blockedProblems
       Expect.isTrue (mentions "third" problems) "The post that keeps a broken link"
       Expect.isFalse (mentions "other" problems) "The fixed post is not named"
       Expect.isTrue (problems |> List.forall Problem.isError) "Only errors"
     }
 
-    test "a pending edit that keeps the link blocks the delete" {
+    test "a pending edit that keeps the link blocks the removal" {
       let problems =
         outcome published (slug "live") [ fix "other" linkingPost []; fix "third" thirdFix [] ] |> blockedProblems
 
       Expect.isTrue (mentions "other" problems) "The post that keeps the link"
     }
 
-    test "a pending edit with an error in its publish check blocks the delete" {
+    test "a pending edit with an error in its publish check blocks the removal" {
       let cardError = Problem.error (Place.Field("image", 7)) "The card image is not available."
 
       let problems =
@@ -1612,13 +1619,13 @@ let deleteCheckTests =
         "The error of the edit"
     }
 
-    test "a warning in the publish check of a pending edit does not block the delete" {
+    test "a warning in the publish check of a pending edit does not block the removal" {
       let warning = Problem.warning (Place.Body 1) "A warning."
 
       Expect.equal
         (outcome published (slug "live") [ fix "other" fixingEdit [ warning ]; fix "third" thirdFix [] ])
-        (DeleteCheck.PublishAndDelete [ edit "other" "Fixed"; edit "third" "Fixed" ])
-        "Publish and delete"
+        (RemovalCheck.PublishAndRemove [ edit "other" "Fixed"; edit "third" "Fixed" ])
+        "Publish and remove"
     }
 
     test "the pending edit of a post that does not link to the post is not published" {
@@ -1626,7 +1633,7 @@ let deleteCheckTests =
 
       Expect.equal
         (outcome withDetached (slug "live") [ fix "other" fixingEdit []; fix "third" thirdFix []; fix "detached" fixingEdit [] ])
-        (DeleteCheck.PublishAndDelete [ edit "other" "Fixed"; edit "third" "Fixed" ])
+        (RemovalCheck.PublishAndRemove [ edit "other" "Fixed"; edit "third" "Fixed" ])
         "Only the linking posts"
     }
   ]
@@ -1638,18 +1645,18 @@ let publishAndDeleteTests =
       let fake = store [ "live", livePost; "other", linkingPost; "detached", otherPost ] [ "other", fixingEdit; "detached", pendingEdit ]
 
       Expect.equal
-        (checkDelete fake "live")
-        (DeleteCheck.PublishAndDelete [ { Slug = slug "other"; Title = "Other fixed"; ETag = "w1" } ])
+        (checkRemoval fake "live")
+        (RemovalCheck.PublishAndRemove [ { Slug = slug "other"; Title = "Other fixed"; ETag = "w1" } ])
         "The edit to publish"
 
       Expect.isEmpty fake.Log "The check writes nothing"
     }
 
-    test "the check of a post that no post links to is a plain delete, and a draft is not published" {
-      Expect.equal (checkDelete (store [ "live", livePost; "other", otherPost ] []) "live") DeleteCheck.PlainDelete "Plain"
+    test "the check of a post that no post links to is a plain removal, and a draft is not published" {
+      Expect.equal (checkRemoval (store [ "live", livePost; "other", otherPost ] []) "live") RemovalCheck.PlainRemoval "Plain"
 
-      match run (CheckDelete.withDependencies (store [] [ "my-draft", draftText ]) { Slug = "my-draft" }) with
-      | Error(ActionError.Logic(CheckDelete.NotPublished _)) -> ()
+      match run (CheckRemoval.withDependencies (store [] [ "my-draft", draftText ]) { Slug = "my-draft" }) with
+      | Error(ActionError.Logic(CheckRemoval.NotPublished _)) -> ()
       | other -> failtestf "Expected NotPublished, got %A" other
     }
 
@@ -1705,7 +1712,7 @@ let publishAndDeleteTests =
         { new IImageSize with
             member _.Size _ = Result.Error "HTTP 404" }
 
-      blockedProblems (checkDelete fake "live") |> mentions "other" |> fun named -> Expect.isTrue named "The check names the post"
+      blockedProblems (checkRemoval fake "live") |> mentions "other" |> fun named -> Expect.isTrue named "The check names the post"
 
       match deleteWith fake "live" (Some "live") [ "other", "w1" ] with
       | Error(ActionError.Logic(DeletePost.BreaksLinks _)) -> ()
@@ -1785,5 +1792,204 @@ let publishAndDeleteTests =
       | other -> failtestf "Expected PostKept, got %A" other
 
       Expect.equal (List.last fake.Log) "dispatch" "The dispatch ran"
+    }
+  ]
+
+let private linkingSoon = otherPost.Replace("Other body.", "See [soon](/posts/soon/).")
+let private thirdSoon = linkingSoon.Replace("title: Other", "title: Third")
+
+let private unpublishWith (fake : FakeStore) name (edits : (string * string) list) =
+  run (
+    Unpublish.withDependencies
+      fake
+      { Slug = name
+        IfMatch = None
+        Edits = edits |> List.map (fun (name, eTag) -> ({ Slug = name; IfMatch = eTag } : RemovalSteps.EditRef)) }
+  )
+
+let private keptOf result =
+  match result with
+  | Ok(Unpublish.Event.PostKept(edits, reason, production, warnings)) -> edits, reason, production, warnings
+  | other -> failtestf "Expected a kept post, got %A" other
+
+let private soonWithFix () =
+  upcomingStore [ "soon", upcomingPost; "other", linkingSoon; "detached", otherPost ] [ "other", fixingEdit; "detached", pendingEdit ]
+
+let private soonWithTwoFixes () =
+  upcomingStore [ "soon", upcomingPost; "other", linkingSoon; "third", thirdSoon ] [ "other", fixingEdit; "third", thirdFix ]
+
+let private expectStaysUpcoming (fake : FakeStore) =
+  Expect.equal fake.Published["soon"] upcomingPost "The post stays upcoming"
+  Expect.isTrue (fake.Rows.ContainsKey "soon") "The row stays"
+  Expect.equal (fake.Log |> List.filter ((=) "dispatch")) [ "dispatch" ] "One dispatch"
+  Expect.equal (List.last fake.Log) "dispatch" "The dispatch runs last"
+  Expect.equal (fake.Changes |> List.map _.Slug) [ slug "other" ] "A change for the published edit only"
+
+[<Tests>]
+let publishAndUnpublishTests =
+  testList "Unpublish a post and publish the pending edits that remove each link to it" [
+    test "the check of an upcoming post gives the pending edit of each linking post" {
+      Expect.equal
+        (checkRemoval (soonWithFix ()) "soon")
+        (RemovalCheck.PublishAndRemove [ { Slug = slug "other"; Title = "Other fixed"; ETag = "w1" } ])
+        "The edit to publish"
+    }
+
+    test "the unpublish publishes the pending edit, unpublishes the post, and dispatches one time" {
+      let fake = soonWithFix ()
+      let moved = unpublishWith fake "soon" [ "other", "w1" ] |> unpublishedOf
+
+      Expect.equal
+        fake.Log
+        [ $"revision other/{isoOf utcNow}"
+          "published"
+          "row"
+          "delete working"
+          "working"
+          "delete published"
+          "delete row"
+          "dispatch" ]
+        "The edit publishes before the unpublish, and one dispatch ends the action"
+
+      Expect.stringContains fake.Published["other"] "No link now." "The edit is published"
+      Expect.isFalse (fake.Working.ContainsKey "other") "The pending edit is gone"
+      Expect.isFalse (fake.Published.ContainsKey "soon") "The post is unpublished"
+      Expect.equal (Post.summary fake.Working["soon"]).PublishDate None "The draft has no publish date"
+      Expect.isFalse (fake.Rows.ContainsKey "soon") "The row is gone"
+      Expect.equal fake.Working["detached"] pendingEdit "The pending edit of a post with no link stays pending"
+      Expect.equal moved.State TwoPoint.Core.Posts.PostState.Draft "A draft"
+      Expect.equal moved.Production dispatched "The dispatch"
+      Expect.isEmpty moved.Warnings "No warning"
+
+      Expect.equal
+        (fake.Changes |> List.map _.Slug |> List.sort)
+        [ slug "other"; slug "soon" ]
+        "A change for the edit and for the unpublish"
+
+      Expect.equal (fake.Changes |> List.map _.Change |> List.distinct |> List.length) 1 "The same dispatch"
+    }
+
+    test "a linking post with no pending edit, or with an edit that keeps the link, blocks the unpublish, and nothing changes" {
+      for working in [ []; [ "other", linkingSoon ] ] do
+        let fake = upcomingStore [ "soon", upcomingPost; "other", linkingSoon ] working
+
+        match unpublishWith fake "soon" (working |> List.map (fun (name, _) -> name, "w1")) with
+        | Error(ActionError.Logic(Unpublish.BreaksLinks problems)) -> Expect.isTrue (mentions "other" problems) "Names the post"
+        | other -> failtestf "Expected BreaksLinks, got %A" other
+
+        Expect.isEmpty fake.Log "No step ran"
+    }
+
+    test "a pending edit that removes the link and has a bad card image blocks the unpublish" {
+      let withCard = fixingEdit.Replace("category: One-offs", "category: One-offs\nimage: https://example.com/card.jpg")
+      let fake = upcomingStore [ "soon", upcomingPost; "other", linkingSoon ] [ "other", withCard ]
+
+      fake.Images <-
+        { new IImageSize with
+            member _.Size _ = Result.Error "HTTP 404" }
+
+      match unpublishWith fake "soon" [ "other", "w1" ] with
+      | Error(ActionError.Logic(Unpublish.BreaksLinks problems)) -> Expect.isTrue (mentions "other" problems) "Names the post"
+      | other -> failtestf "Expected BreaksLinks, got %A" other
+
+      Expect.isEmpty fake.Log "No step ran"
+    }
+
+    test "a stale ETag or a different list of edits is refused, and the unpublish writes nothing" {
+      for edits in [ [ "other", "w0" ]; []; [ "other", "w1"; "detached", "w1" ]; [ "detached", "w1" ] ] do
+        let fake = soonWithFix ()
+
+        match unpublishWith fake "soon" edits with
+        | Error(ActionError.Logic Unpublish.EditsChanged) -> ()
+        | other -> failtestf "Expected EditsChanged for %A, got %A" edits other
+
+        Expect.isEmpty fake.Log $"No step ran for {edits}"
+    }
+
+    test "a request with edits for a plain removal is refused" {
+      let fake = upcomingStore [ "soon", upcomingPost; "other", otherPost ] [ "other", pendingEdit ]
+
+      match unpublishWith fake "soon" [ "other", "w1" ] with
+      | Error(ActionError.Logic Unpublish.EditsChanged) -> ()
+      | other -> failtestf "Expected EditsChanged, got %A" other
+
+      Expect.isEmpty fake.Log "No step ran"
+    }
+
+    test "a failed write of the first edit writes nothing and dispatches nothing" {
+      let fake = soonWithFix ()
+      fake.PublishedWriteFailsFor <- Set.ofList [ "other" ]
+
+      match unpublishWith fake "soon" [ "other", "w1" ] with
+      | Error(ActionError.Dependency _) -> ()
+      | other -> failtestf "Expected a dependency error, got %A" other
+
+      Expect.isFalse (List.contains "dispatch" fake.Log) "No dispatch"
+      Expect.isFalse (List.contains "working" fake.Log) "No draft text"
+      Expect.equal fake.Published["soon"] upcomingPost "The post stays upcoming"
+      Expect.isEmpty fake.Revisions "The revision is removed"
+    }
+
+    test "a failed second edit keeps the post upcoming and the first edit published, and still dispatches one time" {
+      let fake = soonWithTwoFixes ()
+      fake.PublishedWriteFailsFor <- Set.ofList [ "third" ]
+
+      match unpublishWith fake "soon" [ "other", "w1"; "third", "w1" ] |> keptOf with
+      | [ edited ], Unpublish.EditNotPublished(failed, PublishSteps.WriteFailed _), production, [] ->
+        Expect.equal edited (slug "other") "The published edit"
+        Expect.equal failed (slug "third") "The edit that failed"
+        Expect.equal production dispatched "The dispatch"
+      | other -> failtestf "Expected EditNotPublished, got %A" other
+
+      expectStaysUpcoming fake
+      Expect.stringContains fake.Published["other"] "No link now." "The first edit stays published"
+      Expect.equal fake.Working["third"] thirdFix "The failed edit stays pending"
+      Expect.isFalse (fake.Working.ContainsKey "soon") "No draft text"
+    }
+
+    test "a failed write of the draft text after the edits keeps the post upcoming, and still dispatches" {
+      let fake = soonWithFix ()
+      fake.WorkingWriteFails <- true
+
+      match unpublishWith fake "soon" [ "other", "w1" ] |> keptOf with
+      | [ edited ], Unpublish.WorkingWriteFailed _, _, _ -> Expect.equal edited (slug "other") "The published edit"
+      | other -> failtestf "Expected WorkingWriteFailed, got %A" other
+
+      expectStaysUpcoming fake
+      Expect.isFalse (List.contains "delete published" fake.Log) "The published blob stays"
+    }
+
+    test "a working blob that another tab saves during the unpublish keeps the post upcoming" {
+      let fake = soonWithFix ()
+      fake.BeforePublishedWrite <- fun () -> if not (fake.Working.ContainsKey "soon") then fake.Overwrite "soon" "newer"
+
+      match unpublishWith fake "soon" [ "other", "w1" ] |> keptOf with
+      | [ _ ], Unpublish.WorkingBlobKept, _, _ -> ()
+      | other -> failtestf "Expected WorkingBlobKept, got %A" other
+
+      expectStaysUpcoming fake
+      Expect.equal fake.Working["soon"] "newer" "The newer text stays"
+    }
+
+    test "a failed delete of the published blob after the edits keeps the post upcoming, and still dispatches" {
+      let fake = soonWithFix ()
+      fake.PublishedDeleteFails <- true
+
+      match unpublishWith fake "soon" [ "other", "w1" ] |> keptOf with
+      | [ edited ], Unpublish.PublishedDeleteFailed _, _, _ -> Expect.equal edited (slug "other") "The published edit"
+      | other -> failtestf "Expected PublishedDeleteFailed, got %A" other
+
+      expectStaysUpcoming fake
+    }
+
+    test "a published blob that changes after the edits publish keeps the post upcoming" {
+      let fake = soonWithFix ()
+      fake.BeforePublishedWrite <- fun () -> if fake.Published["other"].Contains "No link now." then fake.Publish "soon" upcomingPost
+
+      match unpublishWith fake "soon" [ "other", "w1" ] |> keptOf with
+      | [ _ ], Unpublish.PublishedBlobKept, _, _ -> ()
+      | other -> failtestf "Expected PublishedBlobKept, got %A" other
+
+      expectStaysUpcoming fake
     }
   ]
