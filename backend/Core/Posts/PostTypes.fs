@@ -151,6 +151,15 @@ module Comment =
       }
 
 
+type RenderedComment =
+  { Comment : Comment
+    Html : string }
+
+module RenderedComment =
+  let ofComment (stage : TwoPoint.Site.Render.Stage) (comment : Comment) =
+    { Comment = comment; Html = TwoPoint.Site.Render.CommentBody.html stage (comment.Content.ToString()) }
+
+
 type Slug =
   private | Slug of string
 

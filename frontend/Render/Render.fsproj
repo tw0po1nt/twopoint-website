@@ -20,6 +20,7 @@
     <Compile Include="Directive.fs" />
     <Compile Include="Images.fs" />
     <Compile Include="Body.fs" />
+    <Compile Include="CommentBody.fs" />
     <Compile Include="Post.fs" />
     <Compile Include="Time.fs" />
     <Compile Include="PostText.fs" />
