@@ -241,30 +241,6 @@ let private links stage (document: MarkdownDocument) =
 
   links @ autolinks
 
-let private lines (block: CodeBlock) =
-  [ for index in 0 .. block.Lines.Count - 1 -> block.Lines.Lines[index].Slice.ToString() ]
-
-let private tryFenceLanguage (block: CodeBlock) =
-  match block with
-  | :? FencedCodeBlock as fenced -> Highlight.tryLanguage fenced.Info |> Option.map (fun language -> fenced.Info, language)
-  | _ -> None
-
-type private CodeRenderer() =
-  inherit HtmlObjectRenderer<CodeBlock>()
-
-  override _.Write(renderer: HtmlRenderer, block: CodeBlock) =
-    renderer.EnsureLine() |> ignore
-
-    match tryFenceLanguage block with
-    | Some(name, language) ->
-      renderer
-        .Write($"<pre data-lang=\"{name}\" tabindex=\"0\"><code>")
-        .Write(Highlight.html language (lines block))
-      |> ignore
-    | None -> renderer.Write("<pre tabindex=\"0\"><code>").Write(Highlight.plain (lines block)) |> ignore
-
-    renderer.WriteLine "</code></pre>" |> ignore
-
 type private DirectiveRenderer(html: Directive.Directive -> string) =
   inherit HtmlObjectRenderer<Directive.DirectiveBlock>()
 
@@ -277,7 +253,7 @@ let private render (directiveHtml: Directive.Directive -> string) (document: Mar
   use writer = new StringWriter()
   let renderer = HtmlRenderer(writer)
   pipeline.Setup renderer
-  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeRenderer()) |> ignore
+  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeBlock.Renderer Highlight.NoLimit) |> ignore
   renderer.ObjectRenderers.Add(DirectiveRenderer directiveHtml)
   renderer.Render document |> ignore
   writer.ToString()

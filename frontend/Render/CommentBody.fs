@@ -125,25 +125,13 @@ let private breakToText (source: string) (block: ThematicBreakBlock) =
     extendTo below.Span.End paragraph
   | _ -> ()
 
-let private lines (block: CodeBlock) =
-  [ for index in 0 .. block.Lines.Count - 1 -> block.Lines.Lines[index].Slice.ToString() ]
-
-type private CodeRenderer() =
-  inherit HtmlObjectRenderer<CodeBlock>()
-
-  override _.Write(renderer: HtmlRenderer, block: CodeBlock) =
-    renderer
-      .EnsureLine()
-      .Write("<pre tabindex=\"0\"><code>")
-      .Write(Highlight.plain (lines block))
-      .WriteLine("</code></pre>")
-    |> ignore
-
 let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
   MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
 
-/// Only an absolute http, https, or mailto URL makes a link.
-let html (stage: Stage) (source: string) =
+let codeLimit = Highlight.PerBlock(TimeSpan.FromMilliseconds 50.0)
+
+/// Only an absolute http, https, or mailto URL makes a link. A code block that uses all of `limit` is plain code.
+let htmlWithin (limit: Highlight.Limit) (stage: Stage) (source: string) =
   let document = Markdown.Parse(source, pipeline)
   // A walk of Descendants can miss nodes when the tree changes during the walk, so each walk comes first.
   let breaks = descendants<ThematicBreakBlock> document
@@ -158,6 +146,8 @@ let html (stage: Stage) (source: string) =
   use writer = new StringWriter()
   let renderer = HtmlRenderer(writer)
   pipeline.Setup renderer
-  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeRenderer()) |> ignore
+  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeBlock.Renderer limit) |> ignore
   renderer.Render document |> ignore
   writer.ToString()
+
+let html (stage: Stage) (source: string) = htmlWithin codeLimit stage source

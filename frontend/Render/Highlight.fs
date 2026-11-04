@@ -3,6 +3,7 @@
 module TwoPoint.Site.Render.Highlight
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Reflection
 open System.Text
@@ -181,10 +182,17 @@ let private lineHtml (segments: (Paint * string) list) =
     | None -> inner)
   |> String.concat ""
 
-/// Gives the HTML of the `code` element, with each line and its newline.
-let html (language: Language) (lines: string list) =
-  let output = StringBuilder()
+type Limit =
+  | NoLimit
+  /// The tokenizer time of all the lines of one block. The load of a grammar is not part of it.
+  | PerBlock of TimeSpan
 
+type Highlighted =
+  /// The HTML of the `code` element, with each line and its newline.
+  | Colored of string
+  | TimedOut
+
+let html (limit: Limit) (language: Language) (lines: string list) =
   lock gate (fun () ->
     let registry = registry.Value
 
@@ -193,28 +201,41 @@ let html (language: Language) (lines: string list) =
 
     let grammar = grammars[language]
     let theme = registry.GetTheme()
+    let clock = Stopwatch.StartNew()
 
-    lines
-    |> List.fold
-      (fun (state: IStateStack) line ->
-        let result = grammar.TokenizeLine2(LineText line, state, TimeSpan.MaxValue)
-        let tokens = result.Tokens
+    // TextMateSharp keeps its stopped-early flag internal. A line that stops early uses all of the time that it gets, so the clock is then past the limit.
+    let lineLimit, isPastLimit =
+      match limit with
+      | NoLimit -> (fun () -> TimeSpan.MaxValue), (fun () -> false)
+      | PerBlock limit -> (fun () -> limit - clock.Elapsed), (fun () -> clock.Elapsed >= limit)
 
-        let segments =
-          [ for index in 0..2 .. tokens.Length - 1 do
-              let start = tokens[index]
-              let finish = if index + 2 < tokens.Length then tokens[index + 2] else line.Length
+    let tokenize (state: IStateStack) (line: string) =
+      let result = grammar.TokenizeLine2(LineText line, state, lineLimit ())
+      let tokens = result.Tokens
 
-              if start < line.Length then
-                let id = Convert.ToInt32(theme.GetColor(EncodedTokenAttributes.GetForeground tokens[index + 1]).TrimStart '#', 16)
-                yield paints[id], line.Substring(start, min finish line.Length - start) ]
+      let segments =
+        [ for index in 0..2 .. tokens.Length - 1 do
+            let start = tokens[index]
+            let finish = if index + 2 < tokens.Length then tokens[index + 2] else line.Length
 
-        output.Append(lineHtml segments).Append('\n') |> ignore
-        result.RuleStack)
-      null
-    |> ignore)
+            if start < line.Length then
+              let id = Convert.ToInt32(theme.GetColor(EncodedTokenAttributes.GetForeground tokens[index + 1]).TrimStart '#', 16)
+              yield paints[id], line.Substring(start, min finish line.Length - start) ]
 
-  output.ToString()
+      lineHtml segments, result.RuleStack
+
+    let output = StringBuilder()
+
+    let rec loop (state: IStateStack) (lines: string list) =
+      match lines with
+      | _ when isPastLimit () -> TimedOut
+      | [] -> Colored(output.ToString())
+      | line :: rest ->
+        let html, next = tokenize state line
+        output.Append(html).Append('\n') |> ignore
+        loop next rest
+
+    loop null lines)
 
 let plain (lines: string list) =
   lines |> List.map (fun line -> escape line + "\n") |> String.concat ""
