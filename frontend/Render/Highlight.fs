@@ -201,16 +201,18 @@ let html (limit: Limit) (language: Language) (lines: string list) =
 
     let grammar = grammars[language]
     let theme = registry.GetTheme()
-    let clock = Stopwatch.StartNew()
 
-    // TextMateSharp keeps its stopped-early flag internal. A line that stops early uses all of the time that it gets, so the clock is then past the limit.
-    let lineLimit, isPastLimit =
+    // TextMateSharp keeps its stopped-early flag internal. A line that stops early uses all of the time that it gets, so the time used is then at the limit.
+    // A time of zero or less also stops the line early.
+    let timeLeft, isPastLimit =
       match limit with
-      | NoLimit -> (fun () -> TimeSpan.MaxValue), (fun () -> false)
-      | PerBlock limit -> (fun () -> limit - clock.Elapsed), (fun () -> clock.Elapsed >= limit)
+      | NoLimit -> (fun (_: TimeSpan) -> TimeSpan.MaxValue), (fun (_: TimeSpan) -> false)
+      | PerBlock limit -> (fun used -> limit - used), (fun used -> used >= limit)
 
-    let tokenize (state: IStateStack) (line: string) =
-      let result = grammar.TokenizeLine2(LineText line, state, lineLimit ())
+    let tokenize (state: IStateStack) (line: string) (used: TimeSpan) =
+      let clock = Stopwatch.StartNew()
+      let result = grammar.TokenizeLine2(LineText line, state, timeLeft used)
+      let used = used + clock.Elapsed
       let tokens = result.Tokens
 
       let segments =
@@ -222,20 +224,20 @@ let html (limit: Limit) (language: Language) (lines: string list) =
               let id = Convert.ToInt32(theme.GetColor(EncodedTokenAttributes.GetForeground tokens[index + 1]).TrimStart '#', 16)
               yield paints[id], line.Substring(start, min finish line.Length - start) ]
 
-      lineHtml segments, result.RuleStack
+      lineHtml segments, result.RuleStack, used
 
     let output = StringBuilder()
 
-    let rec loop (state: IStateStack) (lines: string list) =
+    let rec loop (state: IStateStack) (used: TimeSpan) (lines: string list) =
       match lines with
-      | _ when isPastLimit () -> TimedOut
+      | _ when isPastLimit used -> TimedOut
       | [] -> Colored(output.ToString())
       | line :: rest ->
-        let html, next = tokenize state line
+        let html, next, used = tokenize state line used
         output.Append(html).Append('\n') |> ignore
-        loop next rest
+        loop next used rest
 
-    loop null lines)
+    loop null TimeSpan.Zero lines)
 
 let plain (lines: string list) =
   lines |> List.map (fun line -> escape line + "\n") |> String.concat ""

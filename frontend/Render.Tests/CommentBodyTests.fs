@@ -116,6 +116,11 @@ let private code =
           """<pre data-lang="fsharp" tabindex="0"><code><span class="tk-keyword">let</span> add x <span class="tk-keyword">=</span> x <span class="tk-keyword">+</span> <span class="tk-constant">1</span> <span class="tk-comment">// one</span>
 </code></pre>
 """
+          "of a known language with words after it shows no info string",
+          "```fsharp title=\"a\"\nlet add x = x + 1 // one\n```",
+          """<pre data-lang="fsharp" tabindex="0"><code><span class="tk-keyword">let</span> add x <span class="tk-keyword">=</span> x <span class="tk-keyword">+</span> <span class="tk-constant">1</span> <span class="tk-comment">// one</span>
+</code></pre>
+"""
           "of an unknown language is plain code with no label", "```cobol\nDISPLAY 'HI'.\n```", "<pre tabindex=\"0\"><code>DISPLAY 'HI'.\n</code></pre>\n"
           "with words after the language shows no info string", "```cobol title=\"a\"\nDISPLAY 'HI'.\n```", "<pre tabindex=\"0\"><code>DISPLAY 'HI'.\n</code></pre>\n"
           "that is indented is plain code with no label", "    let x = 1\n    let y = 2", "<pre tabindex=\"0\"><code>let x = 1\nlet y = 2\n</code></pre>\n" ]
@@ -124,7 +129,7 @@ let private code =
       Expect.equal
         (CommentBody.htmlWithin (Highlight.PerBlock System.TimeSpan.Zero) Stage.Production fsharpFence)
         "<pre tabindex=\"0\"><code>let add x = x + 1 // one\n</code></pre>\n"
-        "The block falls back to plain code"
+        "The block is plain code"
     }
   ]
 
