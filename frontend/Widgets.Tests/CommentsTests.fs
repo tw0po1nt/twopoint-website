@@ -109,6 +109,12 @@ let tests =
         Expect.equal model.List (Comments.Loaded [ comment "1"; comment "2" ]) "The list has the comments"
       }
 
+      test "the list keeps the HTML of each comment as the API gives it" {
+        let html = { comment "1" with Content = "<p>Use <code>Option</code>:</p>\n<ul>\n<li>one</li>\n</ul>\n" }
+        let model, _ = run [ Comments.ListAnswered { Success = true; Message = None; Data = Some [ html ] } ]
+        Expect.equal model.List (Comments.Loaded [ html ]) "The comment keeps its HTML"
+      }
+
       test "an answer with no data gives an empty list" {
         let model, _ = run [ Comments.ListAnswered { Success = true; Message = None; Data = None } ]
         Expect.equal model.List (Comments.Loaded []) "The list is empty"
@@ -268,6 +274,20 @@ let tests =
           "The comment is last in the list"
 
         Expect.equal model.Comment "" "The form is empty"
+      }
+
+      test "the approved comment goes in the list with the HTML of the answer" {
+        let html = { (posted Approved).Comment with Content = "<p>Nice post &amp; <em>thanks</em></p>\n" }
+
+        let model, _ =
+          run (
+            Comments.ListAnswered { Success = true; Message = None; Data = Some [] }
+            :: filled "known@example.com"
+            @ [ Comments.Submitted
+                Comments.PostAnswered(postAnswer true None (Some { Comment = html; Approval = Approved })) ]
+          )
+
+        Expect.equal model.List (Comments.Loaded [ html ]) "The list has the HTML of the backend"
       }
 
       test "an approved comment while the list is not loaded keeps the list as it is" {

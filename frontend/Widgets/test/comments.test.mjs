@@ -33,6 +33,15 @@ const callsTo = (url) => calls.filter((call) => call.url === url);
 
 await import(pathToFileURL(path.resolve('dist', manifest.entries.comments.file)).href);
 
+// The HTML that the backend makes from the Markdown of a comment.
+const formatted = [
+  '<p>Use <code>Option</code> here:</p>',
+  '<pre tabindex="0"><code>let x = 1\n</code></pre>',
+  '<ul>\n<li>one</li>\n<li>two</li>\n</ul>',
+  '<blockquote>\n<p>a quote</p>\n</blockquote>',
+  '<p><a href="https://example.com/" target="_blank" rel="nofollow ugc noopener noreferrer">a source</a> and <a href="https://twopoint.dev/posts/a-post/">a post</a></p>',
+].join('\n');
+
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 const panel = document.getElementById('panel');
@@ -73,8 +82,8 @@ test('the first toggle loads the view and fetches the comments one time', async 
       success: true,
       message: null,
       data: [
-        { id: '1', createdDate: '2026-10-17T09:30:00Z', commenter: 'Ada', content: 'First.\nSecond line.' },
-        { id: '2', createdDate: '2026-10-18T10:00:00Z', commenter: 'Grace', content: '<b>not bold</b>' },
+        { id: '1', createdDate: '2026-10-17T09:30:00Z', commenter: 'Ada', content: '<p>First.<br />\nSecond line.</p>\n' },
+        { id: '2', createdDate: '2026-10-18T10:00:00Z', commenter: 'Grace', content: formatted },
       ],
     });
 
@@ -92,8 +101,23 @@ test('the first toggle loads the view and fetches the comments one time', async 
   assert.equal(items.length, 2);
   assert.equal(items[0].querySelector('.comment-meta').textContent, '2026-10-17 · Ada');
   assert.equal(items[0].querySelector('time').getAttribute('datetime'), '2026-10-17T09:30:00Z');
-  assert.equal(items[1].querySelector('.comment-text').textContent, '<b>not bold</b>', 'A comment is text, not HTML');
-  assert.equal(items[1].querySelector('b'), null);
+
+  const plain = items[0].querySelector('.comment-text');
+  assert.equal(plain.tagName, 'DIV', 'The comment text is a div, because the HTML has its own paragraphs');
+  assert.equal(plain.innerHTML, '<p>First.<br>\nSecond line.</p>\n', 'A comment with no syntax keeps its line break');
+
+  const text = items[1].querySelector('.comment-text');
+  assert.equal(text.querySelector('p > code').textContent, 'Option', 'Inline code is code');
+  assert.equal(text.querySelector('pre > code').textContent, 'let x = 1\n', 'A code block is code');
+  assert.deepEqual([...text.querySelectorAll('ul > li')].map((item) => item.textContent), ['one', 'two'], 'A list is a list');
+  assert.equal(text.querySelector('blockquote > p').textContent, 'a quote', 'A quote is a quote');
+
+  const [external, own] = text.querySelectorAll('a');
+  assert.equal(external.getAttribute('href'), 'https://example.com/');
+  assert.equal(external.getAttribute('target'), '_blank', 'An external link opens in a new tab');
+  assert.equal(external.getAttribute('rel'), 'nofollow ugc noopener noreferrer');
+  assert.equal(own.getAttribute('href'), 'https://twopoint.dev/posts/a-post/');
+  assert.equal(own.getAttribute('target'), null, 'A link to twopoint.dev opens in the same tab');
 });
 
 test('a second toggle makes no second fetch', async () => {
@@ -147,7 +171,7 @@ test('the comment of a trusted commenter shows in the list at once', async () =>
       success: true,
       message: null,
       data: null,
-      comment: { id: '3', createdDate: '2026-10-19T08:00:00Z', commenter: 'Reader', content: 'Trusted words', approval: 'approved' },
+      comment: { id: '3', createdDate: '2026-10-19T08:00:00Z', commenter: 'Reader', content: '<p>Trusted <em>words</em></p>\n', approval: 'approved' },
     });
   type(field('email'), 'known@example.com');
   type(field('comment'), 'Trusted words');
@@ -161,7 +185,7 @@ test('the comment of a trusted commenter shows in the list at once', async () =>
   const items = [...mount.querySelectorAll('.comment')];
   assert.equal(items.length, 3, 'The comment is in the list');
   assert.equal(items[2].querySelector('.comment-meta').textContent, '2026-10-19 · Reader');
-  assert.equal(items[2].querySelector('.comment-text').textContent, 'Trusted words');
+  assert.equal(items[2].querySelector('.comment-text').innerHTML, '<p>Trusted <em>words</em></p>\n', 'The list shows the HTML of the answer');
   assert.equal(field('comment').value, '', 'The comment input is empty');
 });
 
