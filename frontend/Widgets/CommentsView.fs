@@ -132,7 +132,7 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
                 comment.Commenter
               }
 
-              // The backend gives only HTML that it made from the Markdown of the comment, so it needs no sanitizer.
+              // The backend gives only HTML that it made from the Markdown of the comment.
               div (class' = "comment-text", innerHTML = comment.Content)
             }
       }

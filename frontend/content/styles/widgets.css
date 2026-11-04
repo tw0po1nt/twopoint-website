@@ -132,7 +132,6 @@
   overflow-wrap: anywhere;
 }
 
-/* The rules of comment text apply to a comment in the list and to the preview of the comment form. */
 .comment-text > * {
   margin: 0;
 }
