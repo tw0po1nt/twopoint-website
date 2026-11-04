@@ -34,13 +34,13 @@ type PostedCommentDto =
     Approval : string }
 
 module PostedCommentDto =
-  let ofComment (comment : Comment) =
+  let ofComment (comment : RenderedComment) =
     let dto = comment.ToDto()
     { Id = dto.Id
       CreatedDate = dto.CreatedDate
       Commenter = dto.Commenter
       Content = dto.Content
-      Approval = comment.Status.Approval.ToString() }
+      Approval = comment.Comment.Status.Approval.ToString() }
 
 /// An older Comments widget reads a `data` that is not null as an invalid answer, so the comment goes beside it.
 type PostCommentResponse =
@@ -95,6 +95,7 @@ type PostComment (
       member this.CreateComment post commenter newComment approval =
         postDependencies.CreateComment post commenter newComment approval
       member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId
+      member this.Stage = config.Stage
     }
 
     let newComment =

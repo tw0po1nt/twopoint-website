@@ -15,6 +15,7 @@
     <Compile Include="PostSummaryTests.fs" />
     <Compile Include="PostTextTests.fs" />
     <Compile Include="BodyTests.fs" />
+    <Compile Include="CommentBodyTests.fs" />
     <Compile Include="HighlightTests.fs" />
     <Compile Include="DirectiveTests.fs" />
     <Compile Include="ImagesTests.fs" />

@@ -47,3 +47,11 @@ module AssetContainer =
     || stage = Stage.Local
        && Azurite.isUrl asset
        && asset.AbsolutePath.StartsWith "/devstoreaccount1/assets/"
+
+[<RequireQualifiedAccess>]
+module OwnHost =
+
+  let private hosts = set [ "twopoint.dev"; "www.twopoint.dev" ]
+
+  let isUrl (url: Uri) =
+    (url.Scheme = Uri.UriSchemeHttp || url.Scheme = Uri.UriSchemeHttps) && hosts.Contains url.Host

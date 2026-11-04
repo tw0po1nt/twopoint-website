@@ -195,8 +195,6 @@ let private rawHtmlErrors startLine (document: MarkdownDocument) =
 
   blocks @ inlines
 
-let private ownHosts = set [ "twopoint.dev"; "www.twopoint.dev" ]
-
 let private externalSchemes = set [ Uri.UriSchemeHttp; Uri.UriSchemeHttps ]
 
 let private openInNewTab (node: MarkdownObject) =
@@ -224,7 +222,7 @@ let private kind (stage: Stage) (url: string) =
     Internal(Page(splitAnchor url))
   else
     match Uri.TryCreate(url, UriKind.Absolute) with
-    | true, uri when externalSchemes.Contains uri.Scheme && ownHosts.Contains uri.Host ->
+    | true, uri when OwnHost.isUrl uri ->
       Invalid $"Give the link to {url} as a root-relative link, for example {uri.PathAndQuery}."
     | true, uri when Azurite.isForbidden stage uri ->
       Invalid(Azurite.problem uri)

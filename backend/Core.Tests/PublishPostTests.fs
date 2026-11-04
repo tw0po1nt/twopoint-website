@@ -317,6 +317,7 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
             |> ok)
           |> CancellableTaskResult.singleton
         member _.GetUtcNow () = clock
+        member _.Stage = TwoPoint.Site.Render.Stage.Production
         member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
         member _.CreateComment _ commenter newComment approval =
           let posted =

@@ -13,7 +13,7 @@ open FsToolkit.ErrorHandling
 open System
 open System.Threading
 
-let private comment (id : string) (createdDate : string) (approval : CommentApproval) =
+let private commentWith (content : string) (id : string) (createdDate : string) (approval : CommentApproval) =
   Comment.create
     id
     createdDate
@@ -23,8 +23,15 @@ let private comment (id : string) (createdDate : string) (approval : CommentAppr
        Name = Some "Commenter"
        CreatedDate = "2026-01-01T00:00:00.0000000Z"
        Status = "new" |}
-    "A comment"
+    content
   |> ok
+
+let private comment = commentWith "A comment"
+
+let private markdown = "Use `List.map` and see https://example.com/."
+
+let private markdownHtml =
+  "<p>Use <code>List.map</code> and see <a href=\"https://example.com/\" target=\"_blank\" rel=\"nofollow ugc noopener noreferrer\">https://example.com/</a>.</p>\n"
 
 let private firstId = "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40"
 
@@ -153,6 +160,30 @@ let private postCommentsTests =
         (Ok (Some [ oldest; middle; newest ]))
         "Expected the oldest comment first"
     }
+
+    test "the admin comments of a post keep the Markdown source" {
+      let posted = commentWith markdown (Guid.NewGuid().ToString()) "2026-02-01T00:00:00.0000000Z" CommentApproval.New
+      let dependencies = FakePostCommentsDependencies (olderPost, [ posted ])
+
+      match (GetCommentsForPost.withDependencies dependencies [] (olderPost.Id.ToString()) CancellationToken.None).Result with
+      | Ok (Some [ comment ]) -> Expect.equal (comment.Content.ToString()) markdown "Expected the source"
+      | other -> failtestf "Expected one comment, got %A" other
+    }
+
+    test "the public comments of a post give the rendered HTML" {
+      let posted = commentWith markdown (Guid.NewGuid().ToString()) "2026-02-01T00:00:00.0000000Z" CommentApproval.Approved
+      let dependencies = FakePostCommentsDependencies (olderPost, [ posted ])
+
+      let query =
+        GetCommentsForPost.withDependencies dependencies
+        |> GetCommentsForPost.forReaders TwoPoint.Site.Render.Stage.Production
+
+      match (query [] (olderPost.Id.ToString()) CancellationToken.None).Result with
+      | Ok (Some [ rendered ]) ->
+        Expect.equal rendered.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal rendered.Comment posted "Expected the stored comment"
+      | other -> failtestf "Expected one comment, got %A" other
+    }
   ]
 
 let private commenterId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
@@ -178,6 +209,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
       created.Add approval
       let posted = comment firstId "2026-02-01T00:00:00.0000000Z" approval
       CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
     member _.QueueNewCommentNotice commentId =
       queued.Add commentId
 
@@ -186,12 +218,14 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
       else
         CancellableTaskResult.singleton ()
 
-let private postComment (dependencies : FakePostCommentDependencies) =
+let private postCommentWith (content : string) (dependencies : FakePostCommentDependencies) =
   let dto =
     { NewComment.Dto.Post = NewComment.Post (olderPost.Id.ToString())
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
-      NewComment.Dto.Comment = NewComment.Comment "A comment" }
+      NewComment.Dto.Comment = NewComment.Comment content }
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
+
+let private postComment = postCommentWith "A comment"
 
 let private postCommentTests =
   testList "PostComment" [
@@ -200,7 +234,7 @@ let private postCommentTests =
 
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
-        Expect.equal posted.Status.Approval CommentApproval.Approved "Expected an approved comment"
+        Expect.equal posted.Comment.Status.Approval CommentApproval.Approved "Expected an approved comment"
         Expect.equal dependencies.Created [ CommentApproval.Approved ] "Expected one approved comment in the store"
       | other -> failtestf "Expected Posted, got %A" other
     }
@@ -210,7 +244,7 @@ let private postCommentTests =
 
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
-        Expect.equal posted.Status.Approval CommentApproval.New "Expected a new comment"
+        Expect.equal posted.Comment.Status.Approval CommentApproval.New "Expected a new comment"
         Expect.equal dependencies.Created [ CommentApproval.New ] "Expected one new comment in the store"
       | other -> failtestf "Expected Posted, got %A" other
     }
@@ -220,7 +254,7 @@ let private postCommentTests =
 
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
-        Expect.equal dependencies.Queued [ posted.Id ] "Expected the posted comment on the queue"
+        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected the posted comment on the queue"
       | other -> failtestf "Expected Posted, got %A" other
     }
 
@@ -230,7 +264,17 @@ let private postCommentTests =
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
         Expect.equal dependencies.Created [ CommentApproval.New ] "Expected the comment in the store"
-        Expect.equal dependencies.Queued [ posted.Id ] "Expected one try to queue"
+        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected one try to queue"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "the answer of a posted comment gives the rendered HTML" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.Trusted)
+
+      match postCommentWith markdown dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal posted.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal (posted.Comment.Content.ToString()) markdown "Expected the stored source"
       | other -> failtestf "Expected Posted, got %A" other
     }
 

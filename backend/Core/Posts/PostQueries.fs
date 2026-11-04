@@ -369,6 +369,16 @@ module GetCommentsForPost =
         |> CancellableTaskResult.map (Option.map (List.sortBy _.CreatedDate))
     }
 
+  type ReaderQuery =
+    Approvals
+      -> Slug
+      -> CancellableTask<QueryResult<RenderedComment list option>>
+
+  let forReaders (stage : TwoPoint.Site.Render.Stage) (query : Query) : ReaderQuery =
+    fun approvals slug ->
+      query approvals slug
+      |> CancellableTaskResult.map (Option.map (List.map (RenderedComment.ofComment stage)))
+
 // ====================================================================================================================
 // Get moderation queue
 // ====================================================================================================================

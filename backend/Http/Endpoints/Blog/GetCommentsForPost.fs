@@ -25,12 +25,12 @@ type CommentDto =
 [<AutoOpen>]
 module PostTypesExt =
 
-  type Comment with
+  type RenderedComment with
     member this.ToDto() =
-      { CommentDto.Id = this.Id.ToString()
-        CreatedDate = this.CreatedDate
-        Commenter = this.Commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
-        Content = this.Content.ToString() }
+      { CommentDto.Id = this.Comment.Id.ToString()
+        CreatedDate = this.Comment.CreatedDate
+        Commenter = this.Comment.Commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+        Content = this.Html }
 
 
 type GetCommentsForPost (
@@ -60,12 +60,14 @@ type GetCommentsForPost (
       logger
     )
 
-    let getCommentsForPost = GetCommentsForPost.withDependencies {
-      new GetCommentsForPost.Dependencies with
+    let getCommentsForPost =
+      GetCommentsForPost.withDependencies {
+        new GetCommentsForPost.Dependencies with
 
-      member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
-      member _.GetCommentsForPost approvals post = postDependencies.GetCommentsForPost approvals post
-    }
+        member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+        member _.GetCommentsForPost approvals post = postDependencies.GetCommentsForPost approvals post
+      }
+      |> GetCommentsForPost.forReaders config.Stage
 
     let onlyApproved = [CommentApproval.Approved.ToString()]
     let! commentsResult = (slug, ct) ||> getCommentsForPost onlyApproved

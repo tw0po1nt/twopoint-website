@@ -456,7 +456,7 @@ module PostComment =
     | Commenter of CommenterValidationId
   type Success = Posted of post: Post * comment: NewComment * commenter: Commenter * approval: CommentApproval
   type Decision = Decision<Success, Error>
-  type Event = Posted of Post * Comment
+  type Event = Posted of Post * RenderedComment
 
   // Logic
 
@@ -500,15 +500,16 @@ module PostComment =
         -> approval: CommentApproval
         -> DependencyResult<Comment>
     abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
+    abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<Comment> =
+    let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<RenderedComment> =
       cancellableTaskResult {
         let! (created : Comment) = dependencies.CreateComment post commenter comment approval
 
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
-        return created
+        return RenderedComment.ofComment dependencies.Stage created
       }
 
     fun newComment -> cancellableTaskResult {
