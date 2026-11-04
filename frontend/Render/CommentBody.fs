@@ -53,49 +53,77 @@ let private startsWithScheme (text: string) =
   text.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
   || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
 
+let private keepOrRefuse (refuse: unit -> unit) (node: Inline) target =
+  match target with
+  | Refused -> refuse ()
+  | External -> openInNewTab node
+  | OwnSite
+  | Mail -> ()
+
 let private applyLinkRule (stage: Stage) (source: string) (node: Inline) =
+  let isInLink = not (isNull (node.Parent.FirstParentOfType<LinkInline>()))
+  let targetOf url = if isInLink then Refused else target stage url
+
   match node with
   | :? LinkInline as link when link.IsAutoLink ->
-    let typed = source.Substring(link.Span.Start, link.Span.Length)
-
-    match target stage link.Url with
-    | _ when not (startsWithScheme typed) -> link.ReplaceBy(LiteralInline typed, false) |> ignore
-    | Refused -> link.ReplaceBy(LiteralInline typed, false) |> ignore
-    | External -> openInNewTab link
-    | OwnSite
-    | Mail -> ()
+    let typedText = source.Substring(link.Span.Start, link.Span.Length)
+    let refuse () = link.ReplaceBy(LiteralInline typedText, false) |> ignore
+    keepOrRefuse refuse link (if startsWithScheme typedText then targetOf link.Url else Refused)
   | :? LinkInline as link ->
-    let isInLink = link.IsImage && not (isNull (link.Parent.FirstParentOfType<LinkInline>()))
     link.IsImage <- false
-
-    match target stage link.Url with
-    | _ when isInLink -> toText link
-    | Refused -> toText link
-    | External -> openInNewTab link
-    | OwnSite
-    | Mail -> ()
+    keepOrRefuse (fun () -> toText link) link (targetOf link.Url)
   | :? AutolinkInline as link ->
-    match target stage (if link.IsEmail then "mailto:" + link.Url else link.Url) with
-    | Refused -> link.ReplaceBy(LiteralInline link.Url) |> ignore
-    | External -> openInNewTab link
-    | OwnSite
-    | Mail -> ()
+    let refuse () = link.ReplaceBy(LiteralInline link.Url) |> ignore
+    keepOrRefuse refuse link (targetOf (if link.IsEmail then "mailto:" + link.Url else link.Url))
   | _ -> ()
 
-/// The list parser makes a thematic break of `---` and `***` with no thematic break parser in the pipeline.
+let rec private lastParagraph (block: Block) =
+  match block with
+  | :? ParagraphBlock as paragraph -> Some paragraph
+  | :? ContainerBlock as container when container.Count > 0 -> lastParagraph container[container.Count - 1]
+  | _ -> None
+
+let rec private extendTo (finish: int) (block: Block) =
+  if not (isNull block) then
+    block.Span <- SourceSpan(block.Span.Start, max block.Span.End finish)
+    extendTo finish block.Parent
+
+let private appendLine (paragraph: ParagraphBlock) (inlines: Inline list) =
+  paragraph.Inline.AppendChild(LineBreakInline(IsHard = true)) |> ignore
+
+  for node in inlines do
+    node.Remove()
+    paragraph.Inline.AppendChild node |> ignore
+
+/// The list parser makes a thematic break of `***`, and of `---` after a block other than a paragraph, when the pipeline has no thematic break parser.
 let private breakToText (source: string) (block: ThematicBreakBlock) =
   let text = LiteralInline(source.Substring(block.Span.Start, block.Span.Length))
   let parent = block.Parent
   let index = parent.IndexOf block
+  let isNextLine (above: Block) (below: Block) = source.AsSpan(above.Span.End, below.Span.Start - above.Span.End).Count '\n' = 1
+  let previous = if index > 0 then Some parent[index - 1] else None
+  let next = if index + 1 < parent.Count then Some parent[index + 1] else None
 
-  match (if index > 0 then parent[index - 1] else null) with
-  | :? ParagraphBlock as paragraph when source.AsSpan(paragraph.Span.End, block.Span.Start - paragraph.Span.End).Count '\n' = 1 ->
-    paragraph.Inline.AppendChild(LineBreakInline(IsHard = true)).AppendChild text |> ignore
-    parent.RemoveAt index
-  | _ ->
-    let paragraph = ParagraphBlock(Inline = ContainerInline())
-    paragraph.Inline.AppendChild text |> ignore
-    parent[index] <- paragraph
+  let paragraph =
+    match previous |> Option.filter (fun above -> isNextLine above block) |> Option.bind lastParagraph with
+    | Some paragraph ->
+      appendLine paragraph [ text ]
+      parent.RemoveAt index
+      paragraph
+    | None ->
+      let paragraph = ParagraphBlock(Inline = ContainerInline(), Span = block.Span)
+      paragraph.Inline.AppendChild text |> ignore
+      parent[index] <- paragraph
+      paragraph
+
+  extendTo block.Span.End paragraph
+
+  match next with
+  | Some(:? ParagraphBlock as below) when isNextLine block below ->
+    appendLine paragraph (List.ofSeq below.Inline)
+    parent.Remove below |> ignore
+    extendTo below.Span.End paragraph
+  | _ -> ()
 
 let private lines (block: CodeBlock) =
   [ for index in 0 .. block.Lines.Count - 1 -> block.Lines.Lines[index].Slice.ToString() ]
@@ -114,10 +142,10 @@ type private CodeRenderer() =
 let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocument) =
   MarkdownObjectExtensions.Descendants<'a>(document :> MarkdownObject) |> List.ofSeq
 
-/// The HTML of the Markdown source of a comment. Only an absolute http, https, or mailto URL makes a link.
+/// Only an absolute http, https, or mailto URL makes a link.
 let html (stage: Stage) (source: string) =
   let document = Markdown.Parse(source, pipeline)
-  // A walk of Descendants after a change to the tree can miss nodes, so each walk comes first.
+  // A walk of Descendants can miss nodes when the tree changes during the walk, so each walk comes first.
   let breaks = descendants<ThematicBreakBlock> document
   let inlines = descendants<Inline> document
 

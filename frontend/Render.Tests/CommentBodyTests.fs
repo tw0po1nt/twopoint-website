@@ -35,6 +35,10 @@ let private asText =
         "a setext heading", "Title\n---", paragraph "Title<br />\n---"
         "a rule", "one\n\n---\n\ntwo", "<p>one</p>\n<p>---</p>\n<p>two</p>\n"
         "a rule of stars after a line", "one\n***", paragraph "one<br />\n***"
+        "a rule of stars between lines", "one\n***\ntwo", paragraph "one<br />\n***<br />\ntwo"
+        "a rule before a line", "---\ntwo", paragraph "---<br />\ntwo"
+        "a rule after a list item", "- one\n---", "<ul>\n<li>one<br />\n---</li>\n</ul>\n"
+        "a rule after a block quote", "> one\n---", "<blockquote>\n<p>one<br />\n---</p>\n</blockquote>\n"
         "a table", "| a | b |\n|---|---|", paragraph "| a | b |<br />\n|---|---|"
         "inline HTML", "a <b>bold</b> word", paragraph "a &lt;b&gt;bold&lt;/b&gt; word"
         "an HTML block", "<script>alert(1)</script>", paragraph "&lt;script&gt;alert(1)&lt;/script&gt;"
@@ -46,7 +50,8 @@ let private images =
     renders
       [ "an image links to its URL with its alt text", "![A cat](https://example.com/cat.jpg)", paragraph (external "https://example.com/cat.jpg" "A cat")
         "an image in a link is its alt text", "[![A cat](https://example.com/cat.jpg)](https://example.com/)", paragraph (external "https://example.com/" "A cat")
-        "an image with a refused URL is its alt text", "![A cat](javascript:alert(1))", paragraph "A cat" ]
+        "an image with a refused URL is its alt text", "![A cat](javascript:alert(1))", paragraph "A cat"
+        "a link in the alt text of an image is its text", "![[x](https://a.com/)](https://b.com/)", paragraph (external "https://b.com/" "x") ]
   )
 
 let private urls =
@@ -71,6 +76,7 @@ let private bareUrls =
     renders
       [ "with https is a link", "see https://example.com/a", paragraph $"""see {external "https://example.com/a" "https://example.com/a"}"""
         "with http is a link", "see http://example.com/a", paragraph $"""see {external "http://example.com/a" "http://example.com/a"}"""
+        "with a scheme in capitals stays as text", "see HTTPS://example.com/a", paragraph "see HTTPS://example.com/a"
         "of a www host stays as text", "see www.example.com", paragraph "see www.example.com"
         "of an email address stays as text", "mail me@example.com", paragraph "mail me@example.com"
         "with mailto stays as text", "mail mailto:me@example.com", paragraph "mail mailto:me@example.com" ]
@@ -115,7 +121,7 @@ let private lineBreaks =
   )
 
 let private live =
-  testList "the live comments of 2026-11-01" (
+  testList "a real comment renders as its author meant" (
     renders
       [ "the record struct code becomes inline code",
         "Thanks for unpacking the baggage. It appreciate how you show how to avoid Nulls using Maybe and Just. It was good to be remined of the difference between using the stack and the heap. I had thought record was on the stack, but you pointed out it's the heap. `record struct` puts it on the stack, good to know!",
