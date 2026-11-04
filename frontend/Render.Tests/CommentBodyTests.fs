@@ -105,13 +105,33 @@ let private stages =
     }
   ]
 
+let private fsharpFence = "```fsharp\nlet add x = x + 1 // one\n```"
+
 let private code =
-  testList "a code block renders as plain code" (
-    renders
-      [ "a fence of a known language", "```fsharp\nlet x = 1 < 2\n```", "<pre tabindex=\"0\"><code>let x = 1 &lt; 2\n</code></pre>\n"
-        "a fence of an unknown language", "```cobol\nDISPLAY 'HI'.\n```", "<pre tabindex=\"0\"><code>DISPLAY 'HI'.\n</code></pre>\n"
-        "an indented block", "    let x = 1\n    let y = 2", "<pre tabindex=\"0\"><code>let x = 1\nlet y = 2\n</code></pre>\n" ]
-  )
+  testList "a code block" [
+    yield!
+      renders
+        [ "of a known language gets the label and the colors of a post",
+          fsharpFence,
+          """<pre data-lang="fsharp" tabindex="0"><code><span class="tk-keyword">let</span> add x <span class="tk-keyword">=</span> x <span class="tk-keyword">+</span> <span class="tk-constant">1</span> <span class="tk-comment">// one</span>
+</code></pre>
+"""
+          "of a known language with words after it shows no info string",
+          "```fsharp title=\"a\"\nlet add x = x + 1 // one\n```",
+          """<pre data-lang="fsharp" tabindex="0"><code><span class="tk-keyword">let</span> add x <span class="tk-keyword">=</span> x <span class="tk-keyword">+</span> <span class="tk-constant">1</span> <span class="tk-comment">// one</span>
+</code></pre>
+"""
+          "of an unknown language is plain code with no label", "```cobol\nDISPLAY 'HI'.\n```", "<pre tabindex=\"0\"><code>DISPLAY 'HI'.\n</code></pre>\n"
+          "with words after the language shows no info string", "```cobol title=\"a\"\nDISPLAY 'HI'.\n```", "<pre tabindex=\"0\"><code>DISPLAY 'HI'.\n</code></pre>\n"
+          "that is indented is plain code with no label", "    let x = 1\n    let y = 2", "<pre tabindex=\"0\"><code>let x = 1\nlet y = 2\n</code></pre>\n" ]
+
+    test "of a known language past the time limit is plain code with no label" {
+      Expect.equal
+        (CommentBody.htmlWithin (Highlight.PerBlock System.TimeSpan.Zero) Stage.Production fsharpFence)
+        "<pre tabindex=\"0\"><code>let add x = x + 1 // one\n</code></pre>\n"
+        "The block is plain code"
+    }
+  ]
 
 let private lineBreaks =
   testList "line breaks" (
