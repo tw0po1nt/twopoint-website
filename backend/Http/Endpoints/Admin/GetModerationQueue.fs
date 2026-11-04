@@ -24,11 +24,11 @@ type PostedCommentDto =
 [<AutoOpen>]
 module PostedCommentExt =
 
-  type PostedComment with
+  type RenderedPostedComment with
     member this.ToDto() =
       { PostedCommentDto.PostSlug = this.Post.ToString()
         PostTitle = this.PostTitle.ToString()
-        Comment = this.Comment.ToDto() }
+        Comment = this.Comment.ToAdminDto() }
 
 module GetModerationQueueQuery = TwoPoint.Core.Posts.Queries.GetModerationQueue
 
@@ -69,6 +69,7 @@ type GetModerationQueue (
           new GetModerationQueueQuery.Dependencies with
 
           member _.GetCommentsOnAllPosts approvals = postDependencies.GetCommentsOnAllPosts approvals
+          member _.Stage = config.Stage
         }
 
         let! queueResult = getModerationQueue()

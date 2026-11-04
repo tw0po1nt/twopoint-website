@@ -120,11 +120,17 @@ type private FakeQueueDependencies(comments : PostedComment list) =
     member _.GetCommentsOnAllPosts approvals =
       requests.Add approvals
       CancellableTaskResult.singleton comments
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
 
-let private queued (post : Post) (createdDate : string) =
-  { Post = post.Id
+let private queuedWith (content : string) (post : Post) (createdDate : string) =
+  { PostedComment.Post = post.Id
     PostTitle = post.Info.Title
-    Comment = comment (Guid.NewGuid().ToString()) createdDate CommentApproval.New }
+    Comment = commentWith content (Guid.NewGuid().ToString()) createdDate CommentApproval.New }
+
+let private queued = queuedWith "A comment"
+
+let private rendered (posted : PostedComment) =
+  RenderedPostedComment.ofPostedComment TwoPoint.Site.Render.Stage.Production posted
 
 let private queueTests =
   testList "GetModerationQueue" [
@@ -136,9 +142,20 @@ let private queueTests =
 
       Expect.equal
         (GetModerationQueue.withDependencies dependencies () CancellationToken.None).Result
-        (Ok [ oldest; middle; newest ])
+        (Ok ([ oldest; middle; newest ] |> List.map rendered))
         "Expected the oldest comment first"
       Expect.equal dependencies.Requests [ [ CommentApproval.New ] ] "Expected only the new comments"
+    }
+
+    test "the queue gives the rendered HTML" {
+      let posted = queuedWith markdown olderPost "2026-02-01T00:00:00.0000000Z"
+      let dependencies = FakeQueueDependencies [ posted ]
+
+      match (GetModerationQueue.withDependencies dependencies () CancellationToken.None).Result with
+      | Ok [ queued ] ->
+        Expect.equal queued.Comment.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal queued.Comment.Comment posted.Comment "Expected the stored comment"
+      | other -> failtestf "Expected one comment, got %A" other
     }
   ]
 
@@ -146,6 +163,10 @@ type private FakePostCommentsDependencies(post : Post, comments : Comment list) 
   interface GetCommentsForPost.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
     member _.GetCommentsForPost _ _ = CancellableTaskResult.singleton comments
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private getCommentsForPost (dependencies : FakePostCommentsDependencies) =
+  (GetCommentsForPost.withDependencies dependencies [] (olderPost.Id.ToString()) CancellationToken.None).Result
 
 let private postCommentsTests =
   testList "GetCommentsForPost" [
@@ -156,29 +177,16 @@ let private postCommentsTests =
       let dependencies = FakePostCommentsDependencies (olderPost, [ newest; oldest; middle ])
 
       Expect.equal
-        (GetCommentsForPost.withDependencies dependencies [] (olderPost.Id.ToString()) CancellationToken.None).Result
+        (getCommentsForPost dependencies |> Result.map (Option.map (List.map _.Comment)))
         (Ok (Some [ oldest; middle; newest ]))
         "Expected the oldest comment first"
     }
 
-    test "the admin comments of a post keep the Markdown source" {
+    test "the comments of a post give the rendered HTML" {
       let posted = commentWith markdown (Guid.NewGuid().ToString()) "2026-02-01T00:00:00.0000000Z" CommentApproval.New
       let dependencies = FakePostCommentsDependencies (olderPost, [ posted ])
 
-      match (GetCommentsForPost.withDependencies dependencies [] (olderPost.Id.ToString()) CancellationToken.None).Result with
-      | Ok (Some [ comment ]) -> Expect.equal (comment.Content.ToString()) markdown "Expected the source"
-      | other -> failtestf "Expected one comment, got %A" other
-    }
-
-    test "the public comments of a post give the rendered HTML" {
-      let posted = commentWith markdown (Guid.NewGuid().ToString()) "2026-02-01T00:00:00.0000000Z" CommentApproval.Approved
-      let dependencies = FakePostCommentsDependencies (olderPost, [ posted ])
-
-      let query =
-        GetCommentsForPost.withDependencies dependencies
-        |> GetCommentsForPost.forReaders TwoPoint.Site.Render.Stage.Production
-
-      match (query [] (olderPost.Id.ToString()) CancellationToken.None).Result with
+      match getCommentsForPost dependencies with
       | Ok (Some [ rendered ]) ->
         Expect.equal rendered.Html markdownHtml "Expected the HTML of the source"
         Expect.equal rendered.Comment posted "Expected the stored comment"
@@ -575,6 +583,7 @@ type private FakeCommenterDependencies(existing : Commenter option, comments : P
   interface GetCommenter.Dependencies with
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
     member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private getCommenter (dependencies : FakeCommenterDependencies) =
   (GetCommenter.withDependencies dependencies commenterId CancellationToken.None).Result
@@ -598,8 +607,18 @@ let private commenterQueryTests =
 
       Expect.equal
         (getCommenter (FakeCommenterDependencies (Some (commenter CommenterStatus.Trusted), [ newest; oldest ])))
-        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] }))
+        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] |> List.map rendered }))
         "Expected the oldest comment first"
+    }
+
+    test "the commenter page gives the rendered HTML" {
+      let posted = queuedWith markdown olderPost "2026-02-01T00:00:00.0000000Z"
+
+      match getCommenter (FakeCommenterDependencies (Some (commenter CommenterStatus.Trusted), [ posted ])) with
+      | Ok (Some { Comments = [ shown ] }) ->
+        Expect.equal shown.Comment.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal shown.Comment.Comment posted.Comment "Expected the stored comment"
+      | other -> failtestf "Expected one comment, got %A" other
     }
 
     test "a missing commenter is none" {

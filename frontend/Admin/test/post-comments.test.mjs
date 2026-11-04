@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { answer, apiAnswer, count, heading, load, press, queue, settle } from './load.mjs';
+import { answer, apiAnswer, count, expectedComment, heading, load, press, queue, rendered, settle, shownComment } from './load.mjs';
 
 const comment = (id, name, status, content) => ({
   id,
@@ -13,7 +13,7 @@ const comment = (id, name, status, content) => ({
 
 const comments = [
   comment('c-1', 'Ada', 'new', 'The first comment.'),
-  comment('c-4', 'Grace', 'approved', 'An approved comment.'),
+  comment('c-4', 'Grace', 'approved', rendered('An approved comment.')),
   comment('c-5', 'Alan', 'rejected', 'A rejected comment.'),
 ];
 
@@ -53,6 +53,10 @@ test('the page lists each comment of the post with its approval', () => {
   assert.match(row('c-4').textContent, /An approved comment\./);
   assert.equal(tab('All').getAttribute('aria-selected'), 'true');
   assert.equal(navCount(), String(queue.length));
+});
+
+test('a comment row of the post shows the rendered HTML of the comment', () => {
+  assert.deepEqual(shownComment(row('c-4')), expectedComment);
 });
 
 test('each row offers only the changes that its approval allows', () => {

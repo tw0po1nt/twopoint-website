@@ -60,14 +60,13 @@ type GetCommentsForPost (
       logger
     )
 
-    let getCommentsForPost =
-      GetCommentsForPost.withDependencies {
-        new GetCommentsForPost.Dependencies with
+    let getCommentsForPost = GetCommentsForPost.withDependencies {
+      new GetCommentsForPost.Dependencies with
 
-        member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
-        member _.GetCommentsForPost approvals post = postDependencies.GetCommentsForPost approvals post
-      }
-      |> GetCommentsForPost.forReaders config.Stage
+      member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
+      member _.GetCommentsForPost approvals post = postDependencies.GetCommentsForPost approvals post
+      member _.Stage = config.Stage
+    }
 
     let onlyApproved = [CommentApproval.Approved.ToString()]
     let! commentsResult = (slug, ct) ||> getCommentsForPost onlyApproved

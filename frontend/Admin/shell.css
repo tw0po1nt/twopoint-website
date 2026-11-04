@@ -248,9 +248,70 @@ h2 + .stat-grid {
   min-width: 0;
 }
 
+/* The text of a comment is the HTML that the backend renders from its Markdown. */
 .queue-text {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.queue-text > * {
+  margin: 0;
+}
+
+.queue-text > * + * {
+  margin-top: var(--s-2);
+}
+
+.queue-text a {
+  color: var(--accent);
+}
+
+/* The author cannot hover on a phone, so the target of each link shows after its text. */
+.queue-text a::after {
+  content: " (" attr(href) ")";
+  color: var(--fg-muted);
+}
+
+/* Code shows in monospace with no colors, because the admin has no tk-* rules. */
+.queue-text code {
+  padding: 1px var(--s-1);
+  border-radius: var(--r-sm);
+  background: var(--bg-muted);
+  font: 0.92em var(--mono);
+}
+
+.queue-text pre {
+  padding: var(--s-2) var(--s-3);
+  overflow-x: auto;
+  overflow-wrap: normal;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font: var(--t-sm) / var(--lh-sm) var(--mono);
+}
+
+.queue-text pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.queue-text blockquote {
+  padding-left: var(--s-3);
+  border-left: 2px solid var(--border-strong);
+  color: var(--fg-muted);
+}
+
+.queue-text ul,
+.queue-text ol {
+  padding-left: 3ch;
+}
+
+.queue-text ul {
+  list-style-type: disc;
+}
+
+.queue-text ol {
+  list-style-type: decimal;
 }
 
 .row-top {

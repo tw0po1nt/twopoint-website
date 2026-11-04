@@ -317,9 +317,20 @@ type PostedComment =
     PostTitle : NonEmptyString
     Comment : Comment }
 
+type RenderedPostedComment =
+  { Post : Slug
+    PostTitle : NonEmptyString
+    Comment : RenderedComment }
+
+module RenderedPostedComment =
+  let ofPostedComment (stage : TwoPoint.Site.Render.Stage) (posted : PostedComment) =
+    { Post = posted.Post
+      PostTitle = posted.PostTitle
+      Comment = RenderedComment.ofComment stage posted.Comment }
+
 type CommenterComments =
   { Commenter : Commenter
-    Comments : PostedComment list }
+    Comments : RenderedPostedComment list }
 
 type Post =
   { Id: Slug
