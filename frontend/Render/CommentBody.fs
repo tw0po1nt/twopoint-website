@@ -144,28 +144,27 @@ let private parse (stage: Stage) (source: string) =
 
   document
 
-/// Only an absolute http, https, or mailto URL makes a link. A code block that uses all of `limit` is plain code.
-let htmlWithin (limit: Highlight.Limit) (stage: Stage) (source: string) =
-  let document = parse stage source
+let private render (newRenderer: TextWriter -> HtmlRenderer) (adjust: HtmlRenderer -> unit) (document: MarkdownDocument) =
   use writer = new StringWriter()
-  let renderer = HtmlRenderer(writer)
+  let renderer = newRenderer writer
   pipeline.Setup renderer
-  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeBlock.Renderer limit) |> ignore
+  adjust renderer
   renderer.Render document |> ignore
   writer.ToString()
+
+/// Only an absolute http, https, or mailto URL makes a link. A code block that uses all of `limit` is plain code.
+let htmlWithin (limit: Highlight.Limit) (stage: Stage) (source: string) =
+  parse stage source
+  |> render HtmlRenderer (fun renderer -> renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeBlock.Renderer limit) |> ignore)
 
 let html (stage: Stage) (source: string) = htmlWithin codeLimit stage source
 
 /// The text of the comment with no syntax marks, on one line. A link keeps its text, and each line break becomes a space.
 let plainText (source: string) =
-  // The stage changes only the attributes of a link, and the plain text has no attributes.
-  let document = parse Stage.Production source
-  use writer = new StringWriter()
-  let renderer = HtmlRenderer(writer, EnableHtmlForBlock = false, EnableHtmlForInline = false, EnableHtmlEscape = false)
-  pipeline.Setup renderer
-  renderer.Render document |> ignore
+  let plainRenderer writer =
+    HtmlRenderer(writer, EnableHtmlForBlock = false, EnableHtmlForInline = false, EnableHtmlEscape = false)
 
-  writer.ToString().Split('\n')
+  (parse Stage.Production source |> render plainRenderer ignore).Split('\n')
   |> Seq.map _.Trim()
   |> Seq.filter (not << String.IsNullOrEmpty)
   |> String.concat " "
