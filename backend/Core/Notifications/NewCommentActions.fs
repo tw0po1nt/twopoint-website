@@ -35,11 +35,14 @@ module NewCommentPayload =
   // JSON escapes a character outside the BMP as 12 octets, so these three limits keep the payload below `maxOctets`.
   let maxTitleLength = 100
   let maxCommenterLength = 60
-  /// The worker shows the first 120 characters of the text.
+  /// The worker shows the first 120 characters of the plain text of the comment.
   let maxTextLength = 120
 
   let private truncate (length : int) (text : string) =
     text.EnumerateRunes() |> Seq.truncate length |> Seq.map _.ToString() |> String.concat ""
+
+  let private textOf (plainText : string) =
+    if String.IsNullOrWhiteSpace plainText then "(no text)" else plainText
 
   let private caseName =
     function
@@ -60,7 +63,7 @@ module NewCommentPayload =
           Slug = Slug.value posted.Post
           PostTitle = posted.PostTitle |> NonEmptyString.value |> truncate maxTitleLength
           Commenter = commenter |> truncate maxCommenterLength
-          Text = comment.Content |> NonEmptyString.value |> truncate maxTextLength
+          Text = comment.Content |> NonEmptyString.value |> TwoPoint.Site.Render.CommentBody.plainText |> textOf |> truncate maxTextLength
           NewCount = newCount }
 
     match comment.Status.Approval with

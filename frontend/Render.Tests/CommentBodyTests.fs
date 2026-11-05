@@ -156,6 +156,27 @@ let private live =
         paragraph "WOW! I have learned two things from reading this. One - I have a lot to learn about coding. Two - I’m so glad there are people like you who are brilliant and do all of this so people like me can enjoy technology!" ]
   )
 
+let private plainText =
+  testList "the plain text" (
+    [ "of marks is the text with no marks", "an *important* **word** and `List.map`", "an important word and List.map"
+      "of a link is its text", "[the docs](https://learn.microsoft.com/)", "the docs"
+      "of a refused link is its text", "[a](javascript:alert(1))", "a"
+      "of an image is its alt text", "![A cat](https://example.com/cat.jpg)", "A cat"
+      "of an autolink is its URL", "<https://example.com/>", "https://example.com/"
+      "of a bare URL is the URL", "see https://example.com/a", "see https://example.com/a"
+      "of an email autolink is the address", "<me@example.com>", "me@example.com"
+      "of one newline is a space", "one\ntwo", "one two"
+      "of a blank line is one space", "one\n\ntwo", "one two"
+      "of a list is its items", "- one\n- two", "one two"
+      "of a block quote is its text", "> a quote\n> more", "a quote more"
+      "of a code block is its lines", "```fsharp\nlet x = 1\n  let y = 2\n```", "let x = 1 let y = 2"
+      "of a heading stays as typed", "# Title", "# Title"
+      "of a rule of stars stays as typed", "one\n***", "one ***"
+      "of raw HTML is not escaped", "a <b>bold</b> & word", "a <b>bold</b> & word" ]
+    |> List.map (fun (name, source, expected) ->
+      test name { Expect.equal (CommentBody.plainText source) expected "The plain text of the comment" })
+  )
+
 [<Tests>]
 let tests =
-  testList "CommentBody" [ allowed; asText; images; urls; bareUrls; targets; stages; code; lineBreaks; live ]
+  testList "CommentBody" [ allowed; asText; images; urls; bareUrls; targets; stages; code; lineBreaks; live; plainText ]

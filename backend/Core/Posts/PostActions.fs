@@ -431,13 +431,19 @@ module NewComment =
       ValidationId : ValidationId
       Comment : Comment }
 
+  /// The `maxlength` of the comment form. Both count the source as typed, in UTF-16 code units.
+  let maxLength = 1000
+
   let create (dto : Dto) = validation {
     let (Post post) = dto.Post
     let (ValidationId validationId) = dto.ValidationId
     let (Comment content) = dto.Comment
     let! post = Slug.create post
     let! validationId = CommenterValidationId.create validationId
-    let! content = NonEmptyString.create (Some (nameof content)) content
+    let! content =
+      content
+      |> Constrained.String.between (Some 1) (Some maxLength) (nameof content) id
+      |> Result.bind (NonEmptyString.create (Some (nameof content)))
     return { Post = post; ValidationId = validationId; Content = content }
   }
   

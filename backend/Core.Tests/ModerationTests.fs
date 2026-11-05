@@ -235,6 +235,8 @@ let private postCommentWith (content : string) (dependencies : FakePostCommentDe
 
 let private postComment = postCommentWith "A comment"
 
+let private lengthMessage = $"content must be between 1 and {NewComment.maxLength} characters long"
+
 let private postCommentTests =
   testList "PostComment" [
     test "a comment of a trusted commenter is approved at the time of the post" {
@@ -284,6 +286,39 @@ let private postCommentTests =
         Expect.equal posted.Html markdownHtml "Expected the HTML of the source"
         Expect.equal (posted.Comment.Content.ToString()) markdown "Expected the stored source"
       | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a comment of 1,000 characters is posted" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+      let content = String('x', NewComment.maxLength)
+
+      match postCommentWith content dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal (posted.Comment.Content.ToString()) content "Expected the whole source in the store"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a comment of 1,001 characters is refused, and the blog stores nothing and notifies no one" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+
+      match postCommentWith (String('x', NewComment.maxLength + 1)) dependencies with
+      | Error (ActionError.Validation errors) ->
+        Expect.equal errors [ lengthMessage ] "Expected the length message"
+        Expect.isEmpty dependencies.Created "Expected no comment in the store"
+        Expect.isEmpty dependencies.Queued "Expected no message on the queue"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+
+    test "the limit counts the marks of the source as typed" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+      let content = String.replicate 143 "**abc**"
+      Expect.equal content.Length (NewComment.maxLength + 1) "Expected a source one character over the limit"
+
+      match postCommentWith content dependencies with
+      | Error (ActionError.Validation errors) ->
+        Expect.equal errors [ lengthMessage ] "Expected the length message"
+        Expect.isEmpty dependencies.Created "Expected no comment in the store"
+      | other -> failtestf "Expected a validation error, got %A" other
     }
 
     test "a banned commenter posts, and the blog stores nothing and notifies no one" {

@@ -130,8 +130,7 @@ let private descendants<'a when 'a :> MarkdownObject> (document: MarkdownDocumen
 
 let codeLimit = Highlight.PerBlock(TimeSpan.FromMilliseconds 50.0)
 
-/// Only an absolute http, https, or mailto URL makes a link. A code block that uses all of `limit` is plain code.
-let htmlWithin (limit: Highlight.Limit) (stage: Stage) (source: string) =
+let private parse (stage: Stage) (source: string) =
   let document = Markdown.Parse(source, pipeline)
   // A walk of Descendants can miss nodes when the tree changes during the walk, so each walk comes first.
   let breaks = descendants<ThematicBreakBlock> document
@@ -143,11 +142,29 @@ let htmlWithin (limit: Highlight.Limit) (stage: Stage) (source: string) =
   for node in inlines do
     applyLinkRule stage source node
 
+  document
+
+let private render (newRenderer: TextWriter -> HtmlRenderer) (adjust: HtmlRenderer -> unit) (document: MarkdownDocument) =
   use writer = new StringWriter()
-  let renderer = HtmlRenderer(writer)
+  let renderer = newRenderer writer
   pipeline.Setup renderer
-  renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeBlock.Renderer limit) |> ignore
+  adjust renderer
   renderer.Render document |> ignore
   writer.ToString()
 
+/// Only an absolute http, https, or mailto URL makes a link. A code block that uses all of `limit` is plain code.
+let htmlWithin (limit: Highlight.Limit) (stage: Stage) (source: string) =
+  parse stage source
+  |> render HtmlRenderer (fun renderer -> renderer.ObjectRenderers.ReplaceOrAdd<CodeBlockRenderer>(CodeBlock.Renderer limit) |> ignore)
+
 let html (stage: Stage) (source: string) = htmlWithin codeLimit stage source
+
+/// The text of the comment with no syntax marks, on one line. A link keeps its text, and each line break becomes a space.
+let plainText (source: string) =
+  let plainRenderer writer =
+    HtmlRenderer(writer, EnableHtmlForBlock = false, EnableHtmlForInline = false, EnableHtmlEscape = false)
+
+  (parse Stage.Production source |> render plainRenderer ignore).Split('\n')
+  |> Seq.map _.Trim()
+  |> Seq.filter (not << String.IsNullOrEmpty)
+  |> String.concat " "
