@@ -328,6 +328,11 @@ module RenderedPostedComment =
       PostTitle = posted.PostTitle
       Comment = RenderedComment.ofComment stage posted.Comment }
 
+  let ofPostedCommentsByDate (stage : TwoPoint.Site.Render.Stage) (comments : PostedComment list) =
+    comments
+    |> List.sortBy _.Comment.CreatedDate
+    |> List.map (ofPostedComment stage)
+
 type CommenterComments =
   { Commenter : Commenter
     Comments : RenderedPostedComment list }

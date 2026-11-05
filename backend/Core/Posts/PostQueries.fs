@@ -391,9 +391,7 @@ module GetModerationQueue =
     fun () ->
       dependencies.GetCommentsOnAllPosts [ CommentApproval.New ]
       |> CancellableTaskResult.mapError QueryError.Dependency
-      |> CancellableTaskResult.map (
-        List.sortBy _.Comment.CreatedDate >> List.map (RenderedPostedComment.ofPostedComment dependencies.Stage)
-      )
+      |> CancellableTaskResult.map (RenderedPostedComment.ofPostedCommentsByDate dependencies.Stage)
 
 // ====================================================================================================================
 // Get all commenters
@@ -443,12 +441,10 @@ module GetCommenter =
       return!
         commenter
         |> Option.traverseCancellableTaskResult (fun commenter -> cancellableTaskResult {
-          let! (comments : PostedComment list) = dependencies.GetCommentsOfCommenter commenter
-          let comments =
-            comments
-            |> List.sortBy _.Comment.CreatedDate
-            |> List.map (RenderedPostedComment.ofPostedComment dependencies.Stage)
-          return { Commenter = commenter; Comments = comments }
+          let! comments = dependencies.GetCommentsOfCommenter commenter
+          return
+            { Commenter = commenter
+              Comments = RenderedPostedComment.ofPostedCommentsByDate dependencies.Stage comments }
         })
         |> CancellableTaskResult.mapError QueryError.Dependency
     }

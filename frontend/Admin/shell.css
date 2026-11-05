@@ -248,7 +248,6 @@ h2 + .stat-grid {
   min-width: 0;
 }
 
-/* The text of a comment is the HTML that the backend renders from its Markdown. */
 .queue-text {
   overflow-wrap: anywhere;
 }
