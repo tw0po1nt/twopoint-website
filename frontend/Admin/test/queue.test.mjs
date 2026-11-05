@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { answer, apiAnswer, count, heading, load, press, settle, spyOnShowModal } from './load.mjs';
+import { answer, apiAnswer, count, expectedComment, heading, load, press, settle, shownComment, spyOnShowModal } from './load.mjs';
 
 const actions = [];
 const replies = [
@@ -38,6 +38,10 @@ test('the queue shows each new comment with the post, the commenter, the status,
   assert.match(text, /On First/);
   assert.match(text, /The second comment\./);
   assert.equal(navCount(), '3');
+});
+
+test('a queue row shows the rendered HTML of the comment', () => {
+  assert.deepEqual(shownComment(row('c-2')), expectedComment);
 });
 
 test('Approve sends the approval, removes the row, and lowers the navigation count', async () => {

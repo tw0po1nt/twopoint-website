@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { answer, apiAnswer, follow, heading, load, press, queue, settle } from './load.mjs';
+import { answer, apiAnswer, expectedComment, follow, heading, load, press, queue, rendered, settle, shownComment } from './load.mjs';
 
 const commenter = (name, status, createdDate) => ({
   id: `${name.toLowerCase()}-id`,
@@ -20,7 +20,7 @@ const posted = (id, approval, content) => ({
   comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, status: approval, content },
 });
 
-const page = { commenter: ada, comments: [posted('c-1', 'new', 'The first comment.'), posted('c-6', 'approved', 'An old comment.')] };
+const page = { commenter: ada, comments: [posted('c-1', 'new', 'The first comment.'), posted('c-6', 'approved', rendered('An old comment.'))] };
 
 const reads = [];
 const actions = [];
@@ -68,6 +68,7 @@ test('the name on a queue row opens the commenter page', async () => {
   assert.match(document.querySelector('main .commenter').textContent, /2026-01-03/);
   assert.deepEqual(buttons(), ['Trust', 'Ban', 'Delete']);
   assert.deepEqual(rows().slice(1), ['c-1', 'c-6']);
+  assert.deepEqual(shownComment(document.getElementById('c-6')), expectedComment);
 });
 
 test('Ban bans the commenter, rejects the new comment, and loads the queue again', async () => {

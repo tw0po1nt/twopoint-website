@@ -68,6 +68,7 @@ type GetCommenter (
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
           member _.GetCommentsOfCommenter commenter = postDependencies.GetPostedCommentsOfCommenter commenter
+          member _.Stage = config.Stage
         }
 
         let! commenterResult = getCommenter validationId

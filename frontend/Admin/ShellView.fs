@@ -650,6 +650,10 @@ let private rowEnd
     }
   }
 
+// The backend gives only HTML that it made from the Markdown of the comment.
+[<SolidComponent>]
+let private commentText (html: string) = div (class' = "queue-text", innerHTML = html)
+
 [<SolidComponent>]
 let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
   let comment = row.Comment.Comment
@@ -658,7 +662,7 @@ let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
   article (id = comment.Id, class' = "card card-body queue-row") {
     commenterHead dispatch comment.Commenter
     p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
-    p (class' = "queue-text") { comment.Content }
+    commentText comment.Content
     rowEnd dispatch comment.Id choose row.State (Queue.actions comment.Commenter.Status)
   }
 
@@ -700,7 +704,7 @@ let private postCommentRow (dispatch: Shell.Msg -> unit) (row: PostComments.Row)
       Parts.badge (approvalTone comment.Status) (PostComments.approvalText comment.Status)
     }
 
-    p (class' = "queue-text") { comment.Content }
+    commentText comment.Content
     rowEnd dispatch comment.Id choose row.State (PostComments.actions comment.Status)
   }
 
@@ -813,7 +817,7 @@ let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedC
       Parts.badge (approvalTone comment.Comment.Status) (PostComments.approvalText comment.Comment.Status)
     }
 
-    p (class' = "queue-text") { comment.Comment.Content }
+    commentText comment.Comment.Content
   }
 
 [<SolidComponent>]

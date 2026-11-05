@@ -41,13 +41,13 @@ module CommentTypesExt =
         Status = this.Status.ToString()
         CreatedDate = this.CreatedDate }
 
-  type Comment with
-    member this.ToDto() =
-      { AdminCommentDto.Id = this.Id.ToString()
-        CreatedDate = this.CreatedDate
-        Commenter = this.Commenter.ToDto()
-        Status = this.Status.Approval.ToString()
-        Content = this.Content.ToString() }
+  type RenderedComment with
+    member this.ToAdminDto() =
+      { AdminCommentDto.Id = this.Comment.Id.ToString()
+        CreatedDate = this.Comment.CreatedDate
+        Commenter = this.Comment.Commenter.ToDto()
+        Status = this.Comment.Status.Approval.ToString()
+        Content = this.Html }
 
 type AdminGetCommentsForPost (
   config: Config,
@@ -87,6 +87,7 @@ type AdminGetCommentsForPost (
           
           member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
           member _.GetCommentsForPost approvals slug = postDependencies.GetCommentsForPost approvals slug
+          member _.Stage = config.Stage
         }
 
         let! commentsResult = (slug, ct) ||> getCommentsForPost []
@@ -94,7 +95,7 @@ type AdminGetCommentsForPost (
         let apiResponse, statusCode =
           match commentsResult with
           | Ok (Some comments) ->
-            { Success = true; Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
+            { Success = true; Message = None; Data = comments |> List.map _.ToAdminDto() |> Some }, HttpStatusCode.OK
           | Ok None ->
             { Success = false; Message = Some $"Post ''{slug}'' not found"; Data = None }, HttpStatusCode.NotFound
           | Error queryError when queryError.IsValidation ->

@@ -8,6 +8,20 @@ export const posts = [
   { slug: 'second', title: 'Second', state: 'published', pendingEdit: false, publishDate: '2026-02-03T00:00:00Z', deploy: 'deployed', deliveryToStart: false, commentStats: { new: 1, approved: 0, rejected: 1 } },
 ];
 
+export const rendered = (text) =>
+  `<p>${text} See <a href="https://example.com/" target="_blank" rel="nofollow ugc noopener noreferrer">the source</a>.</p>\n<pre><code>let x = 1\n</code></pre>\n`;
+
+export const shownComment = (row) => {
+  const text = row.querySelector('.queue-text');
+  return {
+    element: text.tagName,
+    link: [text.querySelector('a').textContent, text.querySelector('a').getAttribute('href')],
+    code: text.querySelector('pre > code').textContent,
+  };
+};
+
+export const expectedComment = { element: 'DIV', link: ['the source', 'https://example.com/'], code: 'let x = 1\n' };
+
 const queued = (id, postSlug, postTitle, name, status, content) => ({
   postSlug,
   postTitle,
@@ -22,7 +36,7 @@ const queued = (id, postSlug, postTitle, name, status, content) => ({
 
 export const queue = [
   queued('c-1', 'first', 'First', 'Ada', 'new', 'The first comment.'),
-  queued('c-2', 'first', 'First', 'Grace', 'trusted', 'The second comment.'),
+  queued('c-2', 'first', 'First', 'Grace', 'trusted', rendered('The second comment.')),
   queued('c-3', 'second', 'Second', 'Alan', 'new', 'The third comment.'),
 ];
 
