@@ -286,6 +286,37 @@ let private postCommentTests =
       | other -> failtestf "Expected Posted, got %A" other
     }
 
+    test "a comment of 1,000 characters is posted" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+      let content = String('x', 1000)
+
+      match postCommentWith content dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal (posted.Comment.Content.ToString()) content "Expected the whole source in the store"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a comment of 1,001 characters is refused, and the blog stores nothing and notifies no one" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+
+      match postCommentWith (String('x', 1001)) dependencies with
+      | Error (ActionError.Validation errors) ->
+        Expect.equal errors [ "content must be between 1 and 1000 characters long" ] "Expected the length message"
+        Expect.isEmpty dependencies.Created "Expected no comment in the store"
+        Expect.isEmpty dependencies.Queued "Expected no message on the queue"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+
+    test "the limit counts the marks of the source as typed" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+      // The marks make 1,001 characters of source and 601 characters of text.
+      let content = String.replicate 200 "**abc**" + "x"
+
+      match postCommentWith content dependencies with
+      | Error (ActionError.Validation _) -> Expect.isEmpty dependencies.Created "Expected no comment in the store"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+
     test "a banned commenter posts, and the blog stores nothing and notifies no one" {
       let dependencies = FakePostCommentDependencies (commenter CommenterStatus.Banned)
 

@@ -190,6 +190,25 @@ let private payloadTests =
       | Some payload -> Expect.equal payload.Text.Length 120 "Expected 120 characters"
       | None -> failtest "Expected a payload"
     }
+
+    test "the text is the plain text of the comment, with no marks and no line breaks" {
+      let source = "A **great** post.\n\nSee [the docs](https://learn.microsoft.com/) and `List.map`:\n\n- one\n- two"
+      let comment = posted CommentApproval.New "A post" "Ada" source
+
+      match NewCommentPayload.ofComment 1 comment with
+      | Some payload -> Expect.equal payload.Text "A great post. See the docs and List.map: one two" "Expected the plain text"
+      | None -> failtest "Expected a payload"
+    }
+
+    test "the text is the first 120 characters of the plain text" {
+      let source = String.replicate 100 "**ab** "
+      let comment = posted CommentApproval.New "A post" "Ada" source
+      let expected = (String.replicate 100 "ab ").Substring(0, 120)
+
+      match NewCommentPayload.ofComment 1 comment with
+      | Some payload -> Expect.equal payload.Text expected "Expected 120 characters of the plain text"
+      | None -> failtest "Expected a payload"
+    }
   ]
 
 [<Tests>]
