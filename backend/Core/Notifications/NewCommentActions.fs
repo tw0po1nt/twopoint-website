@@ -41,6 +41,9 @@ module NewCommentPayload =
   let private truncate (length : int) (text : string) =
     text.EnumerateRunes() |> Seq.truncate length |> Seq.map _.ToString() |> String.concat ""
 
+  let private textOf (plainText : string) =
+    if String.IsNullOrWhiteSpace plainText then "(no text)" else plainText
+
   let private caseName =
     function
     | AwaitsModeration -> "awaits-moderation"
@@ -60,7 +63,7 @@ module NewCommentPayload =
           Slug = Slug.value posted.Post
           PostTitle = posted.PostTitle |> NonEmptyString.value |> truncate maxTitleLength
           Commenter = commenter |> truncate maxCommenterLength
-          Text = comment.Content |> NonEmptyString.value |> TwoPoint.Site.Render.CommentBody.plainText |> truncate maxTextLength
+          Text = comment.Content |> NonEmptyString.value |> TwoPoint.Site.Render.CommentBody.plainText |> textOf |> truncate maxTextLength
           NewCount = newCount }
 
     match comment.Status.Approval with

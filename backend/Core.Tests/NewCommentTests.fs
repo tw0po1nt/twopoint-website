@@ -209,6 +209,14 @@ let private payloadTests =
       | Some payload -> Expect.equal payload.Text expected "Expected 120 characters of the plain text"
       | None -> failtest "Expected a payload"
     }
+
+    test "a comment with no plain text gets the no-text mark" {
+      let comment = posted CommentApproval.New "A post" "Ada" "![](https://x.com/a.png)"
+
+      match NewCommentPayload.ofComment 1 comment with
+      | Some payload -> Expect.equal payload.Text "(no text)" "Expected the no-text mark"
+      | None -> failtest "Expected a payload"
+    }
   ]
 
 [<Tests>]
