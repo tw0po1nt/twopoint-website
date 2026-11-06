@@ -522,6 +522,21 @@ let tests =
         "The slug change"
     }
 
+    test "the slug field takes no text while the slug change waits for the save" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "new-slug")) model
+      let model, _ = send Editor.SlugChangeRequested model
+      let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "other-slug")) model
+      Expect.equal (document' model).Details.Slug Details.WaitingForSave "Still waits"
+
+      let _, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.ChangeSlug { Slug = "my-post"; ETag = "\"v2\""; NewSlug = "new-slug" } ]))
+        "The slug that the author asked for"
+    }
+
     test "a failed save before a slug change sends no slug change and shows the save error" {
       let model, _ = send (Editor.BodyChanged "x") (opened draft)
       let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "new-slug")) model

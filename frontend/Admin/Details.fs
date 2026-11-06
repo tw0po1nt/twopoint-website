@@ -17,7 +17,7 @@ type Options =
 
 type SlugState =
   | Idle
-  /// The author asked for a slug change on a draft with unsaved text. The change starts after the save.
+  /// The author asked for a slug change on a draft with unsaved text.
   | WaitingForSave
   | Changing
   | ChangeFailed of reason: string
@@ -216,7 +216,12 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     | Made _, _ -> model, None
   | ImageChanged image -> { model with Values = { values with Image = blankAsNone image } }, None
   | ShowOnHomepageChanged shown -> { model with Values = { values with ShowOnHomepage = shown } }, None
-  | SlugTyped typed -> { model with SlugInput = typed; Slug = Idle }, None
+  | SlugTyped typed ->
+    match model.Slug with
+    | WaitingForSave
+    | Changing -> model, None
+    | Idle
+    | ChangeFailed _ -> { model with SlugInput = typed; Slug = Idle }, None
 
 let slugChangeable (slug: string) (model: Model) =
   model.SlugInput <> slug && Slug.isSlug model.SlugInput
@@ -242,10 +247,15 @@ let slugChangeStarted (model: Model) = { model with Slug = Changing }
 
 let slugChangeWaitsForSave (model: Model) = { model with Slug = WaitingForSave }
 
-let isSlugWaitingForSave (model: Model) = model.Slug = WaitingForSave
+let isSlugWaitingForSave (model: Model) =
+  match model.Slug with
+  | WaitingForSave -> true
+  | Idle
+  | Changing
+  | ChangeFailed _ -> false
 
 let slugChangeRefused (reason: string) (model: Model) = { model with Slug = ChangeFailed reason }
 
-let slugChangeStale (model: Model) = { model with Slug = Idle }
+let slugChangeCanceled (model: Model) = { model with Slug = Idle }
 
 let slugChanged (slug: string) (model: Model) = { model with Slug = Idle; SlugInput = slug }

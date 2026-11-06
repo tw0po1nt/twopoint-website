@@ -11,6 +11,7 @@ let table: (string * string option) list =
     "Matt's F# Notes & Tips", Some "matts-f-notes-and-tips"
     "Don’t panic", Some "dont-panic"
     "Café Crème", Some "cafe-creme"
+    "The v⃗ector", Some "the-vector"
     "Wait... what?!", Some "wait-what"
     "  --Spaced out--  ", Some "spaced-out"
     "100% sure!", Some "100-sure"

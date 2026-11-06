@@ -364,7 +364,6 @@ let private startSlugChange (eTag: string) (document: Document) =
         NewSlug = Details.typedSlug document.Details }
   )
 
-/// A draft with unsaved text saves first. The slug change starts after the save, in `resumeSlugChange`.
 let private requestSlugChange (document: Document) =
   match document.State, document.ETag, document.Save with
   | _ when Details.isChangingSlug document.Details || Publish.isOpen document.Publish -> Loaded document, None
@@ -374,16 +373,10 @@ let private requestSlugChange (document: Document) =
   | Api.Draft, _, (Unsaved | SaveFailed _) -> startSave (changeDetails Details.slugChangeWaitsForSave document)
   | Api.Draft, _, Saving _ -> Loaded(changeDetails Details.slugChangeWaitsForSave document), None
   | Api.Draft, _, Stale ->
-    Loaded(
-      changeDetails
-        (Details.slugChangeRefused "This post changed in another tab. Reload the page to get the latest version.")
-        document
-    ),
-    None
+    Loaded(changeDetails (Details.slugChangeRefused (Api.reason Api.Stale)) document), None
   | (Api.Published | Api.Upcoming), _, _ ->
     Loaded(changeDetails (Details.slugChangeRefused "You can't change the slug of a published post.") document), None
 
-/// After the save answer, a slug change that waits for the save starts. A failed save starts no slug change.
 let private resumeSlugChange (model: Model, effect: Effect option) =
   match model with
   | Loaded document when Details.isSlugWaitingForSave document.Details ->
@@ -391,20 +384,17 @@ let private resumeSlugChange (model: Model, effect: Effect option) =
     | Saving _, _ -> model, effect
     | (Saved | Unsaved), Some eTag -> startSlugChange eTag document
     | (Saved | Unsaved), None
-    | (SaveFailed _ | Stale), _ -> Loaded(changeDetails Details.slugChangeStale document), effect
+    | (SaveFailed _ | Stale), _ -> Loaded(changeDetails Details.slugChangeCanceled document), effect
   | Loaded _
   | Loading _
   | NotLoaded _ -> model, effect
 
-/// Each save state but a stale one can start a slug change. A draft with unsaved text saves first.
 let canChangeSlug (document: Document) =
   document.State = Api.Draft
   && document.Save <> Stale
   && not (Details.isChangingSlug document.Details)
   && Details.slugChangeable document.Slug document.Details
 
-/// The slug that the title of a draft gives. The suggestion hides when it is the slug of the draft or the typed slug,
-/// and while a slug change is in progress.
 let slugSuggestion (document: Document) =
   match document.State, Slug.ofTitle document.Fields.Title with
   | Api.Draft, Some suggested when
@@ -431,7 +421,7 @@ let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document
     else
       Loaded document, None
   | Error Api.Stale ->
-    Loaded { changeDetails Details.slugChangeStale document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
+    Loaded { changeDetails Details.slugChangeCanceled document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
   | Error failure -> Loaded(changeDetails (Details.slugChangeRefused (Api.reason failure)) document), None
 let private togglePreview (document: Document) =
   match document.Preview with
@@ -507,7 +497,7 @@ let private resumePublish (model: Model, effect: Effect option) =
       Loaded(withPublish (Publish.CheckFailed(firstChoice document, $"Couldn't save the post. {reason}")) document), None
     | Publish.Saving, Stale ->
       Loaded(
-        withPublish (Publish.CheckFailed(firstChoice document, "This post changed in another tab. Reload the page to get the latest version.")) document
+        withPublish (Publish.CheckFailed(firstChoice document, Api.reason Api.Stale)) document
       ),
       None
     | Publish.Saving, (Unsaved | Saving _)
