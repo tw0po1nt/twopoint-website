@@ -12,8 +12,10 @@ let private known = Map [ "known@example.com", "validation-1" ]
 
 let private start = Comments.init pageUrl known None |> fst
 
-let private run (messages: Comments.Msg list) =
-  messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (start, None)
+let private from (model: Comments.Model) (messages: Comments.Msg list) =
+  messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (model, None)
+
+let private run (messages: Comments.Msg list) = from start messages
 
 let private answer success message : ApiResponse<unit> =
   { Success = success
@@ -54,8 +56,7 @@ let private refusedPreview : ApiResponse<string> =
     Message = Some "content must be between 1 and 1000 characters long"
     Data = None }
 
-let private from (model: Comments.Model) (messages: Comments.Msg list) =
-  messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (model, None)
+let private request opening source : Comments.PreviewRequest = { Opening = opening; Source = source }
 
 let private previewing = run [ Comments.CommentChanged " Use `List.map` "; Comments.PreviewSelected ] |> fst
 
@@ -190,9 +191,7 @@ let tests =
         Expect.isTrue (Comments.showsEmailError left) "The email error shows"
         Expect.isTrue (Comments.showsCommentError left) "The comment error shows"
 
-        let fixedModel, _ =
-          [ Comments.EmailChanged "reader@example.com"; Comments.CommentChanged "Hi" ]
-          |> List.fold (fun (model, _) msg -> Comments.update msg model) (left, None)
+        let fixedModel, _ = from left [ Comments.EmailChanged "reader@example.com"; Comments.CommentChanged "Hi" ]
 
         Expect.isFalse (Comments.showsEmailError fixedModel || Comments.showsCommentError fixedModel) "No error"
       }
@@ -337,7 +336,7 @@ let tests =
       test "the first open loads the preview of the trimmed text with one call" {
         let model, effect = run [ Comments.CommentChanged " Use `List.map` "; Comments.PreviewSelected ]
         Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading"
-        Expect.equal effect (Some(Comments.PreviewComment(model.Opening, "Use `List.map`"))) "One call with the trimmed text"
+        Expect.equal effect (Some(Comments.PreviewComment(request model.Opening "Use `List.map`"))) "One call with the trimmed text"
       }
 
       test "a second select of the open preview tab makes no call" {
@@ -347,14 +346,14 @@ let tests =
       }
 
       test "the answer shows the HTML and keeps it" {
-        let model, effect = from previewing [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        let model, effect = from previewing [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
         Expect.isNone effect "No request"
         Expect.equal model.Tab (Comments.Preview(Comments.PreviewState.Shown html)) "The preview shows the HTML"
         Expect.equal model.Kept (Some { Source = "Use `List.map`"; Html = html }) "The widget keeps the source and its HTML"
       }
 
       test "an open after no change to the text shows the kept HTML with no call" {
-        let answered, _ = from previewing [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        let answered, _ = from previewing [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
 
         for edit in [ []; [ Comments.CommentChanged "Use `List.map`  " ] ] do
           let model, effect = from answered ([ Comments.WriteSelected ] @ edit @ [ Comments.PreviewSelected ])
@@ -363,17 +362,17 @@ let tests =
       }
 
       test "an open after an edit calls again" {
-        let answered, _ = from previewing [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        let answered, _ = from previewing [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
         let model, effect = from answered [ Comments.WriteSelected; Comments.CommentChanged "Use `List.iter`"; Comments.PreviewSelected ]
         Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading"
-        Expect.equal effect (Some(Comments.PreviewComment(model.Opening, "Use `List.iter`"))) "A call with the new text"
+        Expect.equal effect (Some(Comments.PreviewComment(request model.Opening "Use `List.iter`"))) "A call with the new text"
       }
 
       test "a refused or unanswered call fails, is not kept, and [try again] calls again" {
         for failure in
-          [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", refusedPreview)
-            Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", { shown html with Data = None })
-            Comments.PreviewUnanswered previewing.Opening ] do
+          [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", refusedPreview)
+            Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", { shown html with Data = None })
+            Comments.PreviewUnanswered(request previewing.Opening "Use `List.map`") ] do
           let failed, effect = from previewing [ failure ]
           Expect.isNone effect "No request"
           Expect.equal failed.Tab (Comments.Preview Comments.PreviewState.Failed) "The preview failed"
@@ -381,10 +380,10 @@ let tests =
 
           let retried, effect = from failed [ Comments.RetrySelected ]
           Expect.equal retried.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading again"
-          Expect.equal effect (Some(Comments.PreviewComment(retried.Opening, "Use `List.map`"))) "[try again] calls again"
+          Expect.equal effect (Some(Comments.PreviewComment(request retried.Opening "Use `List.map`"))) "[try again] calls again"
 
           let reopened, effect = from failed [ Comments.WriteSelected; Comments.PreviewSelected ]
-          Expect.equal effect (Some(Comments.PreviewComment(reopened.Opening, "Use `List.map`"))) "A new open calls again"
+          Expect.equal effect (Some(Comments.PreviewComment(request reopened.Opening "Use `List.map`"))) "A new open calls again"
       }
 
       test "[try again] does nothing when the preview did not fail" {
@@ -398,8 +397,8 @@ let tests =
         let back, _ = from previewing [ Comments.WriteSelected ]
 
         for late in
-          [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html)
-            Comments.PreviewUnanswered previewing.Opening ] do
+          [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html)
+            Comments.PreviewUnanswered(request previewing.Opening "Use `List.map`") ] do
           let model, effect = from back [ late ]
           Expect.isNone effect "No request"
           Expect.equal model back "The write tab stays, and the widget keeps nothing"
@@ -407,11 +406,11 @@ let tests =
 
       test "a late answer for an older open does not replace the state of the newer open" {
         let reopened, _ = from previewing [ Comments.WriteSelected; Comments.CommentChanged "Use `List.iter`"; Comments.PreviewSelected ]
-        let model, _ = from reopened [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        let model, _ = from reopened [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
         Expect.equal model reopened "The newer open still loads"
 
         let answered, _ =
-          from model [ Comments.PreviewAnswered(reopened.Opening, "Use `List.iter`", shown "<p>Use <code>List.iter</code></p>\n") ]
+          from model [ Comments.PreviewAnswered(request reopened.Opening "Use `List.iter`", shown "<p>Use <code>List.iter</code></p>\n") ]
 
         Expect.equal answered.Tab (Comments.Preview(Comments.PreviewState.Shown "<p>Use <code>List.iter</code></p>\n")) "The newer answer shows"
       }

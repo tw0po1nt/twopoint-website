@@ -27,10 +27,10 @@ let private perform (props: Contract.CommentsProps) (effect: Comments.Effect) (d
     |> Promise.map (Comments.PostAnswered >> dispatch)
     |> Promise.catch (fun _ -> dispatch Comments.Unanswered)
     |> Promise.start
-  | Comments.PreviewComment(opening, source) ->
-    Comments.previewComment props.Api source
-    |> Promise.map (fun response -> dispatch (Comments.PreviewAnswered(opening, source, response)))
-    |> Promise.catch (fun _ -> dispatch (Comments.PreviewUnanswered opening))
+  | Comments.PreviewComment request ->
+    Comments.previewComment props.Api request.Source
+    |> Promise.map (fun response -> dispatch (Comments.PreviewAnswered(request, response)))
+    |> Promise.catch (fun _ -> dispatch (Comments.PreviewUnanswered request))
     |> Promise.start
 
 let private readValidations () =
@@ -124,27 +124,27 @@ let private isPreview (model: Comments.Model) =
   | Comments.Write -> false
   | Comments.Preview _ -> true
 
-let private previewClass (model: Comments.Model) =
-  match model.Tab with
-  | Comments.Preview Comments.PreviewState.Empty
-  | Comments.Preview Comments.PreviewState.Loading -> "comment-preview is-muted"
-  | Comments.Preview Comments.PreviewState.Failed -> "comment-preview is-failed"
-  | Comments.Preview(Comments.PreviewState.Shown _)
-  | Comments.Write -> "comment-preview"
+type private PreviewPart =
+  { Class: string
+    Text: string
+    Retry: bool
+    Html: string option }
 
-let private previewText (model: Comments.Model) =
-  match model.Tab with
-  | Comments.Preview Comments.PreviewState.Empty -> "Nothing to preview. Write a comment first."
-  | Comments.Preview Comments.PreviewState.Loading -> "Loading the preview…"
-  | Comments.Preview Comments.PreviewState.Failed -> "The site cannot show the preview now. You can still post your comment. "
-  | Comments.Preview(Comments.PreviewState.Shown _)
-  | Comments.Write -> ""
+/// The write tab shows no preview, so it gets the empty part.
+let private previewPart (model: Comments.Model) =
+  let part = { Class = "comment-preview"; Text = ""; Retry = false; Html = None }
 
-let private previewHtml (model: Comments.Model) =
   match model.Tab with
-  | Comments.Preview(Comments.PreviewState.Shown html) -> Some html
-  | Comments.Preview(Comments.PreviewState.Empty | Comments.PreviewState.Loading | Comments.PreviewState.Failed)
-  | Comments.Write -> None
+  | Comments.Preview Comments.PreviewState.Empty ->
+    { part with Class = "comment-preview is-muted"; Text = "Nothing to preview. Write a comment first." }
+  | Comments.Preview Comments.PreviewState.Loading -> { part with Class = "comment-preview is-muted"; Text = "Loading the preview…" }
+  | Comments.Preview Comments.PreviewState.Failed ->
+    { part with
+        Class = "comment-preview is-failed"
+        Text = "The site cannot show the preview now. You can still post your comment. "
+        Retry = true }
+  | Comments.Preview(Comments.PreviewState.Shown html) -> { part with Html = Some html }
+  | Comments.Write -> part
 
 let private notePrefix =
   "To stop spam, the site sends an email to verify your address, and the author approves each comment. "
@@ -257,15 +257,15 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
           .attr ("value", model().Comment)
 
         Show(when' = isPreview (model ())) {
-          div(class' = previewClass (model ())).attr("style", $"min-height: {previewHeight ()}px").attr ("aria-live", "polite") {
-            previewText (model ())
+          div(class' = (previewPart (model ())).Class).attr("style", $"min-height: {previewHeight ()}px").attr ("aria-live", "polite") {
+            (previewPart (model ())).Text
 
-            Show(when' = (model().Tab = Comments.Preview Comments.PreviewState.Failed)) {
+            Show(when' = (previewPart (model ())).Retry) {
               button (type' = "button", onClick = fun _ -> dispatch Comments.RetrySelected) { "[try again]" }
             }
 
-            Show(when' = (previewHtml (model ())).IsSome) {
-              div (class' = "comment-text", innerHTML = (previewHtml (model ()) |> Option.defaultValue ""))
+            Show(when' = (previewPart (model ())).Html.IsSome) {
+              div (class' = "comment-text", innerHTML = ((previewPart (model ())).Html |> Option.defaultValue ""))
             }
           }
         }

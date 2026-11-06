@@ -65,6 +65,10 @@ type Model =
     Opening: int
     HelpShown: bool }
 
+/// One call for the preview of a source. `Opening` is the count of tab changes at the call, so an answer for an older
+/// open has a smaller count than the model.
+type PreviewRequest = { Opening: int; Source: string }
+
 type Msg =
   | ListAnswered of ApiResponse<Comment list>
   | ListUnanswered
@@ -80,19 +84,19 @@ type Msg =
   | WriteSelected
   | PreviewSelected
   | RetrySelected
-  | PreviewAnswered of opening: int * source: string * ApiResponse<string>
-  | PreviewUnanswered of opening: int
+  | PreviewAnswered of PreviewRequest * ApiResponse<string>
+  | PreviewUnanswered of PreviewRequest
   | HelpToggled
 
 type Effect =
   | Load
   | Validate of CommenterValidation
   | Post of NewComment
-  | PreviewComment of opening: int * source: string
+  | PreviewComment of PreviewRequest
 
 type HelpRow = { YouType: string; ReadersSee: string }
 
-/// "Readers see" is the HTML of the comment renderer of the backend for the source, so the help makes no call.
+/// "Readers see" is the HTML of the comment renderer of the backend for the source.
 let helpRows: HelpRow list =
   [ { YouType = "*italic*"; ReadersSee = "<p><em>italic</em></p>\n" }
     { YouType = "**bold**"; ReadersSee = "<p><strong>bold</strong></p>\n" }
@@ -243,17 +247,19 @@ let private openPreview (model: Model) =
   match model.Kept with
   | _ when source = "" -> { model with Tab = Preview PreviewState.Empty; Opening = opening }, None
   | Some kept when kept.Source = source -> { model with Tab = Preview(PreviewState.Shown kept.Html); Opening = opening }, None
-  | _ -> { model with Tab = Preview PreviewState.Loading; Opening = opening }, Some(PreviewComment(opening, source))
+  | _ ->
+    { model with Tab = Preview PreviewState.Loading; Opening = opening },
+    Some(PreviewComment { Opening = opening; Source = source })
 
-let private isAwaited (opening: int) (model: Model) =
-  opening = model.Opening && model.Tab = Preview PreviewState.Loading
+let private isAwaited (request: PreviewRequest) (model: Model) =
+  request.Opening = model.Opening && model.Tab = Preview PreviewState.Loading
 
-let private previewed (source: string) (response: ApiResponse<string>) (model: Model) =
+let private previewed (request: PreviewRequest) (response: ApiResponse<string>) (model: Model) =
   match response.Success, response.Data with
   | true, Some html ->
     { model with
         Tab = Preview(PreviewState.Shown html)
-        Kept = Some { Source = source; Html = html } }
+        Kept = Some { Source = request.Source; Html = html } }
   | _ -> { model with Tab = Preview PreviewState.Failed }
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
@@ -292,8 +298,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | PreviewSelected -> model, None
   | RetrySelected when model.Tab = Preview PreviewState.Failed -> openPreview model
   | RetrySelected -> model, None
-  | PreviewAnswered(opening, source, response) when isAwaited opening model -> previewed source response model, None
-  | PreviewUnanswered opening when isAwaited opening model -> { model with Tab = Preview PreviewState.Failed }, None
+  | PreviewAnswered(request, response) when isAwaited request model -> previewed request response model, None
+  | PreviewUnanswered request when isAwaited request model -> { model with Tab = Preview PreviewState.Failed }, None
   | PreviewAnswered _
   | PreviewUnanswered _ -> model, None
   | HelpToggled -> { model with HelpShown = not model.HelpShown }, None

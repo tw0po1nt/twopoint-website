@@ -309,6 +309,17 @@ let private postCommentTests =
       | other -> failtestf "Expected a validation error, got %A" other
     }
 
+    test "a comment of only spaces and new lines is refused, and the blog stores nothing and notifies no one" {
+      let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
+
+      match postCommentWith "  \n " dependencies with
+      | Error (ActionError.Validation errors) ->
+        Expect.equal errors [ NewComment.blankMessage ] "Expected the blank message"
+        Expect.isEmpty dependencies.Created "Expected no comment in the store"
+        Expect.isEmpty dependencies.Queued "Expected no message on the queue"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+
     test "the limit counts the marks of the source as typed" {
       let dependencies = FakePostCommentDependencies (commenter CommenterStatus.New)
       let content = String.replicate 143 "**abc**"
@@ -347,6 +358,10 @@ let private previewCommentTests =
 
     test "the preview refuses an empty source" {
       Expect.equal (previewComment "") (Error [ lengthMessage ]) "Expected the length message"
+    }
+
+    test "the preview refuses a source of only spaces and new lines" {
+      Expect.equal (previewComment "  \n ") (Error [ NewComment.blankMessage ]) "Expected the blank message"
     }
 
     test "the preview refuses a source of 1,001 characters" {
