@@ -1,11 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#09090b"/>
-  <g fill="#fafafa">
-    <rect x="130" y="130" width="190" height="48"/>
-    <rect x="272" y="130" width="48" height="136"/>
-    <rect x="130" y="218" width="190" height="48"/>
-    <rect x="130" y="218" width="48" height="164"/>
-    <rect x="130" y="334" width="190" height="48"/>
-    <circle cx="388" cy="358" r="30"/>
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g transform="translate(106 106) scale(12.5)">
+    <path fill="none" stroke="#df2a2a" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m7 8l-4 4l4 4m10-8l4 4l-4 4M14 4l-4 16"/>
   </g>
 </svg>

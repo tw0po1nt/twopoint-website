@@ -94,10 +94,10 @@ let tryCommenter (model: Model) =
 
 let failure (state: State) =
   match state with
-  | Progress.NotDone(Trust, reason) -> Some $"The trust did not complete. {reason}"
-  | Progress.NotDone(Untrust, reason) -> Some $"The untrust did not complete. {reason}"
-  | Progress.NotDone(Ban, reason) -> Some $"The ban did not complete. {reason}"
-  | Progress.NotDone(Unban, reason) -> Some $"The unban did not complete. {reason}"
-  | Progress.NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Progress.NotDone(Trust, reason) -> Some $"Couldn't trust the commenter. {reason}"
+  | Progress.NotDone(Untrust, reason) -> Some $"Couldn't untrust the commenter. {reason}"
+  | Progress.NotDone(Ban, reason) -> Some $"Couldn't ban the commenter. {reason}"
+  | Progress.NotDone(Unban, reason) -> Some $"Couldn't unban the commenter. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"Couldn't delete the commenter. {reason}"
   | Progress.Ready
   | Progress.Sending _ -> None

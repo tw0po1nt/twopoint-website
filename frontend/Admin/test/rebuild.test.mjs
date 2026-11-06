@@ -34,7 +34,7 @@ test('Rebuild site posts to the deploys endpoint with the token, and shows the p
   press('Rebuild site', card());
   await settle();
   assert.deepEqual(rebuilds, [{ method: 'POST', authorization: 'Bearer token-1' }]);
-  assert.equal(text(), 'The rebuild started. The production run is #42.');
+  assert.equal(text(), 'Rebuild started (production run #42).');
   assert.equal(alert(), null);
   assert.ok(config.api);
 });
@@ -43,7 +43,7 @@ test('a failed dispatch shows the reason from the API', async () => {
   press('Rebuild site', card());
   await settle();
   assert.equal(rebuilds.length, 2);
-  assert.equal(text(), 'The rebuild did not start.');
+  assert.equal(text(), "Couldn't start the rebuild.");
   assert.equal(alert(), 'The dispatch to tw0po1nt/twopoint-website-staging failed.');
 });
 
@@ -51,6 +51,6 @@ test('a queued rebuild with no run number says that the rebuild started', async 
   press('Rebuild site', card());
   await settle();
   assert.equal(rebuilds.length, 3);
-  assert.equal(text(), 'The rebuild started. GitHub did not send the number of the production run.');
+  assert.equal(text(), 'Rebuild started. Check GitHub for details.');
   assert.equal(alert(), null);
 });

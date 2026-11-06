@@ -34,7 +34,7 @@ let private loadRoot (yaml: string) : Result<YamlMappingNode, string> =
     match stream.Documents |> Seq.tryHead |> Option.map _.RootNode with
     | None -> Ok(YamlMappingNode())
     | Some(:? YamlMappingNode as mapping) -> Ok mapping
-    | Some _ -> Error "The front matter is not a YAML mapping."
+    | Some _ -> Error "The front matter must be a single YAML mapping."
   with
   // An unterminated flow sequence makes YamlDotNet throw InvalidOperationException.
   | :? YamlException

@@ -71,13 +71,13 @@ test('the menu shows each action of a draft, and an action that is not available
   }));
 
   assert.deepEqual(items, [
-    { text: 'SaveThe post is saved.', disabled: 'true' },
-    { text: 'Changes from liveA draft has no published text.', disabled: 'true' },
-    { text: 'Discard changesA draft has no pending edit.', disabled: 'true' },
-    { text: 'Change the dateOnly an upcoming post can change its date.', disabled: 'true' },
-    { text: 'UnpublishYou can unpublish only an upcoming post.', disabled: 'true' },
-    { text: 'RevisionsRevisions are available after the next publish.', disabled: 'true' },
-    { text: 'Send to subscribersPublish the post first.', disabled: 'true' },
+    { text: 'SaveNo unsaved changes.', disabled: 'true' },
+    { text: 'Compare with liveOnly for published posts.', disabled: 'true' },
+    { text: 'Discard changesOnly for published posts.', disabled: 'true' },
+    { text: 'Change dateOnly for upcoming posts.', disabled: 'true' },
+    { text: 'UnpublishOnly for upcoming posts.', disabled: 'true' },
+    { text: 'RevisionsOnly for published posts.', disabled: 'true' },
+    { text: 'Send to subscribersOnly for published posts.', disabled: 'true' },
     { text: 'Delete', disabled: null },
     { text: 'Add image', disabled: null },
   ]);
@@ -143,7 +143,7 @@ test('Publish sends the ETag and the date, closes the dialog, and shows the new 
   assert.deepEqual(publishes, [{ ifMatch: '"v1"', body: { publishDate: '2099-12-31T13:00:00Z' } }]);
   assert.ok(!dialog().open, 'The dialog closes');
   assert.equal(status(), 'Upcoming Dec 31, 2099 · deployed');
-  assert.match(document.querySelector('main .alert').textContent, /The site rebuild did not start/);
+  assert.match(document.querySelector('main .alert').textContent, /Couldn't start the rebuild/);
   assert.equal(bar().querySelector('.editor-primary').disabled, true, 'The published post has no pending edit');
   assert.equal(bar().querySelector('.editor-primary').textContent.trim(), 'Publish changes');
 

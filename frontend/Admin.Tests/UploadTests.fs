@@ -81,14 +81,14 @@ let tests =
       Expect.equal
         (Upload.notices model.Uploads)
         [ { Id = 1
-            Title = "A file did not upload."
-            Reason = "logo.svg is not a JPEG, PNG, WebP, GIF, or PDF file."
+            Title = "Couldn't upload a file."
+            Reason = "logo.svg isn't a supported type. Use JPEG, PNG, WebP, GIF, or PDF."
             CanRetry = false } ]
         "The notice has no retry"
 
       let model, effect = send (Upload.Dropped(file "big.pdf" "application/pdf" (Upload.maxBytes + 1.))) model
       Expect.isNone effect "No call for a big file"
-      Expect.equal (Upload.notices model.Uploads |> List.map _.Reason |> List.last) "big.pdf is larger than 25 MB." "The reason"
+      Expect.equal (Upload.notices model.Uploads |> List.map _.Reason |> List.last) "big.pdf is over the 25 MB limit." "The reason"
 
       let model, effect = send (Upload.Dropped(file "full.pdf" "application/pdf" Upload.maxBytes)) model
       Expect.isSome effect "A file of 25 MB goes out"
@@ -101,11 +101,11 @@ let tests =
     test "a failed upload shows the reason, and a retry sends the same file again" {
       let model, _ = send (Upload.Dropped(file "cat.png" "image/png" 1024.)) (started ())
       let model, _ = send (Upload.Answered(1, Error Api.Unanswered)) model
-      Expect.equal (only model).State (Upload.Failed "The API did not answer.") "The reason"
+      Expect.equal (only model).State (Upload.Failed "The server didn't respond. Check your connection and try again.") "The reason"
 
       Expect.equal
         (Upload.notices model.Uploads)
-        [ { Id = 1; Title = "cat.png did not upload."; Reason = "The API did not answer."; CanRetry = true } ]
+        [ { Id = 1; Title = "Couldn't upload cat.png."; Reason = "The server didn't respond. Check your connection and try again."; CanRetry = true } ]
         "The retry shows"
 
       let model, effect = send (Upload.Retried 1) model

@@ -140,7 +140,7 @@ let canDelete (form: SeriesForm.Form) =
 
 let formTitle (form: SeriesForm.Form) =
   match form.Original with
-  | Some _ -> "Edit the series"
+  | Some _ -> "Edit series"
   | None -> "New series"
 
 let private stateName (state: Api.SeriesPostState) =
@@ -166,7 +166,7 @@ let deleteReason (form: SeriesForm.Form) =
       |> List.sortBy fst
       |> List.map (fun (state, count) -> if count = 1 then $"1 {stateName state}" else $"{count} {stateName state}s")
 
-    Some $"The series has {andList counts}. Remove the series from each post first, and then delete the series."
+    Some $"This series is used by {andList counts}. Remove it from those posts before deleting it."
   | None -> None
 
 let stateText (post: Api.SeriesPost) =
@@ -180,6 +180,6 @@ let noticeText (notice: Notice) =
   match notice with
   | NoNotice -> None
   | SeriesSaved saved -> Some(SeriesForm.savedText saved)
-  | SeriesDeleted slug -> Some $"The series '{slug}' is deleted."
+  | SeriesDeleted slug -> Some $"Deleted '{slug}'."
 
-let emptyText = "The blog has no series."
+let emptyText = "No series yet."

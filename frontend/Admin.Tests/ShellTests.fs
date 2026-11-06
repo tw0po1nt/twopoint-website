@@ -97,9 +97,9 @@ let tests =
           { Dashboard.Title = "Pending edits"
             Count = Some 2
             Route = Posts PostFilter.PendingEdits }
-          { Dashboard.Title = "Deliveries to start"
+          { Dashboard.Title = "Pending deliveries"
             Count = Some 3
-            Route = Posts PostFilter.DeliveriesToStart } ]
+            Route = Posts PostFilter.PendingDeliveries } ]
         "The rows"
     }
 
@@ -143,7 +143,7 @@ let tests =
     test "a refused token shows the reason on the dashboard" {
       let model, _ = Shell.init "/"
       let model, _ = Shell.update (Shell.Dashboard(Dashboard.Answered(Error Api.Refused))) model
-      Expect.equal model.Dashboard (Dashboard.NotLoaded "The API refused the token of this account.") "The reason"
+      Expect.equal model.Dashboard (Dashboard.NotLoaded "Your session isn't authorized. Try signing in again.") "The reason"
     }
 
     test "a refused token offers another account" {

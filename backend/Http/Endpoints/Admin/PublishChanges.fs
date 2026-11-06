@@ -35,10 +35,10 @@ module PendingMapping =
     | PendingGate.PublishedBlobChanged -> "The published text changed since you opened the post", HttpStatusCode.Conflict
     | PendingGate.PostNotFound missing -> $"Post '{missing}' not found", HttpStatusCode.NotFound
     | PendingGate.NotPublished draft -> $"The post '{draft}' is a draft", HttpStatusCode.Conflict
-    | PendingGate.NoPendingEdit published -> $"The post '{published}' has no pending edit", HttpStatusCode.Conflict
-    | PendingGate.NoPublishDate undated -> $"The published text of '{undated}' has no publish date", HttpStatusCode.UnprocessableEntity
+    | PendingGate.NoPendingEdit published -> $"'{published}' has no changes to publish", HttpStatusCode.Conflict
+    | PendingGate.NoPublishDate undated -> $"The live version of '{undated}' has no publish date", HttpStatusCode.UnprocessableEntity
     | PendingGate.FrontMatterUnreadable reason ->
-      $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity
+      $"Couldn't read the saved post's front matter: {reason}", HttpStatusCode.UnprocessableEntity
 
 type CheckChanges(
   config : Config,
@@ -153,7 +153,7 @@ type PublishChanges(
                   "Another publish of the post is in progress", HttpStatusCode.Conflict
                 | PublishChanges.Error.HasErrors problems ->
                   let messages = problems |> List.map _.Message |> String.concat " "
-                  $"The post has errors and the changes are not published. {messages}", HttpStatusCode.UnprocessableEntity)
+                  $"The post has errors, so the changes weren't published. {messages}", HttpStatusCode.UnprocessableEntity)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

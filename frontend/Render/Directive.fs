@@ -26,40 +26,40 @@ let private attributes name (text: string) =
   let found = attributeList.Match text
 
   if not found.Success then
-    Error $"Give each attribute of '::{name}' as name=\"value\"."
+    Error $"Write each attribute of '::{name}' as name=\"value\"."
   else
     let pairs =
       [ for index in 0 .. found.Groups[1].Captures.Count - 1 ->
           found.Groups[1].Captures[index].Value, found.Groups[2].Captures[index].Value ]
 
     match pairs |> List.countBy fst |> List.tryFind (fun (_, count) -> count > 1) with
-    | Some(attribute, _) -> Error $"The directive '::{name}' has the attribute '{attribute}' more than one time."
+    | Some(attribute, _) -> Error $"'::{name}' has the '{attribute}' attribute more than once."
     | None -> Ok(Map.ofList pairs)
 
 let private single name attribute (values: Map<string, string>) =
   match values |> Map.keys |> Seq.tryFind (fun key -> key <> attribute) with
-  | Some unknown -> Error $"The directive '::{name}' has the unknown attribute '{unknown}'. Use only '{attribute}'."
+  | Some unknown -> Error $"'::{name}' doesn't support the '{unknown}' attribute. Use only '{attribute}'."
   | None ->
     match values.TryFind attribute with
     | Some value -> Ok value
-    | None -> Error $"The directive '::{name}' has no '{attribute}' attribute."
+    | None -> Error $"'::{name}' is missing the '{attribute}' attribute."
 
 let private pdf value =
   match Uri.TryCreate(value, UriKind.Absolute) with
   | true, uri when (uri.Scheme = Uri.UriSchemeHttps || Azurite.isUrl uri) && uri.AbsolutePath.EndsWith ".pdf" -> Ok(Pdf uri)
-  | _ -> Error $"The 'file' of '::pdf' is '{value}'. Give the https URL of a .pdf file."
+  | _ -> Error $"The 'file' of '::pdf' must be an https URL to a .pdf file (got '{value}')."
 
 let private youTube (value: string) =
   if youTubeId.IsMatch value then
     Ok(YouTube value)
   else
-    Error $"The 'id' of '::youtube' is '{value}'. Give a YouTube video id of 11 letters, digits, '-', or '_'."
+    Error $"The 'id' of '::youtube' must be an 11-character YouTube video ID (got '{value}')."
 
 let parse (line: string) : Result<Directive, string> =
   let found = shape.Match(line.Trim())
 
   if not found.Success then
-    Error $"Write the directive as ::name{{attribute=\"value\"}}, alone on its line. Use one of these names: {names}."
+    Error $"Write the directive as ::name{{attribute=\"value\"}} on its own line. Use one of: {names}."
   else
     let name = found.Groups[1].Value
     let values = attributes name found.Groups[2].Value
@@ -67,7 +67,7 @@ let parse (line: string) : Result<Directive, string> =
     match name with
     | "pdf" -> values |> Result.bind (single name "file") |> Result.bind pdf
     | "youtube" -> values |> Result.bind (single name "id") |> Result.bind youTube
-    | _ -> Error $"The directive '::{name}' is unknown. Use one of these names: {names}."
+    | _ -> Error $"Unknown directive '::{name}'. Use one of: {names}."
 
 let html (directive: Directive) =
   match directive with

@@ -95,7 +95,7 @@ let tests =
     }
 
     test "the menu gives the reason when the revisions are not available" {
-      Expect.equal (reasonOf Editor.Revisions (opened draft)) "Revisions are available after the next publish." "Draft"
+      Expect.equal (reasonOf Editor.Revisions (opened draft)) "Only for published posts." "Draft"
       let model, _ = send (Editor.BodyChanged "More.\n") (opened pendingPost)
       Expect.equal (reasonOf Editor.Revisions model) "Save the post first." "Unsaved text"
     }
@@ -121,7 +121,7 @@ let tests =
     test "a list that did not load shows the reason" {
       let model, _ = send Editor.RevisionsRequested (opened livePost)
       let model, _ = send (Editor.RevisionsAnswered("my-post", Error Api.Unanswered)) model
-      Expect.equal (Revisions.reason (document' model).Revisions) (Some "The API did not answer.") "The reason"
+      Expect.equal (Revisions.reason (document' model).Revisions) (Some "The server didn't respond. Check your connection and try again.") "The reason"
     }
 
     test "a list for another post changes nothing" {

@@ -73,40 +73,40 @@ let menuTests =
     }
 
     test "a draft and an upcoming post give the reason" {
-      Expect.equal (reasonOf (opened (post Api.Draft None (Some "\"v1\"")))) "Publish the post first." "Draft"
+      Expect.equal (reasonOf (opened (post Api.Draft None (Some "\"v1\"")))) "Only for published posts." "Draft"
 
       let upcoming = opened (post Api.Upcoming (Some "2099-12-31T00:00:00Z") None) |> withDeploy Api.DeployState.Deployed
 
       Expect.equal
         (reasonOf upcoming)
-        "The post is not published yet. Start the delivery after its publish date."
+        "Available after the publish date."
         "Upcoming"
     }
 
     test "a published post waits for the deploy of its latest change, and each deploy state gives its reason" {
-      Expect.equal (reasonOf (opened live)) "The admin reads the deploy state of the post." "Unread"
+      Expect.equal (reasonOf (opened live)) "Checking the deploy status…" "Unread"
 
       Expect.equal
         (reasonOf (opened live |> withDeploy Api.DeployState.Deploying))
-        "The latest change to the post deploys. Start the delivery after the deploy."
+        "Available once the latest change is live."
         "Deploying"
 
       Expect.equal
         (reasonOf (opened live |> withDeploy Api.DeployState.DeployFailed))
-        "The deploy of the latest change failed. Rebuild the site, and then start the delivery."
+        "The latest deploy failed. Rebuild the site first."
         "Failed"
 
       let unreadable, _ = send (Editor.DeployMsg("my-post", Deploy.StatusRead(Error Api.Unanswered))) (opened live)
 
       Expect.equal
         (reasonOf unreadable)
-        "The deploy state of the post is not known. Reload the page."
+        "Couldn't check the deploy status. Reload the page."
         "Unreadable"
     }
 
     test "a post with a delivery start gives the date of the start" {
       let started = opened { live with DeliveryStarted = Some "2026-10-30T12:00:00Z" } |> withDeploy Api.DeployState.Deployed
-      Expect.equal (reasonOf started) "The delivery of the post started on 2026-10-30." "Started"
+      Expect.equal (reasonOf started) "Already sent on 2026-10-30." "Started"
     }
 
     test "a request while the action is not available opens no dialog" {
@@ -149,7 +149,7 @@ let sendTests =
     test "a started delivery makes the action unavailable" {
       let sending, _ = send Editor.SendConfirmed (typing "")
       let model, _ = send (Editor.SendAnswered("my-post", Ok started)) sending
-      Expect.equal (reasonOf model) "The delivery of the post started on 2026-10-30." "Started"
+      Expect.equal (reasonOf model) "Already sent on 2026-10-30." "Started"
 
       let requested, effect = send Editor.SendRequested model
       Expect.isNone effect "No call"
@@ -158,12 +158,12 @@ let sendTests =
 
     test "a refused delivery keeps the intro and shows the reason, and a second send tries again" {
       let sending, _ = send Editor.SendConfirmed (typing "A note.")
-      let refused = Api.Failed "The latest change to post 'my-post' is not deployed yet"
+      let refused = Api.Failed "The latest change to 'my-post' isn't live yet"
       let model, _ = send (Editor.SendAnswered("my-post", Error refused)) sending
 
       Expect.equal
         (document' model).SendToSubscribers
-        (Typed.Failed("A note.", "The latest change to post 'my-post' is not deployed yet"))
+        (Typed.Failed("A note.", "The latest change to 'my-post' isn't live yet"))
         "The reason"
 
       let _, effect = send Editor.SendConfirmed model
@@ -190,8 +190,8 @@ let sendTests =
     }
 
     test "the notice counts the active subscriptions" {
-      Expect.equal (Editor.queuedText 0) "No subscription is active, so the admin sent no email." "None"
-      Expect.equal (Editor.queuedText 1) "The admin queued the email for 1 active subscription." "One"
-      Expect.equal (Editor.queuedText 4) "The admin queued the email for 4 active subscriptions." "Many"
+      Expect.equal (Editor.queuedText 0) "No active subscribers. No emails sent." "None"
+      Expect.equal (Editor.queuedText 1) "Queued 1 email." "One"
+      Expect.equal (Editor.queuedText 4) "Queued 4 emails." "Many"
     }
   ]

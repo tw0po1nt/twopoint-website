@@ -103,7 +103,7 @@ let statusTests =
 
 [<Tests>]
 let changesTests =
-  testList "Changes from live" [
+  testList "Compare with live" [
     test "the changes name each part that differs, with the lines that changed" {
       let parts = Editor.changesFromLive (document' (opened pendingPost))
 
@@ -159,7 +159,7 @@ let changesTests =
 
     test "a draft has no changes from live" {
       let draft = { pendingPost with State = Api.Draft; PublishDate = None; Published = None }
-      Expect.equal (reasonOf Editor.ChangesFromLive (opened draft)) "A draft has no published text." "The reason"
+      Expect.equal (reasonOf Editor.ChangesFromLive (opened draft)) "Only for published posts." "The reason"
       let model, _ = send Editor.ChangesOpened (opened draft)
       Expect.equal (document' model).Changes Editor.ChangesHidden "Stays closed"
     }
@@ -274,7 +274,7 @@ let publishTests =
       let model, _ = send (Editor.PublishAnswered("my-post", Error(Api.Failed "The published text changed since you opened the post"))) model
       Expect.equal (Publish.reason (document' model).Publish) (Some "The published text changed since you opened the post") "The reason"
       Expect.isTrue (document' model).PendingEdit "The pending edit stays"
-      Expect.equal (Publish.statusText (document' model).Publish) "The changes are not published." "The status"
+      Expect.equal (Publish.statusText (document' model).Publish) "Couldn't publish the changes." "The status"
     }
   ]
 
@@ -287,10 +287,10 @@ let discardTests =
     }
 
     test "the menu gives the reason when the discard is not available" {
-      Expect.equal (reasonOf Editor.DiscardChanges (opened cleanPost)) "The post has no pending edit." "No pending edit"
+      Expect.equal (reasonOf Editor.DiscardChanges (opened cleanPost)) "No changes to discard." "No pending edit"
 
       let draft = { pendingPost with State = Api.Draft; Published = None }
-      Expect.equal (reasonOf Editor.DiscardChanges (opened draft)) "A draft has no pending edit." "Draft"
+      Expect.equal (reasonOf Editor.DiscardChanges (opened draft)) "Only for published posts." "Draft"
 
       let model, _ = send (Editor.BodyChanged "More.\n") (opened pendingPost)
       Expect.equal (reasonOf Editor.DiscardChanges model) "Save the post first." "Unsaved text"

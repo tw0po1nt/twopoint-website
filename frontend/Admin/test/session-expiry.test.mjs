@@ -33,7 +33,7 @@ test('a closed popup keeps the banner and asks the author to try again', async (
   press('Sign in again');
   await settle();
   assert.deepEqual(events, ['start', 'token', 'token', 'token', 'signInByPopup']);
-  assert.match(banner(), /^The sign-in did not complete\. Try again\./);
+  assert.match(banner(), /^Sign-in failed\. Try again\./);
   assert.deepEqual(calls, []);
 });
 

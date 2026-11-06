@@ -28,21 +28,21 @@ let tests =
     test "a link to a path that is not in the output fails with its line" {
       Expect.equal
         (check "Text.\n\nRead [c](/posts/c-post/).")
-        [ errorAt "a-post" 11 "The output has no page at /posts/c-post/." ]
+        [ errorAt "a-post" 11 "No page exists at /posts/c-post/." ]
         "The path must be in the output"
     }
 
     test "a link to a heading that is not on the page fails" {
       Expect.equal
         (check "Read [b](/posts/b-post/#last-step).")
-        [ errorAt "a-post" 9 "The page /posts/b-post/ has no heading with the id 'last-step'." ]
+        [ errorAt "a-post" 9 "/posts/b-post/ has no heading with the id 'last-step'." ]
         "The anchor must be on the page"
     }
 
     test "a link to a heading that is not on the same post fails" {
       Expect.equal
         (check "Go to [the end](#end).")
-        [ errorAt "a-post" 9 "The page has no heading with the id 'end'." ]
+        [ errorAt "a-post" 9 "No heading on this page has the id 'end'." ]
         "The anchor must be on the same page"
     }
 

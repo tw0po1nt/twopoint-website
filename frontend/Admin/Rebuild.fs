@@ -40,9 +40,9 @@ let reason (model: Model) =
 
 let text (model: Model) =
   match model with
-  | Idle -> "Build and deploy the site again in the production repo and the staging repo."
-  | Sending -> "The rebuild starts."
-  | Started(Api.Queued run) -> $"The rebuild started. The production run is #{run}."
-  | Started Api.QueuedWithoutRunNumber -> "The rebuild started. GitHub did not send the number of the production run."
-  | Started Api.Logged -> "The local backend logged the rebuild and sent nothing to GitHub."
-  | NotStarted _ -> "The rebuild did not start."
+  | Idle -> "Rebuilds and redeploys production and staging."
+  | Sending -> "Starting the rebuild…"
+  | Started(Api.Queued run) -> $"Rebuild started (production run #{run})."
+  | Started Api.QueuedWithoutRunNumber -> "Rebuild started. Check GitHub for details."
+  | Started Api.Logged -> "Local mode: rebuild logged, nothing sent to GitHub."
+  | NotStarted _ -> "Couldn't start the rebuild."

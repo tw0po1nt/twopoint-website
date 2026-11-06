@@ -19,7 +19,7 @@ let statusText (state: Typed.State) =
   match state with
   | Typed.Closed -> ""
   | Typed.Typing typed
-  | Typed.Failed(typed, _) when (Publish.isoOf typed).IsNone -> "Type the date and the time."
-  | Typed.Typing _ -> "The new date can be in the past. The post then shows as published."
-  | Typed.Sending _ -> "The date changes."
-  | Typed.Failed _ -> "The date is not changed."
+  | Typed.Failed(typed, _) when (Publish.isoOf typed).IsNone -> "Enter a date and time."
+  | Typed.Typing _ -> "A past date publishes the post right away."
+  | Typed.Sending _ -> "Changing the date…"
+  | Typed.Failed _ -> "Couldn't change the date."

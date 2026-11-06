@@ -22,7 +22,7 @@ test('with no session, the admin sends the page to the Entra sign-in and calls n
 });
 
 test('a failed sign-in shows a Sign in button that tries again', async () => {
-  assert.match(banner(), /^The sign-in did not complete\./);
+  assert.match(banner(), /^Sign-in failed\./);
   press('Sign in');
   await settle();
   assert.deepEqual(events, ['start', 'signIn', 'signIn']);

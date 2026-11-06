@@ -40,7 +40,7 @@ module RevisionMapping =
     match error with
     | RestoreRevision.Error.PostNotFound slug -> $"Post '{slug}' not found", HttpStatusCode.NotFound
     | RestoreRevision.Error.NotPublished slug ->
-      $"The post '{slug}' is a draft. Only a published post gets a pending edit", HttpStatusCode.Conflict
+      $"'{slug}' is a draft. Only published posts have revisions", HttpStatusCode.Conflict
     | RestoreRevision.Error.RevisionNotFound(slug, name) -> $"The post '{slug}' has no revision '{name}'", HttpStatusCode.NotFound
     | RestoreRevision.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
 

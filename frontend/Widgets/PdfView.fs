@@ -171,8 +171,8 @@ let private countText (model: Pdf.Model) =
 
 let private statusText (model: Pdf.Model) =
   match model with
-  | Pdf.Opening -> "The site loads the PDF."
-  | Pdf.Broken -> "The PDF did not load. Use the download link."
+  | Pdf.Opening -> "Loading PDF…"
+  | Pdf.Broken -> "Couldn't load the PDF. Use the download link instead."
   | Pdf.Showing _ -> ""
 
 let private statusClass (model: Pdf.Model) =

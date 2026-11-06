@@ -13,7 +13,7 @@ await load('http://localhost:4322/settings', { respond, push });
 const section = () => document.querySelector('main .notifications');
 
 test('with the permission denied, the section tells the author to change the browser setting', () => {
-  assert.match(section().textContent, /The browser blocks notifications for this site\. Change the browser setting/);
+  assert.match(section().textContent, /Notifications are blocked for this site\. Allow them in your browser settings/);
   assert.ok(![...section().querySelectorAll('button')].some((button) => button.textContent.includes('Turn on')));
 });
 
@@ -22,5 +22,5 @@ test('with the permission denied, the page sends no subscription and does not su
 });
 
 test('a list with no device says so', () => {
-  assert.match(section().textContent, /No device is registered\./);
+  assert.match(section().textContent, /No registered devices\./);
 });

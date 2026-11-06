@@ -61,7 +61,7 @@ test('a refused trust sends no approval, keeps the row, and shows the reason', a
   await settle();
 
   assert.deepEqual(actions.slice(2), [{ method: 'PUT', url: 'internal/commenters/alan-id', body: '{"status":"trusted"}' }]);
-  assert.match(row('c-3').querySelector('.alert').textContent, /The trust did not complete, and the comment is not approved\. Commenter is banned/);
+  assert.match(row('c-3').querySelector('.alert').textContent, /Couldn't trust the commenter, so the comment wasn't approved\. Commenter is banned/);
   assert.equal(navCount(), '4');
 });
 
@@ -73,7 +73,7 @@ test('a failed approval after the trust shows the trust and the reason, and keep
     { method: 'PUT', url: 'internal/commenters/linus-id', body: '{"status":"trusted"}' },
     { method: 'PUT', url: 'internal/posts/second/comments/c-5', body: '{"approval":"approved"}' },
   ]);
-  assert.match(row('c-5').querySelector('.alert').textContent, /The approval did not complete\. Comment is approved/);
+  assert.match(row('c-5').querySelector('.alert').textContent, /Couldn't approve the comment\. Comment is approved/);
   assert.match(row('c-5').textContent, /Trusted/);
   assert.deepEqual(buttons('c-5'), ['Approve', 'Reject', 'Delete']);
   assert.equal(navCount(), '4');

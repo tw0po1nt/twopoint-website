@@ -45,9 +45,9 @@ const commentNoticeOf = (data) => ({
 });
 
 const deployNoticeOf = (data) => ({
-  title: 'The production deploy failed',
+  title: 'Production deploy failed',
   options: {
-    body: `The run #${data.runNumber} of site.yml failed. Open the dashboard to rebuild the site.`,
+    body: `Run #${data.runNumber} of site.yml failed. Tap to open the dashboard and rebuild.`,
     tag: `deploy-${data.runNumber}`,
     data: { target: '/' },
   },

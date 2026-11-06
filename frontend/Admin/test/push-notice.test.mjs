@@ -134,8 +134,8 @@ test('a failed production deploy gives a notice that opens the dashboard, and se
   await fire(worker, 'push', { data: { json: () => ({ case: 'deploy-failed', runNumber: 41 }) } });
 
   assert.equal(worker.shown.length, 1);
-  assert.equal(worker.shown[0].title, 'The production deploy failed');
-  assert.equal(worker.shown[0].body, 'The run #41 of site.yml failed. Open the dashboard to rebuild the site.');
+  assert.equal(worker.shown[0].title, 'Production deploy failed');
+  assert.equal(worker.shown[0].body, 'Run #41 of site.yml failed. Tap to open the dashboard and rebuild.');
   assert.equal(worker.shown[0].tag, 'deploy-41');
   assert.equal(worker.shown[0].data.target, '/');
   assert.deepEqual(worker.badges, []);

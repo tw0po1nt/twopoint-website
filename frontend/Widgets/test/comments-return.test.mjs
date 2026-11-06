@@ -39,7 +39,7 @@ test('the form gets the comment back, and the status tells the reader to post it
   assert.equal(field('email').value, 'reader@example.com');
   assert.equal(field('name').value, 'Reader');
   assert.equal(field('comment').value, 'Nice post');
-  assert.match(mount.querySelector('.comment-status').textContent, /Your email address is verified/);
+  assert.match(mount.querySelector('.comment-status').textContent, /Email verified/);
 });
 
 test('the widget stores the validation ID beside the others, and the URL loses its query', () => {

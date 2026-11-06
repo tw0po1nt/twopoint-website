@@ -46,8 +46,8 @@ let verifiedText (commenter: Api.Commenter) =
 
 let emptyText (filter: Filter) =
   match filter with
-  | All -> "The blog has no commenters."
-  | Only Api.New -> "The blog has no new commenters."
-  | Only Api.Trusted -> "The blog has no trusted commenters."
-  | Only Api.Banned -> "The blog has no banned commenters."
+  | All -> "No commenters yet."
+  | Only Api.New -> "No new commenters."
+  | Only Api.Trusted -> "No trusted commenters."
+  | Only Api.Banned -> "No banned commenters."
 

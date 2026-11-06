@@ -125,7 +125,7 @@ let tests =
     test "a failed load of the suggestions shows the reason, and the next open tries again" {
       let model, _ = detail Details.Opened (opened draft)
       let model, _ = detail (Details.OptionsAnswered(Error Api.Unanswered)) model
-      Expect.equal (document' model).Details.Options (Details.NotLoaded "The API did not answer.") "The reason"
+      Expect.equal (document' model).Details.Options (Details.NotLoaded "The server didn't respond. Check your connection and try again.") "The reason"
       let model, _ = detail Details.Closed model
       let _, effect = detail Details.Opened model
       Expect.equal effect (Some(Shell.Send [ Shell.LoadDetailsOptions ])) "Again"
@@ -207,10 +207,10 @@ let tests =
 
       let model, effect = newSeries SeriesForm.SaveClicked model
       Expect.isNone effect "No save with empty fields"
-      Expect.equal (problem SeriesForm.TitleField model) (Some "Give the series a title.") "The rule of the Series page"
+      Expect.equal (problem SeriesForm.TitleField model) (Some "Add a title.") "The rule of the Series page"
 
       let model, _ = newSeries (SeriesForm.TitleTyped "My series") model
-      Expect.equal (problem SeriesForm.SlugField model) (Some "Another series has this slug.") "A known slug"
+      Expect.equal (problem SeriesForm.SlugField model) (Some "Another series already uses this slug.") "A known slug"
 
       let model, _ = newSeries (SeriesForm.TitleTyped "F# for fun") model
       let model, _ = newSeries (SeriesForm.ExcerptTyped " Small programs in F#. ") model
@@ -264,7 +264,7 @@ let tests =
 
       match (document' model).Details.NewSeries with
       | Details.Writing form ->
-        Expect.equal (SeriesForm.failure form) (Some "The series did not save. Another series has this slug.") "The reason"
+        Expect.equal (SeriesForm.failure form) (Some "Couldn't save the series. Another series already uses this slug.") "The reason"
       | other -> failtestf "Expected the form, got %A" other
 
       Expect.equal (values model).Series None "No series"
@@ -368,7 +368,7 @@ let tests =
 
       Expect.equal
         (document' model).Details.Slug
-        (Details.ChangeFailed "The slug of a published post is fixed.")
+        (Details.ChangeFailed "You can't change the slug of a published post.")
         "The reason"
     }
 
@@ -380,14 +380,14 @@ let tests =
 
       Expect.equal
         (document' model).Details.Slug
-        (Details.ChangeFailed "Save the post first, and then change the slug.")
+        (Details.ChangeFailed "Save the post before changing the slug.")
         "The reason"
     }
 
     test "a refused slug change shows the reason from the API and keeps the author on the editor" {
       let model, _ = detail (Details.SlugTyped "taken") (withSheet draft)
       let model, _ = send Editor.SlugChangeRequested model
-      let reason = "Another post has the slug 'taken'"
+      let reason = "Another post already uses the slug 'taken'"
       let model, effect = send (Editor.SlugChangeAnswered("my-post", Error(Api.Failed reason))) model
       Expect.isNone effect "No navigation"
       Expect.equal (document' model).Details.Slug (Details.ChangeFailed reason) "The reason"

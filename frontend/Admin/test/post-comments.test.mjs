@@ -85,7 +85,7 @@ test('Approve sends the approval, and the comment moves to the approved comments
   press('Approve', row('c-1'));
   await settle();
   assert.deepEqual(actions, [{ method: 'PUT', url: 'internal/posts/first/comments/c-1', body: '{"approval":"approved"}' }]);
-  assert.match(document.querySelector('main .empty').textContent, /This post has no new comments\./);
+  assert.match(document.querySelector('main .empty').textContent, /No new comments\./);
   assert.equal(navCount(), String(queue.length - 1));
 
   tab('Approved').click();

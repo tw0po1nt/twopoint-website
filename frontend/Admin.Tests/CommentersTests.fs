@@ -86,8 +86,8 @@ let private listTests =
     }
 
     test "a filter with no commenter has its own empty text" {
-      Expect.equal (Commenters.emptyText Commenters.All) "The blog has no commenters." "All"
-      Expect.equal (Commenters.emptyText(Commenters.Only Api.Banned)) "The blog has no banned commenters." "Banned"
+      Expect.equal (Commenters.emptyText Commenters.All) "No commenters yet." "All"
+      Expect.equal (Commenters.emptyText(Commenters.Only Api.Banned)) "No banned commenters." "Banned"
     }
 
     test "the verified date is the day of the date" {
@@ -174,7 +174,7 @@ let private pageTests =
       let model, effect = send (Commenter.Done("ada", Commenter.Ban, Error(Api.Failed "Commenter 'ada' not found"))) model
       Expect.isNone effect "No call"
       let page, state = loaded model
-      Expect.equal (Commenter.failure state) (Some "The ban did not complete. Commenter 'ada' not found") "The reason"
+      Expect.equal (Commenter.failure state) (Some "Couldn't ban the commenter. Commenter 'ada' not found") "The reason"
       Expect.equal page.Commenter.Status Api.New "The status stays"
     }
 

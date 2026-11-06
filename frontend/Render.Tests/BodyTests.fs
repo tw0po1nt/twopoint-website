@@ -74,14 +74,14 @@ let tests =
     test "an image that is not an https URL fails with its line" {
       Expect.equal
         (bodyErrors "![A](/cat.jpg)\n\n![B](http://twopointwebsite.blob.core.windows.net/cat.jpg)")
-        [ errorAt "a-post" 9 "Give the image '/cat.jpg' as an https URL."
-          errorAt "a-post" 11 "Give the image 'http://twopointwebsite.blob.core.windows.net/cat.jpg' as an https URL." ]
+        [ errorAt "a-post" 9 "The image '/cat.jpg' must be an https URL."
+          errorAt "a-post" 11 "The image 'http://twopointwebsite.blob.core.windows.net/cat.jpg' must be an https URL." ]
         "A root-relative image and an http image fail"
     }
 
     test "an img element in raw HTML fails with its line" {
       let message =
-        "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
+        "Use a Markdown image instead, like ![A cat](https://example.com/cat.jpg)."
 
       Expect.equal
         (bodyErrors $"Text.\n\nA cat: <img src=\"{cat}\">.\n\n<div>\n<IMG SRC=\"{cat}\" />\n</div>")
@@ -94,7 +94,7 @@ let tests =
 
       Expect.equal
         (errorLines (Post.parse (Images.ofFetch failing) Stage.Production [] (file "a-post") (text frontMatter $"Text.\n\n![A cat]({cat})")))
-        [ errorAt "a-post" 11 $"The build cannot read the size of the image {cat}: HTTP 404, after 3 attempts." ]
+        [ errorAt "a-post" 11 $"Couldn't read the size of the image {cat}: HTTP 404, after 3 attempts." ]
         "A failed download fails the build"
     }
 
@@ -103,7 +103,7 @@ let tests =
 
       Expect.equal
         (errorLines (Post.parse (Images.ofFetch text') Stage.Production [] (file "a-post") (text frontMatter $"![A cat]({cat})")))
-        [ errorAt "a-post" 9 $"The build cannot read the size of the image {cat}: the file is not an image." ]
+        [ errorAt "a-post" 9 $"Couldn't read the size of the image {cat}: the file is not an image." ]
         "A file that is not an image fails the build"
     }
 
@@ -199,8 +199,8 @@ let tests =
     test "a class or a style in raw HTML fails with its line" {
       Expect.equal
         (bodyErrors "Text.\n\nIt is <u class=\"big\">this</u>.\n\n<div>\n<p STYLE=\"color: red\">red</p>\n</div>")
-        [ errorAt "a-post" 11 "Delete the 'class' attribute. A post has no class or style in raw HTML."
-          errorAt "a-post" 14 "Delete the 'STYLE' attribute. A post has no class or style in raw HTML." ]
+        [ errorAt "a-post" 11 "Remove the 'class' attribute. Raw HTML in a post can't use class or style."
+          errorAt "a-post" 14 "Remove the 'STYLE' attribute. Raw HTML in a post can't use class or style." ]
         "Each class and style attribute fails"
     }
 
@@ -213,14 +213,14 @@ let tests =
 
       Expect.equal
         (bodyErrors "<span title=\"a class act\" style=\"color: red\">red</span>")
-        [ errorAt "a-post" 9 "Delete the 'style' attribute. A post has no class or style in raw HTML." ]
+        [ errorAt "a-post" 9 "Remove the 'style' attribute. Raw HTML in a post can't use class or style." ]
         "Only the style attribute fails"
     }
 
     test "a link in raw HTML fails with its line" {
       Expect.equal
         (bodyErrors "Text.\n\nRead <a href=\"https://example.com/\">the docs</a>.")
-        [ errorAt "a-post" 11 "Write the link as a Markdown link, for example [the docs](https://example.com/)." ]
+        [ errorAt "a-post" 11 "Use a Markdown link instead, like [the docs](https://example.com/)." ]
         "An inline a element fails"
 
       Expect.isNonEmpty (bodyErrors "<div>\n<A HREF=\"/posts/b-post/\">b</A>\n</div>") "An a element in an HTML block fails"
@@ -229,7 +229,7 @@ let tests =
     test "a link to twopoint.dev fails with its line" {
       Expect.equal
         (bodyErrors "Text.\n\nRead [the post](https://twopoint.dev/posts/a-post/).")
-        [ errorAt "a-post" 11 "Give the link to https://twopoint.dev/posts/a-post/ as a root-relative link, for example /posts/a-post/." ]
+        [ errorAt "a-post" 11 "Make the link to https://twopoint.dev/posts/a-post/ root-relative, like /posts/a-post/." ]
         "A link to the own host fails"
 
       Expect.isNonEmpty (bodyErrors "Read <https://twopoint.dev/>.") "An autolink to the own host fails"
@@ -238,7 +238,7 @@ let tests =
     test "a relative link fails" {
       Expect.equal
         (bodyErrors "Read [the post](a-post/).")
-        [ errorAt "a-post" 9 "Give the link to 'a-post/' as a root-relative link that starts with /, or as an http or https URL." ]
+        [ errorAt "a-post" 9 "The link 'a-post/' must start with / or be an http or https URL." ]
         "A link must start with /"
     }
 

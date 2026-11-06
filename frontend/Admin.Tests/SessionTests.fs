@@ -88,7 +88,7 @@ let tests =
         run [ Session.InteractionRequired "load"; Session.SignInAgainClicked; Session.RenewFailed ] active
 
       Expect.equal model.Status (Session.Expired true) "The banner stays"
-      Expect.equal (Session.bannerText model) "The sign-in did not complete. Try again." "The banner text"
+      Expect.equal (Session.bannerText model) "Sign-in failed. Try again." "The banner text"
       Expect.equal model.Waiting [ "load" ] "The call still waits"
       Expect.isNone effect "No retry"
     }
@@ -102,7 +102,7 @@ let tests =
       let model, effect = Session.update Session.AccountRefused active
       Expect.equal model.Status Session.Refused "The API refuses the account"
       Expect.isTrue (Session.showsBanner model) "The banner shows"
-      Expect.equal (Session.bannerText model) "The API refused this account. Sign in with the author account." "The banner text"
+      Expect.equal (Session.bannerText model) "This account doesn't have access. Sign in with the author account." "The banner text"
       Expect.isNone effect "No sign-in before a click"
       let model, effect = Session.update Session.SignInClicked model
       Expect.equal model.Status Session.Redirecting "The page leaves"

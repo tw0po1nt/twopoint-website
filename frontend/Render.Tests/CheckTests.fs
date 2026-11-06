@@ -35,7 +35,7 @@ let tests =
         (check [ target; other ] "a-post" "## Second step\n\nText.").Problems
         [ Problem.error
             (Place.Post 1)
-            "The change breaks a link in the post 'b-post', on body line 4: The page /posts/a-post/ has no heading with the id 'first-step'." ]
+            "This change breaks a link in the post 'b-post' (body line 4): /posts/a-post/ has no heading with the id 'first-step'." ]
         "The error names the link in the other post"
     }
 
@@ -47,7 +47,7 @@ let tests =
     test "a broken link in the post is an error at its body line" {
       Expect.equal
         (check [ target ] "a-post" "Text.\n\nRead [c](/posts/c-post/).").Problems
-        [ Problem.error (Place.Body 4) "The output has no page at /posts/c-post/." ]
+        [ Problem.error (Place.Body 4) "No page exists at /posts/c-post/." ]
         "The error is at the line of the link"
     }
 
@@ -63,7 +63,7 @@ let tests =
 
       Expect.equal
         (check [ tagged; other ] "a-post" "Text.").Problems
-        [ Problem.error (Place.Post 1) "The change breaks a link in the post 'b-post', on body line 2: The output has no page at /tag/fable/." ]
+        [ Problem.error (Place.Post 1) "This change breaks a link in the post 'b-post' (body line 2): No page exists at /tag/fable/." ]
         "The tag page goes away with the tag"
     }
 
@@ -95,7 +95,7 @@ let tests =
         (Check.post Stage.Production anyImages [] [ other ] "a-post" (text $"{frontMatter}\ntags:\n  - 2026\n  - fable" "Text.")).Problems
         [ Problem.warning
             (Place.Field("tags", 9))
-            "The tag 'fable' has the slug 'fable', and other posts give that slug another title: b-post ('Fable')." ]
+            "The tag 'fable' uses the slug 'fable', which other posts give a different title: b-post ('Fable')." ]
         "The warning names the other post"
     }
 
@@ -117,7 +117,7 @@ let tests =
 
     test "a draft with a title, an excerpt, and an author, and with no publish date and no category, has an article and the error of the category" {
       let checkedPost = draft [ target ] "b-post" "## A step\n\nText."
-      Expect.equal checkedPost.Problems [ Problem.error (Place.Field("category", 1)) "The post has no category." ] "Only the category"
+      Expect.equal checkedPost.Problems [ Problem.error (Place.Field("category", 1)) "The post needs a category." ] "Only the category"
       Expect.isSome checkedPost.Article "The article"
     }
 
@@ -155,7 +155,7 @@ let tests =
 
       Expect.equal
         (checkedPost.Problems |> List.map _.Message)
-        [ "The post is in a series, so give it the category 'Series'." ]
+        [ "Posts in a series must use the 'Series' category." ]
         "A series needs the category Series, also in a draft"
     }
 
@@ -167,7 +167,7 @@ let tests =
     test "a broken link in a draft is an error at its body line" {
       Expect.equal
         (categorizedDraft [ target ] "b-post" "Text.\n\nRead [c](/posts/c-post/).").Problems
-        [ Problem.error (Place.Body 4) "The output has no page at /posts/c-post/." ]
+        [ Problem.error (Place.Body 4) "No page exists at /posts/c-post/." ]
         "The error is at the line of the link"
     }
 
@@ -183,7 +183,7 @@ let tests =
         (Check.forPublish Stage.Production images [] [ target ] "b-post" (text $"{frontMatter}\nimage: {image}" "Text.")).Problems
         [ Problem.error
             (Place.Post 1)
-            $"The front matter gives the Open Graph image {image}, and the build cannot make its crop: HTTP 404." ]
+            $"Couldn't crop the Open Graph image {image}: HTTP 404." ]
         "The error is the one of the build"
     }
 
@@ -206,7 +206,7 @@ let tests =
         (Check.withoutPost Stage.Production [ target; other ] "a-post")
         [ Problem.error
             (Place.Post 1)
-            "The change breaks a link in the post 'b-post', on body line 4: The output has no page at /posts/a-post/." ]
+            "This change breaks a link in the post 'b-post' (body line 4): No page exists at /posts/a-post/." ]
         "The error names the link in the other post"
     }
 
@@ -249,7 +249,7 @@ let tests =
         (Check.withoutPostAndEdits Stage.Production [ target; linking; alsoLinking ] "a-post" [ fixedEdit ])
         [ Problem.error
             (Place.Post 1)
-            "The change breaks a link in the post 'c-post', on body line 2: The output has no page at /posts/a-post/." ]
+            "This change breaks a link in the post 'c-post' (body line 2): No page exists at /posts/a-post/." ]
         "The post with no edit"
     }
 
@@ -261,7 +261,7 @@ let tests =
         (Check.withoutPostAndEdits Stage.Production [ target; linking ] "a-post" [ badEdit ])
         [ Problem.error
             (Place.Post 1)
-            "The change breaks a link in the post 'b-post', on body line 2: The output has no page at /posts/nothing/." ]
+            "This change breaks a link in the post 'b-post' (body line 2): No page exists at /posts/nothing/." ]
         "The broken link of the edit"
     }
   ]

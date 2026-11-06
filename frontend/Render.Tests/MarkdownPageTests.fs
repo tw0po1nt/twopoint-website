@@ -27,7 +27,7 @@ let tests =
     test "a missing field, an unknown field, or no front matter fails" {
       Expect.equal
         (errorLines (parse (text "title: Privacy policy" "Text.")))
-        ([ errorAt 1 "The front matter has no 'description' field." ])
+        ([ errorAt 1 "The front matter is missing the 'description' field." ])
         "The description is required"
 
       Expect.equal

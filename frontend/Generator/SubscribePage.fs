@@ -12,7 +12,7 @@ let robots = Layout.Robots.Index
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "Subscribe"
-      Description = "Get an email for each new post on TwoPoint."
+      Description = "Get new TwoPoint posts by email."
       UrlPath = Some urlPath
       Robots = robots
       OgType = Layout.OgType.Website
@@ -27,7 +27,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Pos
     }
 
     h1 () { "Subscribe" }
-    p (class' = "excerpt") { "Get an email for each new post. Each email has a link to unsubscribe." }
+    p (class' = "excerpt") { "Get new posts by email. Unsubscribe anytime." }
     Mount.subscribe config
   }
   |> Layout.render config assets widgets posts page

@@ -103,10 +103,10 @@ let tryFind (commentId: string) (model: Model) =
 
 let failure (state: RowState) =
   match state with
-  | Progress.NotDone(Approve, reason) -> Some $"The approval did not complete. {reason}"
-  | Progress.NotDone(ApproveAndTrust, reason) -> Some $"The trust did not complete, and the comment is not approved. {reason}"
-  | Progress.NotDone(Reject, reason) -> Some $"The rejection did not complete. {reason}"
-  | Progress.NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Progress.NotDone(Approve, reason) -> Some $"Couldn't approve the comment. {reason}"
+  | Progress.NotDone(ApproveAndTrust, reason) -> Some $"Couldn't trust the commenter, so the comment wasn't approved. {reason}"
+  | Progress.NotDone(Reject, reason) -> Some $"Couldn't reject the comment. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"Couldn't delete the comment. {reason}"
   | Progress.Ready
   | Progress.Sending _ -> None
 

@@ -9,7 +9,7 @@ let private routes =
     Posts PostFilter.All, "/posts"
     Posts PostFilter.Drafts, "/posts?filter=drafts"
     Posts PostFilter.PendingEdits, "/posts?filter=pending-edits"
-    Posts PostFilter.DeliveriesToStart, "/posts?filter=deliveries-to-start"
+    Posts PostFilter.PendingDeliveries, "/posts?filter=pending-deliveries"
     Post "fable-reminders-part-2", "/posts/fable-reminders-part-2"
     PostComments "fable-reminders-part-2", "/posts/fable-reminders-part-2/comments"
     ModerationQueue, "/comments"

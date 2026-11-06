@@ -50,31 +50,31 @@ let tests =
     test "an unknown name fails" {
       Expect.equal
         (directiveError "::vimeo{id=\"123\"}")
-        "The directive '::vimeo' is unknown. Use one of these names: pdf, youtube."
+        "Unknown directive '::vimeo'. Use one of: pdf, youtube."
         "Only pdf and youtube are directives"
     }
 
     test "a missing attribute fails" {
-      Expect.equal (directiveError "::youtube{}") "The directive '::youtube' has no 'id' attribute." "youtube needs id"
-      Expect.equal (directiveError "::pdf{}") "The directive '::pdf' has no 'file' attribute." "pdf needs file"
+      Expect.equal (directiveError "::youtube{}") "'::youtube' is missing the 'id' attribute." "youtube needs id"
+      Expect.equal (directiveError "::pdf{}") "'::pdf' is missing the 'file' attribute." "pdf needs file"
     }
 
     test "an unknown attribute fails" {
       Expect.equal
         (directiveError "::youtube{id=\"qRuKTkDvAk4\" start=\"10\"}")
-        "The directive '::youtube' has the unknown attribute 'start'. Use only 'id'."
+        "'::youtube' doesn't support the 'start' attribute. Use only 'id'."
         "youtube has only id"
 
       Expect.equal
         (directiveError $"::pdf{{file=\"{slides}\" title=\"Slides\"}}")
-        "The directive '::pdf' has the unknown attribute 'title'. Use only 'file'."
+        "'::pdf' doesn't support the 'title' attribute. Use only 'file'."
         "pdf has only file"
     }
 
     test "an attribute two times fails" {
       Expect.equal
         (directiveError "::youtube{id=\"qRuKTkDvAk4\" id=\"GcEHiY6Vp-8\"}")
-        "The directive '::youtube' has the attribute 'id' more than one time."
+        "'::youtube' has the 'id' attribute more than once."
         "Each attribute occurs one time"
     }
 
@@ -82,7 +82,7 @@ let tests =
       for id in [ ""; "qRuKTkDvAk"; "qRuKTkDvAk4x"; "qRuKTkDvAk!" ] do
         Expect.equal
           (directiveError $"::youtube{{id=\"{id}\"}}")
-          $"The 'id' of '::youtube' is '{id}'. Give a YouTube video id of 11 letters, digits, '-', or '_'."
+          $"The 'id' of '::youtube' must be an 11-character YouTube video ID (got '{id}')."
           $"'{id}' is a bad id"
     }
 
@@ -94,13 +94,13 @@ let tests =
           "slides.pdf" ] do
         Expect.equal
           (directiveError $"::pdf{{file=\"{file}\"}}")
-          $"The 'file' of '::pdf' is '{file}'. Give the https URL of a .pdf file."
+          $"The 'file' of '::pdf' must be an https URL to a .pdf file (got '{file}')."
           $"'{file}' is a bad file"
     }
 
     test "a directive with a bad shape fails" {
       let message =
-        "Write the directive as ::name{attribute=\"value\"}, alone on its line. Use one of these names: pdf, youtube."
+        "Write the directive as ::name{attribute=\"value\"} on its own line. Use one of: pdf, youtube."
 
       for line in
         [ "::youtube"
@@ -113,7 +113,7 @@ let tests =
     test "an attribute with no quotes fails" {
       Expect.equal
         (directiveError "::youtube{id=qRuKTkDvAk4}")
-        "Give each attribute of '::youtube' as name=\"value\"."
+        "Write each attribute of '::youtube' as name=\"value\"."
         "A value has quotes"
     }
   ]

@@ -28,11 +28,11 @@ let private statusClass (model: Unsubscribe.Model) =
 
 let private statusText (model: Unsubscribe.Model) =
   match model with
-  | Unsubscribe.Sending -> "[sending] The site sends your unsubscribe request."
-  | Unsubscribe.NoSubscriptionId -> "The link has no subscription ID. Use the unsubscribe link in a TwoPoint email."
-  | Unsubscribe.Unsubscribed -> "You are unsubscribed. No more posts come to your inbox. Sorry to see you go."
+  | Unsubscribe.Sending -> "[sending] Unsubscribing…"
+  | Unsubscribe.NoSubscriptionId -> "This link is missing a subscription ID. Use the unsubscribe link from a TwoPoint email."
+  | Unsubscribe.Unsubscribed -> "You're unsubscribed and won't get any more emails. Sorry to see you go."
   | Unsubscribe.Refused reason -> reason
-  | Unsubscribe.Unreachable -> "The site cannot get to the server. Try again later."
+  | Unsubscribe.Unreachable -> "Couldn't reach the server. Try again later."
 
 // JSX drops the space at the end of a text line, so this string goes in as a value.
 let private againPrefix = "If you unsubscribed by mistake, you can subscribe again on the "

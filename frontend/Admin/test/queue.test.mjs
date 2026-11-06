@@ -58,7 +58,7 @@ test('a refused change keeps the row and shows the reason', async () => {
   press('Reject', row('c-2'));
   await settle();
   assert.deepEqual(actions[1], { method: 'PUT', url: 'internal/posts/first/comments/c-2', body: '{"approval":"rejected"}' });
-  assert.match(row('c-2').querySelector('.alert').textContent, /The rejection did not complete\. Comment is approved/);
+  assert.match(row('c-2').querySelector('.alert').textContent, /Couldn't reject the comment\. Comment is approved/);
   assert.equal(navCount(), '2');
 });
 

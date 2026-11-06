@@ -32,14 +32,14 @@ let check (sitePaths: Set<string>) (sources: Source list) : FileProblems list =
   let problem (source: Source) target =
     match target with
     | SamePage anchor when source.Body.Anchors.Contains anchor -> None
-    | SamePage anchor -> Some $"The page has no heading with the id '{anchor}'."
+    | SamePage anchor -> Some $"No heading on this page has the id '{anchor}'."
     | Page(path, _) when not (exists path) && exists $"{path}/" -> Some $"Add the trailing slash: {path}/"
     | Page(path, anchor) ->
       match anchorsAt (SitePath.ofUrlPath path), anchor with
-      | None, _ -> Some $"The output has no page at {path}."
+      | None, _ -> Some $"No page exists at {path}."
       | Some _, None -> None
       | Some anchors, Some anchor when anchors.Contains anchor -> None
-      | Some _, Some anchor -> Some $"The page {path} has no heading with the id '{anchor}'."
+      | Some _, Some anchor -> Some $"{path} has no heading with the id '{anchor}'."
 
   [ for source in sources do
       let problems =

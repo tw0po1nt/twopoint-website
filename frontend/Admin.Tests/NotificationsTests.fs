@@ -213,7 +213,7 @@ let tests =
 
       test "a failed list shows the reason" {
         let model, _ = send (Notifications.DevicesAnswered(Error Api.Unanswered)) Notifications.init
-        Expect.equal model.Devices (Notifications.NotLoaded "The API did not answer.") "The reason"
+        Expect.equal model.Devices (Notifications.NotLoaded "The server didn't respond. Check your connection and try again.") "The reason"
       }
 
       test "Remove asks the backend to remove the device" {

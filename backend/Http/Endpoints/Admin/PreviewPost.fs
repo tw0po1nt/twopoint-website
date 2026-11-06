@@ -104,7 +104,7 @@ type PreviewPost (
             (function
               | PreviewPost.Error.PostNotFound slug -> $"Post '{slug}' not found", HttpStatusCode.NotFound
               | PreviewPost.Error.FrontMatterUnreadable reason ->
-                $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity)
+                $"Couldn't read the saved post's front matter: {reason}", HttpStatusCode.UnprocessableEntity)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)
