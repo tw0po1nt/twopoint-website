@@ -23,6 +23,7 @@ type Icon =
   | Check
   | Inbox
   | Back
+  | Code
 
 /// Each path is on a 24 px grid, for a stroke of 1.75 px.
 let pathData (icon: Icon) =
@@ -45,6 +46,7 @@ let pathData (icon: Icon) =
   | Check -> "M5 12l5 5L20 7"
   | Inbox -> "M3 13h5l1 3h6l1-3h5M5 5h14l2 8v6H3v-6z"
   | Back -> "M15 6l-6 6 6 6"
+  | Code -> "m7 8-4 4 4 4m10-8 4 4-4 4M14 4l-4 16"
 
 let ofRoute (route: Route) =
   match route with
