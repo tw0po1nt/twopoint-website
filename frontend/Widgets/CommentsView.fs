@@ -27,6 +27,11 @@ let private perform (props: Contract.CommentsProps) (effect: Comments.Effect) (d
     |> Promise.map (Comments.PostAnswered >> dispatch)
     |> Promise.catch (fun _ -> dispatch Comments.Unanswered)
     |> Promise.start
+  | Comments.PreviewComment(opening, source) ->
+    Comments.previewComment props.Api source
+    |> Promise.map (fun response -> dispatch (Comments.PreviewAnswered(opening, source, response)))
+    |> Promise.catch (fun _ -> dispatch (Comments.PreviewUnanswered opening))
+    |> Promise.start
 
 let private readValidations () =
   try
@@ -108,6 +113,39 @@ let private emailLabel = "email>"
 let private commentLabel = "comment>"
 let private separator = " · "
 
+let private helpText =
+  "Markdown works: *italic*, **bold**, `code`, [text](https://…), lists, > quotes, and ``` code blocks. "
+
+let private helpNote =
+  "One new line is a line break. Headings, images, and tables stay as you type them."
+
+let private isPreview (model: Comments.Model) =
+  match model.Tab with
+  | Comments.Write -> false
+  | Comments.Preview _ -> true
+
+let private previewClass (model: Comments.Model) =
+  match model.Tab with
+  | Comments.Preview Comments.PreviewState.Empty
+  | Comments.Preview Comments.PreviewState.Loading -> "comment-preview is-muted"
+  | Comments.Preview Comments.PreviewState.Failed -> "comment-preview is-failed"
+  | Comments.Preview(Comments.PreviewState.Shown _)
+  | Comments.Write -> "comment-preview"
+
+let private previewText (model: Comments.Model) =
+  match model.Tab with
+  | Comments.Preview Comments.PreviewState.Empty -> "Nothing to preview. Write a comment first."
+  | Comments.Preview Comments.PreviewState.Loading -> "Loading the preview…"
+  | Comments.Preview Comments.PreviewState.Failed -> "The site cannot show the preview now. You can still post your comment. "
+  | Comments.Preview(Comments.PreviewState.Shown _)
+  | Comments.Write -> ""
+
+let private previewHtml (model: Comments.Model) =
+  match model.Tab with
+  | Comments.Preview(Comments.PreviewState.Shown html) -> Some html
+  | Comments.Preview(Comments.PreviewState.Empty | Comments.PreviewState.Loading | Comments.PreviewState.Failed)
+  | Comments.Write -> None
+
 let private notePrefix =
   "To stop spam, the site sends an email to verify your address, and the author approves each comment. "
   + "Your name shows with your comment. Your email address stays private. See the "
@@ -117,6 +155,12 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
   let pageUrl = window.location.origin + window.location.pathname
   let init = Comments.init pageUrl (readValidations ()) returned
   let model, dispatch = Mvu.run init Comments.update (perform props)
+  let commentBox: HTMLElement option ref = ref None
+  let previewHeight, setPreviewHeight = createSignal 0.0
+
+  let selectPreview () =
+    commentBox.Value |> Option.iter (fun box -> setPreviewHeight box.offsetHeight)
+    dispatch Comments.PreviewSelected
 
   div (class' = "comments") {
     p (class' = listClass (model ())) { listText (model ()) }
@@ -180,18 +224,85 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
         p (class' = "comment-error", role = "alert") { "Give a valid email address." }
       }
 
-      label (class' = "comment-field") {
-        span () { commentLabel }
+      div (class' = "comment-editor") {
+        div (class' = "comment-tabs", role = "tablist") {
+          span () { commentLabel }
+
+          button (
+            type' = "button",
+            role = "tab",
+            class' = "comment-tab",
+            ariaSelected = not (isPreview (model ())),
+            onClick = fun _ -> dispatch Comments.WriteSelected
+          ) {
+            "[write]"
+          }
+
+          button (type' = "button", role = "tab", class' = "comment-tab", ariaSelected = isPreview (model ()), onClick = fun _ -> selectPreview ()) {
+            "[preview]"
+          }
+        }
 
         textarea(
+          class' = (if isPreview (model ()) then "is-hidden" else ""),
           name = "comment",
           rows = 4,
           maxlength = 1000,
+          ariaLabel = "comment",
           disabled = Comments.isLocked (model ()),
           onInput = (fun event -> dispatch (Comments.CommentChanged(text event))),
           onBlur = fun _ -> dispatch Comments.CommentLeft
         )
+          .ref(fun element -> commentBox.Value <- Some element)
           .attr ("value", model().Comment)
+
+        Show(when' = isPreview (model ())) {
+          div(class' = previewClass (model ())).attr("style", $"min-height: {previewHeight ()}px").attr ("aria-live", "polite") {
+            previewText (model ())
+
+            Show(when' = (model().Tab = Comments.Preview Comments.PreviewState.Failed)) {
+              button (type' = "button", onClick = fun _ -> dispatch Comments.RetrySelected) { "[try again]" }
+            }
+
+            Show(when' = (previewHtml (model ())).IsSome) {
+              div (class' = "comment-text", innerHTML = (previewHtml (model ()) |> Option.defaultValue ""))
+            }
+          }
+        }
+
+        p (class' = "comment-help") {
+          span () { helpText }
+
+          button (type' = "button", ariaExpanded = model().HelpShown, onClick = fun _ -> dispatch Comments.HelpToggled) {
+            "[markdown help]"
+          }
+        }
+
+        Show(when' = model().HelpShown) {
+          div (class' = "comment-help-sheet") {
+            table () {
+              thead () {
+                tr () {
+                  th (scope = "col") { "you type" }
+                  th (scope = "col") { "readers see" }
+                }
+              }
+
+              tbody () {
+                For(each = Array.ofList Comments.helpRows) {
+                  yield
+                    fun row _ ->
+                      tr () {
+                        td () { pre () { row.YouType } }
+                        td (class' = "comment-text", innerHTML = row.ReadersSee)
+                      }
+                }
+              }
+            }
+
+            p () { helpNote }
+          }
+        }
       }
 
       Show(when' = Comments.showsCommentError (model ())) {

@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Render\Render.fsproj" />
     <ProjectReference Include="..\Widgets\Widgets.fsproj" />
   </ItemGroup>
 

@@ -83,6 +83,12 @@ module Comments =
       Body(U3.Case3(Encode.Auto.toString commenterValidation))
     ]
 
+  let previewComment uri (source: string) : Promise<ApiResponse<string>> =
+    request $"{uri}/api/blog/comments/preview" [
+      Method HttpMethod.POST
+      Body(U3.Case3(Encode.toString 0 (Encode.object [ "content", Encode.string source ])))
+    ]
+
   let postComment uri slug (newComment: NewComment) : Promise<PostCommentAnswer> =
     answer postCommentAnswer $"{uri}/api/blog/posts/{slug}/comments" [
       Method HttpMethod.POST

@@ -44,6 +44,23 @@ let private filled email =
     Comments.EmailChanged $" {email} "
     Comments.CommentChanged " Nice post & thanks " ]
 
+let private shown html : ApiResponse<string> =
+  { Success = true
+    Message = None
+    Data = Some html }
+
+let private refusedPreview : ApiResponse<string> =
+  { Success = false
+    Message = Some "content must be between 1 and 1000 characters long"
+    Data = None }
+
+let private from (model: Comments.Model) (messages: Comments.Msg list) =
+  messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (model, None)
+
+let private previewing = run [ Comments.CommentChanged " Use `List.map` "; Comments.PreviewSelected ] |> fst
+
+let private html = "<p>Use <code>List.map</code></p>\n"
+
 let private returned: Comments.Return =
   { Email = "reader@example.com"
     Name = "Reader"
@@ -294,6 +311,140 @@ let tests =
 
         let _, effect = Comments.update Comments.Submitted model
         Expect.isSome effect "A second submit sends again"
+      }
+    ]
+
+    testList "preview" [
+      test "a new form shows the write tab and hides the help" {
+        Expect.equal start.Tab Comments.Write "The write tab"
+        Expect.isFalse start.HelpShown "The help is closed"
+      }
+
+      test "the tabs change, and the return to write keeps the comment" {
+        let model, effect = run [ Comments.CommentChanged "Hi"; Comments.PreviewSelected; Comments.WriteSelected ]
+        Expect.isNone effect "No request"
+        Expect.equal model.Tab Comments.Write "The write tab"
+        Expect.equal model.Comment "Hi" "The comment stays"
+      }
+
+      test "an empty or blank text shows that there is nothing to preview, with no call" {
+        for comment in [ ""; "  \n " ] do
+          let model, effect = run [ Comments.CommentChanged comment; Comments.PreviewSelected ]
+          Expect.isNone effect $"No request for '{comment}'"
+          Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Empty) "Nothing to preview"
+      }
+
+      test "the first open loads the preview of the trimmed text with one call" {
+        let model, effect = run [ Comments.CommentChanged " Use `List.map` "; Comments.PreviewSelected ]
+        Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading"
+        Expect.equal effect (Some(Comments.PreviewComment(model.Opening, "Use `List.map`"))) "One call with the trimmed text"
+      }
+
+      test "a second select of the open preview tab makes no call" {
+        let model, effect = from previewing [ Comments.PreviewSelected ]
+        Expect.isNone effect "No request"
+        Expect.equal model previewing "The model does not change"
+      }
+
+      test "the answer shows the HTML and keeps it" {
+        let model, effect = from previewing [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        Expect.isNone effect "No request"
+        Expect.equal model.Tab (Comments.Preview(Comments.PreviewState.Shown html)) "The preview shows the HTML"
+        Expect.equal model.Kept (Some { Source = "Use `List.map`"; Html = html }) "The widget keeps the source and its HTML"
+      }
+
+      test "an open after no change to the text shows the kept HTML with no call" {
+        let answered, _ = from previewing [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+
+        for edit in [ []; [ Comments.CommentChanged "Use `List.map`  " ] ] do
+          let model, effect = from answered ([ Comments.WriteSelected ] @ edit @ [ Comments.PreviewSelected ])
+          Expect.isNone effect "No request"
+          Expect.equal model.Tab (Comments.Preview(Comments.PreviewState.Shown html)) "The kept HTML"
+      }
+
+      test "an open after an edit calls again" {
+        let answered, _ = from previewing [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        let model, effect = from answered [ Comments.WriteSelected; Comments.CommentChanged "Use `List.iter`"; Comments.PreviewSelected ]
+        Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading"
+        Expect.equal effect (Some(Comments.PreviewComment(model.Opening, "Use `List.iter`"))) "A call with the new text"
+      }
+
+      test "a refused or unanswered call fails, is not kept, and [try again] calls again" {
+        for failure in
+          [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", refusedPreview)
+            Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", { shown html with Data = None })
+            Comments.PreviewUnanswered previewing.Opening ] do
+          let failed, effect = from previewing [ failure ]
+          Expect.isNone effect "No request"
+          Expect.equal failed.Tab (Comments.Preview Comments.PreviewState.Failed) "The preview failed"
+          Expect.isNone failed.Kept "The widget keeps no failed call"
+
+          let retried, effect = from failed [ Comments.RetrySelected ]
+          Expect.equal retried.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading again"
+          Expect.equal effect (Some(Comments.PreviewComment(retried.Opening, "Use `List.map`"))) "[try again] calls again"
+
+          let reopened, effect = from failed [ Comments.WriteSelected; Comments.PreviewSelected ]
+          Expect.equal effect (Some(Comments.PreviewComment(reopened.Opening, "Use `List.map`"))) "A new open calls again"
+      }
+
+      test "[try again] does nothing when the preview did not fail" {
+        for model in [ start; previewing ] do
+          let next, effect = Comments.update Comments.RetrySelected model
+          Expect.isNone effect "No request"
+          Expect.equal next model "The model does not change"
+      }
+
+      test "a late answer after a return to write does not replace the newer state" {
+        let back, _ = from previewing [ Comments.WriteSelected ]
+
+        for late in
+          [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html)
+            Comments.PreviewUnanswered previewing.Opening ] do
+          let model, effect = from back [ late ]
+          Expect.isNone effect "No request"
+          Expect.equal model back "The write tab stays, and the widget keeps nothing"
+      }
+
+      test "a late answer for an older open does not replace the state of the newer open" {
+        let reopened, _ = from previewing [ Comments.WriteSelected; Comments.CommentChanged "Use `List.iter`"; Comments.PreviewSelected ]
+        let model, _ = from reopened [ Comments.PreviewAnswered(previewing.Opening, "Use `List.map`", shown html) ]
+        Expect.equal model reopened "The newer open still loads"
+
+        let answered, _ =
+          from model [ Comments.PreviewAnswered(reopened.Opening, "Use `List.iter`", shown "<p>Use <code>List.iter</code></p>\n") ]
+
+        Expect.equal answered.Tab (Comments.Preview(Comments.PreviewState.Shown "<p>Use <code>List.iter</code></p>\n")) "The newer answer shows"
+      }
+
+      test "a submit from the preview tab posts the comment, and the form goes back to write" {
+        let sending, effect = from previewing [ Comments.EmailChanged "known@example.com"; Comments.Submitted ]
+        Expect.equal sending.Status Comments.Posting "The form is sending"
+        Expect.equal effect (Some(Comments.Post { ValidationId = "validation-1"; Comment = "Use `List.map`" })) "The post has the comment"
+
+        let posted, _ = from sending [ Comments.PostAnswered(postAnswer true None None) ]
+        Expect.equal posted.Tab Comments.Write "The empty form shows the write tab"
+        Expect.equal posted.Comment "" "The form is empty"
+      }
+
+      test "[markdown help] opens and closes the help with no call" {
+        let opened, effect = run [ Comments.HelpToggled ]
+        Expect.isNone effect "No request"
+        Expect.isTrue opened.HelpShown "The help is open"
+
+        let closed, effect = from opened [ Comments.HelpToggled ]
+        Expect.isNone effect "No request"
+        Expect.isFalse closed.HelpShown "The help is closed"
+      }
+
+      test "each row of the help shows the HTML of the comment renderer" {
+        for row in Comments.helpRows do
+          Expect.equal
+            row.ReadersSee
+            (TwoPoint.Site.Render.CommentBody.htmlWithin
+              TwoPoint.Site.Render.Highlight.NoLimit
+              TwoPoint.Site.Render.Stage.Production
+              row.YouType)
+            $"The HTML of '{row.YouType}'"
       }
     ]
 
