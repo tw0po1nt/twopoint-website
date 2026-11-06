@@ -332,6 +332,28 @@ let private postCommentTests =
     }
   ]
 
+let private previewComment (content : string) =
+  PreviewComment.preview TwoPoint.Site.Render.Stage.Production { Content = content }
+
+let private previewCommentTests =
+  testList "PreviewComment" [
+    test "the preview gives the HTML of the source" {
+      Expect.equal (previewComment markdown) (Ok markdownHtml) "Expected the HTML of the source"
+    }
+
+    test "the preview of 1,000 characters gives the HTML" {
+      Expect.isOk (previewComment (String('x', NewComment.maxLength))) "Expected the HTML"
+    }
+
+    test "the preview refuses an empty source" {
+      Expect.equal (previewComment "") (Error [ lengthMessage ]) "Expected the length message"
+    }
+
+    test "the preview refuses a source of 1,001 characters" {
+      Expect.equal (previewComment (String('x', NewComment.maxLength + 1))) (Error [ lengthMessage ]) "Expected the length message"
+    }
+  ]
+
 type private FakeValidationDependencies(existing : Commenter option) =
   let created = ResizeArray<EmailAddress>()
   let sent = ResizeArray<Commenter>()
@@ -668,6 +690,7 @@ let tests =
     queueTests
     postCommentsTests
     postCommentTests
+    previewCommentTests
     validationTests
     statusTests
     deleteTests
