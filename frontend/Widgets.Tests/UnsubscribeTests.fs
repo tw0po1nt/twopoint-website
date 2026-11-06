@@ -44,7 +44,7 @@ let tests =
     test "a refused answer with no message gives the API error with a general message" {
       Expect.equal
         (Unsubscribe.update (Unsubscribe.Answered(answer false None)) sending)
-        (Unsubscribe.Refused "The unsubscribe request did not go through. Try again later.", None)
+        (Unsubscribe.Refused "Couldn't unsubscribe you. Try again later.", None)
         "A general message shows"
     }
 

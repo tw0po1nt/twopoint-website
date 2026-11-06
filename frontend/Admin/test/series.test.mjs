@@ -92,7 +92,7 @@ test('a new series gives the slug from the title, shows its errors, and saves', 
 
   press('Save', sheet());
   await settle();
-  assert.deepEqual(errors(), ['Give the series an excerpt.']);
+  assert.deepEqual(errors(), ['Add an excerpt.']);
   assert.equal(saves.length, 0, 'No save with an error');
 
   await type('series-excerpt', 'Notes of all kinds');
@@ -111,5 +111,5 @@ test('a new series gives the slug from the title, shows its errors, and saves', 
 
   assert.equal(reads.length, before + 1, 'The list loads again');
   assert.ok(!sheet().open, 'The form closes');
-  assert.match(document.querySelector('main [role="status"]').textContent, /is saved, and the site rebuilds/);
+  assert.match(document.querySelector('main [role="status"]').textContent, /The site is rebuilding/);
 });

@@ -12,7 +12,7 @@ let robots = Layout.Robots.Index
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "Unsubscribe"
-      Description = "Stop the emails of new posts on TwoPoint."
+      Description = "Stop getting TwoPoint posts by email."
       UrlPath = Some urlPath
       Robots = robots
       OgType = Layout.OgType.Website
@@ -30,7 +30,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Pos
     Mount.unsubscribe config
 
     p (class' = "unsubscribe-help") {
-      "If the link does not work, send an email to "
+      "If the link doesn't work, email "
       a (href = "mailto:matt@twopoint.dev") { "matt@twopoint.dev" }
       "."
     }

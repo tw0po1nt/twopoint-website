@@ -36,12 +36,12 @@ test('a failed production run shows with a link to the run, and a failed staging
   assert.deepEqual(alerts(), [
     {
       tone: ['bad'],
-      title: 'The production run #41 failed.',
+      title: 'Production run #41 failed.',
       link: 'https://github.com/tw0po1nt/twopoint-website/actions/runs/41',
     },
     {
       tone: ['warn'],
-      title: 'The staging run #77 failed.',
+      title: 'Staging run #77 failed.',
       link: 'https://github.com/tw0po1nt/twopoint-website-staging/actions/runs/77',
     },
   ]);

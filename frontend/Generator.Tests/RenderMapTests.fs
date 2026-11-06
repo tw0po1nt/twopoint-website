@@ -80,7 +80,7 @@ let tests =
       for slug in [ "older-post"; "newer-post" ] do
         Expect.stringContains (siteText map $"posts/{slug}/index.html") """<a href="/tag/web-development/">#web development</a>""" $"The page of {slug} has the newer title"
 
-      Expect.stringContains (siteText map "tag/web-development/index.html") "Posts by tag &#39;web development&#39;" "The tag page has the newer title"
+      Expect.stringContains (siteText map "tag/web-development/index.html") "Posts tagged &#39;web development&#39;" "The tag page has the newer title"
 
       for path in pagePaths map do
         Expect.isFalse ((siteText map path).Contains "#Web development") $"{path} has no older title"
@@ -90,7 +90,7 @@ let tests =
       Expect.equal
         (loadPostsFrom [ seriesFile "a-series"; file "a-post", text $"{frontMatter}\nseries: b-series" "Text." ]
          |> Result.mapError FileProblems.formatAll)
-        (Error [ "frontend/content/posts/published/a-post.md:7: No series has the slug 'b-series'." ])
+        (Error [ "frontend/content/posts/published/a-post.md:7: There's no series with the slug 'b-series'." ])
         "The build error names the file and the line of the series field"
     }
   
@@ -110,7 +110,7 @@ let tests =
          |> Result.map ignore)
         (Error
           [ errorAt "a-post" 9 "warning: A warning."
-            errorAt "b-post" 9 "The output has no page at /posts/c-post/." ])
+            errorAt "b-post" 9 "No page exists at /posts/c-post/." ])
         "The failed build prints the warning with the error"
     }
 

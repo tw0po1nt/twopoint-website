@@ -50,7 +50,7 @@ let tests =
 
       Expect.equal
         (Site.renderMap Stage.Production buildTime widgets content |> Result.map ignore)
-        (Error [ $"{Privacy.file}:8: The output has no page at /posts/c-post/." ])
+        (Error [ $"{Privacy.file}:8: No page exists at /posts/c-post/." ])
         "The build checks the links of the privacy page"
     }
 

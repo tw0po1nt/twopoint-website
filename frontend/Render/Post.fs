@@ -65,4 +65,4 @@ let ogImageSource (post: Post) : System.Uri option =
   |> Option.orElse post.FrontMatter.Image
 
 let ogImageProblem (url: System.Uri) (reason: string) : Problem =
-  Problem.error (Place.Post 1) $"The front matter gives the Open Graph image {url}, and the build cannot make its crop: {reason}."
+  Problem.error (Place.Post 1) $"Couldn't crop the Open Graph image {url}: {reason}."

@@ -57,7 +57,7 @@ let tests =
 
     test "compose refuses front matter that is not a YAML mapping" {
       match PostText.compose "---\n- one\n- two\n---\n" { Title = "x"; Excerpt = ""; Body = "" } with
-      | Error reason -> Expect.equal reason "The front matter is not a YAML mapping." "The reason"
+      | Error reason -> Expect.equal reason "The front matter must be a single YAML mapping." "The reason"
       | Ok composed -> failtestf "Expected a refusal, got %s" composed
     }
   ]

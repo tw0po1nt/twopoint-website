@@ -137,10 +137,10 @@ let tests =
         Expect.equal refused.List (Comments.NotLoaded "No such post") "The message of the API"
 
         let general, _ = run [ Comments.ListAnswered { Success = false; Message = None; Data = None } ]
-        Expect.equal general.List (Comments.NotLoaded "The comments did not load. Try again later.") "A general message"
+        Expect.equal general.List (Comments.NotLoaded "Couldn't load comments. Try again later.") "A general message"
 
         let unanswered, _ = run [ Comments.ListUnanswered ]
-        Expect.equal unanswered.List (Comments.NotLoaded "The site cannot get to the server. Try again later.") "No answer"
+        Expect.equal unanswered.List (Comments.NotLoaded "Couldn't reach the server. Try again later.") "No answer"
       }
 
       test "a submit with a new email address sends the validation with a link back to the panel" {
@@ -301,12 +301,12 @@ let tests =
           Expect.equal withMessage.Comment " Nice post & thanks " "The form keeps the comment"
 
           let general, _ = run (filled email @ [ Comments.Submitted; answered None ])
-          Expect.equal general.Status (Comments.Failed "The comment did not go through. Try again later.") $"A general message for {email}"
+          Expect.equal general.Status (Comments.Failed "Couldn't post your comment. Try again later.") $"A general message for {email}"
       }
 
       test "a request with no answer shows that the site cannot get to the server, and the reader can submit again" {
         let model, _ = run (filled "known@example.com" @ [ Comments.Submitted; Comments.Unanswered ])
-        Expect.equal model.Status (Comments.Failed "The site cannot get to the server. Try again later.") "No answer"
+        Expect.equal model.Status (Comments.Failed "Couldn't reach the server. Try again later.") "No answer"
 
         let _, effect = Comments.update Comments.Submitted model
         Expect.isSome effect "A second submit sends again"

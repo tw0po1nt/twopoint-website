@@ -72,8 +72,8 @@ let label (action: Action) =
 
 let failure (state: State) =
   match state with
-  | Progress.NotDone(Cancel, reason) -> Some $"The cancel did not complete. {reason}"
-  | Progress.NotDone(Delete, reason) -> Some $"The delete did not complete. {reason}"
+  | Progress.NotDone(Cancel, reason) -> Some $"Couldn't cancel the subscription. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"Couldn't delete the subscription. {reason}"
   | Progress.Ready
   | Progress.Sending _ -> None
 
@@ -196,10 +196,10 @@ let emptyText (filter: SubscriptionFilter) (search: string) =
   match filter, search.Trim() with
   | _, "" ->
     match filter with
-    | SubscriptionFilter.All -> "The blog has no subscriptions."
-    | SubscriptionFilter.Active -> "The blog has no active subscriptions."
-    | SubscriptionFilter.Inactive -> "The blog has no inactive subscriptions."
-  | _ -> "No subscription matches the search."
+    | SubscriptionFilter.All -> "No subscriptions yet."
+    | SubscriptionFilter.Active -> "No active subscriptions."
+    | SubscriptionFilter.Inactive -> "No inactive subscriptions."
+  | _ -> "No subscriptions match your search."
 
 let statusText (subscription: Api.Subscription) =
   if subscription.IsActive then "Active" else "Inactive"

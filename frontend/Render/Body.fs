@@ -170,10 +170,10 @@ let private rawHtmlErrors startLine (document: MarkdownDocument) =
         let name = tag.Groups[1].Value
 
         if name.Equals("a", StringComparison.OrdinalIgnoreCase) then
-          errorAt startLine (lineAt tag.Index) "Write the link as a Markdown link, for example [the docs](https://example.com/)."
+          errorAt startLine (lineAt tag.Index) "Use a Markdown link instead, like [the docs](https://example.com/)."
 
         if name.Equals("img", StringComparison.OrdinalIgnoreCase) then
-          errorAt startLine (lineAt tag.Index) "Write the image as a Markdown image, for example ![A cat](https://example.com/cat.jpg)."
+          errorAt startLine (lineAt tag.Index) "Use a Markdown image instead, like ![A cat](https://example.com/cat.jpg)."
 
         let attributes = tag.Groups[2]
 
@@ -184,7 +184,7 @@ let private rawHtmlErrors startLine (document: MarkdownDocument) =
             errorAt
               startLine
               (lineAt (attributes.Index + name.Index))
-              $"Delete the '{name.Value}' attribute. A post has no class or style in raw HTML." ]
+              $"Remove the '{name.Value}' attribute. Raw HTML in a post can't use class or style." ]
 
   let blocks =
     descendants<HtmlBlock> document
@@ -215,7 +215,7 @@ type private LinkKind =
 
 let private kind (stage: Stage) (url: string) =
   if String.IsNullOrEmpty url then
-    Invalid "The link has no URL."
+    Invalid "This link is missing a URL."
   elif url.StartsWith '#' then
     Internal(SamePage(url.Substring 1))
   elif url.StartsWith '/' && not (url.StartsWith "//") then
@@ -223,12 +223,12 @@ let private kind (stage: Stage) (url: string) =
   else
     match Uri.TryCreate(url, UriKind.Absolute) with
     | true, uri when OwnHost.isUrl uri ->
-      Invalid $"Give the link to {url} as a root-relative link, for example {uri.PathAndQuery}."
+      Invalid $"Make the link to {url} root-relative, like {uri.PathAndQuery}."
     | true, uri when Azurite.isForbidden stage uri ->
       Invalid(Azurite.problem uri)
     | true, uri when externalSchemes.Contains uri.Scheme -> External
     | true, uri when uri.Scheme = Uri.UriSchemeMailto -> Mail
-    | _ -> Invalid $"Give the link to '{url}' as a root-relative link that starts with /, or as an http or https URL."
+    | _ -> Invalid $"The link '{url}' must start with / or be an http or https URL."
 
 let private links stage (document: MarkdownDocument) =
   let links =
@@ -279,7 +279,7 @@ let ofDocument (images: IImageSize) (stage: Stage) (startLine: int) (document: M
 
       let altText =
         if String.IsNullOrWhiteSpace(inlineText shownText image) then
-          [ warningAt "The image has no alt text. Write the alt text between the brackets, for example ![A cat](…)." ]
+          [ warningAt "Add alt text to the image between the brackets, like ![A cat](…)." ]
         else
           []
 
@@ -292,16 +292,16 @@ let ofDocument (images: IImageSize) (stage: Stage) (startLine: int) (document: M
             attributes.AddProperty("width", string size.Width)
             attributes.AddProperty("height", string size.Height)
             []
-          | Error reason -> [ errorAt startLine image.Line $"The build cannot read the size of the image {url}: {reason}." ]
+          | Error reason -> [ errorAt startLine image.Line $"Couldn't read the size of the image {url}: {reason}." ]
 
         let assetProblems =
           if AssetContainer.isUrl stage url then
             []
           else
-            [ warningAt $"The image {url} is not in the asset container. Upload the image, so that the site controls it." ]
+            [ warningAt $"The image {url} is hosted elsewhere. Upload it so the site serves its own copy." ]
 
         sizeProblems @ altText @ assetProblems
-      | _ -> errorAt startLine image.Line $"Give the image '{image.Url}' as an https URL." :: altText)
+      | _ -> errorAt startLine image.Line $"The image '{image.Url}' must be an https URL." :: altText)
 
   let links = links stage document
 
@@ -325,7 +325,7 @@ let ofDocument (images: IImageSize) (stage: Stage) (startLine: int) (document: M
     descendants<FencedCodeBlock> document
     |> List.filter (fun code -> not (String.IsNullOrEmpty code.Info) && (Highlight.tryLanguage code.Info).IsNone)
     |> List.map (fun code ->
-      errorAt startLine code.Line $"The code block has the unknown language '{code.Info}'. Use one of these languages: {Highlight.names}.")
+      errorAt startLine code.Line $"Unknown code block language '{code.Info}'. Use one of: {Highlight.names}.")
 
   let directiveErrors =
     descendants<Directive.DirectiveBlock> document

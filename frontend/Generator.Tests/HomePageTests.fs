@@ -104,7 +104,7 @@ let tests =
 
       Expect.stringContains
         subscribe
-        """<p class="note">Get an email for each new post. Each email has a link to unsubscribe.</p>"""
+        """<p class="note">Get new posts by email. Unsubscribe anytime.</p>"""
         "The note"
     }
 

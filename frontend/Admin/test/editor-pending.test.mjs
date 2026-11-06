@@ -60,10 +60,10 @@ test('a pending edit shows that the changes are not live, and the primary action
 });
 
 test('Changes from live shows the lines that changed, and Close closes the dialog', async () => {
-  assert.equal(menuItem('Changes from live').getAttribute('aria-disabled'), null);
+  assert.equal(menuItem('Compare with live').getAttribute('aria-disabled'), null);
   assert.ok(!changes().open, 'The dialog starts closed');
 
-  menuItem('Changes from live').click();
+  menuItem('Compare with live').click();
   await settle();
 
   assert.ok(changes().open, 'The dialog is open');
@@ -82,7 +82,7 @@ test('Keep closes the discard dialog and sends nothing, and Discard sends the ET
   await settle();
   assert.ok(discard().open, 'The dialog is open');
 
-  button(discard(), 'Keep').click();
+  button(discard(), 'Cancel').click();
   await settle();
   assert.ok(!discard().open, 'The dialog closes');
   assert.equal(discards.length, 0);
@@ -96,5 +96,5 @@ test('Keep closes the discard dialog and sends nothing, and Discard sends the ET
   assert.equal(document.querySelector('#editor-title').value, 'Old title');
   assert.equal(status(), 'Published Feb 4, 2026 · deployed');
   assert.equal(bar().querySelector('.editor-primary').disabled, true);
-  assert.match(menuItem('Discard changes').textContent, /The post has no pending edit\./);
+  assert.match(menuItem('Discard changes').textContent, /No changes to discard\./);
 });

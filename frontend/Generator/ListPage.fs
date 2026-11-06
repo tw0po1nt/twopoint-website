@@ -32,14 +32,14 @@ let private title (list: PostList) =
   | PostList.Posts -> "Posts"
   | PostList.Category category -> $"Category '{category.Title}'"
   | PostList.Series series -> $"Series '{series.Title}'"
-  | PostList.Tag tag -> $"Posts by tag '{tag.Title}'"
+  | PostList.Tag tag -> $"Posts tagged '{tag.Title}'"
 
 let private description (list: PostList) =
   match list with
-  | PostList.Posts -> "Each post on TwoPoint, the newest first."
-  | PostList.Category category -> $"Each post in the category {category.Title}, the newest first."
+  | PostList.Posts -> "All posts on TwoPoint, newest first."
+  | PostList.Category category -> $"Posts in {category.Title}, newest first."
   | PostList.Series series -> series.Excerpt
-  | PostList.Tag tag -> $"Each post with the tag {tag.Title}, the newest first."
+  | PostList.Tag tag -> $"Posts tagged {tag.Title}, newest first."
 
 let private pathLine (command: string) =
   p (class' = "path") {
@@ -96,7 +96,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (ogImages: 
   |> Layout.render config assets widgets posts layoutPage
 
 let renderSeries (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
-  let description = "Each series of posts on TwoPoint, the series with the newest post first."
+  let description = "All series on TwoPoint, most recently updated first."
 
   let page: Layout.Page =
     { Title = Some "Series"

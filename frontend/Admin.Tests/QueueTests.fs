@@ -104,7 +104,7 @@ let tests =
       Expect.isNone effect "No approval call"
       Expect.equal
         (Queue.tryFind "first" model.Queue |> Option.bind (fun row -> Queue.failure row.State))
-        (Some "The trust did not complete, and the comment is not approved. Commenter is banned and cannot become trusted")
+        (Some "Couldn't trust the commenter, so the comment wasn't approved. Commenter is banned and cannot become trusted")
         "The reason"
       Expect.equal (commenterStatus "third" model) (Some Api.New) "The commenter stays new"
     }
@@ -116,7 +116,7 @@ let tests =
 
       Expect.equal
         (Queue.tryFind "first" model.Queue |> Option.bind (fun row -> Queue.failure row.State))
-        (Some "The approval did not complete. The API did not answer.")
+        (Some "Couldn't approve the comment. The server didn't respond. Check your connection and try again.")
         "The reason"
       Expect.equal (commenterStatus "first" model) (Some Api.Trusted) "The row shows the trust"
       Expect.equal (commenterStatus "third" model) (Some Api.Trusted) "The other comment of the commenter shows the trust"
@@ -143,7 +143,7 @@ let tests =
       let row = Queue.tryFind "first" model.Queue
       Expect.equal
         (row |> Option.bind (fun row -> Queue.failure row.State))
-        (Some "The approval did not complete. Comment is approved and cannot become approved")
+        (Some "Couldn't approve the comment. Comment is approved and cannot become approved")
         "The reason"
       Expect.equal (Queue.count model.Queue) (Some 2) "The count stays"
       let _, effect = send (Queue.Chosen("first", Queue.Approve)) model
@@ -182,7 +182,7 @@ let tests =
     test "a queue that did not load shows the reason" {
       let model, _ = Shell.init "/comments"
       let model, _ = send (Queue.Answered(Error Api.Unanswered)) model
-      Expect.equal model.Queue (Queue.NotLoaded "The API did not answer.") "The reason"
+      Expect.equal model.Queue (Queue.NotLoaded "The server didn't respond. Check your connection and try again.") "The reason"
     }
 
     test "a refused token offers another account" {

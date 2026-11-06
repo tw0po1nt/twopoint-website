@@ -368,10 +368,10 @@ let private requestSlugChange (document: Document) =
     )
   | Api.Draft, _, Saved -> Loaded document, None
   | Api.Draft, _, _ ->
-    Loaded(changeDetails (Details.slugChangeRefused "Save the post first, and then change the slug.") document),
+    Loaded(changeDetails (Details.slugChangeRefused "Save the post before changing the slug.") document),
     None
   | (Api.Published | Api.Upcoming), _, _ ->
-    Loaded(changeDetails (Details.slugChangeRefused "The slug of a published post is fixed.") document), None
+    Loaded(changeDetails (Details.slugChangeRefused "You can't change the slug of a published post.") document), None
 
 let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
   match result with
@@ -432,7 +432,7 @@ let private startCheck (choice: Publish.When) (document: Document) =
       )
     )
   | _, None -> Loaded(withPublish (Publish.Choosing choice) document), None
-  | None, Some _ -> Loaded(withPublish (Publish.CheckFailed(choice, "The post has no saved text.")) document), None
+  | None, Some _ -> Loaded(withPublish (Publish.CheckFailed(choice, "Save the post before publishing.")) document), None
 
 let canPublish (document: Document) =
   match document.State, document.Save with
@@ -461,10 +461,10 @@ let private resumePublish (model: Model, effect: Effect option) =
     match document.Publish.State, document.Save with
     | Publish.Saving, Saved -> startCheck (firstChoice document) document
     | Publish.Saving, SaveFailed reason ->
-      Loaded(withPublish (Publish.CheckFailed(firstChoice document, $"The post did not save. {reason}")) document), None
+      Loaded(withPublish (Publish.CheckFailed(firstChoice document, $"Couldn't save the post. {reason}")) document), None
     | Publish.Saving, Stale ->
       Loaded(
-        withPublish (Publish.CheckFailed(firstChoice document, "Another tab saved newer text. Reload the page.")) document
+        withPublish (Publish.CheckFailed(firstChoice document, "This post changed in another tab. Reload the page to get the latest version.")) document
       ),
       None
     | Publish.Saving, (Unsaved | Saving _)
@@ -560,18 +560,18 @@ let private deployChanged (slug: string) (msg: Deploy.Msg) (document: Document) 
 
 let private requireSaved (save: SaveState) =
   match save with
-  | Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | Stale -> Unavailable "This post changed in another tab. Reload the page to get the latest version."
   | Unsaved
   | SaveFailed _ -> Unavailable "Save the post first."
-  | Saving _ -> Unavailable "The save runs."
+  | Saving _ -> Unavailable "Saving…"
   | Saved -> Available
 
 let private discardAvailability (document: Document) =
   match document.State, requireSaved document.Save with
-  | Api.Draft, _ -> Unavailable "A draft has no pending edit."
+  | Api.Draft, _ -> Unavailable "Only for published posts."
   | _, (Unavailable _ as notSaved) -> notSaved
-  | _, Available when not document.PendingEdit -> Unavailable "The post has no pending edit."
-  | _, Available when document.ETag.IsNone -> Unavailable "Reload the page, and then discard the changes."
+  | _, Available when not document.PendingEdit -> Unavailable "No changes to discard."
+  | _, Available when document.ETag.IsNone -> Unavailable "Reload the page, then try again."
   | _, Available -> Available
 
 let private discardRequested (document: Document) =
@@ -600,9 +600,9 @@ let private discardClosed (document: Document) =
 
 let private upcomingChangeAvailability (document: Document) =
   match document.State, requireSaved document.Save with
-  | (Api.Draft | Api.Published), _ -> Unavailable "Only an upcoming post can move."
+  | (Api.Draft | Api.Published), _ -> Unavailable "Only for upcoming posts."
   | _, (Unavailable _ as notSaved) -> notSaved
-  | _, Available when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, and then try again."
+  | _, Available when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, then try again."
   | _, Available -> Available
 
 let private unpublishRequested (document: Document) =
@@ -767,7 +767,7 @@ let private deleteAvailability (document: Document) =
   match requireSaved document.Save with
   | Unavailable _ as notSaved -> notSaved
   | Available when document.ETag.IsNone && (document.State = Api.Draft || document.PendingEdit) ->
-    Unavailable "Reload the page, and then delete the post."
+    Unavailable "Reload the page, then try again."
   | Available -> Available
 
 let private deleteRequested (document: Document) =
@@ -859,9 +859,9 @@ let private deleteClosed (document: Document) =
 
 let private revisionsAvailability (document: Document) =
   match document.State, requireSaved document.Save with
-  | Api.Draft, _ -> Unavailable "Revisions are available after the next publish."
+  | Api.Draft, _ -> Unavailable "Only for published posts."
   | _, (Unavailable _ as notSaved) -> notSaved
-  | _, Available when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, and then restore a revision."
+  | _, Available when document.PendingEdit && document.ETag.IsNone -> Unavailable "Reload the page, then try again."
   | _, Available -> Available
 
 let private revisionsRequested (document: Document) =
@@ -903,16 +903,16 @@ let private revisionsClosed (document: Document) =
 
 let private sendAvailability (document: Document) =
   match document.DeliveryStarted, document.State, document.Deploy.Status with
-  | Some started, _, _ -> Unavailable $"The delivery of the post started on {Dates.dateText started}."
-  | None, Api.Draft, _ -> Unavailable "Publish the post first."
-  | None, Api.Upcoming, _ -> Unavailable "The post is not published yet. Start the delivery after its publish date."
+  | Some started, _, _ -> Unavailable $"Already sent on {Dates.dateText started}."
+  | None, Api.Draft, _ -> Unavailable "Only for published posts."
+  | None, Api.Upcoming, _ -> Unavailable "Available after the publish date."
   | None, Api.Published, Deploy.Known Api.DeployState.Deployed -> Available
   | None, Api.Published, Deploy.Known Api.DeployState.Deploying ->
-    Unavailable "The latest change to the post deploys. Start the delivery after the deploy."
+    Unavailable "Available once the latest change is live."
   | None, Api.Published, Deploy.Known Api.DeployState.DeployFailed ->
-    Unavailable "The deploy of the latest change failed. Rebuild the site, and then start the delivery."
-  | None, Api.Published, Deploy.Unread -> Unavailable "The admin reads the deploy state of the post."
-  | None, Api.Published, Deploy.Unreadable _ -> Unavailable "The deploy state of the post is not known. Reload the page."
+    Unavailable "The latest deploy failed. Rebuild the site first."
+  | None, Api.Published, Deploy.Unread -> Unavailable "Checking the deploy status…"
+  | None, Api.Published, Deploy.Unreadable _ -> Unavailable "Couldn't check the deploy status. Reload the page."
 
 let private sendRequested (document: Document) =
   match sendAvailability document with
@@ -1092,7 +1092,7 @@ let retryFailureText (document: Document) = Deploy.retryFailure document.Deploy
 let failureText (model: Model) =
   match model with
   | Loaded { Save = SaveFailed reason } -> reason
-  | Loaded { Save = Stale } -> "Another tab saved newer text. Your text stays here. Copy it, and then reload the page."
+  | Loaded { Save = Stale } -> "This post changed in another tab. Copy your text, then reload the page."
   | _ -> ""
 
 let hasProblems (document: Document) =
@@ -1111,9 +1111,9 @@ let primaryAction (document: Document) =
 let primaryAvailability (document: Document) =
   match document.State, document.Save with
   | _ when canPublish document -> Available
-  | Api.Draft, Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | Api.Draft, Stale -> Unavailable "This post changed in another tab. Reload the page to get the latest version."
   | Api.Draft, _ -> Unavailable "Wait until the slug change ends."
-  | (Api.Published | Api.Upcoming), Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | (Api.Published | Api.Upcoming), Stale -> Unavailable "This post changed in another tab. Reload the page to get the latest version."
   | (Api.Published | Api.Upcoming), _ -> Unavailable "The post has no changes to publish."
 
 type MenuAction =
@@ -1135,20 +1135,20 @@ let private saveAvailability (document: Document) =
   match document.Save with
   | Unsaved
   | SaveFailed _ -> Available
-  | Saved -> Unavailable "The post is saved."
-  | Saving _ -> Unavailable "The save runs."
-  | Stale -> Unavailable "Another tab saved newer text. Reload the page."
+  | Saved -> Unavailable "No unsaved changes."
+  | Saving _ -> Unavailable "Saving…"
+  | Stale -> Unavailable "This post changed in another tab. Reload the page to get the latest version."
 
 let private availability (document: Document) (action: MenuAction) =
   match action, document.State with
   | SaveNow, _ -> saveAvailability document
-  | ChangesFromLive, Api.Draft -> Unavailable "A draft has no published text."
+  | ChangesFromLive, Api.Draft -> Unavailable "Only for published posts."
   | ChangesFromLive, (Api.Published | Api.Upcoming) when document.Published.IsNone ->
-    Unavailable "The page has no published text. Reload the page."
+    Unavailable "Reload the page, then try again."
   | ChangesFromLive, (Api.Published | Api.Upcoming) -> Available
   | DiscardChanges, _ -> discardAvailability document
-  | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only an upcoming post can change its date."
-  | Unpublish, (Api.Draft | Api.Published) -> Unavailable "You can unpublish only an upcoming post."
+  | ChangeDate, (Api.Draft | Api.Published) -> Unavailable "Only for upcoming posts."
+  | Unpublish, (Api.Draft | Api.Published) -> Unavailable "Only for upcoming posts."
   | Revisions, _ -> revisionsAvailability document
   | SendToSubscribers, _ -> sendAvailability document
   | Delete, _ -> deleteAvailability document
@@ -1156,9 +1156,9 @@ let private availability (document: Document) (action: MenuAction) =
 
 let menu (document: Document) : MenuItem list =
   [ SaveNow, "Save"
-    ChangesFromLive, "Changes from live"
+    ChangesFromLive, "Compare with live"
     DiscardChanges, "Discard changes"
-    ChangeDate, "Change the date"
+    ChangeDate, "Change date"
     Unpublish, "Unpublish"
     Revisions, "Revisions"
     SendToSubscribers, "Send to subscribers"
@@ -1181,9 +1181,9 @@ let menuMsg (action: MenuAction) =
 
 let queuedText (queued: int) =
   match queued with
-  | 0 -> "No subscription is active, so the admin sent no email."
-  | 1 -> "The admin queued the email for 1 active subscription."
-  | count -> $"The admin queued the email for {count} active subscriptions."
+  | 0 -> "No active subscribers. No emails sent."
+  | 1 -> "Queued 1 email."
+  | count -> $"Queued {count} emails."
 
 let private detailsText (details: Api.PostDetails) =
   let value = Option.defaultValue ""

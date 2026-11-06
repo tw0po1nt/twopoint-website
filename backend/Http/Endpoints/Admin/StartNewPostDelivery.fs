@@ -146,16 +146,16 @@ type StartNewPostDelivery(
                 | StartNewPostDelivery.Error.PostNotFound slug ->
                   $"Post '{slug}' not found", HttpStatusCode.NotFound
                 | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.NotYetPublished publishDate) ->
-                  $"Post '{post.Id}' is not published until {publishDate:o}", HttpStatusCode.Conflict
+                  $"'{post.Id}' isn't published until {publishDate:o}", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.LatestChangeDeploying) ->
-                  $"The latest change to post '{post.Id}' is not deployed yet", HttpStatusCode.Conflict
+                  $"The latest change to '{post.Id}' isn't live yet", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.LatestDeployFailed) ->
-                  $"The deploy of the latest change to post '{post.Id}' failed. Rebuild the site first",
+                  $"The latest deploy of '{post.Id}' failed. Rebuild the site first",
                   HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.AlreadyStarted (post, startedDate) ->
-                  $"The delivery of post '{post.Id}' started at {startedDate:o}", HttpStatusCode.Conflict
+                  $"'{post.Id}' was already sent on {startedDate:o}", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NewsletterNotFound post ->
-                  $"The newsletter of post '{post.Id}' does not exist", HttpStatusCode.Conflict
+                  $"No newsletter found for '{post.Id}'", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NewsletterInvalid (post, reason) ->
                   $"The newsletter of post '{post.Id}' is invalid: {reason}", HttpStatusCode.Conflict
               logger.LogWarning("Refused new-post delivery: {error}", message)

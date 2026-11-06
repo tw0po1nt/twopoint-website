@@ -78,7 +78,7 @@ let tests =
         [ errorAt
             "a-post"
             11
-            "The code block has the unknown language 'js'. Use one of these languages: fsharp, csharp, swift, sh, diff, json, xml, css." ]
+            "Unknown code block language 'js'. Use one of: fsharp, csharp, swift, sh, diff, json, xml, css." ]
         "A fence language must be on the list"
     }
   ]

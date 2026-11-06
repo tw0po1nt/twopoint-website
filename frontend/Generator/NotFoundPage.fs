@@ -11,7 +11,7 @@ let robots = Layout.Robots.NoIndex
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Post list) =
   let page: Layout.Page =
     { Title = Some "Page not found"
-      Description = "The page does not exist on TwoPoint."
+      Description = "This page doesn't exist."
       UrlPath = None
       Robots = robots
       OgType = Layout.OgType.Website
@@ -26,7 +26,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (posts: Pos
     }
 
     h1 () { "404: page not found" }
-    p (class' = "excerpt") { "No such file or directory. The link can be old, or it can contain an error." }
+    p (class' = "excerpt") { "No such file or directory. The link may be outdated or mistyped." }
 
     p (class' = "page-links") {
       a (href = "/") { "cd ~/twopoint" }

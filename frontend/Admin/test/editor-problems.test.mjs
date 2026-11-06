@@ -120,5 +120,5 @@ test('a check that did not run shows a note in the sheet and no dot', async () =
   nextCheck = { kind: 'unavailable', problems: [] };
   await saveNow();
   assert.equal(dots(), 0);
-  assert.match(sheet().textContent, /The check did not run/);
+  assert.match(sheet().textContent, /Couldn't check the post/);
 });

@@ -95,8 +95,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
       None
 
     match kindOf file.ContentType file.Name with
-    | None -> refuse $"{file.Name} is not a JPEG, PNG, WebP, GIF, or PDF file."
-    | Some _ when file.Size > maxBytes -> refuse $"{file.Name} is larger than 25 MB."
+    | None -> refuse $"{file.Name} isn't a supported type. Use JPEG, PNG, WebP, GIF, or PDF."
+    | Some _ when file.Size > maxBytes -> refuse $"{file.Name} is over the 25 MB limit."
     | Some kind ->
       { model with
           Next = id + 1
@@ -145,14 +145,14 @@ let notices (model: Model) : Notice list =
       match item.State with
       | Failed reason ->
         { Id = item.Id
-          Title = $"{item.Name} did not upload."
+          Title = $"Couldn't upload {item.Name}."
           Reason = reason
           CanRetry = true }
       | Uploading
       | Ready _ -> ()
     for refusal in model.Refusals do
       { Id = refusal.Id
-        Title = "A file did not upload."
+        Title = "Couldn't upload a file."
         Reason = refusal.Reason
         CanRetry = false } ]
 

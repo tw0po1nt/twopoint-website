@@ -22,7 +22,7 @@ let tests =
       Expect.stringContains html $"<title>Subscribe {string (char 0x2014)} TwoPoint</title>" "The title"
       Expect.stringContains html """<link rel="canonical" href="https://twopoint.dev/subscribe/">""" "The canonical URL"
       Expect.stringContains html """<meta name="robots" content="index,follow">""" "The page is indexable"
-      Expect.stringContains html $"""<p class="excerpt">Get an email for each new post. Each email has a link to unsubscribe.</p>{mount "https://func-twopoint-website-api.azurewebsites.net"}</main>""" "The mount follows the excerpt"
+      Expect.stringContains html $"""<p class="excerpt">Get new posts by email. Unsubscribe anytime.</p>{mount "https://func-twopoint-website-api.azurewebsites.net"}</main>""" "The mount follows the excerpt"
     }
 
     test "each mount gives the API origin of the stage, with no '/' at the end" {

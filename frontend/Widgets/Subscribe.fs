@@ -48,9 +48,9 @@ let isSending (model: Model) =
   | Failed _
   | Subscribed -> false
 
-let private refused = "The subscription did not go through. Try again later."
+let private refused = "Couldn't subscribe you. Try again later."
 
-let private unanswered = "The site cannot get to the server. Try again later."
+let private unanswered = "Couldn't reach the server. Try again later."
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with

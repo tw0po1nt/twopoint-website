@@ -21,14 +21,14 @@ let private text: Parse<string> =
   fun context name node ->
     match node with
     | :? YamlScalarNode as scalar when not (String.IsNullOrWhiteSpace scalar.Value) -> Ok scalar.Value
-    | _ -> fail context name node $"Give '{name}' as text."
+    | _ -> fail context name node $"'{name}' must be text."
 
 let private flag: Parse<bool> =
   fun context name node ->
     match text context name node with
     | Ok "true" -> Ok true
     | Ok "false" -> Ok false
-    | _ -> fail context name node $"Give '{name}' as true or false."
+    | _ -> fail context name node $"'{name}' must be true or false."
 
 let private utcTime: Parse<DateTimeOffset> =
   fun context name node ->
@@ -42,7 +42,7 @@ let private utcTime: Parse<DateTimeOffset> =
 
     match parsed with
     | Some time -> Ok time
-    | None -> fail context name node $"Give '{name}' as an ISO 8601 UTC time, for example 2026-02-04T13:00:00Z."
+    | None -> fail context name node $"'{name}' must be an ISO 8601 UTC time, like 2026-02-04T13:00:00Z."
 
 let private httpsUrl: Parse<Uri> =
   fun context name node ->
@@ -50,7 +50,7 @@ let private httpsUrl: Parse<Uri> =
     | Ok value ->
       match Uri.TryCreate(value, UriKind.Absolute) with
       | true, url when url.Scheme = Uri.UriSchemeHttps -> Ok url
-      | _ -> fail context name node $"Give '{name}' as an https URL."
+      | _ -> fail context name node $"'{name}' must be an https URL."
     | Error errors -> Error errors
 
 let private term: Parse<Term> =
@@ -58,7 +58,7 @@ let private term: Parse<Term> =
     text context name node
     |> Result.bind (fun value ->
       match Slug.term value with
-      | "" -> fail context name node $"'{name}' gives an empty slug."
+      | "" -> fail context name node $"'{name}' produces an empty slug."
       | slug -> Ok { Slug = slug; Title = Slug.termTitle value })
 
 let private placedTerm: Parse<PlacedTerm> =
@@ -73,7 +73,7 @@ let private terms: Parse<PlacedTerm list> =
       |> List.ofSeq
       |> List.traverseResultA (placedTerm context name)
       |> Result.mapError List.concat
-    | _ -> fail context name node $"Give '{name}' as a list."
+    | _ -> fail context name node $"'{name}' must be a list."
 
 let private mapping context (prefix: string) (node: YamlNode) (known: string list) =
   match node with
@@ -98,8 +98,8 @@ let private mapping context (prefix: string) (node: YamlNode) (known: string lis
     else
       Error unknown
   | _ when prefix = "" ->
-    Error [ Problem.error (Place.Post(fileLine context node.Start.Line)) $"Give the {context.Document} as a YAML mapping." ]
-  | _ -> fail context (prefix.TrimEnd '.') node $"Give '{prefix.TrimEnd '.'}' as a mapping."
+    Error [ Problem.error (Place.Post(fileLine context node.Start.Line)) $"The {context.Document} must be a single YAML mapping." ]
+  | _ -> fail context (prefix.TrimEnd '.') node $"'{prefix.TrimEnd '.'}' must be a mapping."
 
 let private required context (missingLine: int64) (fields: Map<string, YamlNode * YamlNode>) prefix name (parse: Parse<'a>) =
   match fields.TryFind name with
@@ -108,7 +108,7 @@ let private required context (missingLine: int64) (fields: Map<string, YamlNode 
     Error
       [ Problem.error
           (Place.Field($"{prefix}{name}", fileLine context missingLine))
-          $"The {context.Document} has no '{prefix}{name}' field." ]
+          $"The {context.Document} is missing the '{prefix}{name}' field." ]
 
 let private optional context (fields: Map<string, YamlNode * YamlNode>) prefix name (parse: Parse<'a>) =
   match fields.TryFind name with
@@ -121,7 +121,7 @@ let private seriesBySlug (records: Series list) : Parse<Series> =
     |> Result.bind (fun slug ->
       match records |> List.tryFind (fun record -> record.Slug = slug) with
       | Some record -> Ok record
-      | None -> fail context name node $"No series has the slug '{slug}'.")
+      | None -> fail context name node $"There's no series with the slug '{slug}'.")
 
 let private fieldNames =
   [ "publishDate"
@@ -234,7 +234,7 @@ let private load (document: string) (startLine: int) (yaml: string) (ofRoot: Con
 
     match List.ofSeq stream.Documents with
     | [ document ] -> ofRoot context document.RootNode
-    | _ -> Error [ Problem.error (Place.Post(fileLine context 0L)) $"The {document} is not one YAML mapping." ]
+    | _ -> Error [ Problem.error (Place.Post(fileLine context 0L)) $"The {document} must be a single YAML mapping." ]
   with :? YamlException as error ->
     Error [ Problem.error (Place.Post(fileLine context error.Start.Line)) error.Message ]
 
@@ -264,7 +264,7 @@ let parseDraft
   |> Result.bind (fun (frontMatter, problems) ->
     match frontMatter with
     | Some frontMatter -> Ok(frontMatter, problems)
-    | None -> Error [ Problem.error (Place.Post startLine) "The front matter has no publish date or no category." ])
+    | None -> Error [ Problem.error (Place.Post startLine) "The front matter is missing a publish date or category." ])
 
 /// A published post has a `publishDate` and a `category`.
 let parsePublished (records: Series list) (startLine: int) (yaml: string) : Result<FrontMatter * Problem list, Problem list> =
@@ -272,7 +272,7 @@ let parsePublished (records: Series list) (startLine: int) (yaml: string) : Resu
   |> Result.bind (fun (frontMatter, problems) ->
     match frontMatter with
     | Some frontMatter -> Ok(frontMatter, problems)
-    | None -> Error [ Problem.error (Place.Post startLine) "The front matter has no publish date or no category." ])
+    | None -> Error [ Problem.error (Place.Post startLine) "The front matter is missing a publish date or category." ])
 
 let private ofPageRoot context (root: YamlNode) =
   result {

@@ -89,7 +89,7 @@ let tests =
 
       Expect.equal
         result.Problems
-        [ Problem.error (Place.Body 4) "The output has no page at /posts/missing/." ]
+        [ Problem.error (Place.Body 4) "No page exists at /posts/missing/." ]
         "The problem"
     }
 
@@ -100,7 +100,7 @@ let tests =
 
       Expect.equal
         result.Problems
-        [ Problem.error (Place.Field("category", 1)) "The post has no category." ]
+        [ Problem.error (Place.Field("category", 1)) "The post needs a category." ]
         "A draft can have no publish date, and it needs a category to publish"
       let html = contentOf result
       Expect.stringContains html "<h1>New title</h1>" "The title"
@@ -152,7 +152,7 @@ let tests =
       let result = previewWith store "draft" (Some details) "T" "Body.\n" |> articleOf
       Expect.isNone result.Article "No article"
       Expect.isTrue
-        (result.Problems |> List.exists (fun problem -> problem.Message.Contains "give it the category 'Series'"))
+        (result.Problems |> List.exists (fun problem -> problem.Message.Contains "must use the 'Series' category"))
         "The category problem"
     }
 
@@ -165,7 +165,7 @@ let tests =
 
       let missing = preview withoutRecord "part" "T" "Body.\n" |> articleOf
       Expect.isNone missing.Article "A post of an unknown series has no article"
-      Expect.stringContains (missing.Problems |> List.head).Message "No series has the slug 'tour'" "The reason"
+      Expect.stringContains (missing.Problems |> List.head).Message "There's no series with the slug 'tour'" "The reason"
     }
 
     test "the preview of a post that does not exist fails" {

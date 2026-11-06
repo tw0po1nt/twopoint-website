@@ -111,7 +111,7 @@ let tryFind (commentId: string) (model: Model) =
 
 let emptyText (filter: Filter) =
   match filter with
-  | All -> "This post has no comments."
-  | Only Api.CommentApproval.New -> "This post has no new comments."
-  | Only Api.CommentApproval.Approved -> "This post has no approved comments."
-  | Only Api.CommentApproval.Rejected -> "This post has no rejected comments."
+  | All -> "No comments yet."
+  | Only Api.CommentApproval.New -> "No new comments."
+  | Only Api.CommentApproval.Approved -> "No approved comments."
+  | Only Api.CommentApproval.Rejected -> "No rejected comments."

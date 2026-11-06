@@ -55,7 +55,7 @@ let tests =
       Expect.isNone effect "No poll after a failure"
       Expect.equal (SiteDeploy.state model.SiteDeploy) (Some Api.DeployState.DeployFailed) "Deploy failed"
       Expect.equal (SiteDeploy.productionFailure model.SiteDeploy) (Some failed) "The failed run"
-      Expect.equal (SiteDeploy.productionFailureTitle failed) "The production run #41 failed." "The title"
+      Expect.equal (SiteDeploy.productionFailureTitle failed) "Production run #41 failed." "The title"
       Expect.equal failed.Url "https://github.com/tw0po1nt/twopoint-website/actions/runs/41" "The link"
       Expect.isNone (SiteDeploy.stagingWarning model.SiteDeploy) "No staging warning"
       Expect.isFalse (SiteDeploy.notDeployed model.SiteDeploy) "The failed run explains the state"
@@ -78,7 +78,7 @@ let tests =
 
       Expect.equal (SiteDeploy.state model.SiteDeploy) (Some Api.DeployState.Deployed) "The site is deployed"
       Expect.equal (SiteDeploy.stagingWarning model.SiteDeploy) (Some failed) "The staging warning"
-      Expect.equal (SiteDeploy.stagingWarningTitle failed) "The staging run #77 failed." "The title"
+      Expect.equal (SiteDeploy.stagingWarningTitle failed) "Staging run #77 failed." "The title"
       Expect.isNone (SiteDeploy.productionFailure model.SiteDeploy) "No production failure"
     }
 

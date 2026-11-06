@@ -168,10 +168,10 @@ test('New series in the picker saves a series and selects it, and the editor sta
   select.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
 
-  const saveSeries = () => [...sheet().querySelectorAll('button')].find((item) => item.textContent.trim() === 'Save the series');
+  const saveSeries = () => [...sheet().querySelectorAll('button')].find((item) => item.textContent.trim() === 'Save series');
   saveSeries().click();
   await settle();
-  assert.match(sheet().textContent, /Give the series a title\./, 'The errors of the Series page');
+  assert.match(sheet().textContent, /Add a title\./, 'The errors of the Series page');
   assert.equal(seriesSaves.length, 0, 'No save with problems');
 
   const title = field('new-series-title');

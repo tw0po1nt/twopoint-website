@@ -13,6 +13,6 @@ await load('http://localhost:4322/comments', { respond });
 test('a commenter status that the admin does not know stops the queue and shows the reason', () => {
   assert.equal(document.querySelectorAll('main .queue-row').length, 0);
   const alert = document.querySelector('main .alert').textContent;
-  assert.match(alert, /The moderation queue did not load\./);
-  assert.match(alert, /The API sent an answer that the admin cannot read\./);
+  assert.match(alert, /Couldn't load the moderation queue\./);
+  assert.match(alert, /The server sent an unexpected response\./);
 });

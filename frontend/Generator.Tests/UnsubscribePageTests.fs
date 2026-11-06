@@ -15,7 +15,7 @@ let private mount api =
   $"""<div data-widget="unsubscribe" data-api="{api}"><p class="unsubscribe-fallback">The unsubscribe link needs JavaScript.</p></div>"""
 
 let private help =
-  """<p class="unsubscribe-help">If the link does not work, send an email to <a href="mailto:matt@twopoint.dev">matt@twopoint.dev</a>.</p>"""
+  """<p class="unsubscribe-help">If the link doesn&#39;t work, email <a href="mailto:matt@twopoint.dev">matt@twopoint.dev</a>.</p>"""
 
 [<Tests>]
 let tests =

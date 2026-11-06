@@ -51,7 +51,7 @@ let filters =
   [ PostFilter.All, "All"
     PostFilter.Drafts, "Drafts"
     PostFilter.PendingEdits, "Pending edits"
-    PostFilter.DeliveriesToStart, "Deliveries to start" ]
+    PostFilter.PendingDeliveries, "Pending deliveries" ]
 
 let private isDeploying (posts: Api.Post list) =
   posts |> List.exists (fun post -> post.Deploy = Api.DeployState.Deploying)
@@ -93,15 +93,15 @@ let shown (filter: PostFilter) (model: Model) =
   | Loaded posts, PostFilter.All -> posts
   | Loaded posts, PostFilter.Drafts -> posts |> List.filter (fun post -> post.State = Api.Draft)
   | Loaded posts, PostFilter.PendingEdits -> posts |> List.filter (fun post -> post.PendingEdit)
-  | Loaded posts, PostFilter.DeliveriesToStart -> posts |> List.filter (fun post -> post.DeliveryToStart)
+  | Loaded posts, PostFilter.PendingDeliveries -> posts |> List.filter (fun post -> post.DeliveryToStart)
   | (Waiting | NotLoaded _), _ -> []
 
 let emptyText (filter: PostFilter) =
   match filter with
-  | PostFilter.All -> "The blog has no posts."
-  | PostFilter.Drafts -> "The blog has no drafts."
-  | PostFilter.PendingEdits -> "No post has a pending edit."
-  | PostFilter.DeliveriesToStart -> "No post waits for a delivery."
+  | PostFilter.All -> "No posts yet."
+  | PostFilter.Drafts -> "No drafts."
+  | PostFilter.PendingEdits -> "No pending edits."
+  | PostFilter.PendingDeliveries -> "No pending deliveries."
 
 /// The name of a post on the page of its comments.
 type PostName =

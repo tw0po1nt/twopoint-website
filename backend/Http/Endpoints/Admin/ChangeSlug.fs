@@ -70,8 +70,8 @@ type ChangeSlug (
                 | ChangeSlug.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
                 | ChangeSlug.Error.PostNotFound missing -> $"Post '{missing}' not found", HttpStatusCode.NotFound
                 | ChangeSlug.Error.PostPublished published ->
-                  $"The slug of the published post '{published}' is fixed", HttpStatusCode.Conflict
-                | ChangeSlug.Error.SlugTaken taken -> $"Another post has the slug '{taken}'", HttpStatusCode.Conflict)
+                  "You can't change the slug of a published post", HttpStatusCode.Conflict
+                | ChangeSlug.Error.SlugTaken taken -> $"Another post already uses the slug '{taken}'", HttpStatusCode.Conflict)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

@@ -10,10 +10,10 @@ let private categoryProblems (state: PostState) (fields: RuleFields) =
   let isSeries = fields.Category |> Option.exists (fun category -> category.Slug = seriesCategory)
 
   match fields.Category, fields.Series with
-  | _, Some _ when not isSeries -> [ Problem.error at "The post is in a series, so give it the category 'Series'." ]
+  | _, Some _ when not isSeries -> [ Problem.error at "Posts in a series must use the 'Series' category." ]
   | Some _, None when isSeries ->
-    [ Problem.error at "The category is 'Series', so give the post a series, or give it another category." ]
-  | None, None when state = PostState.Published -> [ Problem.error at "The post has no category." ]
+    [ Problem.error at "The 'Series' category needs a series. Pick a series or another category." ]
+  | None, None when state = PostState.Published -> [ Problem.error at "The post needs a category." ]
   | _ -> []
 
 let private duplicateTags (fields: RuleFields) =
@@ -24,7 +24,7 @@ let private duplicateTags (fields: RuleFields) =
       Some(
         Problem.error
           (Place.Field("tags", tag.Line))
-          $"Another tag has the slug '{tag.Term.Slug}'. Delete one of the two tags."
+          $"Two tags share the slug '{tag.Term.Slug}'. Remove one."
       )
     else
       None)
@@ -48,7 +48,7 @@ let private yearProblems (fields: RuleFields) =
       |> List.map (fun tag ->
         Problem.warning
           (Place.Field("tags", tag.Line))
-          $"The tag '{tag.Term.Slug}' is a year tag, and the publish year is {year}. Delete the tag or change it to '{year}'.")
+          $"The year tag '{tag.Term.Slug}' doesn't match the publish year. Change it to '{year}' or remove it.")
 
     missing @ otherYears
   | _ -> []
@@ -81,4 +81,4 @@ let termTitles (published: Post list) (post: Post) =
 
           Problem.warning
             (Place.Field(field, line))
-            $"The {name} '{term.Title}' has the slug '{term.Slug}', and other posts give that slug another title: {posts}." ]
+            $"The {name} '{term.Title}' uses the slug '{term.Slug}', which other posts give a different title: {posts}." ]

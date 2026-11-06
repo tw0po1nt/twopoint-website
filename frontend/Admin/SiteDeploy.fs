@@ -54,10 +54,10 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
 let private failedRun (run: Api.SiteRun option) =
   run |> Option.filter (fun run -> run.State = Api.RunState.Failed)
 
-let notDeployedTitle = "The latest change did not deploy."
+let notDeployedTitle = "Latest change isn't live."
 
 let notDeployedText =
-  "No production run failed: the rebuild did not start, or GitHub canceled the run. Select Rebuild site to deploy it again."
+  "The rebuild didn't start, or GitHub canceled the run. Click 'Rebuild site' to try again."
 
 let private ofLoaded (read: Api.SiteDeploy -> 'T option) (model: Model) =
   match model.Status with
@@ -86,12 +86,12 @@ let reason (model: Model) =
   | Waiting
   | Loaded _ -> None
 
-let productionFailureTitle (run: Api.SiteRun) = $"The production run #{run.Number} failed."
+let productionFailureTitle (run: Api.SiteRun) = $"Production run #{run.Number} failed."
 
 let productionFailureText =
-  "The site of record did not deploy. Open the run in GitHub to find the error, and then select Rebuild site."
+  "The live site didn't update. Open the run in GitHub to see the error, then click 'Rebuild site'."
 
-let stagingWarningTitle (run: Api.SiteRun) = $"The staging run #{run.Number} failed."
+let stagingWarningTitle (run: Api.SiteRun) = $"Staging run #{run.Number} failed."
 
 let stagingWarningText =
-  "The unreleased code in the staging repo did not build the published posts. The production site does not change."
+  "Unreleased code in staging couldn't build the published posts. Production isn't affected."

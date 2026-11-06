@@ -65,21 +65,21 @@ const type = async (element, text) => {
 };
 
 test('the menu of a saved upcoming post offers Change the date and Unpublish', () => {
-  assert.equal(menuItem('Change the date').getAttribute('aria-disabled'), null);
+  assert.equal(menuItem('Change date').getAttribute('aria-disabled'), null);
   assert.equal(menuItem('Unpublish').getAttribute('aria-disabled'), null);
 });
 
 test('Change the date opens a dialog with the current date, and the date sends the ETag and the UTC time', async () => {
   moveAnswer = () => ok({ publishDate: '2099-06-01T08:30:00Z', state: 'upcoming', eTag: '"w2"', productionRun: 7, warnings: [] });
 
-  menuItem('Change the date').click();
+  menuItem('Change date').click();
   await settle();
 
   assert.ok(changeDate().open, 'The dialog is open');
   assert.equal(changeDate().querySelector('#new-publish-date').value, '2099-12-31T00:00');
 
   await type(changeDate().querySelector('#new-publish-date'), '2099-06-01T08:30');
-  button(changeDate(), 'Change the date').click();
+  button(changeDate(), 'Change date').click();
   await settle();
 
   assert.deepEqual(calls, [{ url: 'date', method: 'POST', ifMatch: '"w1"', body: { publishDate: '2099-06-01T08:30:00Z' } }]);
@@ -93,7 +93,7 @@ const openUnpublish = async () => {
 };
 
 const keepUnpublish = async () => {
-  button(unpublish(), 'Keep').click();
+  button(unpublish(), 'Cancel').click();
   await settle();
 };
 
@@ -105,12 +105,12 @@ test('the unpublish dialog checks the links one time when it opens, and Unpublis
   await openUnpublish();
   assert.ok(unpublish().open, 'The dialog is open');
   assert.equal(checks, checksBefore + 1, 'One check');
-  assert.match(unpublish().textContent, /The check of the links to the post runs\./);
+  assert.match(unpublish().textContent, /Checking for links to this post…/);
   assert.equal(button(unpublish(), 'Unpublish').disabled, true);
 
   pending.resolve(ok(plain));
   await settle();
-  assert.doesNotMatch(unpublish().textContent, /The check of the links to the post runs\./);
+  assert.doesNotMatch(unpublish().textContent, /Checking for links to this post…/);
   assert.doesNotMatch(unpublish().textContent, /Other posts link to this post/);
   assert.equal(button(unpublish(), 'Unpublish').disabled, false);
   assert.equal(checks, checksBefore + 1, 'No second check');
@@ -126,7 +126,7 @@ test('a blocked check shows the problems and keeps Unpublish disabled', async ()
     });
 
   await openUnpublish();
-  assert.match(unpublish().textContent, /The admin cannot unpublish the post\. A link to it stays\./);
+  assert.match(unpublish().textContent, /Can't unpublish: other posts still link here\./);
   assert.match(unpublish().textContent, /The post 'c-post' links to the post and has no pending edit/);
   assert.equal(button(unpublish(), 'Unpublish').disabled, true);
   await keepUnpublish();
@@ -136,7 +136,7 @@ test('a failed check shows the reason and keeps Unpublish disabled', async () =>
   checkAnswer = () => answer(500, { success: false, message: 'The post store did not answer.', data: null });
 
   await openUnpublish();
-  assert.match(unpublish().textContent, /The check of the links to the post did not run/);
+  assert.match(unpublish().textContent, /Couldn't check for links to this post/);
   assert.match(unpublish().textContent, /The post store did not answer\./);
   assert.equal(button(unpublish(), 'Unpublish').disabled, true);
   await keepUnpublish();
@@ -161,7 +161,7 @@ test('a publish and remove lists the posts and sends each edit, and a refusal sh
     });
 
   await openUnpublish();
-  assert.match(unpublish().textContent, /Their pending edits remove the links\. The admin publishes these pending edits first, and then unpublishes the post\./);
+  assert.match(unpublish().textContent, /Their unpublished changes remove those links and will be published first, in the same rebuild\./);
   const titles = [...unpublish().querySelectorAll('.removal-edits li')].map((item) => item.textContent.trim());
   assert.deepEqual(titles, ['A post', 'C post']);
 
@@ -197,7 +197,7 @@ test('Keep closes the unpublish dialog and sends nothing, and Unpublish shows a 
   await settle();
   assert.ok(unpublish().open, 'The dialog is open');
 
-  button(unpublish(), 'Keep').click();
+  button(unpublish(), 'Cancel').click();
   await settle();
   assert.ok(!unpublish().open, 'The dialog closes');
   assert.equal(calls.length, 0);
@@ -210,6 +210,6 @@ test('Keep closes the unpublish dialog and sends nothing, and Unpublish shows a 
   assert.deepEqual(calls, [{ url: 'unpublish', method: 'POST', ifMatch: '"w2"', body: { edits: [] } }]);
   assert.ok(!unpublish().open, 'The dialog closes');
   assert.match(status(), /^Draft/);
-  assert.match(menuItem('Unpublish').textContent, /You can unpublish only an upcoming post\./);
-  assert.match(menuItem('Change the date').textContent, /Only an upcoming post can change its date\./);
+  assert.match(menuItem('Unpublish').textContent, /Only for upcoming posts\./);
+  assert.match(menuItem('Change date').textContent, /Only for upcoming posts\./);
 });

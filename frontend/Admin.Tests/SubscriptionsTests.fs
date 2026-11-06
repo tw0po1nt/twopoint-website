@@ -58,7 +58,7 @@ let private tests' =
       Expect.equal model.Subscriptions.Subscriptions Subscriptions.Waiting "The list waits"
     }
 
-    test "the counts are the active and the inactive subscriptions" {
+    test "the counts are the active, the inactive subscriptions" {
       let model = listed ()
       Expect.equal (Subscriptions.counts model.Subscriptions) (Some(counts 2 2)) "Two and two"
     }
@@ -127,19 +127,19 @@ let private tests' =
 
     test "the empty text says what the filter and the search found" {
       let none = Subscriptions.emptyText SubscriptionFilter.All ""
-      Expect.equal none "The blog has no subscriptions." "No subscription"
+      Expect.equal none "No subscriptions yet." "No subscription"
 
       Expect.equal
         (Subscriptions.emptyText SubscriptionFilter.Active "")
-        "The blog has no active subscriptions."
+        "No active subscriptions."
         "No active"
 
       Expect.equal
         (Subscriptions.emptyText SubscriptionFilter.Inactive "")
-        "The blog has no inactive subscriptions."
+        "No inactive subscriptions."
         "No inactive"
 
-      Expect.equal (Subscriptions.emptyText SubscriptionFilter.All "zed") "No subscription matches the search." "No match"
+      Expect.equal (Subscriptions.emptyText SubscriptionFilter.All "zed") "No subscriptions match your search." "No match"
     }
 
     test "a change of the filter alone sends no API call and keeps the search" {
@@ -314,7 +314,7 @@ let private actionTests =
 
       Expect.equal
         (model.Subscriptions.Sheet |> Option.bind (fun sheet -> Subscriptions.failure sheet.State))
-        (Some $"The cancel did not complete. {Api.reason Api.Unanswered}")
+        (Some $"Couldn't cancel the subscription. {Api.reason Api.Unanswered}")
         "The reason"
     }
 
@@ -358,7 +358,7 @@ let private actionTests =
 
       Expect.equal
         (model.Subscriptions.Sheet |> Option.bind (fun sheet -> Subscriptions.failure sheet.State))
-        (Some "The delete did not complete. Boom.")
+        (Some "Couldn't delete the subscription. Boom.")
         "The reason"
     }
 

@@ -334,10 +334,10 @@ type SiteDeploy =
 
 let reason (failure: Failure) =
   match failure with
-  | Refused -> "The API refused the token of this account."
-  | Stale -> "The post changed in another place after this page loaded it."
-  | Unanswered -> "The API did not answer."
-  | Invalid -> "The API sent an answer that the admin cannot read."
+  | Refused -> "Your session isn't authorized. Try signing in again."
+  | Stale -> "This post changed in another tab. Reload the page to get the latest version."
+  | Unanswered -> "The server didn't respond. Check your connection and try again."
+  | Invalid -> "The server sent an unexpected response."
   | Failed reason -> reason
 
 let private postState: Decoder<PostState> =

@@ -206,11 +206,11 @@ let countText (count: int) =
   | 1 -> "1 comment"
   | count -> $"{count} comments"
 
-let private listFailed = "The comments did not load. Try again later."
+let private listFailed = "Couldn't load comments. Try again later."
 
-let private refused = "The comment did not go through. Try again later."
+let private refused = "Couldn't post your comment. Try again later."
 
-let private unanswered = "The site cannot get to the server. Try again later."
+let private unanswered = "Couldn't reach the server. Try again later."
 
 let private failed (message: string option) =
   Failed(message |> Option.defaultValue refused)

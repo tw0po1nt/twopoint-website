@@ -65,8 +65,8 @@ module DeleteMapping =
     let because =
       match reason with
       | DeletePost.EditNotPublished(edit, failure) -> RemovalMapping.editNotPublished "delete" edit failure
-      | DeletePost.PublishedBlobKept -> "The published text of the post changed during the delete.", HttpStatusCode.Conflict
-      | DeletePost.PublishedDeleteFailed _ -> "The delete of the published text failed.", HttpStatusCode.InternalServerError
+      | DeletePost.PublishedBlobKept -> "The post changed while it was being deleted.", HttpStatusCode.Conflict
+      | DeletePost.PublishedDeleteFailed _ -> "Couldn't delete the published post.", HttpStatusCode.InternalServerError
 
     RemovalMapping.kept "delete" slug edits because warnings
 
@@ -75,12 +75,12 @@ module DeleteMapping =
     | DeletePost.PostNotFound missing -> $"Post '{missing}' not found", HttpStatusCode.NotFound
     | DeletePost.WorkingBlobChanged -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
     | DeletePost.PublishedBlobChanged -> "The published text changed since you opened the post", HttpStatusCode.Conflict
-    | DeletePost.SlugNotConfirmed slug -> $"Type the slug '{slug}' to delete the published post", HttpStatusCode.UnprocessableEntity
+    | DeletePost.SlugNotConfirmed slug -> $"Type '{slug}' to confirm the delete.", HttpStatusCode.UnprocessableEntity
     | DeletePost.BreaksLinks problems ->
-      $"If you delete the post, a link in another post breaks. The admin does not delete the post. {RemovalMapping.errors problems}",
+      $"Can't delete: other posts still link here. {RemovalMapping.errors problems}",
       HttpStatusCode.UnprocessableEntity
     | DeletePost.EditsChanged ->
-      "The pending edits that remove the links to the post changed. The admin did not delete the post. Check the delete again.",
+      "The pending edits that remove links to this post have changed. Close the dialog and try again.",
       HttpStatusCode.Conflict
 
 type DeletePost(

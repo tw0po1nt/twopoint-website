@@ -128,10 +128,10 @@ let tests =
     }
 
     test "a filter with no comment has its own empty text" {
-      Expect.equal (PostComments.emptyText PostComments.All) "This post has no comments." "All"
+      Expect.equal (PostComments.emptyText PostComments.All) "No comments yet." "All"
       Expect.equal
         (PostComments.emptyText(PostComments.Only Api.CommentApproval.Rejected))
-        "This post has no rejected comments."
+        "No rejected comments."
         "Rejected"
     }
 
@@ -167,7 +167,7 @@ let tests =
       let model, _ = send (PostComments.Chosen("waiting", Queue.Reject)) (loaded ())
       let model, _ = send (PostComments.Done("waiting", Queue.Reject, Error(Api.Failed "Comment 'waiting' not found"))) model
       let row = PostComments.tryFind "waiting" (page model) |> Option.get
-      Expect.equal (Queue.failure row.State) (Some "The rejection did not complete. Comment 'waiting' not found") "The reason"
+      Expect.equal (Queue.failure row.State) (Some "Couldn't reject the comment. Comment 'waiting' not found") "The reason"
       Expect.equal row.Comment.Status Api.CommentApproval.New "The approval stays"
     }
 

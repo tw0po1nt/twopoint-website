@@ -39,7 +39,7 @@ test('the dashboard shows the to-do counts and the audience, and each count link
     { title: 'Moderation queue', count: '3', href: '/comments' },
     { title: 'Drafts', count: '1', href: '/posts?filter=drafts' },
     { title: 'Pending edits', count: '2', href: '/posts?filter=pending-edits' },
-    { title: 'Deliveries to start', count: '0', href: '/posts?filter=deliveries-to-start' },
+    { title: 'Pending deliveries', count: '0', href: '/posts?filter=pending-deliveries' },
     { title: 'Active subscriptions', count: '12', href: '/subscriptions?filter=active' },
   ]);
 
