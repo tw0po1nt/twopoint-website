@@ -25,7 +25,8 @@ open System.Globalization
 ///    "CreatedDate": "&lt;date&gt;",
 ///    "EmailAddress": "&lt;string&gt;",
 ///    "Name": "&lt;string&gt;" | null,
-///    "IsActive": "&lt;boolean&gt;"
+///    "IsActive": "&lt;boolean&gt;",
+///    "CanceledDate": "&lt;date&gt;" | null
 ///  }
 /// </c>
 /// </remarks>
@@ -34,8 +35,10 @@ type internal DbSubscription =
     CreatedDate : DateTime 
     EmailAddress : string
     Name : string option
-    IsActive : bool }
-  
+    CanceledDate : DateTime option }
+
+  member this.IsActive = this.CanceledDate.IsNone
+
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbSubscription 
     let! createdDate =
@@ -45,13 +48,21 @@ type internal DbSubscription =
     let! emailAddress = "EmailAddress" |> entity.RequireString entityName
     let name = "Name" |> entity.TryGetString
     let isActive = "IsActive" |> entity.TryGetBoolean |> Option.defaultValue false
+    let! canceledDate =
+      match isActive with
+      | true -> Validation.ok None
+      | false ->
+        "CanceledDate"
+        |> entity.RequireString entityName
+        |> Validation.bind (fun date -> DateTime.TryValidateUtc(date, "CanceledDate"))
+        |> Validation.map Some
 
     return
       { SubscriptionId = entity.RowKey
         CreatedDate =  createdDate
         EmailAddress = emailAddress
         Name = name 
-        IsActive = isActive }
+        CanceledDate = canceledDate }
   }
   
   member this.ToEntity() =
@@ -60,6 +71,7 @@ type internal DbSubscription =
     entity["EmailAddress"] <- this.EmailAddress
     entity["Name"] <- this.Name |> Option.toObj
     entity["IsActive"] <- this.IsActive
+    entity["CanceledDate"] <- this.CanceledDate |> Option.map (fun date -> date.ToString("o", CultureInfo.InvariantCulture)) |> Option.toObj
     entity
     
   static member FromSubscription (subscription : Subscription) =
@@ -67,7 +79,10 @@ type internal DbSubscription =
       CreatedDate = subscription.CreatedDate
       EmailAddress = subscription.EmailAddress |> EmailAddress.value
       Name = subscription.Name |> Option.map NonEmptyString.value
-      IsActive = subscription.IsActive }
+      CanceledDate =
+        match subscription.Status with
+        | Active -> None
+        | Canceled date -> Some date }
     
   member this.ToSubscription () = validation {
     let! subscriptionId = this.SubscriptionId |> SubscriptionId.create
@@ -82,7 +97,10 @@ type internal DbSubscription =
         CreatedDate = createdDate
         EmailAddress = emailAddress
         Name = name
-        IsActive = this.IsActive }
+        Status =
+          match this.CanceledDate with
+          | None -> Active
+          | Some date -> Canceled(date.ToUniversalTime()) }
   }
 
 /// <summary>
@@ -165,14 +183,16 @@ type internal ISubscriptionDb =
   abstract member GetSubscriptionByEmail: email: string -> CancellableTaskResult<DbSubscription option, DependencyError>
   abstract member GetSubscriptionById: id: string -> CancellableTaskResult<DbSubscription option, DependencyError>
   abstract member CreateSubscription: subscription: DbSubscription -> CancellableTaskResult<DbSubscription, DependencyError>
-  abstract member UpdateSubscriptionActivation: 
+  abstract member UpdateSubscriptionActivation:
     subscription: DbSubscription
-      -> isActive: bool
       -> CancellableTaskResult<DbSubscription, DependencyError>
   abstract member GetDeliveriesForSubscription:
     subscriptionId: string -> CancellableTaskResult<DbSubscriptionDelivery list, DependencyError>
   abstract member CreateDelivery:
     delivery: DbSubscriptionDelivery -> CancellableTaskResult<DbSubscriptionDelivery, DependencyError>
+  abstract member DeleteSubscription: subscriptionId: string -> CancellableTaskResult<unit, DependencyError>
+  abstract member DeleteDelivery:
+    subscriptionId: string -> deliveryId: string -> CancellableTaskResult<unit, DependencyError>
 
 module internal SubscriptionDbError =
   let private subscriptionDbError =
@@ -211,6 +231,9 @@ module internal SubscriptionDb =
     let where table onEntity filter =
       Db.where tableServiceClient logger db table onEntity filter
 
+    let deleteByKeys table onError partitionKey rowKey =
+      Db.deleteByKeys tableServiceClient logger db table onError partitionKey rowKey
+
     let subscriptionsTable = "subscriptions"
     let deliveriesTable = "deliveries"
 
@@ -228,10 +251,13 @@ module internal SubscriptionDb =
       member _.CreateSubscription subscription =
         subscription.ToEntity() |> add subscriptionsTable SubscriptionDbError.validation DbSubscription.FromEntity
 
-      member _.UpdateSubscriptionActivation subscription isActive =
+      member _.UpdateSubscriptionActivation subscription =
         subscription.ToEntity() |> update subscriptionsTable SubscriptionDbError.validation DbSubscription.FromEntity
         <| fun entity ->
-          entity["IsActive"] <- isActive
+          entity["IsActive"] <- subscription.IsActive
+          match subscription.CanceledDate with
+          | Some date -> entity["CanceledDate"] <- date.ToString("o", CultureInfo.InvariantCulture)
+          | None -> entity.Remove "CanceledDate" |> ignore
           entity
 
       member _.GetDeliveriesForSubscription subscriptionId =
@@ -239,5 +265,11 @@ module internal SubscriptionDb =
 
       member _.CreateDelivery delivery =
         delivery.ToEntity() |> add deliveriesTable SubscriptionDbError.validation DbSubscriptionDelivery.FromEntity
+
+      member _.DeleteSubscription subscriptionId =
+        deleteByKeys subscriptionsTable SubscriptionDbError.validation subscriptionId subscriptionId
+
+      member _.DeleteDelivery subscriptionId deliveryId =
+        deleteByKeys deliveriesTable SubscriptionDbError.validation subscriptionId deliveryId
     }
   

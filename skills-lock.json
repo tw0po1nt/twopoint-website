@@ -103,6 +103,12 @@
       "skillPath": "skills/engineering/retro/SKILL.md",
       "computedHash": "b8d55851a2909e26c2dbb2e8563719c87b3b700559f604e4df344f8c27e21047"
     },
+    "sagefs": {
+      "source": "WillEhrendreich/SageFs",
+      "sourceType": "github",
+      "skillPath": "skills/sagefs/SKILL.md",
+      "computedHash": "a10b108eaf380150f54ccfab8567bf984ec272ee6a5a11c4f8af0fba5c7b1d44"
+    },
     "setup-matt-pocock-skills": {
       "source": "mattpocock/skills",
       "sourceType": "github",

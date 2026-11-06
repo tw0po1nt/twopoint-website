@@ -2,6 +2,8 @@ module TwoPoint.Site.Generator.Tests.OgImagesTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 open SkiaSharp
@@ -21,8 +23,8 @@ let private post slug (image: string option) (series: string option) =
     |> Option.map (fun image -> { seriesRecord "a-series" with Image = Some(Uri image) })
     |> Option.toList
 
-  let seriesLine = if records.IsEmpty then "" else "\nseries: a-series"
-  publishedIn records slug (text $"{frontMatter}{imageLine}{seriesLine}" "Text.")
+  let frontMatter = if records.IsEmpty then frontMatter else seriesFrontMatter "a-series"
+  publishedIn records slug (text $"{frontMatter}{imageLine}" "Text.")
 
 let private tags (map: RenderMap) slug =
   let html = siteText map $"posts/{slug}/index.html"
@@ -115,7 +117,7 @@ let tests =
     }
 
     test "the real posts give one crop for each distinct source" {
-      let sources = realPosts.Value |> List.choose OgImages.source |> List.distinctBy _.AbsoluteUri
+      let sources = realPosts.Value |> List.choose Post.ogImageSource |> List.distinctBy _.AbsoluteUri
       let map = RenderMap.create Stage.Production buildTime widgets realContent.Value
       Expect.isNonEmpty sources "The posts have images"
       Expect.equal (ogFiles map).Count sources.Length "One crop for each source"

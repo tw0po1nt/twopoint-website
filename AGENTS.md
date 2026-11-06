@@ -5,7 +5,8 @@ Instructions for agents in this repo.
 This repo contains the code for twopoint.dev, a technical blog. `frontend/` is an F# static site
 generator with F# widgets that Fable compiles to JavaScript
 (`docs/spec/124-build-twopoint-dev-with-fsharp.md`). `backend/` is an F# Azure Functions app for
-newsletter subscriptions, notifications, and posts.
+newsletter subscriptions, notifications, and posts. `frontend/Render/` is the library that renders
+and checks a post. The generator and the backend reference it.
 
 Each post is a Markdown blob in the `published` container of the post store, a private Azure Blob
 storage account. Each series is a YAML record in the `series` container. A post refers to its
@@ -25,7 +26,107 @@ repo variable `POST_STORE_ACCOUNT`. Then run
 writes the site to `frontend/dist/website/`, the newsletters to `frontend/dist/newsletter/`, and
 the stage marker to `frontend/dist/stage`. The stage marker contains the stage name of the build.
 After a production build, `dotnet run --project frontend/Generator -- upload --container <uri>`
-sends each newsletter to Azure Blob. The command stops if the stage marker is not `production`.
+sends each newsletter to Azure Blob. It then deletes each `posts/<slug>/index` blob that has no post
+in the build. The command stops if the stage marker is not `production`.
+
+Before the admin build, run
+`dotnet run --project frontend/Generator -- preview-styles --out frontend/Admin/dist/preview-styles`.
+The command writes the site CSS and its fonts. The preview frame of the editor links them, so
+without them the preview has no style. The backend serves the preview at
+`POST internal/posts/{slug}/preview`. It reads the `series` and `published` containers.
+
+`frontend/Admin/` is the admin, a separate Fable app that references the Widgets project for shared
+code. The site bundle gets no admin code. In `frontend/Admin/`, `npm run build` builds the release
+mode and `npm run watch` builds the dev mode at each change. `config.json` contains the public
+settings of each mode, with the public VAPID key. The build copies `public/` to `dist/`: the push
+worker `sw.js`, `manifest.webmanifest`, and the icons. A build with no VAPID key cannot turn on
+notifications. `scripts/setup-web-push.sh` makes the key pair for the deployed backend and writes
+the public key to `config.json`. `npm test` tests the last build in happy-dom, with a stub push that has a test key.
+The admin dev host in
+`frontend/Admin.Dev/` serves the build on `http://localhost:4322` with the rules of
+`staticwebapp.config.json`. A SageFs session over `frontend/Admin.Tests/` starts the host and the
+watch. In the `staging` repo, `.github/workflows/backend-staging.yml` deploys the admin to Azure
+Static Web Apps at `https://admin.twopoint.dev` after the backend. `scripts/setup-admin-host.sh`
+sets up that host.
+
+"Rebuild site" on the dashboard sends `workflow_dispatch` to `site.yml` in the two site repos
+through a GitHub App. Key Vault keeps the private key of the app and signs each app JWT.
+`scripts/setup-site-dispatch.sh` sets up the app. The local backend logs each dispatch and sends
+nothing.
+
+The app subscribes to `workflow_run`. The public function `Github-Webhook-Receive`
+(`POST /api/webhooks/github`) checks `X-Hub-Signature-256` with the webhook secret and writes each
+run of `site.yml` to the table `siteRuns`. The secret is the Key Vault secret that the setting
+`Deploy:GitHubApp:WebhookSecretName` names. A bad or missing signature gets `401` and writes
+nothing. Each action that dispatches the site stores its change in the table `postChanges` with
+`PostChange.ofDispatch` and `PostChanges.RecordChange`. `GET internal/posts` and
+`GET internal/posts/{slug}/deploy` give the deploy state of a post. The rule is the pure function
+`DeployRule.state`. The local backend logs each dispatch, so each change there is deployed.
+A failed production run sends a Web Push to each registered device, and the notification opens
+the dashboard. A re-run keeps the run number, and the failure of each attempt sends a Web Push.
+`GET internal/deploys` gives the deploy state of the site and the latest run of each
+repo. The dashboard shows a failed production run with a link to the run, and a failed staging run
+as a warning.
+
+`Admin-Posts-Publish` publishes a draft now or on a future date. It sets the publish date in the
+working text and runs the check of the build, with the card image, so an error refuses the publish.
+It then writes the `revisions` blob, the `published` blob, and the post-table row, deletes the
+`working` blob, and dispatches `site.yml` as "Rebuild site" does. A step after the `published` write
+that fails gives a warning, and the post stays published. `Admin-Posts-CheckPublish` gives the
+problems for the dialog before the author confirms.
+
+The removal check runs before a published post leaves the site, by a delete or an unpublish. The
+delete dialog and the unpublish dialog run it one time when they open, through
+`Admin-Posts-CheckRemoval` (`POST internal/posts/{slug}/removal/check`). The rule is the pure
+function `RemovalCheck.Logic.outcome`. A publish and remove sends the slug and the working ETag of
+each pending edit to publish. `Admin-Posts-Delete` and `Admin-Posts-Unpublish` run the check again,
+and a different list or ETag gets `409` and writes nothing. The action publishes each pending edit
+with the publish steps of `PublishChanges` and no dispatch. The delete then deletes the post. The
+unpublish then writes the draft text, deletes the `published` blob, and deletes the post row. The
+action then dispatches `site.yml` one time. Each published edit and the post record their change
+with that dispatch. A failed step after the first published edit keeps the post, and the dispatch
+still runs for the published edits.
+
+The Series page lists, makes, and edits each series record. `GET internal/series` gives each record
+with its posts. `PUT internal/series/{slug}` saves a record and dispatches `site.yml` as "Rebuild
+site" does, and the page shows the deploy state of the site. A series save stores no change in
+`postChanges`, because a change in that table is for one post. The slug is locked while a post, a
+draft, or a pending edit refers to the series. `DELETE internal/series/{slug}` deletes only a series
+that no post, draft, or pending edit refers to. The series picker of the Details sheet ends with
+"New series…". It opens the form of the Series page (`SeriesForm`, `SeriesFormView`) in the sheet,
+saves through the same endpoint, and selects the new series.
+
+"Send to subscribers" in the "•••" menu of the editor starts a new-post delivery, with an optional
+intro, through `Admin-Posts-Deliveries-Start` (`POST internal/posts/{slug}/deliveries`). The
+backend refuses with `409` until the publish date is in the past and the latest change to the post
+is deployed. The rule is the pure function `DeliveryGate.check`. Each start inserts the delivery
+start of the post in the table `deliveryStarts` before it queues, so the backend refuses a second
+start with `409`. A failed queue deletes the delivery start. The welcome uses the newest post that
+passes the same check. The migrated mark is the blob metadata `migrated=true` on a `published`
+blob, and each write of a `published` blob keeps it. The filter "Deliveries to start" of the post
+list shows each published post that passes the check, with no delivery start and no migrated mark.
+
+`GET internal/dashboard` gives the counts of the dashboard: the drafts, the pending edits, the
+deliveries to start, the active subscriptions, and the subscriptions made and canceled in the last
+30 days. The backend calculates them at each request with `GetDashboard`, from the same post list
+as `GET internal/posts`. The admin reads them at each visit to the dashboard. The moderation queue
+count comes from the queue that the admin loads at the start. Each count opens its page with its
+filter. The filter of the post list and of the Subscriptions page is part of the route and of the
+URL, for example `/posts?filter=drafts`. "All" has no query string.
+
+`Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
+`Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
+builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a
+deploy to create the queue.
+
+The backend reads the post store for the post list. The setting `Azure:PostStoreUri` names the
+account. On the local stage it is the Azurite URL. `scripts/setup-post-store-access.sh` gives the
+backend identity read and write on the four containers and sets the setting on the Function App.
+
+The backend writes each uploaded image and PDF to the `assets` container of the account `twopointwebsite`.
+The setting `Azure:AssetsUri` names the account. On the local stage it is the Azurite URL.
+`scripts/setup-assets-access.sh` gives the backend identity write access to `assets` only and sets
+the setting on the Function App.
 
 `.github/workflows/site.yml` builds the site and deploys `frontend/dist/website/` to GitHub Pages
 on each push to `main` and on each manual run. The build action signs in to Azure as the build
@@ -89,6 +190,17 @@ The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 
 Single-context layout: `GLOSSARY.md` and `docs/adr/` at the repo root. See
 `docs/agents/domain.md`.
+
+### SageFs
+
+The `sagefs` skill drives the SageFs REPL through the `sagefs` MCP server in `.mcp.json`. The repo
+standards in `docs/standards/` and the gate in `scripts/verify.sh` take priority over the design
+and test rules of that skill.
+
+The site session is a solution session over `frontend/Site.slnx`, with `frontend/` as its working
+directory. Its init script `frontend/.SageFs/init.fsx` starts the widget watch and the dev server
+on `http://localhost:4321`. The session runs the tests of `Dev.Tests`,
+`Generator.Tests`, and `Render.Tests`. The gate uses `TwoPoint.slnx`.
 
 ### Feedback ledger
 

@@ -6,11 +6,18 @@ open TwoPoint.Core.Util
 open FsToolkit.ErrorHandling
 
 open System
+open System.Globalization
 
 type CommenterStatus =
   | New
   | Trusted
   | Banned
+
+  override this.ToString() =
+    match this with
+    | New -> "new"
+    | Trusted -> "trusted"
+    | Banned -> "banned"
 
 module CommenterStatus =
   let create (value : string) =
@@ -144,6 +151,15 @@ module Comment =
       }
 
 
+type RenderedComment =
+  { Comment : Comment
+    Html : string }
+
+module RenderedComment =
+  let ofComment (stage : TwoPoint.Site.Render.Stage) (comment : Comment) =
+    { Comment = comment; Html = TwoPoint.Site.Render.CommentBody.html stage (comment.Content.ToString()) }
+
+
 type Slug =
   private | Slug of string
 
@@ -193,6 +209,133 @@ module PostInfo =
     let! createdDate = DateTime.TryValidateUtc(createdDate, nameof createdDate)
     return { Slug = slug; Title = title;  CreatedDate = createdDate; CommentStats = commentStats }
   }
+
+type PostState =
+  | Draft
+  | Published
+  | Upcoming
+
+/// The text of one blob in the post store.
+type StoredPost = { Slug : Slug; Text : string; ETag : string }
+
+/// The author cannot set or clear the mark, so each write of a `published` blob keeps it.
+type MigratedMark =
+  | Migrated
+  | NotMigrated
+
+/// A post has at most one start of its new-post delivery.
+type DeliveryStart =
+  | NotStarted
+  | Started of startedDate : DateTime
+
+type DeliveryStartInsert =
+  | Inserted
+  | StartedBefore of startedDate : DateTime
+
+/// Only a `published` blob can have the migrated mark.
+type StoredBlob = { Text : string; ETag : string; Mark : MigratedMark }
+
+/// The store refuses a write when its condition is false.
+type WriteCondition =
+  | MatchesETag of string
+  | MustNotExist
+
+type WriteOutcome =
+  | Written of eTag: string
+  | ConditionFailed
+
+type DeleteOutcome =
+  | Deleted
+  /// The blob changed since the caller read it, or it is gone.
+  | DeleteConditionFailed
+
+/// The text of one series record. The slug is the blob name without `.yml`.
+type StoredSeries = { Slug : string; Text : string; ETag : string }
+
+[<RequireQualifiedAccess>]
+module StoredSeries =
+
+  let parseOne (record : StoredSeries) : TwoPoint.Site.Render.Series option =
+    TwoPoint.Site.Render.FrontMatter.parseSeries $"{record.Slug}.yml" record.Text |> Result.toOption
+
+  /// A record that the parser cannot read is not in the list.
+  let parse (records : StoredSeries list) : TwoPoint.Site.Render.Series list = records |> List.choose parseOne
+
+/// A category or a tag on the published posts. `Value` is the text in the front matter of the newest published post
+/// with the slug, and `Title` is the title that the site shows for it.
+type TermCount = { Slug : Slug; Title : string; Value : string; Posts : int }
+
+type TermSuggestions = { Categories : TermCount list; Tags : TermCount list }
+
+/// The blob `<slug>/<name>.md` in `revisions`. A migrated post has a name in the round-trip form of its publish date,
+/// such as `2024-01-15T00:00:00.0000000Z`. The name is the exact blob name, so a restore finds the blob.
+type RevisionName =
+  private | RevisionName of name: string * publishedAt: DateTime
+
+  override this.ToString() =
+    let (RevisionName(name, _)) = this
+    name
+
+module RevisionName =
+
+  let create (name : string) : Result<RevisionName, string list> =
+    match DateTimeOffset.TryParse(name, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal) with
+    | true, time when Text.RegularExpressions.Regex.IsMatch(name, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?Z\z") -> Ok(RevisionName(name, time.UtcDateTime))
+    | _ -> Error [ $"'{name}' is not a revision name. A revision name is an ISO 8601 UTC time" ]
+
+  let value (RevisionName(name, _)) = name
+
+  let publishedAt (RevisionName(_, publishedAt)) = publishedAt
+
+type StoredRevision = { Name : RevisionName; Text : string }
+
+type RevisionListing = { Name : RevisionName; PublishedAt : DateTime; Title : string option }
+
+/// `Text` is the pending edit when the post has one, and else the published text. `ETag` is the ETag of the working blob.
+type PostDocument =
+  { Slug : Slug
+    State : PostState
+    HasPendingEdit : bool
+    PublishDate : DateTime option
+    ETag : string option
+    Text : string
+    PublishedText : string option
+    DeliveryStart : DeliveryStart }
+
+type PostListing =
+  { Slug : Slug
+    Title : string
+    State : PostState
+    HasPendingEdit : bool
+    PublishDate : DateTime option
+    Deploy : TwoPoint.Core.Deploys.DeployState
+    DeliveryToStart : bool
+    CommentStats : PostCommentStats }
+
+type PostedComment =
+  { Post : Slug
+    PostTitle : NonEmptyString
+    Comment : Comment }
+
+type RenderedPostedComment =
+  { Post : Slug
+    PostTitle : NonEmptyString
+    Comment : RenderedComment }
+
+module RenderedPostedComment =
+  let ofPostedComment (stage : TwoPoint.Site.Render.Stage) (posted : PostedComment) =
+    { Post = posted.Post
+      PostTitle = posted.PostTitle
+      Comment = RenderedComment.ofComment stage posted.Comment }
+
+  let ofPostedCommentsByDate (stage : TwoPoint.Site.Render.Stage) (comments : PostedComment list) =
+    comments
+    |> List.sortBy _.Comment.CreatedDate
+    |> List.map (ofPostedComment stage)
+
+type CommenterComments =
+  { Commenter : Commenter
+    Comments : RenderedPostedComment list }
 
 type Post =
   { Id: Slug

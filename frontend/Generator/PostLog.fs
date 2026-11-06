@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.PostLog
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 open System.Globalization
 
@@ -18,7 +20,7 @@ let years (posts: Post list) =
       ol () {
         for post in posts do
           li () {
-            time (datetime = Layout.isoTime post.FrontMatter.PublishDate) {
+            time (datetime = Time.isoTime post.FrontMatter.PublishDate) {
               post.FrontMatter.PublishDate.UtcDateTime.ToString("MM-dd", CultureInfo.InvariantCulture)
             }
 

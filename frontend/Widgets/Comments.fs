@@ -30,8 +30,21 @@ type Status =
   | Validating
   | ValidationSent of email: string
   | Posting
-  | Posted
+  | Posted of Approval
   | Failed of reason: string
+
+[<RequireQualifiedAccess>]
+type PreviewState =
+  | Empty
+  | Loading
+  | Failed
+  | Shown of html: string
+
+type Tab =
+  | Write
+  | Preview of PreviewState
+
+type Kept = { Source: string; Html: string }
 
 type Model =
   { /// The URL of the post page, with no query and no fragment.
@@ -44,7 +57,17 @@ type Model =
     Comment: string
     EmailTouched: bool
     CommentTouched: bool
-    Status: Status }
+    Status: Status
+    Tab: Tab
+    /// The last source that the backend previewed, and its HTML.
+    Kept: Kept option
+    /// The count of tab changes. An answer for an older open has a smaller count.
+    Opening: int
+    HelpShown: bool }
+
+/// One call for the preview of a source. `Opening` is the count of tab changes at the call, so an answer for an older
+/// open has a smaller count than the model.
+type PreviewRequest = { Opening: int; Source: string }
 
 type Msg =
   | ListAnswered of ApiResponse<Comment list>
@@ -56,13 +79,37 @@ type Msg =
   | CommentLeft
   | Submitted
   | ValidationAnswered of ApiResponse<unit>
-  | PostAnswered of ApiResponse<unit>
+  | PostAnswered of PostCommentAnswer
   | Unanswered
+  | WriteSelected
+  | PreviewSelected
+  | RetrySelected
+  | PreviewAnswered of PreviewRequest * ApiResponse<string>
+  | PreviewUnanswered of PreviewRequest
+  | HelpToggled
 
 type Effect =
   | Load
   | Validate of CommenterValidation
   | Post of NewComment
+  | PreviewComment of PreviewRequest
+
+type HelpRow = { YouType: string; ReadersSee: string }
+
+/// "Readers see" is the HTML of the comment renderer of the backend for the source.
+let helpRows: HelpRow list =
+  [ { YouType = "*italic*"; ReadersSee = "<p><em>italic</em></p>\n" }
+    { YouType = "**bold**"; ReadersSee = "<p><strong>bold</strong></p>\n" }
+    { YouType = "`code`"; ReadersSee = "<p><code>code</code></p>\n" }
+    { YouType = "[text](https://example.com)"
+      ReadersSee =
+        "<p><a href=\"https://example.com\" target=\"_blank\" rel=\"nofollow ugc noopener noreferrer\">text</a></p>\n" }
+    { YouType = "- one\n- two"; ReadersSee = "<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n" }
+    { YouType = "> a quote"; ReadersSee = "<blockquote>\n<p>a quote</p>\n</blockquote>\n" }
+    { YouType = "```fsharp\nlet x = 1\n```"
+      ReadersSee =
+        "<pre data-lang=\"fsharp\" tabindex=\"0\"><code><span class=\"tk-keyword\">let</span> x "
+        + "<span class=\"tk-keyword\">=</span> <span class=\"tk-constant\">1</span>\n</code></pre>\n" } ]
 
 let parse (query: (string * string) list) : Return option =
   let find key =
@@ -88,7 +135,11 @@ let private empty (pageUrl: string) (validations: Map<string, string>) =
     Comment = ""
     EmailTouched = false
     CommentTouched = false
-    Status = Editing }
+    Status = Editing
+    Tab = Write
+    Kept = None
+    Opening = 0
+    HelpShown = false }
 
 let init (pageUrl: string) (validations: Map<string, string>) (returned: Return option) : Model * Effect option =
   let model =
@@ -118,7 +169,7 @@ let isSending (model: Model) =
   | Editing
   | Validated
   | ValidationSent _
-  | Posted
+  | Posted _
   | Failed _ -> false
 
 /// After a sent validation, the form stays locked until the reader comes back through the link in the email.
@@ -129,7 +180,7 @@ let isLocked (model: Model) =
   | ValidationSent _ -> true
   | Editing
   | Validated
-  | Posted
+  | Posted _
   | Failed _ -> false
 
 /// The backend adds the validation ID to the query of this URL.
@@ -161,8 +212,15 @@ let private refused = "The comment did not go through. Try again later."
 
 let private unanswered = "The site cannot get to the server. Try again later."
 
-let private failed (response: ApiResponse<unit>) =
-  Failed(response.Message |> Option.defaultValue refused)
+let private failed (message: string option) =
+  Failed(message |> Option.defaultValue refused)
+
+let private posted (answer: PostCommentAnswer) (list: CommentList) =
+  match answer.Comment, list with
+  | Some { Comment = comment; Approval = Approved }, Loaded comments -> Approved, Loaded(comments @ [ comment ])
+  | Some { Approval = Approved }, (Loading | NotLoaded _) -> Approved, list
+  | Some { Approval = AwaitsApproval }, _
+  | None, _ -> AwaitsApproval, list
 
 let private submit (model: Model) =
   let email = model.Email.Trim()
@@ -182,6 +240,28 @@ let private submit (model: Model) =
           RedirectUri = redirectUri model }
     )
 
+let private openPreview (model: Model) =
+  let opening = model.Opening + 1
+  let source = model.Comment.Trim()
+
+  match model.Kept with
+  | _ when source = "" -> { model with Tab = Preview PreviewState.Empty; Opening = opening }, None
+  | Some kept when kept.Source = source -> { model with Tab = Preview(PreviewState.Shown kept.Html); Opening = opening }, None
+  | _ ->
+    { model with Tab = Preview PreviewState.Loading; Opening = opening },
+    Some(PreviewComment { Opening = opening; Source = source })
+
+let private isAwaited (request: PreviewRequest) (model: Model) =
+  request.Opening = model.Opening && model.Tab = Preview PreviewState.Loading
+
+let private previewed (request: PreviewRequest) (response: ApiResponse<string>) (model: Model) =
+  match response.Success, response.Data with
+  | true, Some html ->
+    { model with
+        Tab = Preview(PreviewState.Shown html)
+        Kept = Some { Source = request.Source; Html = html } }
+  | _ -> { model with Tab = Preview PreviewState.Failed }
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
   | ListAnswered response when response.Success -> { model with List = Loaded(response.Data |> Option.defaultValue []) }, None
@@ -200,11 +280,26 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     None
   | Submitted -> submit model
   | ValidationAnswered response when response.Success -> { model with Status = ValidationSent(model.Email.Trim()) }, None
-  | ValidationAnswered response -> { model with Status = failed response }, None
-  | PostAnswered response when response.Success ->
+  | ValidationAnswered response -> { model with Status = failed response.Message }, None
+  | PostAnswered answer when answer.Success ->
+    let approval, list = posted answer model.List
+
     { empty model.PageUrl model.Validations with
-        List = model.List
-        Status = Posted },
+        List = list
+        Status = Posted approval
+        Opening = model.Opening
+        HelpShown = model.HelpShown },
     None
-  | PostAnswered response -> { model with Status = failed response }, None
+  | PostAnswered answer -> { model with Status = failed answer.Message }, None
   | Unanswered -> { model with Status = Failed unanswered }, None
+  | WriteSelected when model.Tab = Write -> model, None
+  | WriteSelected -> { model with Tab = Write; Opening = model.Opening + 1 }, None
+  | PreviewSelected when model.Tab = Write -> openPreview model
+  | PreviewSelected -> model, None
+  | RetrySelected when model.Tab = Preview PreviewState.Failed -> openPreview model
+  | RetrySelected -> model, None
+  | PreviewAnswered(request, response) when isAwaited request model -> previewed request response model, None
+  | PreviewUnanswered request when isAwaited request model -> { model with Tab = Preview PreviewState.Failed }, None
+  | PreviewAnswered _
+  | PreviewUnanswered _ -> model, None
+  | HelpToggled -> { model with HelpShown = not model.HelpShown }, None

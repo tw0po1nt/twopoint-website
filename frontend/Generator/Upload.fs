@@ -1,5 +1,7 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Render
+
 open Azure.Identity
 open Azure.Storage.Blobs
 open Azure.Storage.Blobs.Models
@@ -16,6 +18,13 @@ type IBlobContainer =
   abstract CreateIfNotExists: unit -> Result<unit, string>
   /// Replaces a blob that has the same name.
   abstract Upload: Blob -> Result<unit, string>
+  abstract Names: prefix: string -> Result<string list, string>
+  /// Gives no error when the blob does not exist.
+  abstract Delete: name: string -> Result<unit, string>
+
+type UploadReport =
+  { Uploaded: string list
+    Deleted: string list }
 
 [<RequireQualifiedAccess>]
 module BlobContainer =
@@ -33,13 +42,27 @@ module BlobContainer =
               HttpHeaders = BlobHttpHeaders(ContentType = blob.ContentType, CacheControl = blob.CacheControl)
             )
 
-          AzureRequest.attempt (fun () -> client.GetBlobClient(blob.Name).Upload(BinaryData.FromBytes blob.Content, options) |> ignore) }
+          AzureRequest.attempt (fun () -> client.GetBlobClient(blob.Name).Upload(BinaryData.FromBytes blob.Content, options) |> ignore)
+
+        member _.Names prefix =
+          AzureRequest.attempt (fun () -> [ for item in client.GetBlobs(GetBlobsOptions(Prefix = prefix)) -> item.Name ])
+
+        member _.Delete name =
+          AzureRequest.attempt (fun () ->
+            client.GetBlobClient(name).DeleteIfExists(DeleteSnapshotsOption.IncludeSnapshots) |> ignore) }
 
 [<RequireQualifiedAccess>]
 module Upload =
 
+  let private prefix = "posts/"
+
   /// The backend reads each newsletter at this name.
-  let blobName (slug: string) = $"posts/{slug}/index"
+  let blobName (slug: string) = $"{prefix}{slug}/index"
+
+  let private isNewsletter (name: string) =
+    match name.Split '/' with
+    | [| _; slug; _ |] -> slug <> "" && name = blobName slug
+    | _ -> false
 
   let private blob (newsletter: Disk.NewsletterFile) =
     { Name = blobName newsletter.Slug
@@ -61,7 +84,7 @@ module Upload =
     (container: IBlobContainer)
     (stageMarker: string option)
     (newsletters: Disk.NewsletterFile list)
-    : Result<string list, string> =
+    : Result<UploadReport, string> =
     result {
       do! checkStage stageMarker
 
@@ -82,5 +105,20 @@ module Upload =
           |> Result.mapError (fun reason -> $"Cannot upload {blob.Name}: {reason}"))
         |> Result.ignore
 
-      return blobs |> List.map _.Name
+      let uploaded = blobs |> List.map _.Name
+
+      let! names = container.Names prefix |> Result.mapError (fun reason -> $"Cannot list the newsletters: {reason}")
+
+      let removed =
+        names
+        |> List.filter (fun name -> isNewsletter name && not (List.contains name uploaded))
+
+      do!
+        removed
+        |> List.traverseResultM (fun name ->
+          container.Delete name
+          |> Result.mapError (fun reason -> $"Cannot delete {name}: {reason}"))
+        |> Result.ignore
+
+      return { Uploaded = uploaded; Deleted = removed }
     }

@@ -1,0 +1,39 @@
+{
+  "globalHeaders": {
+    "X-Robots-Tag": "noindex, nofollow"
+  },
+  "routes": [
+    {
+      "route": "/redirect/*",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    },
+    {
+      "route": "/sw.js",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/manifest.webmanifest",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/redirect/*",
+      "/bundle/*",
+      "/icons/*",
+      "/preview-styles/*",
+      "/sw.js",
+      "/manifest.webmanifest"
+    ]
+  },
+  "mimeTypes": {
+    ".webmanifest": "application/manifest+json"
+  }
+}

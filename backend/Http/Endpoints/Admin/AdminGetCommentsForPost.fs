@@ -7,7 +7,6 @@ open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -18,9 +17,11 @@ open System.Net
 open System.Threading
 
 type AdminCommenterDto =
-  { Email : string
+  { Id : string
+    Email : string
     Name : string
-    Status : string }
+    Status : string
+    CreatedDate : DateTime }
 
 type AdminCommentDto =
   { Id : string
@@ -34,22 +35,23 @@ module CommentTypesExt =
 
   type Commenter with
     member this.ToDto() =
-      { AdminCommenterDto.Email = this.EmailAddress.ToString()
+      { AdminCommenterDto.Id = this.ValidationId.ToString()
+        Email = this.EmailAddress.ToString()
         Name = this.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
-        Status = this.Status.ToString() }
+        Status = this.Status.ToString()
+        CreatedDate = this.CreatedDate }
 
-  type Comment with
-    member this.ToDto() =
-      { AdminCommentDto.Id = this.Id.ToString()
-        CreatedDate = this.CreatedDate
-        Commenter = this.Commenter.ToDto()
-        Status = this.Status.Approval.ToString()
-        Content = this.Content.ToString() }
+  type RenderedComment with
+    member this.ToAdminDto() =
+      { AdminCommentDto.Id = this.Comment.Id.ToString()
+        CreatedDate = this.Comment.CreatedDate
+        Commenter = this.Comment.Commenter.ToDto()
+        Status = this.Comment.Status.Approval.ToString()
+        Content = this.Html }
 
 type AdminGetCommentsForPost (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<AdminGetCommentsForPost>,
   tableServiceClient: TableServiceClient
 ) =
@@ -77,7 +79,6 @@ type AdminGetCommentsForPost (
           validRedirectUris,
           emailClient,
           config.Azure.EmailSender,
-          messaging,
           tableServiceClient,
           logger
         )
@@ -86,6 +87,7 @@ type AdminGetCommentsForPost (
           
           member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
           member _.GetCommentsForPost approvals slug = postDependencies.GetCommentsForPost approvals slug
+          member _.Stage = config.Stage
         }
 
         let! commentsResult = (slug, ct) ||> getCommentsForPost []
@@ -93,7 +95,7 @@ type AdminGetCommentsForPost (
         let apiResponse, statusCode =
           match commentsResult with
           | Ok (Some comments) ->
-            { Success = true; Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
+            { Success = true; Message = None; Data = comments |> List.map _.ToAdminDto() |> Some }, HttpStatusCode.OK
           | Ok None ->
             { Success = false; Message = Some $"Post ''{slug}'' not found"; Data = None }, HttpStatusCode.NotFound
           | Error queryError when queryError.IsValidation ->

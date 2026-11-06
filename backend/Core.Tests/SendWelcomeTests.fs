@@ -24,7 +24,7 @@ let private decisionTests =
     }
 
     test "an inactive subscription gets no welcome" {
-      let inactive = subscription false
+      let inactive = subscription canceledStatus
       Expect.equal
         (decide (Some inactive) [] (Some latestPost))
         (Error (SendWelcome.SubscriptionInactive inactive))
@@ -32,11 +32,11 @@ let private decisionTests =
     }
 
     test "no welcome goes out when there are no posts" {
-      Expect.equal (decide (Some (subscription true)) [] None) (Error SendWelcome.NoPosts) "Expected NoPosts"
+      Expect.equal (decide (Some (subscription Active)) [] None) (Error SendWelcome.NoPosts) "Expected NoPosts"
     }
 
     test "a new subscription gets the latest post" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [] (Some latestPost))
         (Ok (SendWelcome.Send (active, latestPost)))
@@ -44,7 +44,7 @@ let private decisionTests =
     }
 
     test "a reactivation gets no second welcome for the same post" {
-      let active = subscription true
+      let active = subscription Active
       let earlierWelcome = delivery Welcome latestPost
       Expect.equal
         (decide (Some active) [ earlierWelcome ] (Some latestPost))
@@ -53,7 +53,7 @@ let private decisionTests =
     }
 
     test "a reactivation gets a welcome when a newer post exists" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [ delivery Welcome olderPost ] (Some latestPost))
         (Ok (SendWelcome.Send (active, latestPost)))
@@ -61,7 +61,7 @@ let private decisionTests =
     }
 
     test "a new-post delivery of the latest post does not count as a welcome" {
-      let active = subscription true
+      let active = subscription Active
       Expect.equal
         (decide (Some active) [ delivery NewPost latestPost ] (Some latestPost))
         (Ok (SendWelcome.Send (active, latestPost)))
@@ -89,7 +89,7 @@ let private newsletterTests =
     }
   ]
 
-type private FakeDependencies(subscription, deliveries, latestPost, newsletter) =
+type private FakeDependencies(subscription, deliveries, posts : Post list, deploys, newsletter) =
   let calls = ResizeArray<string>()
 
   member _.Calls = List.ofSeq calls
@@ -97,7 +97,8 @@ type private FakeDependencies(subscription, deliveries, latestPost, newsletter) 
   interface SendWelcome.Dependencies with
     member _.GetSubscriptionById _ = CancellableTaskResult.singleton subscription
     member _.GetDeliveriesForSubscription _ = CancellableTaskResult.singleton deliveries
-    member _.GetLatestPost () = CancellableTaskResult.singleton latestPost
+    member _.GetAllPosts () = CancellableTaskResult.singleton posts
+    member _.GetDeployContext () = CancellableTaskResult.singleton deploys
     member _.GetNewsletter _ = CancellableTaskResult.singleton newsletter
     member _.GetUtcNow () = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
     member _.SendWelcome _ _ =
@@ -111,10 +112,50 @@ let private run (dependencies : FakeDependencies) =
   let request = { WelcomeRequest.Dto.SubscriptionId = WelcomeRequest.SubscriptionId (subscriptionId.ToString()) }
   (SendWelcome.withDependencies dependencies request CancellationToken.None).Result
 
+let private utcNow = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+let private upcomingPost = post "upcoming-post" "2026-04-01T00:00:00.0000000Z"
+
+let private latestPostTests =
+  testList "Logic.latestPost" [
+    test "the latest post that is deployed and past its publish date goes in the welcome" {
+      Expect.equal
+        (SendWelcome.Logic.latestPost utcNow noDeploys [ olderPost; latestPost; upcomingPost ])
+        (Some latestPost)
+        "Expected the latest post with a past publish date"
+    }
+
+    test "the welcome uses the previous post while the publish of the newest post deploys" {
+      Expect.equal
+        (SendWelcome.Logic.latestPost utcNow (deploying latestPost) [ olderPost; latestPost ])
+        (Some olderPost)
+        "Expected the previous post"
+    }
+
+    test "the welcome uses the previous post when the deploy of the newest post failed" {
+      Expect.equal
+        (SendWelcome.Logic.latestPost utcNow (deployFailed latestPost) [ olderPost; latestPost ])
+        (Some olderPost)
+        "Expected the previous post"
+    }
+
+    test "no post is the latest when no post is deployed" {
+      Expect.equal (SendWelcome.Logic.latestPost utcNow (deploying latestPost) [ latestPost ]) None "Expected no post"
+    }
+  ]
+
 let private actionTests =
   testList "withDependencies" [
+    test "sends the previous post while the publish of the newest post deploys" {
+      let dependencies =
+        FakeDependencies(Some (subscription Active), [], [ olderPost; latestPost ], deploying latestPost, Some slottedHtml)
+
+      match run dependencies with
+      | Ok (SendWelcome.Sent (_, recorded)) -> Expect.equal recorded.Post olderPost.Id "Expected the previous post"
+      | other -> failtestf "Expected Sent, got %A" other
+    }
+
     test "sends the welcome, then records the delivery" {
-      let dependencies = FakeDependencies(Some (subscription true), [], Some latestPost, Some slottedHtml)
+      let dependencies = FakeDependencies(Some (subscription Active), [], [ olderPost; latestPost ], noDeploys, Some slottedHtml)
 
       match run dependencies with
       | Ok (SendWelcome.Sent (_, recorded)) ->
@@ -127,7 +168,7 @@ let private actionTests =
 
     test "sends nothing when a welcome for the latest post exists" {
       let dependencies =
-        FakeDependencies(Some (subscription true), [ delivery Welcome latestPost ], Some latestPost, Some slottedHtml)
+        FakeDependencies(Some (subscription Active), [ delivery Welcome latestPost ], [ olderPost; latestPost ], noDeploys, Some slottedHtml)
 
       match run dependencies with
       | Error (ActionError.Logic (SendWelcome.AlreadySent _)) -> ()
@@ -137,7 +178,7 @@ let private actionTests =
     }
 
     test "sends nothing when the newsletter has no slots" {
-      let dependencies = FakeDependencies(Some (subscription true), [], Some latestPost, Some "<html></html>")
+      let dependencies = FakeDependencies(Some (subscription Active), [], [ latestPost ], noDeploys, Some "<html></html>")
 
       match run dependencies with
       | Error (ActionError.Logic (SendWelcome.NewsletterInvalid _)) -> ()
@@ -148,4 +189,4 @@ let private actionTests =
   ]
 
 [<Tests>]
-let tests = testList "SendWelcome" [ decisionTests; newsletterTests; actionTests ]
+let tests = testList "SendWelcome" [ decisionTests; newsletterTests; latestPostTests; actionTests ]

@@ -1,10 +1,11 @@
 namespace TwoPoint.Dependencies.Subscriptions
 
 open TwoPoint.Core.Posts
-open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
+open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Posts
 
 open Azure.Data.Tables
 open FsToolkit.ErrorHandling
@@ -19,6 +20,7 @@ type SubscriptionDependencies(
  
  
   let subscriptionDb = SubscriptionDb.live tableServiceClient logger
+  let postDb = PostDb.live tableServiceClient logger
 
   let source = Dependency.Database
 
@@ -55,20 +57,14 @@ type SubscriptionDependencies(
         CreatedDate = createdDateUtc 
         EmailAddress = newSubscription.EmailAddress |> EmailAddress.value
         Name = newSubscription.Name |> Option.map NonEmptyString.value
-        IsActive = true }
+        CanceledDate = None }
     let! (dbSubscription: DbSubscription) = subscriptionDb.CreateSubscription newSubscription
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
   }
 
-  member _.UpdateSubscriptionActivation subscription isActive = cancellableTaskResult {
-    let dbSubscription =
-      { DbSubscription.SubscriptionId = subscription.Id.ToString()
-        CreatedDate = subscription.CreatedDate
-        EmailAddress = subscription.EmailAddress |> EmailAddress.value
-        Name = subscription.Name |> Option.map NonEmptyString.value
-        IsActive = subscription.IsActive }
-
-    let! (dbSubscription: DbSubscription) = subscriptionDb.UpdateSubscriptionActivation dbSubscription isActive
+  member _.UpdateSubscriptionActivation (subscription : Subscription) = cancellableTaskResult {
+    let! (dbSubscription: DbSubscription) =
+      subscriptionDb.UpdateSubscriptionActivation (DbSubscription.FromSubscription subscription)
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
   }
 
@@ -78,6 +74,22 @@ type SubscriptionDependencies(
     return!
       dbDeliveries
       |> List.traverseValidationA (fun (dbo: DbSubscriptionDelivery) -> dbo.ToSubscriptionDelivery())
+      |> DependencyError.ofValidation source
+  }
+
+  member _.DeleteSubscription (subscription : Subscription) = subscriptionDb.DeleteSubscription (subscription.Id.ToString())
+
+  member _.DeleteDelivery (subscription : Subscription) (delivery : SubscriptionDelivery) =
+    subscriptionDb.DeleteDelivery (subscription.Id.ToString()) (delivery.Id.ToString())
+
+  member _.GetPostsBySlugs (slugs : Slug list) = cancellableTaskResult {
+    let! (dbPosts: DbPost list) = postDb.GetAllPosts()
+    let wanted = slugs |> List.map Slug.value |> Set.ofList
+
+    return!
+      dbPosts
+      |> List.filter (fun dbPost -> wanted.Contains dbPost.Slug)
+      |> List.traverseValidationA (fun dbPost -> dbPost.ToPost PostCommentStats.Zero)
       |> DependencyError.ofValidation source
   }
 

@@ -1,6 +1,7 @@
 namespace TwoPoint.Site.Dev
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open FsToolkit.ErrorHandling
 open System
@@ -48,7 +49,7 @@ module DevSite =
         and! content = content
         return widgets, content
       }
-      |> Result.bind (fun (widgets, content) -> attempt (fun () -> Site.renderMap stage buildTime widgets content))
+      |> Result.bind (fun (widgets, content) -> attempt (fun () -> Site.renderMap stage buildTime widgets content |> Result.map fst))
 
     match widgets with
     | Ok widgets ->

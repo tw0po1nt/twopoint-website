@@ -165,7 +165,25 @@ module Db =
         |> List.traverseValidationA onEntity
         |> DependencyError.ofValidation Dependency.Database
     }
-  
+
+  // Azure Table Storage refuses a query URL with about 500 GUID keys.
+  let maxKeysPerFilter = 100
+
+  let filtersOfKeys (toFilter: string -> Filter) (keys: string seq) : Filter list =
+    keys
+    |> Seq.distinct
+    |> Seq.chunkBySize maxKeysPerFilter
+    |> Seq.map (Array.fold (fun filter key -> filter * toFilter key) Empty)
+    |> Seq.toList
+
+  let whereAnyKey tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) toFilter keys =
+    (cancellableTaskResult { return [] }, filtersOfKeys toFilter keys)
+    ||> List.fold (fun entities filter -> cancellableTaskResult {
+      let! entities = entities
+      let! more = where tableServiceClient logger db table onEntity filter
+      return entities @ more
+    })
+
   /// <summary>
   /// Add an entity to an Azure Table
   /// </summary>
@@ -242,7 +260,9 @@ module Db =
         try
           let! entity = tableClient.GetEntityAsync<TableEntity>(entity.PartitionKey, entity.RowKey)
           let entity = updateEntity entity.Value
-          do! tableClient.UpdateEntityAsync(entity, entity.ETag, cancellationToken = ct) |> Task.ignore
+          do!
+            tableClient.UpdateEntityAsync(entity, entity.ETag, TableUpdateMode.Replace, cancellationToken = ct)
+            |> Task.ignore
         with
           | :? RequestFailedException as ex when ex.Status = int HttpStatusCode.Conflict ->
             return! onError ex.Message |> Error
@@ -260,6 +280,43 @@ module Db =
         return! onError "Unable to fetch updated entity" |> Error
     }
     
+  /// <summary>
+  /// Add an entity to an Azure Table, or replace the entity with the same keys
+  /// </summary>
+  /// <param name="tableServiceClient">The service client to use to perform the operation</param>
+  /// <param name="logger">A logger for telemetry for the operation</param>
+  /// <param name="db">The name of the database - used for telemetry</param>
+  /// <param name="table">The table that contains the entity</param>
+  /// <param name="onError">A function called with an error message if an error occurs</param>
+  /// <param name="onEntity">A function called with the stored entity if no error occurs</param>
+  /// <param name="entity">The entity to store</param>
+  let upsert
+    tableServiceClient
+    (logger : ILogger)
+    db
+    table
+    (onError: string -> DependencyError)
+    (onEntity: TableEntity -> Validation<'a, 'e>)
+    (entity: TableEntity) =
+
+    let operation = $"{db}.{table}.upsert"
+    runQuery logger operation
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let! tableClient = getTable tableServiceClient table
+
+      do! tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace, ct) |> Task.ignore
+
+      let! stored = entity.RowKey |> trySingle tableServiceClient logger db table onEntity (Some entity.PartitionKey)
+
+      match stored with
+      | Some stored ->
+        return stored
+      | None ->
+        logger.LogError("{op} failed", operation)
+        return! onError "Unable to fetch upserted entity" |> Error
+    }
+
   /// <summary>
   /// Delete entities in an Azure Table
   /// </summary>
@@ -308,3 +365,7 @@ module Db =
         errors |> List.iter (fun ex -> logger.LogError(message = "{op}: An error occurred when deleting an entity", ``exception`` = ex, args = [| operation |]))
         return onError "One or more errors occurred when deleting entities" |> Error
     }
+
+  let deleteByKeys tableServiceClient logger db table onError (partitionKey : string) (rowKey : string) =
+    eq "PartitionKey" partitionKey + eq "RowKey" rowKey
+    |> delete tableServiceClient logger db table onError

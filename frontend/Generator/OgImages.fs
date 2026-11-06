@@ -1,5 +1,7 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Render
+
 open FsToolkit.ErrorHandling
 
 type OgImages =
@@ -11,11 +13,6 @@ type OgImages =
 [<RequireQualifiedAccess>]
 module OgImages =
 
-  let source (post: Post) =
-    post.FrontMatter.Series
-    |> Option.bind _.Image
-    |> Option.orElse post.FrontMatter.Image
-
   let private crop (images: IImages) url =
     images.OgCrop url
     |> Result.map (fun (bytes, size) ->
@@ -26,23 +23,24 @@ module OgImages =
   let create (images: IImages) (defaultImage: SizedImage) (posts: Post list) : Result<OgImages, string list> =
     let crops =
       posts
-      |> List.choose source
+      |> List.choose Post.ogImageSource
       |> List.distinctBy _.AbsoluteUri
       |> List.map (fun url -> url.AbsoluteUri, crop images url)
       |> Map.ofList
 
     posts
     |> List.traverseResultA (fun post ->
-      match source post with
+      match Post.ogImageSource post with
       | None -> Ok(post.Slug, defaultImage, None)
       | Some url ->
         match crops[url.AbsoluteUri] with
         | Ok(path, bytes, image) -> Ok(post.Slug, image, Some(path, bytes))
         | Error reason ->
-          $"The front matter gives the Open Graph image {url}, and the build cannot make its crop: {reason}."
-          |> PostError.at post.File 1
-          |> PostError.format
+          [ Post.ogImageProblem url reason ]
+          |> FileProblems.create post.File post.Body.StartLine
+          |> FileProblems.format
           |> Error)
+    |> Result.mapError List.concat
     |> Result.map (fun images ->
       { Files = images |> List.choose (fun (_, _, file) -> file) |> Map.ofList
         ByPost = images |> List.map (fun (slug, image, _) -> slug, image) |> Map.ofList })

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="RouteTests.fs" />
+    <Compile Include="RouterTests.fs" />
+    <Compile Include="TransitionTests.fs" />
+    <Compile Include="SessionTests.fs" />
+    <Compile Include="ShellTests.fs" />
+    <Compile Include="RebuildTests.fs" />
+    <Compile Include="SiteDeployTests.fs" />
+    <Compile Include="QueueTests.fs" />
+    <Compile Include="PostsTests.fs" />
+    <Compile Include="DeployTests.fs" />
+    <Compile Include="EditorTests.fs" />
+    <Compile Include="DetailsTests.fs" />
+    <Compile Include="PreviewTests.fs" />
+    <Compile Include="PublishTests.fs" />
+    <Compile Include="PendingEditTests.fs" />
+    <Compile Include="RevisionsTests.fs" />
+    <Compile Include="UpcomingChangeTests.fs" />
+    <Compile Include="DeleteTests.fs" />
+    <Compile Include="SendTests.fs" />
+    <Compile Include="DiffTests.fs" />
+    <Compile Include="UploadTests.fs" />
+    <Compile Include="PostCommentsTests.fs" />
+    <Compile Include="CommentersTests.fs" />
+    <Compile Include="SubscriptionsTests.fs" />
+    <Compile Include="SeriesTests.fs" />
+    <Compile Include="NotificationsTests.fs" />
+    <Compile Include="MenuTests.fs" />
+    <Compile Include="PartsTests.fs" />
+    <Compile Include="StaticWebAppTests.fs" />
+    <Compile Include="Main.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Admin\Admin.fsproj" />
+    <ProjectReference Include="..\Admin.Dev\Admin.Dev.fsproj" />
+    <ProjectReference Include="..\Render\Render.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.0.102" />
+    <PackageReference Include="Expecto" Version="11.1.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="YoloDev.Expecto.TestSdk" Version="0.16.1" />
+  </ItemGroup>
+
+</Project>

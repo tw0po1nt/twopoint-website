@@ -1,6 +1,5 @@
 namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Comms
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
@@ -9,7 +8,6 @@ open TwoPoint.Core.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open FSharp.Control
 open FsToolkit.ErrorHandling
 open IcedTasks
@@ -25,7 +23,6 @@ type PostDependencies(
   validRedirectUris : Uri list,
   emailClient : EmailClient,
   emailSender : EmailAddress,
-  messaging : FirebaseMessaging,
   tableServiceClient : TableServiceClient,
   logger : ILogger
 ) =
@@ -40,12 +37,22 @@ type PostDependencies(
     | _ -> PostCommentStats.Zero
 
   let postDb = PostDb.live tableServiceClient logger
-  let notificationDb = NotificationDb.live tableServiceClient logger
-  let commsService = CommsService.live emailClient messaging tableServiceClient logger emailSender
+  let commsService = CommsService.live emailClient tableServiceClient logger emailSender
 
   let source = Dependency.Database
 
   let allApprovals = CommentApproval.all |> List.map _.ToString()
+
+  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>) =
+    cancellableTaskResult {
+      let! dbPosts, dbComments = CancellableTaskResult.parallelZip (postDb.GetAllPosts()) readComments
+      return!
+        dbComments
+        |> List.traverseValidationA (fun (comment: DbComment, commenter, status) ->
+          let post = dbPosts |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
+          comment.ToPostedComment(post, status, commenter))
+        |> DependencyError.ofValidation source
+    }
 
   member _.GetAllPosts () = cancellableTaskResult {
     let! (dbPosts: DbPost list) = postDb.GetAllPosts()
@@ -93,13 +100,33 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreatePost (newPost : NewPost) = cancellableTaskResult {
+  member _.UpsertPost (newPost : PostRow) = cancellableTaskResult {
     let newPost =
       { DbPost.Title = newPost.Title |> NonEmptyString.value
         Slug = newPost.Slug |> Slug.value
         CreatedDate = newPost.CreatedDate }
-    let! (dbPost: DbPost) = postDb.CreatePost newPost
+    let! (dbPost: DbPost) = postDb.UpsertPost newPost
     return! dbPost.ToPost(PostCommentStats.Zero) |> DependencyError.ofValidation source
+  }
+
+  member _.DeletePost (slug : Slug) = postDb.DeletePost(Slug.value slug)
+
+  member _.DeleteCommentsOfPost (slug : Slug) = postDb.DeleteCommentsOfPost(Slug.value slug)
+
+  member _.HasPostRecords (slug : Slug) = cancellableTaskResult {
+    let! row = postDb.GetPostBySlug(Slug.value slug)
+    return!
+      match row with
+      | Some _ -> CancellableTaskResult.singleton true
+      | None -> postDb.HasCommentsOfPost(Slug.value slug)
+  }
+
+  member _.GetAllCommenters () = cancellableTaskResult {
+    let! dbCommenters = postDb.GetAllCommenters()
+    return!
+      dbCommenters
+      |> List.traverseValidationA (fun (dbo: DbCommenter) -> dbo.ToCommenter())
+      |> DependencyError.ofValidation source
   }
 
   member _.GetCommenterByEmailAddress emailAddress = cancellableTaskResult {
@@ -157,14 +184,8 @@ type PostDependencies(
   }
 
   member _.UpdateCommenterStatus (commenter : Commenter) status = cancellableTaskResult {
-    let dbCommenter =
-      { DbCommenter.ValidationId = commenter.ValidationId.ToString()
-        EmailAddress = commenter.EmailAddress |> EmailAddress.value
-        Name = commenter.Name |> Option.map NonEmptyString.value
-        CreatedDate = commenter.CreatedDate
-        Status = commenter.Status.ToString().ToLower() }
     let dbStatus = status.ToString().ToLower()
-    let! (dbCommenter: DbCommenter) = postDb.UpdateCommenterStatus dbCommenter dbStatus
+    let! (dbCommenter: DbCommenter) = postDb.UpdateCommenterStatus (DbCommenter.FromCommenter commenter) dbStatus
     return! dbCommenter.ToCommenter() |> DependencyError.ofValidation source
   }
 
@@ -178,6 +199,25 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.GetCommentsOnAllPosts (approvals : CommentApproval list) =
+    postDb.GetCommentsOnAllPosts (approvals |> List.map _.ToString()) |> postedComments
+
+  member _.GetCommentsOfCommenter (commenter : Commenter) = cancellableTaskResult {
+    let! dbComments =
+      postDb.GetCommentsOfCommenter (CommentApproval.all |> List.map _.ToString()) (DbCommenter.FromCommenter commenter)
+    return!
+      dbComments
+      |> List.traverseValidationA (
+        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
+      )
+      |> DependencyError.ofValidation source
+  }
+
+  member _.GetPostedCommentsOfCommenter (commenter : Commenter) =
+    postDb.GetCommentsOfCommenter allApprovals (DbCommenter.FromCommenter commenter) |> postedComments
+
+  member _.DeleteCommenter (commenter : Commenter) = commenter.ValidationId.ToString() |> postDb.DeleteCommenter
+
   member _.GetCommentById commentId = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())
 
@@ -187,7 +227,7 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreateComment (post : Post) (commenter : Commenter) (newComment : NewComment) = cancellableTaskResult {
+  member _.CreateComment (post : Post) (commenter : Commenter) (newComment : NewComment) (approval : CommentApproval) = cancellableTaskResult {
     let newDbComment =
       { DbComment.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
         PostId = post.Id |> Slug.value
@@ -198,41 +238,32 @@ type PostDependencies(
       { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
         CommentId = newDbComment.Id
         CreatedDate = newDbComment.CreatedDate
-        Approval = CommentApproval.New.ToString().ToLower() }
+        Approval = approval.ToString().ToLower() }
 
     let! (dbComment: DbComment, dbCommenter, dbCommentStatus) =
       postDb.CreateComment newDbComment newDbStatus
-
-    // Notify admin
-    do! cancellableTask {
-      // todo: probably good to eventually not hardcode this admin/client lookup
-      //       maybe would even be good to have this post an event and have the dispatching be handled separately
-      //       this'll do for now
-      let! notification =
-        notificationDb.GetDeviceRegistrationByUserAndClient "ad1209ae-c4cc-4360-953a-ccbab9d68c83" "android"
-        |> CancellableTaskResult.map (
-          fun registration -> option {
-            let! registration = registration
-            let commenterName =
-              commenter.Name |> Option.map _.ToString() |> Option.defaultValue (commenter.EmailAddress.ToString())
-            return
-              { Title = NonEmptyString.Unsafe.create None "Someone posted a new comment!"
-                Body = NonEmptyString.Unsafe.create None $"{commenterName} left a comment on the post '{post.Info.Title}'"
-                Recipient = NonEmptyString.Unsafe.create None registration.Token }
-          }
-        )
-        |> CancellableTask.map (Result.defaultValue None)
-
-      return!
-        notification
-        |> Option.traverseCancellableTaskResult commsService.SendPushNotification
-        |> CancellableTaskResult.ignore
-    }
 
     return!
       dbComment.ToComment(dbCommentStatus, dbCommenter)
       |> DependencyError.ofValidation source
   }
+
+  member _.GetPostedCommentById (commentId : CommentId) = cancellableTaskResult {
+    let! dbComment = postDb.GetCommentById (commentId.ToString())
+
+    match dbComment with
+    | None -> return None
+    | Some (comment : DbComment, commenter, status) ->
+      let! dbPost = postDb.GetPostBySlug comment.PostId
+
+      return!
+        comment.ToPostedComment(dbPost, status, commenter)
+        |> Result.map Some
+        |> DependencyError.ofValidation source
+  }
+
+  member this.CountNewComments () =
+    this.GetCommentsOnAllPosts [ CommentApproval.New ] |> CancellableTaskResult.map List.length
 
   member _.UpdateCommentApproval (comment : Comment) approval = cancellableTaskResult {
     let newStatus =

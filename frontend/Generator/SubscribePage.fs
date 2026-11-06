@@ -1,9 +1,11 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.SubscribePage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
-let urlPath = "/subscribe/"
+let urlPath = SitePage.urlPath SitePage.Subscribe
 
 let robots = Layout.Robots.Index
 

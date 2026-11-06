@@ -1,11 +1,13 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Sitemap
 
+open TwoPoint.Site.Render
+
 open System.Xml
 
-let indexUrlPath = "/sitemap-index.xml"
+let indexUrlPath = FixedFile.sitemapIndex
 
-let urlPath = "/sitemap-0.xml"
+let urlPath = FixedFile.sitemap
 
 let private xmlns = "http://www.sitemaps.org/schemas/sitemap/0.9"
 

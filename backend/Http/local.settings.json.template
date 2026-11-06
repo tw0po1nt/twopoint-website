@@ -6,7 +6,7 @@
     "TwoPointWebsiteServiceBus": ""
   },
   "Host": {
-    "CORS": "http://localhost:4321"
+    "CORS": "http://localhost:4321,http://localhost:4322"
   },
   "AzureAd": {
     "Instance": "https://sts.windows.net/",
@@ -19,10 +19,14 @@
     "EntraTenantId": "<entra_tenant_id>",
     "ManagedIdentityClientId": "<managed_identity_client_id>",
     "TableStorageUri": "https://<storage_account_name>.table.core.windows.net/",
+    "PostStoreUri": "http://127.0.0.1:10000/devstoreaccount1",
+    "AssetsUri": "http://127.0.0.1:10000/devstoreaccount1",
     "ServiceBusUri": "https://<service_bus_namespace>.servicebus.windows.net/"
   },
-  "Firebase": {
-    "ServiceAccountJsonPath": "./service-account-key.json"
+  "WebPush": {
+    "Subject": "mailto:you@example.com",
+    "PublicKey": "BJfO8M7cCATrska2CFKeyAYsUaYU5kOMsHea2Evge-a5F1Vu9FGp3XxlGX9MjbssjX9QCV1DsaNj0B-ExteCxk4",
+    "PrivateKey": "Yr9MOjsHrjTrPkA0RHA6hjt7OVGnPFr1zGgVC2SepmI"
   },
   "ValidRedirectUris": [
     {
@@ -33,5 +37,9 @@
     "Enabled": false,
     "NewsletterContainerUri": "https://<storage_account_name>.blob.core.windows.net/<newsletter_container>",
     "UnsubscribeUri": "http://localhost:4321/unsubscribe/"
+  },
+  "Deploy": {
+    "ProductionRepo": "tw0po1nt/twopoint-website",
+    "StagingRepo": "tw0po1nt/twopoint-website-staging"
   }
 }

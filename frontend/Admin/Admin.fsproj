@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Config.fs" />
+    <Compile Include="Msal.fs" />
+    <Compile Include="SignIn.fs" />
+    <Compile Include="MsalSignIn.fs" />
+    <Compile Include="Push.fs" />
+    <Compile Include="BrowserPush.fs" />
+    <Compile Include="Route.fs" />
+    <Compile Include="Router.fs" />
+    <Compile Include="Transition.fs" />
+    <Compile Include="Api.fs" />
+    <Compile Include="Dates.fs" />
+    <Compile Include="Problem.fs" />
+    <Compile Include="Progress.fs" />
+    <Compile Include="Upload.fs" />
+    <Compile Include="Session.fs" />
+    <Compile Include="Rebuild.fs" />
+    <Compile Include="Queue.fs" />
+    <Compile Include="Deploy.fs" />
+    <Compile Include="SiteDeploy.fs" />
+    <Compile Include="Posts.fs" />
+    <Compile Include="Slug.fs" />
+    <Compile Include="SeriesForm.fs" />
+    <Compile Include="Details.fs" />
+    <Compile Include="Series.fs" />
+    <Compile Include="Preview.fs" />
+    <Compile Include="Diff.fs" />
+    <Compile Include="Confirm.fs" />
+    <Compile Include="Typed.fs" />
+    <Compile Include="RemovalCheck.fs" />
+    <Compile Include="Revisions.fs" />
+    <Compile Include="Publish.fs" />
+    <Compile Include="ChangeDate.fs" />
+    <Compile Include="Editor.fs" />
+    <Compile Include="PostComments.fs" />
+    <Compile Include="Commenters.fs" />
+    <Compile Include="Commenter.fs" />
+    <Compile Include="Subscriptions.fs" />
+    <Compile Include="Dashboard.fs" />
+    <Compile Include="Notifications.fs" />
+    <Compile Include="Shell.fs" />
+    <Compile Include="Menu.fs" />
+    <Compile Include="Icon.fs" />
+    <Compile Include="Parts.fs" />
+    <Compile Include="Banner.fs" />
+    <Compile Include="CodeMirror.fs" />
+    <Compile Include="SeriesFormView.fs" />
+    <Compile Include="DetailsView.fs" />
+    <Compile Include="EditorView.fs" />
+    <Compile Include="Lamp.fs" />
+    <Compile Include="ShellView.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Main.fs" />
+    <Compile Include="Bridge.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Widgets\Widgets.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.0.102" />
+    <PackageReference Include="Fable.Browser.Dom" Version="2.20.0" />
+    <PackageReference Include="Fable.Core" Version="5.2.0" />
+    <PackageReference Include="Oxpecker.Solid" Version="1.1.0" />
+  </ItemGroup>
+
+</Project>

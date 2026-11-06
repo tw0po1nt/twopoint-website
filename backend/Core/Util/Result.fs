@@ -12,6 +12,8 @@ type Dependency =
   | Communications = 3
   | BlobStorage = 4
   | ServiceBus = 5
+  | GitHub = 6
+  | WebPush = 7
 
 type DependencyErrorType =
   | Validation of message: string
@@ -79,6 +81,14 @@ type ActionError<'logicError> =
         let errorsList = String.Join(", ", errors)
         $"The following validation errors occurred: {errorsList}"
     | Logic logic -> $"{logic}"
+
+module ActionError =
+
+  let mapLogic (map: 'logicError -> 'error) (error: ActionError<'logicError>) : ActionError<'error> =
+    match error with
+    | Logic logic -> Logic(map logic)
+    | Dependency dependency -> Dependency dependency
+    | Validation messages -> Validation messages
 
 /// <summary>
 /// The result of an action execution.

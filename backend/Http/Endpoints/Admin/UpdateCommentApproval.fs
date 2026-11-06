@@ -8,7 +8,6 @@ open TwoPoint.Dependencies.Posts
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -23,7 +22,6 @@ type UpdateCommentApprovalJson =
 type UpdateCommentApproval(
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger: ILogger<UpdateCommentApproval>,
   tableServiceClient: TableServiceClient
 ) =
@@ -53,7 +51,6 @@ type UpdateCommentApproval(
           validRedirectUris,
           emailClient,
           config.Azure.EmailSender,
-          messaging,
           tableServiceClient,
           logger
         )
@@ -61,7 +58,6 @@ type UpdateCommentApproval(
           new UpdateCommentApproval.Dependencies with
           
           member _.GetCommentById commentId = postDependencies.GetCommentById commentId
-          member _.UpdateCommenterStatus commenter status = postDependencies.UpdateCommenterStatus commenter status
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
         }
 
@@ -74,18 +70,14 @@ type UpdateCommentApproval(
 
         let! approvalUpdateResult = ct |> updateCommentApproval approvalUpdate
         let apiResponse, statusCode =
-          match approvalUpdateResult with
-          | Ok _ ->
-            { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-          | Error (Logic updateCommentApprovalError) ->
-            let errorMessage =
-              match updateCommentApprovalError with
-              | UpdateCommentApproval.Error.CommentNotFound commentId -> $"Comment '{commentId.ToString()}' not found for post '{slug}'"
-            { Success = false; Message = Some errorMessage; Data = None }, HttpStatusCode.NotFound
-          | Error actionError when actionError.IsValidation ->
-            { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-          | Error actionError ->
-            { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+          approvalUpdateResult
+          |> ActionResult.toApiResponse
+            (fun _ -> None)
+            (function
+              | UpdateCommentApproval.Error.CommentNotFound commentId ->
+                $"Comment '{commentId.ToString()}' not found for post '{slug}'", HttpStatusCode.NotFound
+              | UpdateCommentApproval.Error.ChangeNotAllowed(current, requested) ->
+                $"Comment is {current} and cannot become {requested}", HttpStatusCode.Conflict)
 
         response.StatusCode <- statusCode
         do! response.WriteAsJsonAsync(apiResponse, ct)

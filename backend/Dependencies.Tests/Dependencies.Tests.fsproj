@@ -9,6 +9,19 @@
 
   <ItemGroup>
     <Compile Include="SubscriptionEmailsTests.fs" />
+    <Compile Include="GitHubAppJwtTests.fs" />
+    <Compile Include="GitHubDispatchTests.fs" />
+    <Compile Include="DeployRowsTests.fs" />
+    <Compile Include="DeliveryStartRowsTests.fs" />
+    <Compile Include="WebPushTests.fs" />
+    <Compile Include="PushTests.fs" />
+    <Compile Include="DeviceDbTests.fs" />
+    <Compile Include="SubscriptionDbTests.fs" />
+    <Compile Include="PostedCommentTests.fs" />
+    <Compile Include="DbTests.fs" />
+    <Compile Include="PostDbTests.fs" />
+    <Compile Include="PublishedParseCacheTests.fs" />
+    <Compile Include="ImageSizeCacheTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

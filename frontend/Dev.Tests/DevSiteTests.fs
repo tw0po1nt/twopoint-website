@@ -2,6 +2,7 @@ module TwoPoint.Site.Dev.Tests.DevSiteTests
 
 open TwoPoint.Site.Dev
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Expecto
 open System
@@ -36,7 +37,8 @@ let private content =
             Headings = []
             Anchors = Set.empty
             Links = []
-            ReadingTime = 0 } }
+            ReadingTime = 0
+            StartLine = 1 } }
     Assets =
       { Files = Map.empty
         Stylesheet = ""
@@ -44,7 +46,8 @@ let private content =
         DefaultImage = { UrlPath = ""; Size = { Width = 0; Height = 0 } }
         AboutPhoto = { UrlPath = ""; Size = { Width = 0; Height = 0 } } }
     OgImages = { Files = Map.empty; ByPost = Map.empty }
-    Email = { Inline = ""; Embed = "" } }
+    Email = { Inline = ""; Embed = "" }
+    Warnings = [] }
 
 let private postError = "frontend/content/posts/published/a-post.md:12: The front matter has no 'title'."
 

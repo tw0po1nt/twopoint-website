@@ -1,0 +1,128 @@
+/* The move between the admin and the editor. The light of the editor spreads from the tap, and goes back into the
+   post. The script sets data-transition on <html>, and --lamp-x, --lamp-y, --lamp-edge, and --lamp-end. */
+
+@property --lamp-r {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+:root {
+  --lamp-ease: cubic-bezier(.4, 0, .2, 1);
+  /* In light mode, Paper is near white, so an amber band shows the edge of the light. */
+  --lamp-warm: light-dark(rgb(255 186 102 / .24), transparent);
+}
+
+/* The two screens are opaque, so they must not add their light where they overlap. */
+:root[data-transition^='lamp']::view-transition-old(root),
+:root[data-transition^='lamp']::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+
+:root[data-transition='lamp-in']::view-transition-new(root),
+:root[data-transition='lamp-out']::view-transition-old(root),
+:root[data-transition='alone-in'] .shell {
+  -webkit-mask-image: radial-gradient(circle at var(--lamp-x) var(--lamp-y), #000 calc(var(--lamp-r) - var(--lamp-edge)), transparent var(--lamp-r));
+  mask-image: radial-gradient(circle at var(--lamp-x) var(--lamp-y), #000 calc(var(--lamp-r) - var(--lamp-edge)), transparent var(--lamp-r));
+}
+
+.lamp-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+:root[data-transition^='lamp']::view-transition-old(lamp-glow) {
+  display: none;
+}
+
+:root[data-transition^='lamp']::view-transition-new(lamp-glow),
+:root[data-transition='alone-in'] .lamp-glow {
+  background: radial-gradient(
+    circle at var(--lamp-x) var(--lamp-y),
+    transparent calc(var(--lamp-r) - 200px),
+    var(--lamp-warm) calc(var(--lamp-r) - 90px),
+    transparent var(--lamp-r)
+  );
+}
+
+/* Into the editor */
+:root[data-transition='lamp-in']::view-transition-old(root) {
+  animation: none;
+}
+
+:root[data-transition='lamp-in']::view-transition-new(root),
+:root[data-transition='lamp-in']::view-transition-new(lamp-glow),
+:root[data-transition='alone-in'] .shell,
+:root[data-transition='alone-in'] .lamp-glow {
+  animation: lamp-on 680ms var(--lamp-ease) both;
+}
+
+:root[data-transition='lamp-in']::view-transition-new(paper-text) {
+  animation: lamp-text-in 280ms cubic-bezier(.32, .72, 0, 1) 400ms both;
+}
+
+/* Out of the editor. A back has its own keyframes: animation-direction: reverse also reverses the curve. */
+:root[data-transition='lamp-out']::view-transition-old(root) {
+  z-index: 1;
+  animation: lamp-off 480ms var(--lamp-ease) both;
+}
+
+:root[data-transition='lamp-out']::view-transition-new(lamp-glow) {
+  animation: lamp-off 480ms var(--lamp-ease) both;
+}
+
+:root[data-transition='lamp-out']::view-transition-new(root) {
+  animation: none;
+}
+
+:root[data-transition='lamp-out']::view-transition-old(paper-text) {
+  animation: lamp-fade-out 140ms linear both;
+}
+
+:root[data-transition='alone-out'] .shell {
+  animation: lamp-fade-in 200ms linear both;
+}
+
+/* Reduce motion */
+:root[data-transition='fade']::view-transition-group(*) {
+  animation-duration: 180ms;
+}
+
+@keyframes lamp-on {
+  from {
+    --lamp-r: 0px;
+  }
+  to {
+    --lamp-r: var(--lamp-end);
+  }
+}
+
+@keyframes lamp-off {
+  from {
+    --lamp-r: var(--lamp-end);
+  }
+  to {
+    --lamp-r: 0px;
+  }
+}
+
+@keyframes lamp-text-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+@keyframes lamp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes lamp-fade-out {
+  to {
+    opacity: 0;
+  }
+}

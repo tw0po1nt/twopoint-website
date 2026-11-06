@@ -15,7 +15,6 @@ open Azure.Core
 open Azure.Data.Tables
 open Azure.Messaging.ServiceBus
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
 open FsToolkit.ErrorHandling
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
@@ -31,13 +30,13 @@ type StartNewPostDeliveryJson =
   { Intro : string option }
 
 type StartNewPostDeliveryResponse =
-  { Queued : int }
+  { Queued : int
+    StartedDate : DateTime }
 
 type StartNewPostDelivery(
   config: Config,
   credential: TokenCredential,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   serviceBus : ServiceBusClient,
   logger : ILogger<StartNewPostDelivery>,
   tableServiceClient: TableServiceClient
@@ -107,7 +106,6 @@ type StartNewPostDelivery(
             let deliveryDependencies = DeliveryDependencies(
               emailClient,
               config.Azure.EmailSender,
-              messaging,
               BlobContainerClient(welcomeConfig.NewsletterContainerUri, credential),
               welcomeConfig.UnsubscribeUri,
               tableServiceClient,
@@ -117,9 +115,13 @@ type StartNewPostDelivery(
             // Action
             let startNewPostDelivery = StartNewPostDelivery.withDependencies { new StartNewPostDelivery.Dependencies with
               member _.GetPostBySlug slug = deliveryDependencies.GetPostBySlug slug
+              member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
               member _.GetNewsletter post = deliveryDependencies.GetNewsletter post
               member _.GetAllSubscriptions () = subscriptionDependencies.GetAllSubscriptions()
               member _.GetUtcNow () = DateTime.UtcNow
+              member _.InsertDeliveryStart post startedDate =
+                DeliveryStartDb(tableServiceClient, logger).InsertDeliveryStart post.Id startedDate
+              member _.DeleteDeliveryStart post = DeliveryStartDb(tableServiceClient, logger).DeleteDeliveryStart post.Id
               member _.QueueDeliveries post intro recipients = queueDeliveries post intro recipients
             }
 
@@ -129,22 +131,29 @@ type StartNewPostDelivery(
                   json |> Option.bind _.Intro |> Option.map NewPostDeliveryStart.Intro }
 
             match! ct |> startNewPostDelivery start with
-            | Ok (StartNewPostDelivery.Event.Started (post, recipients)) ->
+            | Ok (StartNewPostDelivery.Event.Started (post, recipients, startedDate)) ->
               logger.LogInformation(
                 "Queued {count} new-post deliveries of post '{post}'",
                 recipients.Length,
                 post.Id
               )
               let apiResponse =
-                { Success = true; Message = None; Data = Some { Queued = recipients.Length } }
+                { Success = true; Message = None; Data = Some { Queued = recipients.Length; StartedDate = startedDate } }
               return apiResponse, HttpStatusCode.OK
             | Error (ActionError.Logic error) ->
               let message, statusCode =
                 match error with
                 | StartNewPostDelivery.Error.PostNotFound slug ->
                   $"Post '{slug}' not found", HttpStatusCode.NotFound
-                | StartNewPostDelivery.Error.PostUpcoming post ->
-                  $"Post '{post.Id}' is not published until {post.Info.CreatedDate:o}", HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.NotYetPublished publishDate) ->
+                  $"Post '{post.Id}' is not published until {publishDate:o}", HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.LatestChangeDeploying) ->
+                  $"The latest change to post '{post.Id}' is not deployed yet", HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.NotReady (post, DeliveryGate.LatestDeployFailed) ->
+                  $"The deploy of the latest change to post '{post.Id}' failed. Rebuild the site first",
+                  HttpStatusCode.Conflict
+                | StartNewPostDelivery.Error.AlreadyStarted (post, startedDate) ->
+                  $"The delivery of post '{post.Id}' started at {startedDate:o}", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NewsletterNotFound post ->
                   $"The newsletter of post '{post.Id}' does not exist", HttpStatusCode.Conflict
                 | StartNewPostDelivery.Error.NewsletterInvalid (post, reason) ->

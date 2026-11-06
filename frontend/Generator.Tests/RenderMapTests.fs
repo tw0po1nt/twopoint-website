@@ -2,6 +2,8 @@ module TwoPoint.Site.Generator.Tests.RenderMapTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 open System.IO
@@ -14,7 +16,7 @@ let private loadPostsFrom (files: (string * string) list) =
     |> List.filter (fun (path, _) -> path.EndsWith(Container.extension container))
     |> List.map (fun (path, text) -> { Path = path; Bytes = Encoding.UTF8.GetBytes text })
 
-  Site.parsePosts anyImages { Published = postFiles Container.Published; Series = postFiles Container.Series }
+  Site.parsePosts anyImages Stage.Production { Published = postFiles Container.Published; Series = postFiles Container.Series }
 
 let private seriesFile slug =
   PostFolder.filePath PostFolder.pulled Container.Series $"{slug}.yml", "title: A series\nexcerpt: Posts\n"
@@ -55,8 +57,9 @@ let tests =
         loadPostsFrom
           [ seriesFile "a-series"
             seriesFile "no-posts"
-            file "a-post", text $"{frontMatter}\nseries: a-series" "Text." ]
+            file "a-post", text (seriesFrontMatter "a-series") "Text." ]
         |> ok
+        |> fst
 
       let map = RenderMap.create Stage.Production buildTime widgets (content posts)
 
@@ -67,22 +70,63 @@ let tests =
         Expect.isFalse (Encoding.UTF8.GetString(render ()).Contains "/series/no-posts/") $"%A{output} has no link to the series"
     }
 
+    test "two titles for one tag slug give the title of the newer post on each page" {
+      let older = published "older-post" (text $"{frontMatter}\ntags:\n  - Web development" "Text.")
+      let newerFields = frontMatter.Replace("2026-02-04", "2026-03-04") + "\ntags:\n  - web development"
+      let newer = published "newer-post" (text newerFields "Text.")
+
+      let map = RenderMap.create Stage.Production buildTime widgets (content [ older; newer ])
+
+      for slug in [ "older-post"; "newer-post" ] do
+        Expect.stringContains (siteText map $"posts/{slug}/index.html") """<a href="/tag/web-development/">#web development</a>""" $"The page of {slug} has the newer title"
+
+      Expect.stringContains (siteText map "tag/web-development/index.html") "Posts by tag &#39;web development&#39;" "The tag page has the newer title"
+
+      for path in pagePaths map do
+        Expect.isFalse ((siteText map path).Contains "#Web development") $"{path} has no older title"
+    }
+
     test "a post with an unknown series slug fails with its file and line" {
       Expect.equal
         (loadPostsFrom [ seriesFile "a-series"; file "a-post", text $"{frontMatter}\nseries: b-series" "Text." ]
-         |> Result.mapError (List.map PostError.format))
+         |> Result.mapError FileProblems.formatAll)
         (Error [ "frontend/content/posts/published/a-post.md:7: No series has the slug 'b-series'." ])
         "The build error names the file and the line of the series field"
     }
   
+    test "a build with only warnings passes, and a failed build prints each warning" {
+      let warning = FileProblems.create (file "a-post") 8 [ Problem.warning (Place.Body 2) "A warning." ]
+      let post = published "a-post" (text frontMatter "Text.")
+      let broken = published "b-post" (text frontMatter "Read [c](/posts/c-post/).")
+
+      Expect.equal
+        (Site.renderMap Stage.Production buildTime widgets { content [ post ] with Warnings = [ warning ] }
+         |> Result.map snd)
+        (Ok [ warning ])
+        "A warning does not fail the build, and the build keeps it"
+
+      Expect.equal
+        (Site.renderMap Stage.Production buildTime widgets { content [ post; broken ] with Warnings = [ warning ] }
+         |> Result.map ignore)
+        (Error
+          [ errorAt "a-post" 9 "warning: A warning."
+            errorAt "b-post" 9 "The output has no page at /posts/c-post/." ])
+        "The failed build prints the warning with the error"
+    }
+
     test "pull gives the posts that build makes into the same site" {
       let pulled = Pull.run (FixtureStore()) |> Result.mapError List.singleton |> ok
-      let fromPull = Site.loadContent anyImages realRoot.Value pulled |> ok
+      let fromPull = Site.loadContent anyImages Stage.Production realRoot.Value pulled |> ok
 
       let render content =
         RenderMap.create Stage.Production buildTime widgets content
         |> Map.map (fun _ render -> render ())
 
       Expect.equal (render fromPull) (render realContent.Value) "Each output file has the same bytes"
+    }
+  
+    test "the site paths of the render map agree with the library" {
+      let map = RenderMap.create Stage.Production buildTime widgets realContent.Value
+      Expect.equal (pagePaths map) (SitePath.all realPosts.Value) "The pages and the fixed files are the same"
     }
   ]

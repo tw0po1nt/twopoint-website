@@ -1,9 +1,11 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.AboutPage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
-let urlPath = "/about/"
+let urlPath = SitePage.urlPath SitePage.About
 
 let robots = Layout.Robots.Index
 

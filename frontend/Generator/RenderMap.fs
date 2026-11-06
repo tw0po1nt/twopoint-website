@@ -1,5 +1,7 @@
 namespace TwoPoint.Site.Generator
 
+open TwoPoint.Site.Render
+
 open System
 open System.Text
 
@@ -18,7 +20,9 @@ type Content =
     Privacy: MarkdownPage
     Assets: Assets
     OgImages: OgImages
-    Email: EmailStyles }
+    Email: EmailStyles
+    /// The problems of the posts and the privacy page, when no problem is an error.
+    Warnings: FileProblems list }
 
 [<RequireQualifiedAccess>]
 module RenderMap =
@@ -27,39 +31,37 @@ module RenderMap =
 
   let private file (urlPath: string) = SiteFile(SitePath.ofUrlPath urlPath)
 
+  let private pageEntry (config: StageConfig) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) (sitePage: SitePage) =
+    let assets = content.Assets
+    let posts = content.Posts
+
+    match sitePage with
+    | SitePage.Home -> HomePage.robots, (fun () -> HomePage.render config assets widgets buildTime posts)
+    | SitePage.Subscribe -> SubscribePage.robots, (fun () -> SubscribePage.render config assets widgets posts)
+    | SitePage.Unsubscribe -> UnsubscribePage.robots, (fun () -> UnsubscribePage.render config assets widgets posts)
+    | SitePage.About -> AboutPage.robots, (fun () -> AboutPage.render config assets widgets posts)
+    | SitePage.Privacy -> PrivacyPage.robots, (fun () -> PrivacyPage.render config assets widgets posts content.Privacy)
+    | SitePage.NotFound -> NotFoundPage.robots, (fun () -> NotFoundPage.render config assets widgets posts)
+    | SitePage.SeriesList -> ListPage.seriesRobots, (fun () -> ListPage.renderSeries config assets widgets posts)
+    | SitePage.PostList list ->
+      ListPage.robots list, (fun () -> ListPage.render config assets widgets content.OgImages posts list)
+    | SitePage.Post post ->
+      PostPage.robots,
+      (fun () -> PostPage.render config assets widgets buildTime posts content.OgImages.ByPost[post.Slug] post)
+
   let private pages (config: StageConfig) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) =
-    [ HomePage.urlPath, HomePage.robots, (fun () -> HomePage.render config content.Assets widgets buildTime content.Posts)
-      SubscribePage.urlPath, SubscribePage.robots, (fun () -> SubscribePage.render config content.Assets widgets content.Posts)
-      UnsubscribePage.urlPath,
-      UnsubscribePage.robots,
-      (fun () -> UnsubscribePage.render config content.Assets widgets content.Posts)
-      AboutPage.urlPath, AboutPage.robots, (fun () -> AboutPage.render config content.Assets widgets content.Posts)
-      PrivacyPage.urlPath,
-      PrivacyPage.robots,
-      (fun () -> PrivacyPage.render config content.Assets widgets content.Posts content.Privacy)
-      $"/{NotFoundPage.sitePath}",
-      NotFoundPage.robots,
-      (fun () -> NotFoundPage.render config content.Assets widgets content.Posts)
-      ListPage.seriesUrlPath,
-      ListPage.seriesRobots,
-      (fun () -> ListPage.renderSeries config content.Assets widgets content.Posts)
-      for page in ListPage.all content.Posts do
-        ListPage.urlPath page,
-        ListPage.robots page,
-        (fun () -> ListPage.render config content.Assets widgets content.OgImages content.Posts page)
-      for post in content.Posts do
-        Post.urlPath post,
-        PostPage.robots,
-        (fun () ->
-          PostPage.render config content.Assets widgets buildTime content.Posts content.OgImages.ByPost[post.Slug] post) ]
+    [ for sitePage in SitePage.all content.Posts do
+        let robots, render = pageEntry config buildTime widgets content sitePage
+        SitePage.urlPath sitePage, robots, render ]
 
   /// `buildTime` decides which post the upcoming post banner shows, and which Comments panels are hidden.
   let create (stage: Stage) (buildTime: DateTimeOffset) (widgets: Widgets) (content: Content) : RenderMap =
     let config = Stage.config stage
+    let content = { content with Posts = Blog.withNewestTermTitles content.Posts }
     let pages = pages config buildTime widgets content
 
     Map
-      [ SiteFile "robots.txt", text (fun () -> Robots.render config Sitemap.indexUrlPath)
+      [ file FixedFile.robots, text (fun () -> Robots.render config Sitemap.indexUrlPath)
         StageMarker, text (fun () -> Stage.name stage)
         file Feed.urlPath, (fun () -> Feed.render config content.Posts)
         file Sitemap.indexUrlPath, (fun () -> Sitemap.renderIndex config)

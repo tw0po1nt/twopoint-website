@@ -8,7 +8,6 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
-open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
 open Microsoft.Extensions.Logging
@@ -26,18 +25,17 @@ type CommentDto =
 [<AutoOpen>]
 module PostTypesExt =
 
-  type Comment with
+  type RenderedComment with
     member this.ToDto() =
-      { CommentDto.Id = this.Id.ToString()
-        CreatedDate = this.CreatedDate
-        Commenter = this.Commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
-        Content = this.Content.ToString() }
+      { CommentDto.Id = this.Comment.Id.ToString()
+        CreatedDate = this.Comment.CreatedDate
+        Commenter = this.Comment.Commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+        Content = this.Html }
 
 
 type GetCommentsForPost (
   config: Config,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<GetCommentsForPost>,
   tableServiceClient: TableServiceClient
 ) =
@@ -58,7 +56,6 @@ type GetCommentsForPost (
       validRedirectUris,
       emailClient,
       config.Azure.EmailSender,
-      messaging,
       tableServiceClient,
       logger
     )
@@ -68,6 +65,7 @@ type GetCommentsForPost (
 
       member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
       member _.GetCommentsForPost approvals post = postDependencies.GetCommentsForPost approvals post
+      member _.Stage = config.Stage
     }
 
     let onlyApproved = [CommentApproval.Approved.ToString()]

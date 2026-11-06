@@ -1,5 +1,6 @@
 module TwoPoint.Core.Tests.Fixtures
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Subscriptions
@@ -13,18 +14,33 @@ let ok result =
 
 let subscriptionId = SubscriptionId.create "2f1c4ed9-6a5b-4f0e-9a43-3d2b8c1e7a10" |> ok
 
-let subscription isActive =
+let canceledStatus = Canceled(DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc))
+
+let subscription (status : SubscriptionStatus) =
   { Id = subscriptionId
     CreatedDate = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
     EmailAddress = EmailAddress.create "reader@example.com" |> ok
     Name = NonEmptyString.create None "Reader" |> ok |> Some
-    IsActive = isActive }
+    Status = status }
 
 let post slug (createdDate : string) =
   Post.create slug "A post" createdDate PostCommentStats.Zero |> ok
 
 let olderPost = post "older-post" "2026-01-01T00:00:00.0000000Z"
 let latestPost = post "latest-post" "2026-02-01T00:00:00.0000000Z"
+
+let noDeploys =
+  { Changes = Map.empty
+    Rebuild = None
+    Runs = { Latest = None; LatestSucceeded = None } }
+
+/// The deploy context of one change to the post, with no run yet.
+let changed (post : Post) (production : ProductionDispatch) =
+  { noDeploys with Changes = Map.ofList [ post.Id, { ChangedDate = post.Info.CreatedDate; Production = production } ] }
+
+let deploying (post : Post) = changed post (Dispatched (Queued (RunNumber 9L)))
+
+let deployFailed (post : Post) = changed post ProductionDispatch.Failed
 
 let delivery deliveryType (post : Post) =
   { Id = SubscriptionDeliveryId.create (Guid.NewGuid().ToString()) |> ok

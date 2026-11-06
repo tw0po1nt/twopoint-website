@@ -2,6 +2,8 @@ module TwoPoint.Site.Generator.Tests.PostsTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 
 open Expecto
 open System.IO
@@ -48,6 +50,23 @@ let private page slug =
 [<Tests>]
 let tests =
   testList "The posts" [
+    test "the posts build with no error, and each warning is about a tag slug with two titles" {
+      let problems = realContent.Value.Warnings |> List.collect _.Problems
+
+      for problem in problems do
+        match problem with
+        | { Severity = Severity.Warning; Place = Place.Field("tags", _) } -> ()
+        | other -> failtest $"Each problem is a warning on the tags field: %A{other}"
+
+      Expect.equal
+        (problems
+         |> List.map (fun problem -> Regex.Match(problem.Message, "the slug '([^']+)'").Groups[1].Value)
+         |> List.countBy id
+         |> List.sort)
+        [ "functional-programming", 8; "net-conf", 2 ]
+        "Each post with one of the two tag slugs gets one warning"
+    }
+
     test "each post of the Astro build is Markdown" {
       Expect.equal (astro |> List.length) 10 "The Astro build has 10 posts"
 

@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Grammars/*.json" LogicalName="Grammars/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../content/privacy.md" LogicalName="privacy.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Widgets/Contract.fs" Link="Contract.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="Stage.fs" />
+    <Compile Include="Slug.fs" />
+    <Compile Include="Rules.fs" />
+    <Compile Include="FrontMatter.fs" />
+    <Compile Include="Highlight.fs" />
+    <Compile Include="Directive.fs" />
+    <Compile Include="Images.fs" />
+    <Compile Include="CodeBlock.fs" />
+    <Compile Include="Body.fs" />
+    <Compile Include="CommentBody.fs" />
+    <Compile Include="Post.fs" />
+    <Compile Include="Time.fs" />
+    <Compile Include="PostText.fs" />
+    <Compile Include="MarkdownPage.fs" />
+    <Compile Include="Privacy.fs" />
+    <Compile Include="Blog.fs" />
+    <Compile Include="SitePage.fs" />
+    <Compile Include="SitePath.fs" />
+    <Compile Include="Links.fs" />
+    <Compile Include="Article.fs" />
+    <Compile Include="Check.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.0.102" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
+    <PackageReference Include="Markdig" Version="1.4.1" />
+    <PackageReference Include="Oxpecker.ViewEngine" Version="2.1.0" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+    <PackageReference Include="TextMateSharp" Version="2.0.4" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+
+</Project>

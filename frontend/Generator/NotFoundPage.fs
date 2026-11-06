@@ -1,9 +1,9 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.NotFoundPage
 
-open Oxpecker.ViewEngine
+open TwoPoint.Site.Render
 
-let sitePath = "404.html"
+open Oxpecker.ViewEngine
 
 let robots = Layout.Robots.NoIndex
 

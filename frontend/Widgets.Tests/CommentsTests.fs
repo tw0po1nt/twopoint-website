@@ -12,8 +12,10 @@ let private known = Map [ "known@example.com", "validation-1" ]
 
 let private start = Comments.init pageUrl known None |> fst
 
-let private run (messages: Comments.Msg list) =
-  messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (start, None)
+let private from (model: Comments.Model) (messages: Comments.Msg list) =
+  messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (model, None)
+
+let private run (messages: Comments.Msg list) = from start messages
 
 let private answer success message : ApiResponse<unit> =
   { Success = success
@@ -26,10 +28,39 @@ let private comment id : Comment =
     Commenter = "Ada"
     Content = "First." }
 
+let private postAnswer success message (posted: PostedComment option) : PostCommentAnswer =
+  { Success = success
+    Message = message
+    Comment = posted }
+
+let private posted approval : PostedComment =
+  { Comment =
+      { Id = "3"
+        CreatedDate = "2026-10-18T10:00:00Z"
+        Commenter = "Reader"
+        Content = "Nice post & thanks" }
+    Approval = approval }
+
 let private filled email =
   [ Comments.NameChanged " Reader "
     Comments.EmailChanged $" {email} "
     Comments.CommentChanged " Nice post & thanks " ]
+
+let private shown html : ApiResponse<string> =
+  { Success = true
+    Message = None
+    Data = Some html }
+
+let private refusedPreview : ApiResponse<string> =
+  { Success = false
+    Message = Some "content must be between 1 and 1000 characters long"
+    Data = None }
+
+let private request opening source : Comments.PreviewRequest = { Opening = opening; Source = source }
+
+let private previewing = run [ Comments.CommentChanged " Use `List.map` "; Comments.PreviewSelected ] |> fst
+
+let private html = "<p>Use <code>List.map</code></p>\n"
 
 let private returned: Comments.Return =
   { Email = "reader@example.com"
@@ -160,9 +191,7 @@ let tests =
         Expect.isTrue (Comments.showsEmailError left) "The email error shows"
         Expect.isTrue (Comments.showsCommentError left) "The comment error shows"
 
-        let fixedModel, _ =
-          [ Comments.EmailChanged "reader@example.com"; Comments.CommentChanged "Hi" ]
-          |> List.fold (fun (model, _) msg -> Comments.update msg model) (left, None)
+        let fixedModel, _ = from left [ Comments.EmailChanged "reader@example.com"; Comments.CommentChanged "Hi" ]
 
         Expect.isFalse (Comments.showsEmailError fixedModel || Comments.showsCommentError fixedModel) "No error"
       }
@@ -208,7 +237,7 @@ let tests =
           run (
             Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
             :: filled "known@example.com"
-            @ [ Comments.Submitted; Comments.PostAnswered(answer true None) ]
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None None) ]
           )
 
         Expect.isNone effect "No request"
@@ -217,19 +246,61 @@ let tests =
           model
           { start with
               List = Comments.Loaded [ comment "1" ]
-              Status = Comments.Posted }
+              Status = Comments.Posted AwaitsApproval }
           "The form is empty"
+      }
+
+      test "a new comment waits for the approval and does not go in the list" {
+        let model, _ =
+          run (
+            Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
+            :: filled "known@example.com"
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted AwaitsApproval))) ]
+          )
+
+        Expect.equal model.Status (Comments.Posted AwaitsApproval) "The status says that the comment shows after approval"
+        Expect.equal model.List (Comments.Loaded [ comment "1" ]) "The list stays"
+      }
+
+      test "the approved comment of a trusted commenter goes in the list at once" {
+        let model, effect =
+          run (
+            Comments.ListAnswered { Success = true; Message = None; Data = Some [ comment "1" ] }
+            :: filled "known@example.com"
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ]
+          )
+
+        Expect.isNone effect "No request"
+        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
+
+        Expect.equal
+          model.List
+          (Comments.Loaded
+            [ comment "1"
+              { Id = "3"
+                CreatedDate = "2026-10-18T10:00:00Z"
+                Commenter = "Reader"
+                Content = "Nice post & thanks" } ])
+          "The comment is last in the list"
+
+        Expect.equal model.Comment "" "The form is empty"
+      }
+
+      test "an approved comment while the list is not loaded keeps the list as it is" {
+        let model, _ = run (filled "known@example.com" @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ])
+        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
+        Expect.equal model.List Comments.Loading "The list is still loading"
       }
 
       test "a refused validation or post shows the message of the API, or a general message" {
         for email, answered in
-          [ "reader@example.com", Comments.ValidationAnswered
-            "known@example.com", Comments.PostAnswered ] do
-          let withMessage, _ = run (filled email @ [ Comments.Submitted; answered (answer false (Some "The commenter is banned")) ])
+          [ "reader@example.com", (fun message -> Comments.ValidationAnswered(answer false message))
+            "known@example.com", (fun message -> Comments.PostAnswered(postAnswer false message None)) ] do
+          let withMessage, _ = run (filled email @ [ Comments.Submitted; answered (Some "The commenter is banned") ])
           Expect.equal withMessage.Status (Comments.Failed "The commenter is banned") $"The message of the API for {email}"
           Expect.equal withMessage.Comment " Nice post & thanks " "The form keeps the comment"
 
-          let general, _ = run (filled email @ [ Comments.Submitted; answered (answer false None) ])
+          let general, _ = run (filled email @ [ Comments.Submitted; answered None ])
           Expect.equal general.Status (Comments.Failed "The comment did not go through. Try again later.") $"A general message for {email}"
       }
 
@@ -239,6 +310,140 @@ let tests =
 
         let _, effect = Comments.update Comments.Submitted model
         Expect.isSome effect "A second submit sends again"
+      }
+    ]
+
+    testList "preview" [
+      test "a new form shows the write tab and hides the help" {
+        Expect.equal start.Tab Comments.Write "The write tab"
+        Expect.isFalse start.HelpShown "The help is closed"
+      }
+
+      test "the tabs change, and the return to write keeps the comment" {
+        let model, effect = run [ Comments.CommentChanged "Hi"; Comments.PreviewSelected; Comments.WriteSelected ]
+        Expect.isNone effect "No request"
+        Expect.equal model.Tab Comments.Write "The write tab"
+        Expect.equal model.Comment "Hi" "The comment stays"
+      }
+
+      test "an empty or blank text shows that there is nothing to preview, with no call" {
+        for comment in [ ""; "  \n " ] do
+          let model, effect = run [ Comments.CommentChanged comment; Comments.PreviewSelected ]
+          Expect.isNone effect $"No request for '{comment}'"
+          Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Empty) "Nothing to preview"
+      }
+
+      test "the first open loads the preview of the trimmed text with one call" {
+        let model, effect = run [ Comments.CommentChanged " Use `List.map` "; Comments.PreviewSelected ]
+        Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading"
+        Expect.equal effect (Some(Comments.PreviewComment(request model.Opening "Use `List.map`"))) "One call with the trimmed text"
+      }
+
+      test "a second select of the open preview tab makes no call" {
+        let model, effect = from previewing [ Comments.PreviewSelected ]
+        Expect.isNone effect "No request"
+        Expect.equal model previewing "The model does not change"
+      }
+
+      test "the answer shows the HTML and keeps it" {
+        let model, effect = from previewing [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
+        Expect.isNone effect "No request"
+        Expect.equal model.Tab (Comments.Preview(Comments.PreviewState.Shown html)) "The preview shows the HTML"
+        Expect.equal model.Kept (Some { Source = "Use `List.map`"; Html = html }) "The widget keeps the source and its HTML"
+      }
+
+      test "an open after no change to the text shows the kept HTML with no call" {
+        let answered, _ = from previewing [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
+
+        for edit in [ []; [ Comments.CommentChanged "Use `List.map`  " ] ] do
+          let model, effect = from answered ([ Comments.WriteSelected ] @ edit @ [ Comments.PreviewSelected ])
+          Expect.isNone effect "No request"
+          Expect.equal model.Tab (Comments.Preview(Comments.PreviewState.Shown html)) "The kept HTML"
+      }
+
+      test "an open after an edit calls again" {
+        let answered, _ = from previewing [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
+        let model, effect = from answered [ Comments.WriteSelected; Comments.CommentChanged "Use `List.iter`"; Comments.PreviewSelected ]
+        Expect.equal model.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading"
+        Expect.equal effect (Some(Comments.PreviewComment(request model.Opening "Use `List.iter`"))) "A call with the new text"
+      }
+
+      test "a refused or unanswered call fails, is not kept, and [try again] calls again" {
+        for failure in
+          [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", refusedPreview)
+            Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", { shown html with Data = None })
+            Comments.PreviewUnanswered(request previewing.Opening "Use `List.map`") ] do
+          let failed, effect = from previewing [ failure ]
+          Expect.isNone effect "No request"
+          Expect.equal failed.Tab (Comments.Preview Comments.PreviewState.Failed) "The preview failed"
+          Expect.isNone failed.Kept "The widget keeps no failed call"
+
+          let retried, effect = from failed [ Comments.RetrySelected ]
+          Expect.equal retried.Tab (Comments.Preview Comments.PreviewState.Loading) "The preview is loading again"
+          Expect.equal effect (Some(Comments.PreviewComment(request retried.Opening "Use `List.map`"))) "[try again] calls again"
+
+          let reopened, effect = from failed [ Comments.WriteSelected; Comments.PreviewSelected ]
+          Expect.equal effect (Some(Comments.PreviewComment(request reopened.Opening "Use `List.map`"))) "A new open calls again"
+      }
+
+      test "[try again] does nothing when the preview did not fail" {
+        for model in [ start; previewing ] do
+          let next, effect = Comments.update Comments.RetrySelected model
+          Expect.isNone effect "No request"
+          Expect.equal next model "The model does not change"
+      }
+
+      test "a late answer after a return to write does not replace the newer state" {
+        let back, _ = from previewing [ Comments.WriteSelected ]
+
+        for late in
+          [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html)
+            Comments.PreviewUnanswered(request previewing.Opening "Use `List.map`") ] do
+          let model, effect = from back [ late ]
+          Expect.isNone effect "No request"
+          Expect.equal model back "The write tab stays, and the widget keeps nothing"
+      }
+
+      test "a late answer for an older open does not replace the state of the newer open" {
+        let reopened, _ = from previewing [ Comments.WriteSelected; Comments.CommentChanged "Use `List.iter`"; Comments.PreviewSelected ]
+        let model, _ = from reopened [ Comments.PreviewAnswered(request previewing.Opening "Use `List.map`", shown html) ]
+        Expect.equal model reopened "The newer open still loads"
+
+        let answered, _ =
+          from model [ Comments.PreviewAnswered(request reopened.Opening "Use `List.iter`", shown "<p>Use <code>List.iter</code></p>\n") ]
+
+        Expect.equal answered.Tab (Comments.Preview(Comments.PreviewState.Shown "<p>Use <code>List.iter</code></p>\n")) "The newer answer shows"
+      }
+
+      test "a submit from the preview tab posts the comment, and the form goes back to write" {
+        let sending, effect = from previewing [ Comments.EmailChanged "known@example.com"; Comments.Submitted ]
+        Expect.equal sending.Status Comments.Posting "The form is sending"
+        Expect.equal effect (Some(Comments.Post { ValidationId = "validation-1"; Comment = "Use `List.map`" })) "The post has the comment"
+
+        let posted, _ = from sending [ Comments.PostAnswered(postAnswer true None None) ]
+        Expect.equal posted.Tab Comments.Write "The empty form shows the write tab"
+        Expect.equal posted.Comment "" "The form is empty"
+      }
+
+      test "[markdown help] opens and closes the help with no call" {
+        let opened, effect = run [ Comments.HelpToggled ]
+        Expect.isNone effect "No request"
+        Expect.isTrue opened.HelpShown "The help is open"
+
+        let closed, effect = from opened [ Comments.HelpToggled ]
+        Expect.isNone effect "No request"
+        Expect.isFalse closed.HelpShown "The help is closed"
+      }
+
+      test "each row of the help shows the HTML of the comment renderer" {
+        for row in Comments.helpRows do
+          Expect.equal
+            row.ReadersSee
+            (TwoPoint.Site.Render.CommentBody.htmlWithin
+              TwoPoint.Site.Render.Highlight.NoLimit
+              TwoPoint.Site.Render.Stage.Production
+              row.YouType)
+            $"The HTML of '{row.YouType}'"
       }
     ]
 

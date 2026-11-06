@@ -1,9 +1,11 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.UnsubscribePage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
-let urlPath = "/unsubscribe/"
+let urlPath = SitePage.urlPath SitePage.Unsubscribe
 
 let robots = Layout.Robots.Index
 

@@ -138,7 +138,17 @@ module CancellableTaskResult =
     (input: CancellableTaskResult<'ok, 'error>)
     : CancellableTaskResult<unit, 'error> =
     CancellableTask.map Result.ignore input
-    
+
+  let orElseWith
+    (onError: 'errorInput -> CancellableTaskResult<'ok, 'errorOutput>)
+    (input: CancellableTaskResult<'ok, 'errorInput>)
+    : CancellableTaskResult<'ok, 'errorOutput> =
+    cancellableTask {
+      match! input with
+      | Ok value -> return Ok value
+      | Error error -> return! onError error
+    }
+
 module TaskSeq =
   open FSharp.Control
   

@@ -2,6 +2,7 @@ module TwoPoint.Site.Generator.Tests.RobotsTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
 
 open Expecto
 open System.Text

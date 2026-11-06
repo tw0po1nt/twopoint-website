@@ -74,7 +74,7 @@ Use one of these two paths. Each path gives the site at [http://localhost:4321](
 
 Use this path to change the site. The dev server renders each page in memory, so it needs no build first.
 
-Start a SageFs session in `frontend/Dev/`. The init script starts the dev server and the widget watch. A save of a pulled post, a style, or a widget reloads the page.
+Start a SageFs solution session over `frontend/Site.slnx`, with `frontend/` as the working directory. The init script `frontend/.SageFs/init.fsx` starts the dev server and the widget watch. A save of a pulled post, a style, or a widget reloads the page. At each save, SageFs runs each test in `Site.slnx` that calls the changed code.
 
 On the first start, the page shows an error until the widget watch writes `frontend/Widgets/dist/`. Then the page reloads.
 
@@ -102,6 +102,20 @@ Use this path to see the files that a deploy sends to GitHub Pages.
 
 The build writes the site to `frontend/dist/website/` and the newsletters to `frontend/dist/newsletter/`.
 
+### 6. Run the admin locally
+
+1. Install the admin packages in `frontend/Admin/`:
+
+   ```sh
+   npm ci
+   ```
+
+2. Start a SageFs session over `frontend/Admin.Tests/Admin.Tests.fsproj`.
+
+The init script starts the admin dev host on [http://localhost:4322](http://localhost:4322) and the admin watch. A save of an admin F# file builds the admin again and reloads the page. SageFs runs the admin tests at each save.
+
+On the first start, the page shows "The first build is not ready" until the admin watch writes `frontend/Admin/dist/`. Then refresh the page.
+
 ## Tests
 
 ```sh
@@ -112,7 +126,7 @@ The script runs the prose check, builds the solution, and runs the .NET tests. T
 
 ## Deploys
 
-A push to `main` or a manual run of `site.yml` pulls the posts, builds the site, and deploys it to GitHub Pages. In the production repository, the workflow also uploads the newsletters to Azure Blob storage before the deploy.
+A push to `main` or a manual run of `site.yml` pulls the posts, builds the site, and deploys it to GitHub Pages. In the production repository, the workflow also uploads the newsletters to Azure Blob storage before the deploy, and deletes the newsletter of each removed post.
 
 ## Live site
 

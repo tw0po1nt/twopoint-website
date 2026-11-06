@@ -2,6 +2,7 @@ namespace TwoPoint.Http.Endpoints.Queues
 
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
+open TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
@@ -11,7 +12,6 @@ open Azure.Core
 open Azure.Data.Tables
 open Azure.Messaging.ServiceBus
 open Azure.Storage.Blobs
-open FirebaseAdmin.Messaging
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Extensions.Logging
 
@@ -25,7 +25,6 @@ type ProcessWelcomeMessage(
   config: Config,
   credential: TokenCredential,
   emailClient: EmailClient,
-  messaging : FirebaseMessaging,
   logger : ILogger<ProcessWelcomeMessage>,
   tableServiceClient: TableServiceClient
 ) =
@@ -54,7 +53,6 @@ type ProcessWelcomeMessage(
       let deliveryDependencies = DeliveryDependencies(
         emailClient,
         config.Azure.EmailSender,
-        messaging,
         BlobContainerClient(welcomeConfig.NewsletterContainerUri, credential),
         welcomeConfig.UnsubscribeUri,
         tableServiceClient,
@@ -66,7 +64,8 @@ type ProcessWelcomeMessage(
         member _.GetSubscriptionById id = subscriptionDependencies.GetSubscriptionById id
         member _.GetDeliveriesForSubscription subscription =
           subscriptionDependencies.GetDeliveriesForSubscription subscription
-        member _.GetLatestPost () = deliveryDependencies.GetLatestPost()
+        member _.GetAllPosts () = deliveryDependencies.GetAllPosts()
+        member _.GetDeployContext () = DeployStore(config, tableServiceClient, logger).GetDeployContext()
         member _.GetNewsletter post = deliveryDependencies.GetNewsletter post
         member _.GetUtcNow () = DateTime.UtcNow
         member _.SendWelcome subscription newsletter = deliveryDependencies.SendWelcome subscription newsletter

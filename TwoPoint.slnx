@@ -1,18 +1,24 @@
 <Solution>
   <Folder Name="/backend/">
     <File Path="backend/Core.Api.fsx" />
-    <File Path="backend/FIREBASE_SETUP.md" />
     <Project Path="backend/Core.Tests/Core.Tests.fsproj" />
     <Project Path="backend/Core/Core.fsproj" />
     <Project Path="backend/Dependencies.Tests/Dependencies.Tests.fsproj" />
     <Project Path="backend/Dependencies/Dependencies.fsproj" />
     <Project Path="backend/Http/Http.fsproj" />
+    <Project Path="backend/Http.Tests/Http.Tests.fsproj" />
   </Folder>
   <Folder Name="/frontend/">
+    <Project Path="frontend/Admin.Dev/Admin.Dev.fsproj" />
+    <Project Path="frontend/Admin.Tests/Admin.Tests.fsproj" />
+    <Project Path="frontend/Admin/Admin.fsproj" />
     <Project Path="frontend/Dev.Tests/Dev.Tests.fsproj" />
     <Project Path="frontend/Dev/Dev.fsproj" />
+    <Project Path="frontend/DevHost/DevHost.fsproj" />
     <Project Path="frontend/Generator.Tests/Generator.Tests.fsproj" />
     <Project Path="frontend/Generator/Generator.fsproj" />
+    <Project Path="frontend/Render.Tests/Render.Tests.fsproj" />
+    <Project Path="frontend/Render/Render.fsproj" />
     <Project Path="frontend/Widgets.Tests/Widgets.Tests.fsproj" />
     <Project Path="frontend/Widgets/Widgets.fsproj" />
   </Folder>

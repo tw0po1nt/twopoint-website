@@ -1,67 +1,18 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.ListPage
 
+open TwoPoint.Site.Render
+
 open Oxpecker.ViewEngine
 
-[<RequireQualifiedAccess>]
-type PostList =
-  | Posts
-  | Category of Term
-  | Series of Series
-  | Tag of Term
-
-/// A page of a list. `Number` counts from 1.
-type Page =
-  { List: PostList
-    Number: int
-    Count: int
-    Posts: Post list }
-
-let seriesUrlPath = "/series/"
-
-let private seriesCategorySlug = "series"
-
-/// The URL path of page 1.
-let private basePath (list: PostList) =
-  match list with
-  | PostList.Posts -> "/posts/"
-  | PostList.Category category -> $"/category/{category.Slug}/"
-  | PostList.Series series -> $"/series/{series.Slug}/"
-  | PostList.Tag tag -> $"/tag/{tag.Slug}/"
+let seriesUrlPath = SitePage.urlPath SitePage.SeriesList
 
 let private isSeriesCategory (list: PostList) =
   match list with
-  | PostList.Category category -> category.Slug = seriesCategorySlug
+  | PostList.Category category -> category.Slug = Rules.seriesCategory
   | _ -> false
 
-let private includes (list: PostList) (post: Post) =
-  let frontMatter = post.FrontMatter
-
-  match list with
-  | PostList.Posts -> true
-  | PostList.Category category -> frontMatter.Category.Slug = category.Slug
-  | PostList.Series series -> frontMatter.Series |> Option.exists (fun other -> other.Slug = series.Slug)
-  | PostList.Tag tag -> frontMatter.Tags |> List.exists (fun other -> other.Slug = tag.Slug)
-
-/// The pages of the list of each post, then of each category, each series, and each tag.
-let all (posts: Post list) =
-  [ for list in
-        [ PostList.Posts
-          yield! Blog.categories posts |> List.map PostList.Category
-          yield! Blog.series posts |> List.map (fst >> PostList.Series)
-          yield! Blog.tags posts |> List.map (fst >> PostList.Tag) ] do
-      let pages = posts |> List.filter (includes list) |> Blog.pages
-
-      for index, shown in List.indexed pages do
-        { List = list
-          Number = index + 1
-          Count = pages.Length
-          Posts = shown } ]
-
-let urlPath (page: Page) =
-  Blog.pageUrlPath (basePath page.List) page.Number
-
-let robots (page: Page) =
+let robots (page: PostListPage) =
   match page.List with
   | PostList.Tag _ -> Layout.Robots.NoIndex
   | list when isSeriesCategory list -> Layout.Robots.NoIndex
@@ -96,9 +47,9 @@ let private pathLine (command: string) =
     $" $ {command}"
   }
 
-let private pager (page: Page) =
+let private pager (page: PostListPage) =
   let pageUrlPath number =
-    Blog.pageUrlPath (basePath page.List) number
+    Blog.pageUrlPath (PostList.basePath page.List) number
 
   nav(class' = "pager").attr ("aria-label", "Pages") {
     if page.Number > 1 then
@@ -110,9 +61,9 @@ let private pager (page: Page) =
       a(class' = "older", href = pageUrlPath (page.Number + 1)).attr ("rel", "next") { "older →" }
   }
 
-let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (ogImages: OgImages) (posts: Post list) (page: Page) =
+let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (ogImages: OgImages) (posts: Post list) (page: PostListPage) =
   let list = page.List
-  let command = $"ls -l {(basePath list).TrimStart '/'}"
+  let command = $"ls -l {(PostList.basePath list).TrimStart '/'}"
 
   let ogImage =
     match list, page.Posts with
@@ -123,7 +74,7 @@ let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (ogImages: 
     { Title = Some(if page.Number = 1 then title list else $"{title list}, page {page.Number}")
       Description = description list
       // `/category/series/` lists the posts of the series pages, so it sends search engines to `/series/`.
-      UrlPath = Some(if isSeriesCategory list then seriesUrlPath else urlPath page)
+      UrlPath = Some(if isSeriesCategory list then seriesUrlPath else PostList.urlPath page)
       Robots = robots page
       OgType = Layout.OgType.Website
       OgImage = ogImage

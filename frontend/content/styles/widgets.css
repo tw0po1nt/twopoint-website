@@ -129,8 +129,74 @@
 
 .comment-text {
   margin-top: 4px;
-  white-space: pre-line;
   overflow-wrap: anywhere;
+}
+
+.comment-text > * {
+  margin: 0;
+}
+
+.comment-text > * + * {
+  margin-top: 8px;
+}
+
+.comment-text a {
+  color: var(--accent);
+}
+
+.comment-text code {
+  padding: 1px 4px;
+  background: var(--bg-2);
+  font: 0.92em var(--mono);
+}
+
+.comment-text pre {
+  position: relative;
+  padding: 10px 12px;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font: 13px/1.5 var(--mono);
+}
+
+.comment-text pre[data-lang] {
+  padding-top: 28px;
+}
+
+.comment-text pre[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.comment-text pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.comment-text blockquote {
+  padding-left: 12px;
+  border-left: 2px solid var(--accent-2);
+  color: var(--muted);
+}
+
+.comment-text ul,
+.comment-text ol {
+  padding-left: 3ch;
+}
+
+/* A comment is in a list, so the browser gives its lists the markers of a nested list. */
+.comment-text ul {
+  list-style-type: disc;
+}
+
+.comment-text ol {
+  list-style-type: decimal;
 }
 
 .comment-form {
@@ -151,10 +217,41 @@
   min-width: 8ch;
 }
 
-.comment-field input,
-.comment-field textarea {
+.comment-field input {
   flex: 1;
   min-width: 0;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--fg);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: 14px var(--mono);
+}
+
+.comment-field input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.comment-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comment-tabs {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.comment-tabs span {
+  min-width: 8ch;
+}
+
+.comment-editor textarea {
   padding: 4px 2px;
   border: 0;
   border-bottom: 1px solid var(--fg);
@@ -165,9 +262,73 @@
   resize: vertical;
 }
 
-.comment-field input:focus,
-.comment-field textarea:focus {
+.comment-editor textarea:focus {
   border-bottom-color: var(--accent);
+}
+
+.comment-editor textarea.is-hidden {
+  display: none;
+}
+
+.comment-preview {
+  padding: 4px 2px;
+  border-bottom: 1px dashed var(--line);
+  color: var(--fg);
+  font: 14px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.comment-preview > .comment-text {
+  margin-top: 0;
+}
+
+.comment-preview.is-muted,
+.comment-help {
+  color: var(--muted);
+}
+
+.comment-preview.is-failed {
+  color: var(--accent);
+}
+
+.comment-help {
+  margin: 0;
+  font: 12px/1.5 var(--mono);
+}
+
+.comment-help-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 13px/1.4 var(--mono);
+}
+
+.comment-help-sheet th {
+  color: var(--muted);
+  font-weight: 400;
+  text-align: left;
+}
+
+.comment-help-sheet th,
+.comment-help-sheet td {
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px dashed var(--line);
+  vertical-align: top;
+}
+
+.comment-help-sheet td.comment-text {
+  margin: 0;
+}
+
+.comment-help-sheet td > pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.comment-help-sheet p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font: 12px/1.5 var(--mono);
 }
 
 .comment-form button {
@@ -183,6 +344,16 @@
 .comment-form button:disabled {
   cursor: default;
   color: var(--muted);
+}
+
+.comment-form .comment-tab {
+  color: var(--muted);
+}
+
+.comment-form .comment-tab[aria-selected="true"] {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .comment-error,

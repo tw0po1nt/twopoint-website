@@ -112,7 +112,14 @@ type internal DbCommenter =
     entity["Name"] <- this.Name |> Option.toObj
     entity["Status"] <- this.Status
     entity
-    
+
+  static member FromCommenter (commenter : Commenter) =
+    { ValidationId = commenter.ValidationId.ToString()
+      EmailAddress = commenter.EmailAddress |> EmailAddress.value
+      Name = commenter.Name |> Option.map NonEmptyString.value
+      CreatedDate = commenter.CreatedDate
+      Status = commenter.Status.ToString().ToLower() }
+
   member this.ToCommenter() =
     Commenter.create
       this.ValidationId
@@ -231,13 +238,30 @@ type internal DbComment =
          Status = commenter.Status
          ValidationId = commenter.ValidationId |}
       this.Content
-      
+
+  /// A comment whose post is not in the post table gets the slug as its title, so that the author can
+  /// still moderate it.
+  member this.ToPostedComment(post: DbPost option, status: DbCommentStatus, commenter: DbCommenter) = validation {
+    let! slug = Slug.create this.PostId
+    let! title =
+      post
+      |> Option.map _.Title
+      |> Option.defaultValue this.PostId
+      |> NonEmptyString.create (Some "title")
+    let! comment = this.ToComment(status, commenter)
+    return { PostedComment.Post = slug; PostTitle = title; Comment = comment }
+  }
+
 
 type internal IPostDb =
   abstract member GetAllPosts: unit -> CancellableTaskResult<DbPost list, DependencyError>
   abstract member GetPostBySlug: slug: string -> CancellableTaskResult<DbPost option, DependencyError>
-  abstract member CreatePost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
+  abstract member UpsertPost: post: DbPost -> CancellableTaskResult<DbPost, DependencyError>
+  abstract member DeletePost: slug: string -> CancellableTaskResult<unit, DependencyError>
+  abstract member HasCommentsOfPost: slug: string -> CancellableTaskResult<bool, DependencyError>
+  abstract member DeleteCommentsOfPost: slug: string -> CancellableTaskResult<unit, DependencyError>
   
+  abstract member GetAllCommenters: unit -> CancellableTaskResult<DbCommenter list, DependencyError>
   abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member GetCommenterByValidationId: validationId: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member CreateCommenter: commenter: DbCommenter -> CancellableTaskResult<DbCommenter, DependencyError>
@@ -245,10 +269,18 @@ type internal IPostDb =
     commenter: DbCommenter
       -> status: string
       -> CancellableTaskResult<DbCommenter, DependencyError>
+  abstract member DeleteCommenter: validationId: string -> CancellableTaskResult<unit, DependencyError>
   
   abstract member GetCommentsForPost:
     approvals: string list
       -> post: DbPost
+      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+  abstract member GetCommentsOnAllPosts:
+    approvals: string list
+      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+  abstract member GetCommentsOfCommenter:
+    approvals: string list
+      -> commenter: DbCommenter
       -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
@@ -273,7 +305,45 @@ module internal PostDb =
   
   open Azure.Data.Tables.FSharp
   open Microsoft.Extensions.Logging
-  
+
+  let withLatestStatus
+    (logger : ILogger)
+    approvals
+    (dbComments : DbComment array)
+    (commenters : DbCommenter list)
+    (statuses : DbCommentStatus list)
+    =
+    let commenters = commenters |> List.toArray
+    let statuses =
+      statuses
+      |> List.toArray
+      |> Array.sortByDescending (fun (status: DbCommentStatus) -> status.CreatedDate)
+
+    (Validation.ok [||], dbComments) ||> Array.fold (fun comments comment -> validation {
+      let! comments = comments
+      match commenters |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId) with
+      | None ->
+        logger.LogWarning(
+          "No commenter with Id '{commenterId}' for comment '{commentId}'. The comment is left out.",
+          comment.CommenterId,
+          comment.Id
+        )
+        return comments
+      | Some commenter ->
+        let! latestStat =
+          statuses
+          |> Array.filter (fun st -> st.CommentId = comment.Id)
+          |> Array.tryHead
+          |> Result.requireSome $"No status found for comment with Id '{comment.Id}'"
+
+        if approvals |> List.contains latestStat.Approval
+        then return [|(comment, commenter, latestStat)|] |> Array.append comments
+        else return comments
+    })
+    |> DependencyError.ofValidation Dependency.Database
+    |> Result.map (fun comments -> comments |> Array.sortBy (fun (comment, _, _) -> comment.CreatedDate))
+    |> Result.map Array.toList
+
   let live (tableServiceClient : TableServiceClient) (logger : ILogger) =
 
     let db = nameof IPostDb
@@ -289,21 +359,30 @@ module internal PostDb =
       
     let where table onEntity filter =
       Db.where tableServiceClient logger db table onEntity filter
-      
+
+    let whereAnyKey table onEntity toFilter keys =
+      Db.whereAnyKey tableServiceClient logger db table onEntity toFilter keys
+
     let add table onError onEntity entity =
       Db.add tableServiceClient logger db table onError onEntity entity
       
+    let upsert table onError onEntity entity =
+      Db.upsert tableServiceClient logger db table onError onEntity entity
+
     let update table onError onEntity entity updateEntity =
       Db.update tableServiceClient logger db table onError onEntity entity updateEntity
       
     let delete table onError filter =
       Db.delete tableServiceClient logger db table onError filter
+
+    let deleteByKeys table onError partitionKey rowKey =
+      Db.deleteByKeys tableServiceClient logger db table onError partitionKey rowKey
       
     let postsTable = "posts"
     let commentsTable = "comments"
     let commentStatusesTable = "commentStatuses"
     let commentersTable = "commenters"
-    
+
     { new IPostDb with
       
       member _.GetAllPosts () =
@@ -312,8 +391,27 @@ module internal PostDb =
       member _.GetPostBySlug slug =
         slug |> trySingle postsTable DbPost.FromEntity (Some slug)
 
-      member _.CreatePost post =
-        post.ToEntity() |> add postsTable PostDbError.validation DbPost.FromEntity
+      member _.UpsertPost post =
+        post.ToEntity() |> upsert postsTable PostDbError.validation DbPost.FromEntity
+
+      member _.DeletePost slug =
+        deleteByKeys postsTable PostDbError.validation slug slug
+
+      member _.HasCommentsOfPost slug = cancellableTaskResult {
+        let! (dbComments: DbComment list) = eq "PartitionKey" slug |> where commentsTable DbComment.FromEntity
+        return not (List.isEmpty dbComments)
+      }
+
+      member _.DeleteCommentsOfPost slug = cancellableTaskResult {
+        let! (dbComments: DbComment list) = eq "PartitionKey" slug |> where commentsTable DbComment.FromEntity
+
+        for (comment: DbComment) in dbComments do
+          do! eq "PartitionKey" comment.Id |> delete commentStatusesTable PostDbError.validation
+          do! deleteByKeys commentsTable PostDbError.validation slug comment.Id
+      }
+
+      member _.GetAllCommenters () =
+        toList commentersTable DbCommenter.FromEntity
 
       member _.GetCommenterByEmailAddress emailAddress =
         eq "EmailAddress" emailAddress |> trySingleQuery commentersTable DbCommenter.FromEntity None
@@ -329,6 +427,9 @@ module internal PostDb =
         <| fun entity ->
           entity["Status"] <- status
           entity
+
+      member _.DeleteCommenter validationId =
+        deleteByKeys commentersTable PostDbError.validation validationId validationId
         
       member _.GetCommentsForPost approvals post = cancellableTaskResult {
         // Get comments
@@ -336,49 +437,45 @@ module internal PostDb =
         let dbComments = dbComments |> List.toArray
       
         // for every comment, get the commenter
-        let commenterIds = dbComments |> Array.map _.CommenterId
-        let commentersFilter = (Empty, commenterIds) ||> Array.fold (fun filter commenterId ->
-          filter * (eq "PartitionKey" commenterId + eq "RowKey" commenterId)
-        )
-        let getCommenters = commentersFilter |> where commentersTable DbCommenter.FromEntity
-        
+        let getCommenters =
+          dbComments
+          |> Array.map _.CommenterId
+          |> whereAnyKey commentersTable DbCommenter.FromEntity (fun commenterId ->
+            eq "PartitionKey" commenterId + eq "RowKey" commenterId
+          )
+
         // for every comment, get the comment statuses
-        let commentIds = dbComments |> Array.map _.Id
-        let commentStatusesFilter = (Empty, commentIds) ||> Array.fold (fun filter commentId ->
-          filter * eq "PartitionKey" commentId
-        )
-        let getCommentStatuses = commentStatusesFilter |> where commentStatusesTable DbCommentStatus.FromEntity
-        
+        let getCommentStatuses =
+          dbComments
+          |> Array.map _.Id
+          |> whereAnyKey commentStatusesTable DbCommentStatus.FromEntity (eq "PartitionKey")
+
         let! commenters, statuses = CancellableTaskResult.parallelZip getCommenters getCommentStatuses
-        
-        let commenters = commenters |> List.toArray
-        let statuses =
-          statuses
-          |> List.toArray
-          |> Array.sortByDescending (fun (status: DbCommentStatus) -> status.CreatedDate)
-        
-        return!
-          (Validation.ok [||], dbComments) ||> Array.fold (fun comments comment -> validation {
-            let! comments = comments
-            let! commenter =
-              commenters
-              |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId)
-              |> Validation.requireSome $"No commenter with Id '{comment.CommenterId}' found for comment with Id '{comment.Id}'"
-            let! latestStat =
-              statuses
-              |> Array.filter (fun st -> st.CommentId = comment.Id)
-              |> Array.tryHead
-              |> Result.requireSome $"No status found for comment with Id '{comment.Id}'"
-              
-            if approvals |> List.contains latestStat.Approval
-            then return [|(comment, commenter, latestStat)|] |> Array.append comments
-            else return comments 
-          })
-          |> DependencyError.ofValidation Dependency.Database
-          |> Result.map (fun comments -> comments |> Array.sortBy (fun (comment, _, _) -> comment.CreatedDate))
-          |> Result.map Array.toList
+
+        return! withLatestStatus logger approvals dbComments commenters statuses
       }
-      
+
+      member _.GetCommentsOnAllPosts approvals = cancellableTaskResult {
+        let! dbComments = toList commentsTable DbComment.FromEntity
+        let! commenters, statuses =
+          CancellableTaskResult.parallelZip
+            (toList commentersTable DbCommenter.FromEntity)
+            (toList commentStatusesTable DbCommentStatus.FromEntity)
+
+        return! withLatestStatus logger approvals (dbComments |> List.toArray) commenters statuses
+      }
+
+      member _.GetCommentsOfCommenter approvals commenter = cancellableTaskResult {
+        let! dbComments = eq "CommenterId" commenter.ValidationId |> where commentsTable DbComment.FromEntity
+        let dbComments = dbComments |> List.toArray
+        let! statuses =
+          dbComments
+          |> Array.map _.Id
+          |> whereAnyKey commentStatusesTable DbCommentStatus.FromEntity (eq "PartitionKey")
+
+        return! withLatestStatus logger approvals dbComments [ commenter ] statuses
+      }
+
       member this.GetCommentById commentId = cancellableTaskResult {
         // Get comment
         let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None

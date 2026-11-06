@@ -2,6 +2,7 @@
 module TwoPoint.Site.Dev.ImageCache
 
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open System
 open System.IO

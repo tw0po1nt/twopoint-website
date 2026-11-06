@@ -9,11 +9,29 @@
 
   <ItemGroup>
     <Compile Include="Fixtures.fs" />
+    <Compile Include="AccessTests.fs" />
     <Compile Include="NewsletterTests.fs" />
     <Compile Include="CreateSubscriptionTests.fs" />
+    <Compile Include="SubscriptionTests.fs" />
     <Compile Include="SendWelcomeTests.fs" />
     <Compile Include="StartNewPostDeliveryTests.fs" />
     <Compile Include="SendNewPostDeliveryTests.fs" />
+    <Compile Include="RebuildSiteTests.fs" />
+    <Compile Include="DeployRuleTests.fs" />
+    <Compile Include="ReceiveWorkflowRunTests.fs" />
+    <Compile Include="ModerationTests.fs" />
+    <Compile Include="PostListTests.fs" />
+    <Compile Include="DashboardTests.fs" />
+    <Compile Include="DeviceTests.fs" />
+    <Compile Include="NewCommentTests.fs" />
+    <Compile Include="PostDraftTests.fs" />
+    <Compile Include="PostTermsTests.fs" />
+    <Compile Include="PostPreviewTests.fs" />
+    <Compile Include="PublishPostTests.fs" />
+    <Compile Include="RevisionTests.fs" />
+    <Compile Include="SeriesTests.fs" />
+    <Compile Include="PhotoMetadataTests.fs" />
+    <Compile Include="UploadAssetTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

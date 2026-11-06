@@ -2,6 +2,7 @@ module TwoPoint.Site.Dev.Tests.ImageCacheTests
 
 open TwoPoint.Site.Dev
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Expecto
 open System

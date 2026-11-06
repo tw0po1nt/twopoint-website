@@ -1,6 +1,8 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Generator.Cli
 
+open TwoPoint.Site.Render
+
 open System
 open System.Text.RegularExpressions
 
@@ -10,11 +12,13 @@ type Command =
   | Pull of account: string
   /// The container URI, for example `https://account.blob.core.windows.net/newsletter`.
   | Upload of container: Uri
+  /// The folder for the site CSS and its fonts, for example `frontend/Admin/dist/preview-styles`.
+  | PreviewStyles of out: string
 
 let private stageNames = Stage.all |> List.map Stage.name |> String.concat "|"
 
 let usage =
-  $"Usage: build --stage {stageNames} | pull --account <name> | upload --container <uri>"
+  $"Usage: build --stage {stageNames} | pull --account <name> | upload --container <uri> | preview-styles --out <folder>"
 
 let private accountName (value: string) =
   if Regex.IsMatch(value, "^[a-z0-9]{3,24}$") then
@@ -41,4 +45,7 @@ let parse (args: string list) : Result<Command, string> =
   | [ "upload"; "--container"; value ] -> containerUri value
   | [ "upload" ]
   | [ "upload"; "--container" ] -> Error "upload needs a container. Give --container <uri>."
+  | [ "preview-styles"; "--out"; value ] -> Ok(PreviewStyles value)
+  | [ "preview-styles" ]
+  | [ "preview-styles"; "--out" ] -> Error "preview-styles needs a folder. Give --out <folder>."
   | _ -> Error usage

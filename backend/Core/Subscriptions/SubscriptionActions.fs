@@ -1,5 +1,6 @@
 namespace TwoPoint.Core.Subscriptions.Actions
 
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Shared
@@ -67,7 +68,7 @@ module CreateSubscription =
       fun existingSubscription newSubscription ->
         match existingSubscription with
         | None -> Ok (New newSubscription)
-        | Some existing when existing.IsActive -> Error (AlreadyActive existing)
+        | Some existing when Subscription.isActive existing -> Error (AlreadyActive existing)
         | Some existing -> Ok (Reactivate existing)
 
   // Action
@@ -104,7 +105,7 @@ module CreateSubscription =
           | New newSubscription ->
             dependencies.CreateSubscription newSubscription utcNow |> CancellableTaskResult.map Event.Created
           | Reactivate existing ->
-            dependencies.ActivateSubscription existing |> CancellableTaskResult.map Event.Reactivated
+            dependencies.ActivateSubscription (Subscription.reactivate existing) |> CancellableTaskResult.map Event.Reactivated
         )
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult id)
@@ -152,7 +153,9 @@ module CancelSubscription =
   // Output
 
   type Error = SubscriptionNotFound of SubscriptionCancellation 
-  type Success = Cancelled of Subscription
+  type Success =
+    | Cancelled of Subscription
+    | AlreadyCanceled of Subscription
   type Decision = Decision<Success, Error>
   type Event = Cancelled of Subscription
   
@@ -167,9 +170,10 @@ module CancelSubscription =
   module Logic =
     let decide : Logic = 
       fun existingSubscription cancellation ->
-        existingSubscription 
+        existingSubscription
         |> Result.requireSome (SubscriptionNotFound cancellation)
-        |> Result.map Success.Cancelled
+        |> Result.map (fun subscription ->
+          if Subscription.isActive subscription then Success.Cancelled subscription else Success.AlreadyCanceled subscription)
    
   // Action
 
@@ -178,6 +182,7 @@ module CancelSubscription =
   type Dependencies =
     abstract member GetSubscriptionByEmail: EmailAddress -> DependencyResult<Subscription option>
     abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member GetUtcNow: unit -> DateTime
     abstract member DeactivateSubscription: Subscription -> DependencyResult<Subscription>
 
   let withDependencies (dependencies : Dependencies) : Action =
@@ -197,10 +202,108 @@ module CancelSubscription =
 
       return!
         decision
-        |> Result.map (fun (Success.Cancelled subscription) -> subscription)
-        |> Result.traverseCancellableTask dependencies.DeactivateSubscription 
+        |> Result.traverseCancellableTask (function
+          | Success.Cancelled subscription ->
+            dependencies.DeactivateSubscription (Subscription.cancel (dependencies.GetUtcNow()) subscription)
+          | Success.AlreadyCanceled subscription -> CancellableTaskResult.singleton subscription
+        )
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Cancelled)
+          (Logic >> ActionResult.failure)
+    }
+
+// ========================================================================================
+// Delete subscription
+// ========================================================================================
+
+// Input
+
+type SubscriptionDeletion =
+  { SubscriptionId : SubscriptionId }
+
+module SubscriptionDeletion =
+
+  type SubscriptionId = SubscriptionId of string
+
+  type Dto =
+    { SubscriptionId : SubscriptionId }
+
+  let create (dto : Dto) = validation {
+    let (SubscriptionId subscriptionId) = dto.SubscriptionId
+
+    let! subscriptionId = subscriptionId |> SubscriptionId.create
+
+    return { SubscriptionDeletion.SubscriptionId = subscriptionId }
+  }
+
+[<RequireQualifiedAccess>]
+module DeleteSubscription =
+
+  // Output
+
+  type Error = SubscriptionNotFound of SubscriptionId
+  type Success = Deleted of Subscription * deliveries : SubscriptionDelivery list
+  type Decision = Decision<Success, Error>
+  type Event = Deleted of Subscription
+
+  // Logic
+
+  type Logic =
+    SubscriptionDeletion
+      -> Subscription option
+      -> SubscriptionDelivery list
+      -> Decision
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide : Logic =
+      fun deletion existingSubscription deliveries -> result {
+        let! subscription = existingSubscription |> Result.requireSome (SubscriptionNotFound deletion.SubscriptionId)
+        return Success.Deleted (subscription, deliveries)
+      }
+
+  // Action
+
+  type Action = SubscriptionDeletion.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<SubscriptionDelivery list>
+    abstract member DeleteDelivery: Subscription -> SubscriptionDelivery -> DependencyResult<unit>
+    abstract member DeleteSubscription: Subscription -> DependencyResult<unit>
+
+  let withDependencies (dependencies : Dependencies) : Action =
+
+    // The subscription goes after its deliveries, so that a second try after a failed delete finds the deliveries that are left.
+    let handleDeleted (Success.Deleted (subscription, deliveries)) : DependencyResult<Subscription> =
+      cancellableTaskResult {
+        for delivery in deliveries do
+          do! dependencies.DeleteDelivery subscription delivery
+        do! dependencies.DeleteSubscription subscription
+        return subscription
+      }
+
+    fun deletion -> cancellableTaskResult {
+      let! deletion =
+        deletion
+        |> SubscriptionDeletion.create
+        |> Result.mapError ActionError<Error>.Validation
+
+      let! existingSubscription =
+        dependencies.GetSubscriptionById deletion.SubscriptionId
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! deliveries =
+        existingSubscription
+        |> Option.traverseCancellableTaskResult dependencies.GetDeliveriesForSubscription
+        |> CancellableTaskResult.map (Option.defaultValue [])
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return!
+        Logic.decide deletion existingSubscription deliveries
+        |> Result.traverseCancellableTask handleDeleted
+        |> CancellableTaskResult.foldResult
+          (DependencyResult.toActionResult Event.Deleted)
           (Logic >> ActionResult.failure)
     }
 
@@ -273,7 +376,7 @@ module SendWelcome =
     let decide : Logic =
       fun subscriptionId subscription deliveries latestPost -> result {
         let! subscription = subscription |> Result.requireSome (SubscriptionNotFound subscriptionId)
-        do! subscription.IsActive |> Result.requireTrue (SubscriptionInactive subscription)
+        do! Subscription.isActive subscription |> Result.requireTrue (SubscriptionInactive subscription)
         let! latestPost = latestPost |> Result.requireSome NoPosts
         // A reactivation gets a second welcome only when a newer post exists than the one in the last welcome.
         do!
@@ -282,6 +385,12 @@ module SendWelcome =
           |> Result.requireNoneWith (fun welcome -> AlreadySent (subscription, welcome))
         return Send (subscription, latestPost)
       }
+
+    let latestPost (utcNow : DateTime) (deploys : DeployContext) (posts : Post list) : Post option =
+      posts
+      |> List.filter (DeliveryGate.checkPost utcNow deploys >> Result.isOk)
+      |> List.sortByDescending _.Info.CreatedDate
+      |> List.tryHead
 
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
       NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
@@ -293,7 +402,8 @@ module SendWelcome =
   type Dependencies =
     abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
     abstract member GetDeliveriesForSubscription: Subscription -> DependencyResult<SubscriptionDelivery list>
-    abstract member GetLatestPost: unit -> DependencyResult<Post option>
+    abstract member GetAllPosts: unit -> DependencyResult<Post list>
+    abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
     abstract member GetNewsletter: Post -> DependencyResult<string option>
     abstract member GetUtcNow: unit -> DateTime
     abstract member SendWelcome: Subscription -> Newsletter -> DependencyResult<OperationId>
@@ -322,9 +432,11 @@ module SendWelcome =
         |> CancellableTaskResult.map (Option.defaultValue [])
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let! latestPost =
-        dependencies.GetLatestPost()
+      let! posts, deploys =
+        CancellableTaskResult.parallelZip (dependencies.GetAllPosts()) (dependencies.GetDeployContext())
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let latestPost = Logic.latestPost (dependencies.GetUtcNow()) deploys posts
 
       let! (Send (subscription, post)) =
         Logic.decide request.SubscriptionId subscription deliveries latestPost
@@ -388,12 +500,13 @@ module StartNewPostDelivery =
 
   type Error =
     | PostNotFound of Slug
-    | PostUpcoming of Post
+    | NotReady of Post * DeliveryGate.Refusal
+    | AlreadyStarted of Post * startedDate : DateTime
     | NewsletterNotFound of Post
     | NewsletterInvalid of Post * reason : string
   type Success = Start of Post
   type Decision = Decision<Success, Error>
-  type Event = Started of Post * recipients : Subscription list
+  type Event = Started of Post * recipients : Subscription list * startedDate : DateTime
 
   // Logic
 
@@ -401,21 +514,27 @@ module StartNewPostDelivery =
     DateTime
       -> Slug
       -> Post option
+      -> DeployContext
       -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun utcNow slug post -> result {
+      fun utcNow slug post deploys -> result {
         let! post = post |> Result.requireSome (PostNotFound slug)
-        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
+        do! DeliveryGate.checkPost utcNow deploys post |> Result.mapError (fun refusal -> NotReady (post, refusal))
         return Start post
       }
+
+    let inserted (post : Post) (insert : DeliveryStartInsert) : Result<unit, Error> =
+      match insert with
+      | Inserted -> Ok ()
+      | StartedBefore startedDate -> Error (AlreadyStarted (post, startedDate))
 
     let prepareNewsletter (post : Post) (html : string option) : Result<Newsletter, Error> =
       NewsletterPreparation.prepare NewsletterNotFound NewsletterInvalid post html
 
-    let recipients (subscriptions : Subscription list) = subscriptions |> List.filter _.IsActive
+    let recipients (subscriptions : Subscription list) = subscriptions |> List.filter Subscription.isActive
 
   // Action
 
@@ -423,9 +542,12 @@ module StartNewPostDelivery =
 
   type Dependencies =
     abstract member GetPostBySlug: Slug -> DependencyResult<Post option>
+    abstract member GetDeployContext: unit -> DependencyResult<DeployContext>
     abstract member GetNewsletter: Post -> DependencyResult<string option>
     abstract member GetAllSubscriptions: unit -> DependencyResult<Subscription list>
     abstract member GetUtcNow: unit -> DateTime
+    abstract member InsertDeliveryStart: post: Post -> startedDate: DateTime -> DependencyResult<DeliveryStartInsert>
+    abstract member DeleteDeliveryStart: post: Post -> DependencyResult<unit>
     abstract member QueueDeliveries:
       post: Post
         -> intro: NonEmptyString option
@@ -443,8 +565,12 @@ module StartNewPostDelivery =
         dependencies.GetPostBySlug start.Post
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
+      let! deploys =
+        dependencies.GetDeployContext()
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
       let! (Start post) =
-        Logic.decide (dependencies.GetUtcNow()) start.Post post
+        Logic.decide (dependencies.GetUtcNow()) start.Post post deploys
         |> Result.mapError ActionError<Error>.Logic
 
       let! html =
@@ -461,12 +587,23 @@ module StartNewPostDelivery =
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let recipients = Logic.recipients subscriptions
+      let startedDate = dependencies.GetUtcNow()
 
-      do!
-        dependencies.QueueDeliveries post start.Intro recipients
+      // The insert fails when another start inserted first, so two starts never queue the same post.
+      let! insert =
+        dependencies.InsertDeliveryStart post startedDate
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      return Event.Started (post, recipients)
+      do! Logic.inserted post insert |> Result.mapError ActionError<Error>.Logic
+
+      // A failed queue deletes the start, so the author can start the delivery again.
+      do!
+        dependencies.QueueDeliveries post start.Intro recipients
+        |> CancellableTaskResult.orElseWith (fun queueError ->
+          dependencies.DeleteDeliveryStart post |> CancellableTask.map (fun _ -> Error queueError))
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      return Event.Started (post, recipients, startedDate)
     }
 
 
@@ -536,7 +673,7 @@ module SendNewPostDelivery =
     let decide : Logic =
       fun subscriptionId subscription deliveries slug post -> result {
         let! subscription = subscription |> Result.requireSome (SubscriptionNotFound subscriptionId)
-        do! subscription.IsActive |> Result.requireTrue (SubscriptionInactive subscription)
+        do! Subscription.isActive subscription |> Result.requireTrue (SubscriptionInactive subscription)
         let! post = post |> Result.requireSome (PostNotFound slug)
         // A delivery of any type counts, so a subscription that got the post in its welcome does not get it again.
         do!

@@ -2,6 +2,7 @@ module TwoPoint.Site.Dev.Tests.LookupTests
 
 open TwoPoint.Site.Dev
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Expecto
 open System
@@ -24,7 +25,8 @@ let private noPrivacy =
         Headings = []
         Anchors = Set.empty
         Links = []
-        ReadingTime = 0 } }
+        ReadingTime = 0
+        StartLine = 1 } }
 
 let private noWidgets =
   { Manifest =
@@ -45,7 +47,8 @@ let private post slug =
         Excerpt = "An excerpt"
         Author = "Matthew Watt"
         Category = { Slug = "one-offs"; Title = "One-offs" }
-        Tags = []
+        CategoryLine = 6
+        PlacedTags = []
         Series = None
         Image = None
         ShowOnHomepage = true }
@@ -60,7 +63,8 @@ let private mapOf (posts: Post list) =
       Privacy = noPrivacy
       Assets = noAssets
       OgImages = { Files = Map.empty; ByPost = Map.empty }
-      Email = { Inline = ""; Embed = "" } }
+      Email = { Inline = ""; Embed = "" }
+      Warnings = [] }
 
 let private map = mapOf []
 

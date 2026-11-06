@@ -1,7 +1,9 @@
 namespace TwoPoint.Http
 
-open System
+open TwoPoint.Core.Deploys
 open TwoPoint.Core.Shared
+
+open System
 
 type AzureConfig =
   { CommsResourceEndpoint : Uri
@@ -9,12 +11,10 @@ type AzureConfig =
     EntraTenantId : Guid
     ManagedIdentityClientId : Guid
     TableStorageUri : Uri
+    PostStoreUri : Uri
+    AssetsUri : Uri
     ServiceBusUri : Uri
     KeyVaultUri : Uri option }
-
-type FirebaseConfig =
-  { ServiceAccountJsonPath : string option
-    ServiceAccountJsonFromKeyVault : string option }
 
 type ValidRedirectUri =
   { Uri : Uri }
@@ -24,11 +24,33 @@ type WelcomeConfig =
     NewsletterContainerUri : Uri
     UnsubscribeUri : Uri }
 
+type GitHubAppConfig =
+  { ClientId : string
+    SigningKeyUri : Uri
+    WebhookSecretName : string option }
+
+/// The local backend needs no GitHub App, because it sends no dispatch.
+type DeployConfig =
+  { ProductionRepo : Repo
+    StagingRepo : Repo
+    GitHubApp : GitHubAppConfig option }
+
+type PrivateKeySource =
+  | Inline of privateKey : string
+  | KeyVault of secretName : string * vaultUri : Uri
+
+type WebPushConfig =
+  { Subject : string
+    PublicKey : string
+    PrivateKey : PrivateKeySource }
+
 type Config =
   { Azure : AzureConfig
-    Firebase : FirebaseConfig
+    WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
-    Welcome : WelcomeConfig option }
+    Welcome : WelcomeConfig option
+    Deploy : DeployConfig option
+    Stage : TwoPoint.Site.Render.Stage }
 
 module Config =
 
@@ -44,6 +66,8 @@ module Config =
         let! entraTenantId = Bind.valueAt "EntraTenantId" Bind.guid
         let! managedIdentityClientId = Bind.valueAt "ManagedIdentityClientId" Bind.guid
         let! tableStorageUri = Bind.valueAt "TableStorageUri" (Bind.uri UriKind.Absolute)
+        let! postStoreUri = Bind.valueAt "PostStoreUri" (Bind.uri UriKind.Absolute)
+        let! assetsUri = Bind.valueAt "AssetsUri" (Bind.uri UriKind.Absolute)
         let! serviceBusUri = Bind.valueAt "ServiceBusUri" (Bind.uri UriKind.Absolute)
         let! keyVaultUri = Bind.optValueAt "KeyVaultUri" (Bind.uri UriKind.Absolute)
         return
@@ -52,16 +76,26 @@ module Config =
             EntraTenantId = entraTenantId
             ManagedIdentityClientId = managedIdentityClientId
             TableStorageUri = tableStorageUri
+            PostStoreUri = postStoreUri
+            AssetsUri = assetsUri
             ServiceBusUri = serviceBusUri
             KeyVaultUri = keyVaultUri }
       }
 
-      let! firebase = Bind.section "Firebase" <| bind {
-        let! serviceAccountJsonPath = Bind.optValueAt "ServiceAccountJsonPath" Bind.string
-        let! serviceAccountJsonFromKeyVault = Bind.optValueAt "ServiceAccountJsonFromKeyVault" Bind.string
+      let! webPush = Bind.optSection "WebPush" <| bind {
+        let! subject = Bind.valueAt "Subject" Bind.string
+        let! publicKey = Bind.valueAt "PublicKey" Bind.string
+        let! inlineKey = Bind.optValueAt "PrivateKey" Bind.string
+        let! secretName = Bind.optValueAt "PrivateKeyFromKeyVault" Bind.string
+        let! privateKey =
+          match inlineKey, secretName, azure.KeyVaultUri with
+          | Some key, _, _ -> Binder.result (Inline key)
+          | None, Some name, Some vaultUri -> Binder.result (KeyVault(name, vaultUri))
+          | None, _, _ -> Binder.fail (Error.keyNotFound "PrivateKey")
         return
-          { ServiceAccountJsonPath = serviceAccountJsonPath
-            ServiceAccountJsonFromKeyVault = serviceAccountJsonFromKeyVault }
+          { Subject = subject
+            PublicKey = publicKey
+            PrivateKey = privateKey }
       }
 
       let bindValidRedirectUri =  bind {
@@ -81,10 +115,30 @@ module Config =
             UnsubscribeUri = unsubscribeUri }
       }
 
+      let! deploy = Bind.optSection "Deploy" <| bind {
+        let! productionRepo = Bind.valueAt "ProductionRepo" Bind.repo
+        let! stagingRepo = Bind.valueAt "StagingRepo" Bind.repo
+        let! gitHubApp = Bind.optSection "GitHubApp" <| bind {
+          let! clientId = Bind.valueAt "ClientId" Bind.string
+          let! signingKeyUri = Bind.valueAt "SigningKeyUri" (Bind.uri UriKind.Absolute)
+          let! webhookSecretName = Bind.optValueAt "WebhookSecretName" Bind.string
+          return { ClientId = clientId; SigningKeyUri = signingKeyUri; WebhookSecretName = webhookSecretName }
+        }
+        return
+          { ProductionRepo = productionRepo
+            StagingRepo = stagingRepo
+            GitHubApp = gitHubApp }
+      }
+
       return
         { Azure = azure
-          Firebase = firebase
+          WebPush = webPush
           ValidRedirectUris = validRedirectUris
-          Welcome = welcome }
+          Welcome = welcome
+          Deploy = deploy
+          Stage =
+            if TwoPoint.Site.Render.Azurite.isUrl azure.PostStoreUri
+            then TwoPoint.Site.Render.Stage.Local
+            else TwoPoint.Site.Render.Stage.Staging }
     }
     |> Binder.eval config

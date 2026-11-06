@@ -10,24 +10,58 @@
   <ItemGroup>
     <Compile Include="BindExtensions.fs" />
     <Compile Include="Config.fs" />
-    <Compile Include="FirebaseInitializer.fs" />
     <Compile Include="Endpoints\EndpointTypes.fs" />
     <Compile Include="Endpoints\Auth.fs" />
     <Compile Include="Endpoints\CoreExtensions.fs" />
     <Compile Include="Endpoints\JsonExtensions.fs" />
     <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
     <Compile Include="Endpoints\Blog\PostComment.fs" />
+    <Compile Include="Endpoints\Blog\PreviewComment.fs" />
     <Compile Include="Endpoints\Blog\ValidateCommenter.fs" />
     <Compile Include="Endpoints\Blog\Subscribe.fs" />
     <Compile Include="Endpoints\Blog\Unsubscribe.fs" />
+    <Compile Include="Endpoints\Admin\DeployStore.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
-    <Compile Include="Endpoints\Admin\SyncPosts.fs" />
+    <Compile Include="Endpoints\Admin\GetPost.fs" />
+    <Compile Include="Endpoints\Admin\CreateDraft.fs" />
+    <Compile Include="Endpoints\Admin\ProblemDto.fs" />
+    <Compile Include="Endpoints\Admin\SaveDraft.fs" />
+    <Compile Include="Endpoints\Admin\ChangeSlug.fs" />
+    <Compile Include="Endpoints\Admin\SiteRebuilder.fs" />
+    <Compile Include="Endpoints\Admin\PublishPost.fs" />
+    <Compile Include="Endpoints\Admin\PublishChanges.fs" />
+    <Compile Include="Endpoints\Admin\RemovalCheck.fs" />
+    <Compile Include="Endpoints\Admin\UpcomingChange.fs" />
+    <Compile Include="Endpoints\Admin\DeletePost.fs" />
+    <Compile Include="Endpoints\Admin\Revisions.fs" />
+    <Compile Include="Endpoints\Admin\GetTerms.fs" />
+    <Compile Include="Endpoints\Admin\GetSeries.fs" />
+    <Compile Include="Endpoints\Admin\SaveSeries.fs" />
+    <Compile Include="Endpoints\Admin\PreviewPost.fs" />
+    <Compile Include="Endpoints\Admin\UploadAsset.fs" />
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />
+    <Compile Include="Endpoints\Admin\GetModerationQueue.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
-    <Compile Include="Endpoints\Admin\RegisterForNotifications.fs" />
+    <Compile Include="Endpoints\Admin\UpdateCommenterStatus.fs" />
+    <Compile Include="Endpoints\Admin\GetAllCommenters.fs" />
+    <Compile Include="Endpoints\Admin\GetCommenter.fs" />
+    <Compile Include="Endpoints\Admin\DeleteCommenter.fs" />
+    <Compile Include="Endpoints\Admin\PushDeviceDto.fs" />
+    <Compile Include="Endpoints\Admin\RegisterPushDevice.fs" />
+    <Compile Include="Endpoints\Admin\GetPushDevices.fs" />
+    <Compile Include="Endpoints\Admin\DeletePushDevice.fs" />
     <Compile Include="Endpoints\Admin\DeleteComment.fs" />
     <Compile Include="Endpoints\Admin\StartNewPostDelivery.fs" />
-    <Compile Include="Endpoints\Queues\ProcessNewPostMessage.fs" />
+    <Compile Include="Endpoints\Admin\RebuildSite.fs" />
+    <Compile Include="Endpoints\Admin\GetPostDeploy.fs" />
+    <Compile Include="Endpoints\Admin\GetSiteDeploy.fs" />
+    <Compile Include="Endpoints\Admin\GetAllSubscriptions.fs" />
+    <Compile Include="Endpoints\Admin\GetDashboard.fs" />
+    <Compile Include="Endpoints\Admin\GetSubscriptionDeliveries.fs" />
+    <Compile Include="Endpoints\Admin\CancelSubscription.fs" />
+    <Compile Include="Endpoints\Admin\DeleteSubscription.fs" />
+    <Compile Include="Endpoints\Github\ReceiveGitHubWebhook.fs" />
+    <Compile Include="Endpoints\Queues\ProcessNewCommentMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostDeliveryMessage.fs" />
     <Compile Include="Endpoints\Health.fs" />
@@ -39,8 +73,6 @@
     <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
     <PackageReference Include="Azure.Identity" Version="1.16.0" />
     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.8.0" />
-    <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
-    <PackageReference Include="FSharp.Data" Version="6.6.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.0.0" />
@@ -52,12 +84,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="service-account-key.json" Condition="Exists('service-account-key.json')" />
-    <None Update="service-account-key.json" Condition="Exists('service-account-key.json')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
-    </None>
-    <None Include="service-account-key.json.template" />
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

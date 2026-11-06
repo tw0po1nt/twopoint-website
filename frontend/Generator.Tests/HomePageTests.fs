@@ -2,6 +2,8 @@ module TwoPoint.Site.Generator.Tests.HomePageTests
 
 open TwoPoint.Site.Generator
 open TwoPoint.Site.Generator.Tests.Fixture
+open TwoPoint.Site.Render
+open TwoPoint.Site.Render.Tests.Fixture
 open TwoPoint.Site.Widgets
 
 open Expecto

@@ -1,7 +1,9 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Site.Dev.Server
 
+open TwoPoint.DevHost
 open TwoPoint.Site.Generator
+open TwoPoint.Site.Render
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
@@ -11,8 +13,6 @@ open System.IO
 open System.Threading.Tasks
 
 let private stage = Stage.Local
-
-let reloadPath = "/__dev/reload"
 
 let private watchedFolders (root: string) =
   [ Path.Combine(root, "frontend", "content"); Path.Combine(root, WidgetManifest.folder) ]
@@ -34,22 +34,6 @@ let serve (site: unit -> DevSite) (ctx: HttpContext) : Task =
     ctx.Response.Redirect(target, true)
     Task.CompletedTask
 
-let events (reloads: Watch.Reloads) (ctx: HttpContext) : Task =
-  task {
-    ctx.Response.ContentType <- "text/event-stream"
-    ctx.Response.Headers.CacheControl <- "no-cache"
-    do! ctx.Response.Body.FlushAsync ctx.RequestAborted
-
-    try
-      while not ctx.RequestAborted.IsCancellationRequested do
-        do! reloads.Next.WaitAsync ctx.RequestAborted
-        do! ctx.Response.WriteAsync("data: reload\n\n", ctx.RequestAborted)
-        do! ctx.Response.Body.FlushAsync ctx.RequestAborted
-    with :? OperationCanceledException ->
-      ()
-  }
-  :> Task
-
 let private report (site: DevSite) =
   match site.Render with
   | Ok map -> printfn "dev: loaded the site, %d files" map.Count
@@ -65,14 +49,13 @@ let private findRoot () =
   | Error message -> failwith message
 
 let startWidgetWatch () =
-  match Watch.widgets (Path.Combine(findRoot (), "frontend", "Widgets")) with
+  match Watch.npmWatch (Path.Combine(findRoot (), "frontend", "Widgets")) with
   | Ok watch -> Some watch
   | Error message ->
     eprintfn "dev: the widget watch did not start: %s" message
     eprintfn "  Run 'npm run watch' in frontend/Widgets, or put npm and node on the PATH of the SageFs daemon."
     None
 
-/// SageFs adds its reload script only to an app that `RunAsync` or `Run` starts.
 let start () =
   let root = findRoot ()
 
@@ -87,16 +70,17 @@ let start () =
 
   let load () =
     site.Value <-
-      DevSite.load site.Value stage DateTimeOffset.UtcNow (fun () -> Site.loadWidgets root) (fun () -> Site.loadPulledContent images root)
+      DevSite.load site.Value stage DateTimeOffset.UtcNow (fun () -> Site.loadWidgets root) (fun () -> Site.loadPulledContent images stage root)
     report site.Value
     reloads.Send()
 
   load ()
   let watch = Watch.folders (TimeSpan.FromMilliseconds 200.0) (watchedFolders root) load
 
-  let app = WebApplication.CreateSlimBuilder().Build()
-  app.MapGet(reloadPath, RequestDelegate(events reloads)) |> ignore
-  app.MapGet("/{**path}", RequestDelegate(serve (fun () -> site.Value))) |> ignore
-  app.Lifetime.ApplicationStopping.Register(fun () -> watch.Dispose()) |> ignore
-  app.RunAsync((Stage.config stage).SiteUrl.GetLeftPart UriPartial.Authority) |> ignore
-  app
+  let routes (app: WebApplication) =
+    app.MapGet(Reload.path, RequestDelegate(Reload.events reloads)) |> ignore
+    app.MapGet("/{**path}", RequestDelegate(serve (fun () -> site.Value))) |> ignore
+
+  let url = (Stage.config stage).SiteUrl.GetLeftPart UriPartial.Authority
+
+  Listen.serve "dev" url routes watch

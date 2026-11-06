@@ -48,7 +48,7 @@ The map [Wayfinder: a web admin for twopoint.dev with dynamic posts](https://git
 14. As the author, I want the Markdown source with quiet styles for headings, emphasis, links, and code, so that I see the structure with no WYSIWYG changes to my Markdown.
 15. As the author, I want the top bar to fade while I type, so that it does not distract me.
 16. As the author, I want one line of status text, for example "Draft · saved" or "Published Feb 4, 2026 · changes not live · saving…", so that I always know the state of the post.
-17. As the author, I want the editor to save about 2 seconds after I stop typing, and at once with ⌘S, so that I never lose text.
+17. As the author, I want the editor to save only when I save: at once with ⌘S, before a publish, and when I leave the editor, so that each call to the backend is a call that I start. I want the browser to ask before it closes a page with unsaved text, so that I do not lose text.
 18. As the author, I want a save from an old browser tab to fail, so that it never replaces newer text.
 19. As the author, I want one primary action, "Publish" for a draft and "Publish changes" for a pending edit, so that the next step is clear.
 20. As the author, I want a "•••" menu with the other actions for the state, so that the top bar stays small.
@@ -505,7 +505,7 @@ New endpoints:
 - The "•••" menu: Save, Changes from live, Discard changes, Change the date, Unpublish, Revisions, Send to subscribers, and Delete. Each action that is not available shows the reason. On a phone, the menu also has "Add image".
 - The Details sheet: the slug, the category, the tags, the series, the card image, the author, "Show on the home page", and the list of problems. On a phone, the sheet fills the screen.
 - The publish dialog asks for "now" or a date. For "publish changes", it shows the changes from live and the option to set the update date. An error disables the publish.
-- Autosave about 2 seconds after the author stops typing, and ⌘S saves at once.
+- The editor saves only when the author saves: ⌘S, Save in the "•••" menu, before a publish, and before a leave of the editor. A pause in the typing saves nothing. The browser asks before it closes a page with unsaved text.
 - An image paste or drop starts the upload at once. A CodeMirror widget outside the Markdown text shows the placeholder. When the upload returns the URL, the editor writes `![](<url>)` and puts the cursor between the brackets. A PDF becomes a `::pdf{file="…"}` line. A failed upload removes the widget and shows a retry.
 - A token expiry in a session keeps the editor text.
 
@@ -550,8 +550,8 @@ A good test checks the behavior that the author, a reader, or the build sees: th
 2. **The render map** (`Generator.Tests`). The fixture folder of posts and series records gives the output map, with no disk and no download. The series pages from the records, the term title of the newest post, `file:line` in the build errors, the agreement of the site paths with the library function, `pull` behind a fake blob client, and the `upload` delete of a newsletter with no post test here.
 3. **The backend actions** (`backend/Core.Tests`). Each action is a pure `Logic.decide` and a `withDependencies` with in-memory fakes, as `StartNewPostDelivery` is tested today. The post store, the tables, the dispatch, and the push stay behind the dependencies. These test here: the post lifecycle actions and the refusal on an error, the moderation actions and the trusted and banned rules, the series save, delete, and slug lock, the subscription cancel and delete, the dashboard counts, the deploy rule (run numbers, replaced runs, a failed dispatch), the delivery gate, the welcome post, and the `new_comment` handler. The HTTP endpoints stay thin and get no tests, as today.
 4. **The Web Push sender** (`backend/Dependencies.Tests`). The encryption against the vectors in RFC 8291 Appendix A and RFC 8188, and the VAPID JWT.
-5. **The pure admin code** (the admin test project, in `dotnet test`). Each screen `update`: the editor states, the status text, the menu reasons, the publish dialog, the sign-in banner, the autosave timer, the paste flow, the lists, the filters, and the search. Also the function of the worker that makes a notification from a payload.
-6. **The built admin bundle** (`npm test` in the admin project, CI only). The bundle runs in happy-dom with a stub `fetch` and a stub sign-in port, so MSAL never runs in a test. For example: no API call before a token, and a save after 2 seconds with no input.
+5. **The pure admin code** (the admin test project, in `dotnet test`). Each screen `update`: the editor states, the status text, the menu reasons, the publish dialog, the sign-in banner, the save triggers, the paste flow, the lists, the filters, and the search. Also the function of the worker that makes a notification from a payload.
+6. **The built admin bundle** (`npm test` in the admin project, CI only). The bundle runs in happy-dom with a stub `fetch` and a stub sign-in port, so MSAL never runs in a test. For example: no API call before a token, and no save after a pause in the typing.
 7. **The Comments widget**: the trusted reply in `Widgets.Tests` and in the widget bundle test.
 
 ### One-time checks
