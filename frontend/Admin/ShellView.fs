@@ -347,7 +347,7 @@ let private routeLink (dispatch: Router.Msg -> unit) (route: Route) (text: strin
 [<SolidComponent>]
 let private brand (dispatch: Router.Msg -> unit) =
   a (class' = "brand", href = Route.path Dashboard, ariaLabel = "twopoint admin", onClick = follow dispatch Dashboard) {
-    span (class' = "mark") { "2·" }
+    span (class' = "mark") { Icon.view Icon.Code }
 
     span (class' = "brand-text") {
       "twopoint "
