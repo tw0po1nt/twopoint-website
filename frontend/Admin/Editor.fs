@@ -355,23 +355,66 @@ let private detailsChanged (msg: Details.Msg) (document: Document) =
 let private changeDetails (change: Details.Model -> Details.Model) (document: Document) =
   { document with Details = change document.Details }
 
+let private startSlugChange (eTag: string) (document: Document) =
+  Loaded(changeDetails Details.slugChangeStarted document),
+  Some(
+    ChangeSlug
+      { Slug = document.Slug
+        ETag = eTag
+        NewSlug = Details.typedSlug document.Details }
+  )
+
+/// A draft with unsaved text saves first. The slug change starts after the save, in `resumeSlugChange`.
 let private requestSlugChange (document: Document) =
   match document.State, document.ETag, document.Save with
-  | _ when Details.isChangingSlug document.Details -> Loaded document, None
-  | Api.Draft, Some eTag, Saved when Details.slugChangeable document.Slug document.Details ->
-    Loaded(changeDetails Details.slugChangeStarted document),
-    Some(
-      ChangeSlug
-        { Slug = document.Slug
-          ETag = eTag
-          NewSlug = Details.typedSlug document.Details }
-    )
-  | Api.Draft, _, Saved -> Loaded document, None
-  | Api.Draft, _, _ ->
-    Loaded(changeDetails (Details.slugChangeRefused "Save the post before changing the slug.") document),
+  | _ when Details.isChangingSlug document.Details || Publish.isOpen document.Publish -> Loaded document, None
+  | Api.Draft, _, _ when not (Details.slugChangeable document.Slug document.Details) -> Loaded document, None
+  | Api.Draft, Some eTag, Saved -> startSlugChange eTag document
+  | Api.Draft, None, Saved -> Loaded document, None
+  | Api.Draft, _, (Unsaved | SaveFailed _) -> startSave (changeDetails Details.slugChangeWaitsForSave document)
+  | Api.Draft, _, Saving _ -> Loaded(changeDetails Details.slugChangeWaitsForSave document), None
+  | Api.Draft, _, Stale ->
+    Loaded(
+      changeDetails
+        (Details.slugChangeRefused "This post changed in another tab. Reload the page to get the latest version.")
+        document
+    ),
     None
   | (Api.Published | Api.Upcoming), _, _ ->
     Loaded(changeDetails (Details.slugChangeRefused "You can't change the slug of a published post.") document), None
+
+/// After the save answer, a slug change that waits for the save starts. A failed save starts no slug change.
+let private resumeSlugChange (model: Model, effect: Effect option) =
+  match model with
+  | Loaded document when Details.isSlugWaitingForSave document.Details ->
+    match document.Save, document.ETag with
+    | Saving _, _ -> model, effect
+    | (Saved | Unsaved), Some eTag -> startSlugChange eTag document
+    | (Saved | Unsaved), None
+    | (SaveFailed _ | Stale), _ -> Loaded(changeDetails Details.slugChangeStale document), effect
+  | Loaded _
+  | Loading _
+  | NotLoaded _ -> model, effect
+
+/// Each save state but a stale one can start a slug change. A draft with unsaved text saves first.
+let canChangeSlug (document: Document) =
+  document.State = Api.Draft
+  && document.Save <> Stale
+  && not (Details.isChangingSlug document.Details)
+  && Details.slugChangeable document.Slug document.Details
+
+/// The slug that the title of a draft gives. The suggestion hides when it is the slug of the draft or the typed slug,
+/// and while a slug change is in progress.
+let slugSuggestion (document: Document) =
+  match document.State, Slug.ofTitle document.Fields.Title with
+  | Api.Draft, Some suggested when
+    not (Details.isChangingSlug document.Details)
+    && suggested <> document.Slug
+    && suggested <> Details.typedSlug document.Details
+    ->
+    Some suggested
+  | Api.Draft, _
+  | (Api.Published | Api.Upcoming), _ -> None
 
 let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
   match result with
@@ -968,7 +1011,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, BodyChanged body -> edit (fun fields -> { fields with Body = body }) document
   | Loaded document, SaveRequested -> saveNow document
   | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug ->
-    answered version result document |> resumePublish
+    answered version result document |> resumePublish |> resumeSlugChange
   | Loaded document, PointerMoved -> Loaded { document with Typing = false }, None
   | Loaded document, DetailsMsg msg -> detailsChanged msg document
   | Loaded document, SlugChangeRequested -> requestSlugChange document

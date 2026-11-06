@@ -15,3 +15,10 @@ let termTitle (text: string) =
   Regex.Replace(Regex.Replace(text, "fsharp", "F#", RegexOptions.IgnoreCase), "csharp", "C#", RegexOptions.IgnoreCase)
 
 let isSlug (text: string) = Regex.IsMatch(text, "^[a-z0-9]+(-[a-z0-9]+)*$")
+
+/// The post slug that a title gives. It has the same rule as `DraftSlug.ofTitle` in the backend: a term slug can
+/// contain `_`, and a post slug cannot. A title with no letter or digit gives `None`.
+let ofTitle (title: string) =
+  match Regex.Replace((term title).Replace('_', '-'), "-+", "-").Trim '-' with
+  | "" -> None
+  | slug -> Some slug

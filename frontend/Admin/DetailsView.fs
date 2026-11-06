@@ -35,13 +35,10 @@ let private isDraft (model: Shell.Model) =
   | None -> false
 
 let private canChangeSlug (model: Shell.Model) =
-  match document model with
-  | Some document ->
-    document.State = Api.Draft
-    && document.Save = Editor.Saved
-    && not (Details.isChangingSlug document.Details)
-    && Details.slugChangeable document.Slug document.Details
-  | None -> false
+  document model |> Option.exists Editor.canChangeSlug
+
+let private slugSuggestion (model: Shell.Model) =
+  document model |> Option.bind Editor.slugSuggestion
 
 let private choices (model: Shell.Model) =
   match (details model).Options with
@@ -94,6 +91,7 @@ let private suggestionList (choose: string -> unit) (terms: Api.Term list) =
 let private slugField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   // A read of the model in the body of a component would build the field again at each change, and the input would lose its focus.
   let hint () = Details.slugHint (slug (model ())) (details (model ()))
+  let suggested () = slugSuggestion (model ()) |> Option.defaultValue ""
 
   Parts
     .Field(id = "details-slug", label = "Slug", hint = "Used in the post's URL.")
@@ -117,6 +115,20 @@ let private slugField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
             onClick = fun _ -> dispatch (Shell.Editor Editor.SlugChangeRequested)
           ) {
             "Change"
+          }
+        }
+
+        Show(when' = (suggested () <> "")) {
+          div (class' = "row slug-suggestion") {
+            span () { $"Suggested: {suggested ()}" }
+
+            button (
+              type' = "button",
+              class' = Parts.buttonClass Parts.Ghost Parts.Small,
+              onClick = fun _ -> dispatch (Shell.Editor(Editor.DetailsMsg(Details.SlugTyped(suggested ()))))
+            ) {
+              "Use suggestion"
+            }
           }
         }
 

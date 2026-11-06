@@ -17,6 +17,8 @@ type Options =
 
 type SlugState =
   | Idle
+  /// The author asked for a slug change on a draft with unsaved text. The change starts after the save.
+  | WaitingForSave
   | Changing
   | ChangeFailed of reason: string
 
@@ -222,15 +224,25 @@ let slugChangeable (slug: string) (model: Model) =
 let slugHint (slug: string) (model: Model) =
   match model.Slug with
   | ChangeFailed reason -> reason
+  | WaitingForSave
   | Changing -> ""
   | Idle when model.SlugInput = slug || Slug.isSlug model.SlugInput -> ""
   | Idle -> "Use lowercase letters, numbers, and single hyphens (like my-post-2)."
 
-let isChangingSlug (model: Model) = model.Slug = Changing
+let isChangingSlug (model: Model) =
+  match model.Slug with
+  | WaitingForSave
+  | Changing -> true
+  | Idle
+  | ChangeFailed _ -> false
 
 let typedSlug (model: Model) = model.SlugInput
 
 let slugChangeStarted (model: Model) = { model with Slug = Changing }
+
+let slugChangeWaitsForSave (model: Model) = { model with Slug = WaitingForSave }
+
+let isSlugWaitingForSave (model: Model) = model.Slug = WaitingForSave
 
 let slugChangeRefused (reason: string) (model: Model) = { model with Slug = ChangeFailed reason }
 

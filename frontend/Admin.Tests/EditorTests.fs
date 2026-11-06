@@ -482,6 +482,70 @@ let tests =
       Expect.equal (Editor.primaryAction (document' (opened draft))) "Publish" "Draft"
       Expect.equal (Editor.primaryAction (document' (opened live))) "Publish changes" "Published"
     }
+
+    test "Change on a draft with unsaved text saves, then sends the slug change with the new ETag" {
+      let model, _ = send (Editor.TitleChanged "Hello world") (opened draft)
+      let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "hello-world")) model
+      Expect.isTrue (Editor.canChangeSlug (document' model)) "Change is ready before the save"
+
+      let model, effect = send Editor.SlugChangeRequested model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.SavePost(request (Some "\"v1\"") "Hello world" "About it." "Some text.\n" 1) ]))
+        "The save first"
+
+      Expect.equal (document' model).Details.Slug Details.WaitingForSave "The slug change waits"
+
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.ChangeSlug { Slug = "my-post"; ETag = "\"v2\""; NewSlug = "hello-world" } ]))
+        "Then the slug change"
+
+      Expect.equal (document' model).Details.Slug Details.Changing "Changing"
+    }
+
+    test "Change during a save waits for the save answer" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send Editor.SaveRequested model
+      let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "new-slug")) model
+      let model, effect = send Editor.SlugChangeRequested model
+      Expect.isNone effect "No second call"
+
+      let _, effect = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+
+      Expect.equal
+        effect
+        (Some(Shell.Send [ Shell.ChangeSlug { Slug = "my-post"; ETag = "\"v2\""; NewSlug = "new-slug" } ]))
+        "The slug change"
+    }
+
+    test "a failed save before a slug change sends no slug change and shows the save error" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "new-slug")) model
+      let model, _ = send Editor.SlugChangeRequested model
+      let model, effect = send (Editor.SaveAnswered("my-post", 1, Error(Api.Failed "The store is down."))) model
+      Expect.isNone effect "No slug change"
+      Expect.equal (document' model).Details.Slug Details.Idle "No slug change in progress"
+      Expect.equal (Editor.failureText model.Editor.Value) "The store is down." "The save error"
+      Expect.equal (document' model).Slug "my-post" "The old slug"
+    }
+
+    test "a failed slug change after the save keeps the draft saved with its old slug and shows the reason" {
+      let model, _ = send (Editor.BodyChanged "x") (opened draft)
+      let model, _ = send (Editor.DetailsMsg(Details.SlugTyped "taken")) model
+      let model, _ = send Editor.SlugChangeRequested model
+      let model, _ = send (Editor.SaveAnswered("my-post", 1, Ok(savedAs "\"v2\""))) model
+      let reason = "Another post already uses the slug 'taken'"
+      let model, effect = send (Editor.SlugChangeAnswered("my-post", Error(Api.Failed reason))) model
+      Expect.isNone effect "No call"
+      Expect.equal (document' model).Save Editor.Saved "Saved"
+      Expect.equal (document' model).Slug "my-post" "The old slug"
+      Expect.equal (document' model).Details.Slug (Details.ChangeFailed reason) "The reason"
+      Expect.equal model.Router.Route (Route.Post "my-post") "The route"
+    }
   ]
 
 [<Tests>]

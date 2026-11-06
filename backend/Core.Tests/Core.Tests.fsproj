@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="SlugTitles.fs" />
     <Compile Include="Fixtures.fs" />
     <Compile Include="AccessTests.fs" />
     <Compile Include="NewsletterTests.fs" />

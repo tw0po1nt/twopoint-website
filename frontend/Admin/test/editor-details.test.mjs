@@ -205,17 +205,37 @@ test('New series in the picker saves a series and selects it, and the editor sta
   assert.equal(save.body.details.category, 'Series');
 });
 
-test('the slug of a draft changes with the ETag, and the editor goes to the new address', async () => {
+test('the title of a draft suggests a slug, and Use suggestion puts it in the field with no call', async () => {
+  const suggestion = () => sheet().querySelector('.slug-suggestion');
+  assert.equal(suggestion(), null, 'The title gives the slug of the draft');
+
+  const before = calls.length;
+  await type(field('editor-title'), 'Newer slug');
+  assert.equal(suggestion().querySelector('span').textContent.trim(), 'Suggested: newer-slug');
+
+  press('Use suggestion', suggestion());
+  await settle();
+  assert.equal(field('details-slug').value, 'newer-slug', 'The field');
+  assert.equal(suggestion(), null, 'The field has the suggestion');
+  assert.equal(calls.length, before, 'No call');
+});
+
+test('Change saves the unsaved title, then changes the slug with the ETag of the save', async () => {
   const change = [...sheet().querySelectorAll('button')].find((item) => item.textContent.trim() === 'Change');
+  const input = field('details-slug');
+  await type(input, 'my-post');
   assert.equal(change.disabled, true, 'The slug has not changed');
 
-  const input = field('details-slug');
   await type(input, 'new-slug');
   assert.ok(field('details-slug') === input, 'The input stays, so it keeps its focus');
-  assert.equal(change.disabled, false);
+  assert.equal(change.disabled, false, 'Unsaved text does not stop a change');
+
+  const savesBefore = saves.length;
   change.click();
   await settle();
 
+  assert.equal(saves.length, savesBefore + 1, 'The save first');
+  assert.equal(saves.at(-1).body.title, 'Newer slug');
   assert.equal(slugChanges.length, 1);
   assert.equal(slugChanges[0].method, 'PUT');
   assert.equal(slugChanges[0].ifMatch, `"v${saved + 1}"`, 'The ETag of the last save');
