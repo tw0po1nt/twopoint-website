@@ -126,7 +126,7 @@ let private header () =
         a (href = href) { text }
     }
 
-    button(class' = "theme-toggle", type' = "button").attr("aria-label", "Switch the theme").data ("theme-toggle", "")
+    button(class' = "theme-toggle", type' = "button").attr("aria-label", "Toggle theme").data ("theme-toggle", "")
     button (class' = "explorer-toggle", type' = "button", popovertarget = "explorer") { "[explorer]" }
   }
 

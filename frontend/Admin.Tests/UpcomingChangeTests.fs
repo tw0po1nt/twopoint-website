@@ -81,28 +81,28 @@ let menuTests =
   testList "Move menu" [
     test "the menu offers both actions for a saved upcoming post, and each action sends its message" {
       Expect.equal (availabilityOf Editor.Unpublish (opened upcoming)) Editor.Available "Unpublish"
-      Expect.equal (availabilityOf Editor.ChangeDate (opened upcomingPending)) Editor.Available "Change the date"
+      Expect.equal (availabilityOf Editor.ChangeDate (opened upcomingPending)) Editor.Available "Change date"
       Expect.equal (Editor.menuMsg Editor.Unpublish) (Some Editor.UnpublishRequested) "Unpublish message"
       Expect.equal (Editor.menuMsg Editor.ChangeDate) (Some Editor.ChangeDateRequested) "Change the date message"
     }
 
     test "the menu gives the reason when the post is not upcoming" {
-      Expect.equal (reasonOf Editor.Unpublish (opened live)) "You can unpublish only an upcoming post." "Published"
-      Expect.equal (reasonOf Editor.ChangeDate (opened live)) "Only an upcoming post can change its date." "Published"
+      Expect.equal (reasonOf Editor.Unpublish (opened live)) "Only for upcoming posts." "Published"
+      Expect.equal (reasonOf Editor.ChangeDate (opened live)) "Only for upcoming posts." "Published"
 
       let draft = post Api.Draft false None (Some "\"v1\"")
-      Expect.equal (reasonOf Editor.Unpublish (opened draft)) "You can unpublish only an upcoming post." "Draft"
+      Expect.equal (reasonOf Editor.Unpublish (opened draft)) "Only for upcoming posts." "Draft"
     }
 
     test "the menu gives the reason when the text is not saved" {
       let model, _ = send (Editor.BodyChanged "More.\n") (opened upcoming)
       Expect.equal (reasonOf Editor.Unpublish model) "Save the post first." "Unpublish"
-      Expect.equal (reasonOf Editor.ChangeDate model) "Save the post first." "Change the date"
+      Expect.equal (reasonOf Editor.ChangeDate model) "Save the post first." "Change date"
     }
 
     test "a pending edit with no ETag needs a reload" {
       let model = opened { upcomingPending with ETag = None }
-      Expect.equal (reasonOf Editor.Unpublish model) "Reload the page, and then try again." "Unpublish"
+      Expect.equal (reasonOf Editor.Unpublish model) "Reload the page, then try again." "Unpublish"
     }
   ]
 
@@ -180,7 +180,7 @@ let unpublishTests =
         fst (send (Editor.RemovalCheckAnswered("my-post", Editor.UnpublishDialog, Error Api.Unanswered)) (requested upcoming))
 
       Expect.isFalse (Editor.canUnpublish (document' model)) "Disabled"
-      Expect.equal (document' model).UnpublishCheck (RemovalCheck.Failed "The API did not answer.") "The reason"
+      Expect.equal (document' model).UnpublishCheck (RemovalCheck.Failed "The server didn't respond. Check your connection and try again.") "The reason"
     }
 
     test "a check answer after the dialog closes, or for the delete dialog, changes nothing" {
@@ -224,7 +224,7 @@ let unpublishTests =
       Expect.equal document.Deploy.Chain.Number (before.Chain.Number + 1) "A new chain of deploy reads"
       Expect.equal effect (Some(Shell.Send [ Shell.LoadPostDeploy "my-post" ])) "The deploy read"
       Expect.equal (Editor.statusText document) "Draft · saved" "The status"
-      Expect.equal (availabilityOf Editor.Unpublish model) (Editor.Unavailable "You can unpublish only an upcoming post.") "Not upcoming"
+      Expect.equal (availabilityOf Editor.Unpublish model) (Editor.Unavailable "Only for upcoming posts.") "Not upcoming"
     }
 
     test "the draft can publish with the ETag that the unpublish gave" {
@@ -273,7 +273,7 @@ let unpublishTests =
 
 [<Tests>]
 let changeDateTests =
-  testList "Change the date" [
+  testList "Change date" [
     test "the dialog starts with the current date in the field" {
       let model, effect = send Editor.ChangeDateRequested (opened upcoming)
       Expect.equal (document' model).ChangeDate (Typed.Typing "2099-12-31T00:00") "The field"
@@ -331,7 +331,7 @@ let changeDateTests =
       let model, _ = send (Editor.ChangeDateAnswered("my-post", answer)) model
 
       Expect.equal (document' model).State Api.Published "Published"
-      Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Not upcoming"
+      Expect.equal (reasonOf Editor.ChangeDate model) "Only for upcoming posts." "Not upcoming"
     }
 
     test "a date change keeps the pending edit and takes its new ETag" {
@@ -373,7 +373,7 @@ let warningTests =
     test "the text of a kept row says that readers can comment until the row is deleted" {
       Expect.equal
         (Publish.changeWarningText Api.PostRowKept)
-        "The post table still has a row for this post. Readers can comment on the post until the row is deleted."
+        "Comments are still open on this post (its post-table row wasn't deleted)."
         "The text"
     }
   ]

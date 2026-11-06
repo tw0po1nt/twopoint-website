@@ -95,17 +95,17 @@ let tests =
     test "the filter of deliveries to start shows only the posts that wait for a delivery" {
       let model, _ = start "/posts"
       let model, _ = Shell.update (Shell.Posts(Posts.Answered(Ok [ draft; published; toSend; upcoming ]))) model
-      let model, effect = follow "/posts?filter=deliveries-to-start" model
-      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts?filter=deliveries-to-start", []))) "The filter calls no API"
+      let model, effect = follow "/posts?filter=pending-deliveries" model
+      Expect.equal effect (Some(Shell.Navigate(Router.PushUrl "/posts?filter=pending-deliveries", []))) "The filter calls no API"
       Expect.equal (shown model) [ "to-send" ] "Only the post to send"
-      Expect.contains (Posts.filters |> List.map snd) "Deliveries to start" "The filter tab"
-      Expect.equal (Posts.emptyText PostFilter.DeliveriesToStart) "No post waits for a delivery." "The empty text"
+      Expect.contains (Posts.filters |> List.map snd) "Pending deliveries" "The filter tab"
+      Expect.equal (Posts.emptyText PostFilter.PendingDeliveries) "No pending deliveries." "The empty text"
     }
 
     test "a filter with no post has its own empty text" {
-      Expect.equal (Posts.emptyText PostFilter.All) "The blog has no posts." "All"
-      Expect.equal (Posts.emptyText PostFilter.Drafts) "The blog has no drafts." "Drafts"
-      Expect.equal (Posts.emptyText PostFilter.PendingEdits) "No post has a pending edit." "Pending edits"
+      Expect.equal (Posts.emptyText PostFilter.All) "No posts yet." "All"
+      Expect.equal (Posts.emptyText PostFilter.Drafts) "No drafts." "Drafts"
+      Expect.equal (Posts.emptyText PostFilter.PendingEdits) "No pending edits." "Pending edits"
     }
 
     test "a failed load shows the reason, and an answer of 403 refuses the account" {

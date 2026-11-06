@@ -33,7 +33,7 @@ let tests =
     test "a post with no category is an error on the category field" {
       Expect.equal
         (problems (parse "a-post" (text (frontMatter.Replace("\ncategory: One-offs", "")) "Text.")))
-        [ Problem.error (Place.Field("category", 1)) "The post has no category." ]
+        [ Problem.error (Place.Field("category", 1)) "The post needs a category." ]
         "A missing field is on the opening line"
     }
 
@@ -42,19 +42,19 @@ let tests =
 
       Expect.equal
         (Rules.frontMatter PostState.Published draftFields)
-        [ Problem.error (Place.Field("category", 1)) "The post has no category." ]
+        [ Problem.error (Place.Field("category", 1)) "The post needs a category." ]
         "The same fields are an error on a published post"
     }
 
     test "a post in a series with another category is an error on the category field" {
       Expect.equal
         (problems (parseIn [ seriesRecord "a-series" ] "a-post" (withField "series: a-series" "Text.")))
-        [ Problem.error (Place.Field("category", 6)) "The post is in a series, so give it the category 'Series'." ]
+        [ Problem.error (Place.Field("category", 6)) "Posts in a series must use the 'Series' category." ]
         "One-offs is not Series"
 
       Expect.equal
         (Rules.frontMatter PostState.Draft { draftFields with Series = Some "a-series" })
-        [ Problem.error (Place.Field("category", 1)) "The post is in a series, so give it the category 'Series'." ]
+        [ Problem.error (Place.Field("category", 1)) "Posts in a series must use the 'Series' category." ]
         "A draft in a series with no category"
 
       Expect.isEmpty
@@ -67,14 +67,14 @@ let tests =
         (problems (parse "a-post" (text (frontMatter.Replace("One-offs", "Series")) "Text.")))
         [ Problem.error
             (Place.Field("category", 6))
-            "The category is 'Series', so give the post a series, or give it another category." ]
+            "The 'Series' category needs a series. Pick a series or another category." ]
         "Series needs a series"
     }
 
     test "two tags with one slug are an error on the second tag" {
       Expect.equal
         (problems (parse "a-post" (withTags [ "FSharp"; "2026"; "fsharp" ])))
-        [ Problem.error (Place.Field("tags", 10)) "Another tag has the slug 'fsharp'. Delete one of the two tags." ]
+        [ Problem.error (Place.Field("tags", 10)) "Two tags share the slug 'fsharp'. Remove one." ]
         "fsharp is on file line 10"
     }
 
@@ -94,7 +94,7 @@ let tests =
         (problems (parse "a-post" (withTags [ "2026"; "2025" ])))
         [ Problem.warning
             (Place.Field("tags", 9))
-            "The tag '2025' is a year tag, and the publish year is 2026. Delete the tag or change it to '2026'." ]
+            "The year tag '2025' doesn't match the publish year. Change it to '2026' or remove it." ]
         "2025 is on file line 9"
 
       Expect.isEmpty (problems (parse "a-post" (withTags [ "FSharp"; "2026" ]))) "The tag of the publish year"
@@ -120,10 +120,10 @@ let tests =
         (Rules.termTitles [ post; older; same ] post)
         [ Problem.warning
             (Place.Field("category", 6))
-            "The category 'One-offs' has the slug 'one-offs', and other posts give that slug another title: b-post ('one-offs')."
+            "The category 'One-offs' uses the slug 'one-offs', which other posts give a different title: b-post ('one-offs')."
           Problem.warning
             (Place.Field("tags", 8))
-            "The tag 'Functional programming' has the slug 'functional-programming', and other posts give that slug another title: b-post ('functional programming')." ]
+            "The tag 'Functional programming' uses the slug 'functional-programming', which other posts give a different title: b-post ('functional programming')." ]
         "A category and a tag"
 
       Expect.isEmpty (Rules.termTitles [ post; same ] post) "The same titles give no problem"
@@ -141,7 +141,7 @@ let tests =
           (problems (parse "a-post" (text frontMatter $"Text.\n\n![{alt}]({assets})")))
           [ Problem.warning
               (Place.Body 4)
-              "The image has no alt text. Write the alt text between the brackets, for example ![A cat](…)." ]
+              "Add alt text to the image between the brackets, like ![A cat](…)." ]
           $"The alt text '{alt}'"
     }
 
@@ -152,7 +152,7 @@ let tests =
         (problems (parse "a-post" (text frontMatter $"Text.\n\n![A cat]({outside})")))
         [ Problem.warning
             (Place.Body 4)
-            $"The image {outside} is not in the asset container. Upload the image, so that the site controls it." ]
+            $"The image {outside} is hosted elsewhere. Upload it so the site serves its own copy." ]
         "example.com is not the asset container"
 
       Expect.isEmpty (problems (parse "a-post" (text frontMatter $"![A cat]({assets})"))) "An asset"
@@ -176,7 +176,7 @@ let tests =
         [ Problem.warning (Place.Field("tags", 7)) "Add the tag '2026' for the publish year."
           Problem.error
             (Place.Body 4)
-            "The code block has the unknown language 'js'. Use one of these languages: fsharp, csharp, swift, sh, diff, json, xml, css." ]
+            "Unknown code block language 'js'. Use one of: fsharp, csharp, swift, sh, diff, json, xml, css." ]
         "The error and the warning"
     }
   ]

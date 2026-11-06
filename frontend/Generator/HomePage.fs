@@ -72,7 +72,7 @@ let private subscribe (config: StageConfig) =
   section (class' = "home-subscribe") {
     PostLog.prompt "subscribe --email"
     Mount.subscribe config
-    p (class' = "note") { "Get an email for each new post. Each email has a link to unsubscribe." }
+    p (class' = "note") { "Get new posts by email. Unsubscribe anytime." }
   }
 
 let render (config: StageConfig) (assets: Assets) (widgets: Widgets) (buildTime: DateTimeOffset) (posts: Post list) =

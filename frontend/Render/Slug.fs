@@ -72,4 +72,4 @@ let ofFileName (file: string) : Result<string, Problem list> =
   if term slug = slug then
     Ok slug
   else
-    Error [ Problem.error (Place.Post 1) $"Give the file a slug as its name, for example {term slug}{Path.GetExtension file}." ]
+    Error [ Problem.error (Place.Post 1) $"Name the file with a slug, like {term slug}{Path.GetExtension file}." ]

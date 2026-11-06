@@ -91,12 +91,12 @@ let tests =
       let model, _ = send (Editor.BodyChanged "More.\n") (opened live)
       Expect.equal (reason model) "Save the post first." "Unsaved text"
       let saving, _ = send Editor.SaveRequested model
-      Expect.equal (reason saving) "The save runs." "Save runs"
+      Expect.equal (reason saving) "Saving…" "Save runs"
       let failed, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Unanswered)) saving
       Expect.equal (reason failed) "Save the post first." "Failed save"
       let stale, _ = send (Editor.SaveAnswered("my-post", 1, Error Api.Stale)) saving
-      Expect.equal (reason stale) "Another tab saved newer text. Reload the page." "Stale save"
-      Expect.equal (reason (opened { draft with ETag = None })) "Reload the page, and then delete the post." "No ETag"
+      Expect.equal (reason stale) "This post changed in another tab. Reload the page to get the latest version." "Stale save"
+      Expect.equal (reason (opened { draft with ETag = None })) "Reload the page, then try again." "No ETag"
     }
 
     test "a published post asks for the slug, and a draft asks for a plain confirm" {
@@ -266,7 +266,7 @@ let tests =
       let model = fst (send (Editor.RemovalCheckAnswered("my-post", Editor.DeleteDialog, Error Api.Unanswered)) (requested (opened live)))
       let model = typing "my-post" model
       Expect.equal (step model) Editor.DeleteBlocked "Disabled"
-      Expect.equal (document' model).DeleteCheck (RemovalCheck.Failed "The API did not answer.") "The reason"
+      Expect.equal (document' model).DeleteCheck (RemovalCheck.Failed "The server didn't respond. Check your connection and try again.") "The reason"
     }
 
     test "a refused delete runs the check again, and the dialog shows the new outcome" {

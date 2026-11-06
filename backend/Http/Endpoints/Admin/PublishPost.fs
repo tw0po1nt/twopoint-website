@@ -87,7 +87,7 @@ module PublishMapping =
     | PublishGate.AlreadyPublished published -> $"The post '{published}' is already published", HttpStatusCode.Conflict
     | PublishGate.DateInPast -> "The publish date is in the past", HttpStatusCode.UnprocessableEntity
     | PublishGate.FrontMatterUnreadable reason ->
-      $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity
+      $"Couldn't read the saved post's front matter: {reason}", HttpStatusCode.UnprocessableEntity
 
 type PublishGateStore(
   config : Config,
@@ -258,7 +258,7 @@ type PublishPost(
                   "Another publish of the post is in progress", HttpStatusCode.Conflict
                 | PublishPost.Error.HasErrors problems ->
                   let messages = problems |> List.map _.Message |> String.concat " "
-                  $"The post has errors and is not published. {messages}", HttpStatusCode.UnprocessableEntity)
+                  $"The post has errors, so it wasn't published. {messages}", HttpStatusCode.UnprocessableEntity)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

@@ -84,7 +84,7 @@ test('a request with no answer shows that the site cannot get to the server', as
   submit();
   await settle();
   assert.equal(calls.length, 2, 'A second request');
-  assert.match(status().textContent, /cannot get to the server/);
+  assert.match(status().textContent, /Couldn't reach the server/);
 });
 
 test('a subscription that goes through shows the result and empties the form', async () => {
@@ -93,7 +93,7 @@ test('a subscription that goes through shows the result and empties the form', a
   await settle();
   assert.equal(calls.length, 3, 'A third request');
   assert.equal(status().className, 'subscribe-status is-subscribed');
-  assert.match(status().textContent, /You are subscribed/);
+  assert.match(status().textContent, /You're subscribed/);
   assert.equal(email().value, '', 'The email input is empty');
   assert.equal(name().value, '', 'The name input is empty');
 });

@@ -23,7 +23,7 @@ let view (dispatch: Shell.Msg -> unit) (model: Session.Model<Shell.Call>) =
 
   match model.Status with
   | Session.Broken ->
-    Fragment() { bannerWith "The sign-in did not complete." "Sign in" false (fun () -> session Session.SignInClicked) }
+    Fragment() { bannerWith "Sign-in failed." "Sign in" false (fun () -> session Session.SignInClicked) }
   | Session.Refused ->
     Fragment() {
       bannerWith (Session.bannerText model) "Use another account" false (fun () -> session Session.SignInClicked)

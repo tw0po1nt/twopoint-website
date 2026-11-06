@@ -1,7 +1,7 @@
 # Technical prose: the STE skill is mandatory
 
 An agent must run the `simplified-technical-english` skill on every piece of prose it writes in
-this repo. This rule has no exception, and **all prose** means all prose:
+this repo. **All prose** means all prose except UI copy:
 
 - Issue titles and bodies
 - Pull request titles and descriptions
@@ -11,6 +11,10 @@ this repo. This rule has no exception, and **all prose** means all prose:
 - Commit messages
 - Your reply to the user in an interactive session
 - Code comments, including the one-line comments that coding-standards.md permits
+
+UI copy is the one exception. UI copy is each string that a person sees in the admin, on the site,
+in an email, or in a push notification. It follows `ui-copy.md`, and the STE skill does not apply
+to it. The banned patterns still apply to UI copy.
 
 A short piece of prose is still prose. A reply that you type in a session is prose that a person
 reads, so the rule applies to it with the same force as to a file that lands in the repo. The rule

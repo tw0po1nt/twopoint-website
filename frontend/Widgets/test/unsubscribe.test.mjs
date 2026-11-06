@@ -45,14 +45,14 @@ test('a link with no subscription ID shows the error, and sends no request', asy
   assert.equal(mount().textContent.includes('static'), false, 'The static HTML is gone');
   assert.equal(calls.length, 0, 'No request');
   assert.equal(status().className, 'unsubscribe-status is-failed');
-  assert.match(status().textContent, /no subscription ID/);
+  assert.match(status().textContent, /missing a subscription ID/);
   assert.equal(note(), null, 'No subscribe link');
 });
 
 test('a link with an empty subscription ID shows the error, and sends no request', async () => {
   await open('?subscriptionId=');
   assert.equal(calls.length, 0, 'No request');
-  assert.match(status().textContent, /no subscription ID/);
+  assert.match(status().textContent, /missing a subscription ID/);
 });
 
 test('an unsubscribe that goes through shows the result and links to /subscribe/', async () => {
@@ -63,7 +63,7 @@ test('an unsubscribe that goes through shows the result and links to /subscribe/
   assert.equal(calls[0].init.method, 'POST');
   assert.deepEqual(JSON.parse(calls[0].init.body), { SubscriptionId: 'sub-123' });
   assert.equal(status().className, 'unsubscribe-status is-done');
-  assert.match(status().textContent, /You are unsubscribed/);
+  assert.match(status().textContent, /You're unsubscribed/);
   // The Solid template writes `<a href=/subscribe/>`. A browser reads `/subscribe/`, and happy-dom 21 drops the last `/`.
   assert.match(note().querySelector('a').getAttribute('href'), /^\/subscribe\/?$/);
   assert.equal(note().querySelector('a').textContent, 'subscribe page');
@@ -81,7 +81,7 @@ test('a refused unsubscribe shows the message of the API', async () => {
 test('a refused unsubscribe with no message shows a general message', async () => {
   answer = () => json(500, { success: false, message: null, data: null });
   await open('?subscriptionId=sub-123');
-  assert.match(status().textContent, /did not go through/);
+  assert.match(status().textContent, /Couldn't unsubscribe you/);
 });
 
 test('a request with no answer shows that the site cannot get to the server', async () => {
@@ -89,7 +89,7 @@ test('a request with no answer shows that the site cannot get to the server', as
   await open('?subscriptionId=sub-123');
   assert.equal(calls.length, 1, 'One request');
   assert.equal(status().className, 'unsubscribe-status is-failed');
-  assert.match(status().textContent, /cannot get to the server/);
+  assert.match(status().textContent, /Couldn't reach the server/);
 });
 
 test('a bad mount keeps its static HTML, and the entry logs the widget and the reason', async () => {

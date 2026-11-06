@@ -297,7 +297,7 @@ let private subscribe (push: Push) (dispatch: Shell.Msg -> unit) =
   |> Promise.map (fun keys -> answered (permission ()) (Ok keys))
   |> Promise.catch (fun error ->
     console.error ("admin: the push subscription failed.", error)
-    answered (permission ()) (Error "The browser did not subscribe this device to notifications."))
+    answered (permission ()) (Error "The browser refused the push subscription."))
   |> Promise.start
 
 let private perform (signIn: SignIn) (push: Push) (effect: Shell.Effect) (dispatch: Shell.Msg -> unit) =
@@ -497,7 +497,7 @@ let private dashboard (dispatch: Shell.Msg -> unit) (model: Dashboard.Model) (qu
       }
     }
   | Dashboard.NotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The dashboard did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the dashboard.").Has(p () { reason }) }
 
 let private deployTone (state: Api.DeployState) =
   match state with
@@ -536,7 +536,7 @@ let private deployAlerts (siteDeploy: SiteDeploy.Model) =
 
     Show(when' = (SiteDeploy.reason siteDeploy).IsSome) {
       Parts
-        .Alert(tone = Parts.Bad, title = "The deploy state did not load.")
+        .Alert(tone = Parts.Bad, title = "Couldn't load the deploy state.")
         .Has(p () { SiteDeploy.reason siteDeploy |> Option.defaultValue "" })
     }
   }
@@ -678,14 +678,14 @@ let private queue (dispatch: Shell.Msg -> unit) (model: Queue.Model) =
     }
   | Queue.Loaded [] ->
     Fragment() {
-      Parts.emptyState Icon.Inbox "The moderation queue is empty." (p () { "Each new comment comes here." })
+      Parts.emptyState Icon.Inbox "The moderation queue is empty." (p () { "New comments show up here for review." })
     }
   | Queue.Loaded rows ->
     Fragment() {
       div (class' = "queue") { For(each = Array.ofList rows) { yield fun row _ -> queueRow dispatch row } }
     }
   | Queue.NotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The moderation queue did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the moderation queue.").Has(p () { reason }) }
 
 let private approvalTone (approval: Api.CommentApproval) =
   match approval with
@@ -720,14 +720,14 @@ let private postCommentList (dispatch: Shell.Msg -> unit) (model: PostComments.M
     }
   | PostComments.Loaded _, [] ->
     Fragment() {
-      Parts.emptyState Icon.Inbox (PostComments.emptyText model.Filter) (p () { "Each comment on the post comes here." })
+      Parts.emptyState Icon.Inbox (PostComments.emptyText model.Filter) (p () { "Comments on this post show up here." })
     }
   | PostComments.Loaded _, rows ->
     Fragment() {
       div (class' = "queue") { For(each = Array.ofList rows) { yield fun row _ -> postCommentRow dispatch row } }
     }
   | PostComments.NotLoaded reason, _ ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The comments did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the comments.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private postComments (dispatch: Shell.Msg -> unit) (model: PostComments.Model) =
@@ -760,7 +760,7 @@ let private commenterList (dispatch: Shell.Msg -> unit) (model: Commenters.Model
       Parts.emptyState
         Icon.Inbox
         (Commenters.emptyText model.Filter)
-        (p () { "Each person who verifies an email address to comment comes here." })
+        (p () { "People who verify their email to comment show up here." })
     }
   | Commenters.Loaded _, commenters ->
     Fragment() {
@@ -769,7 +769,7 @@ let private commenterList (dispatch: Shell.Msg -> unit) (model: Commenters.Model
       }
     }
   | Commenters.NotLoaded reason, _ ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The commenters did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the commenters.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private commenters (dispatch: Shell.Msg -> unit) (model: Commenters.Model) =
@@ -863,12 +863,12 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
 
         h2 () { "Comments" }
 
-        Show(when' = List.isEmpty page.Comments) { p (class' = "muted") { "This commenter has no comments." } }
+        Show(when' = List.isEmpty page.Comments) { p (class' = "muted") { "No comments yet." } }
         For(each = Array.ofList page.Comments) { yield fun comment _ -> commenterComment dispatch comment }
       }
     }
   | Commenter.NotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The commenter did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the commenter.").Has(p () { reason }) }
 
 let private stateTone (state: Api.PostState) =
   match state with
@@ -915,14 +915,14 @@ let private postList (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter:
     }
   | Posts.Loaded _, [] ->
     Fragment() {
-      Parts.emptyState Icon.Inbox (Posts.emptyText filter) (p () { "Each post of the post store comes here." })
+      Parts.emptyState Icon.Inbox (Posts.emptyText filter) (p () { "Your posts and drafts show up here." })
     }
   | Posts.Loaded _, posts ->
     Fragment() {
       div (class' = "queue") { For(each = Array.ofList posts) { yield fun post _ -> postRow dispatch post } }
     }
   | Posts.NotLoaded reason, _ ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The posts did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the posts.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter: PostFilter) =
@@ -944,12 +944,12 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter: Po
 
     Show(when' = model.CreateFailure.IsSome) {
       Parts
-        .Alert(tone = Parts.Bad, title = "The draft was not made.")
+        .Alert(tone = Parts.Bad, title = "Couldn't create the draft.")
         .Has(p () { model.CreateFailure |> Option.defaultValue "" })
     }
 
     Show(when' = not (List.isEmpty model.Notice)) {
-      Parts.Alert(tone = Parts.Warn, title = "The post is deleted, and a step after the delete failed.").Has(
+      Parts.Alert(tone = Parts.Warn, title = "Deleted, with problems").Has(
         Fragment() {
           For(each = Array.ofList model.Notice) { yield fun warning _ -> p () { Publish.changeWarningText warning } }
 
@@ -968,8 +968,8 @@ let private subscriptionTone (subscription: Api.Subscription) =
 
 let private countsText (model: Subscriptions.Model) =
   match Subscriptions.counts model with
-  | Some counts -> $"{counts.Active} active and {counts.Inactive} inactive"
-  | None -> "The counts come with the list."
+  | Some counts -> $"{counts.Active} active, {counts.Inactive} inactive"
+  | None -> "Loading…"
 
 [<SolidComponent>]
 let private subscriptionsToolbar (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
@@ -986,7 +986,7 @@ let private subscriptionsToolbar (dispatch: Shell.Msg -> unit) (model: unit -> S
 
     Parts
       .Search(
-        label = "Search the subscriptions",
+        label = "Search subscriptions",
         placeholder = "Email address or name",
         value = (fun () -> (model ()).Subscriptions.Search),
         onInput = fun event -> send (Subscriptions.Searched((event.target :?> HTMLInputElement).value))
@@ -1034,7 +1034,7 @@ let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions
       Parts.emptyState
         Icon.Inbox
         (Subscriptions.emptyText filter model.Search)
-        (p () { "Each reader who subscribes to the newsletter comes here." })
+        (p () { "Newsletter subscribers show up here." })
     }
   | Subscriptions.Loaded _, subscriptions ->
     Fragment() {
@@ -1043,7 +1043,7 @@ let private subscriptionList (dispatch: Shell.Msg -> unit) (model: Subscriptions
       }
     }
   | Subscriptions.NotLoaded reason, _ ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The subscriptions did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the subscriptions.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private deliveryRow (delivery: Api.Delivery) =
@@ -1066,11 +1066,11 @@ let private deliveryList (deliveries: Subscriptions.Deliveries) =
         Parts.skeleton "40%"
       }
     }
-  | Subscriptions.DeliveriesLoaded [] -> Fragment() { p (class' = "muted") { "This subscription has no delivery." } }
+  | Subscriptions.DeliveriesLoaded [] -> Fragment() { p (class' = "muted") { "No deliveries yet." } }
   | Subscriptions.DeliveriesLoaded deliveries ->
     Fragment() { ul (class' = "deliveries") { For(each = Array.ofList deliveries) { yield fun delivery _ -> deliveryRow delivery } } }
   | Subscriptions.DeliveriesNotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The deliveries did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the deliveries.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private subscriptionAction (dispatch: Shell.Msg -> unit) (subscriptionId: string) (sending: bool) (action: Subscriptions.Action) =
@@ -1122,7 +1122,7 @@ let private subscriptionDetails (dispatch: Shell.Msg -> unit) (model: Subscripti
       h3 () { "Deliveries" }
       deliveryList sheet.Deliveries
     }
-  | _ -> Fragment() { p (class' = "muted") { "This subscription is not in the list." } }
+  | _ -> Fragment() { p (class' = "muted") { "Subscription not found." } }
 
 [<SolidComponent>]
 let private subscriptionSheet (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
@@ -1162,7 +1162,7 @@ let private seriesPostRow (dispatch: Shell.Msg -> unit) (post: Api.SeriesPost) =
 [<SolidComponent>]
 let private seriesPosts (dispatch: Shell.Msg -> unit) (series: Api.SeriesRecord) =
   match Series.orderedPosts series with
-  | [] -> Fragment() { p (class' = "muted small") { "No post is in the series." } }
+  | [] -> Fragment() { p (class' = "muted small") { "No posts in this series." } }
   | posts ->
     Fragment() {
       ol (class' = "series-posts") { For(each = Array.ofList posts) { yield fun post _ -> seriesPostRow dispatch post } }
@@ -1197,13 +1197,13 @@ let private seriesList (dispatch: Shell.Msg -> unit) (model: Series.Model) =
       }
     }
   | Series.Loaded [] ->
-    Fragment() { Parts.emptyState Icon.Inbox Series.emptyText (p () { "Select New series to make one." }) }
+    Fragment() { Parts.emptyState Icon.Inbox Series.emptyText (p () { "Click 'New series' to create one." }) }
   | Series.Loaded records ->
     Fragment() {
       div (class' = "queue") { For(each = Array.ofList records) { yield fun series _ -> seriesRow dispatch series } }
     }
   | Series.NotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The series did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the series.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private seriesPage (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
@@ -1300,10 +1300,10 @@ let private deleteSeriesDialog (dispatch: Shell.Msg -> unit) (model: unit -> She
     "delete-series"
     (fun () -> (Shell.deleteSeriesChosen (model ())).IsSome)
     close
-    "Delete the series?"
-    (p () { "The series record goes away permanently. No post is in the series, so the site does not change." })
+    "Delete this series?"
+    (p () { "This permanently deletes the series. No posts use it, so the site won't change." })
     (Fragment() {
-      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Keep" })
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
     })
 
@@ -1345,7 +1345,7 @@ let private deviceList (dispatch: Shell.Msg -> unit) (model: Notifications.Model
       }
     }
   | Notifications.NotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The devices did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the devices.").Has(p () { reason }) }
 
 [<SolidComponent>]
 let private notificationsSection (dispatch: Shell.Msg -> unit) (model: Notifications.Model) =
@@ -1367,7 +1367,7 @@ let private notificationsSection (dispatch: Shell.Msg -> unit) (model: Notificat
 
     Show(when' = (Notifications.registrationFailure model).IsSome) {
       Parts
-        .Alert(tone = Parts.Bad, title = "This device did not register.")
+        .Alert(tone = Parts.Bad, title = "Couldn't register this device.")
         .Has(p () { Notifications.registrationFailure model |> Option.defaultValue "" })
     }
 
@@ -1375,7 +1375,7 @@ let private notificationsSection (dispatch: Shell.Msg -> unit) (model: Notificat
 
     Show(when' = model.RemoveFailure.IsSome) {
       Parts
-        .Alert(tone = Parts.Bad, title = "The device did not go away.")
+        .Alert(tone = Parts.Bad, title = "Couldn't remove the device.")
         .Has(p () { model.RemoveFailure |> Option.defaultValue "" })
     }
 
@@ -1425,7 +1425,7 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
     Fragment() {
       Parts.emptyState
         Icon.Alert
-        "No page has this address."
+        "This page doesn't exist."
         (p () {
           "Go to the "
           routeLink route Dashboard "dashboard"
@@ -1455,9 +1455,9 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     "delete-comment"
     (fun () -> (Shell.deleteChosen (model ())).IsSome)
     close
-    "Delete the comment?"
+    "Delete this comment?"
     (p () {
-      "The comment and its history go away permanently. To hide the comment from readers and keep it, reject it."
+      "This permanently deletes the comment and its history. To hide it from readers but keep it, reject it instead."
     })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
@@ -1473,9 +1473,9 @@ let private deleteCommenterDialog (dispatch: Shell.Msg -> unit) (model: unit -> 
     "delete-commenter"
     (fun () -> (Shell.deleteCommenterChosen (model ())).IsSome)
     close
-    "Delete the commenter?"
+    "Delete this commenter?"
     (p () {
-      "The commenter and each comment of the commenter go away permanently. The email address can verify again later, as a new commenter. To keep the commenter from commenting, ban the commenter."
+      "This permanently deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead."
     })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
@@ -1491,12 +1491,12 @@ let private deleteSubscriptionDialog (dispatch: Shell.Msg -> unit) (model: unit 
     "delete-subscription"
     (fun () -> (Shell.deleteSubscriptionChosen (model ())).IsSome)
     close
-    "Delete the subscription?"
+    "Delete this subscription?"
     (p () {
-      "The subscription and each delivery record of the subscription go away permanently. The reader gets no email. To keep the record, cancel the subscription."
+      "This permanently deletes the subscription and its delivery history. The reader won't be notified. To keep the record, cancel the subscription instead."
     })
     (Fragment() {
-      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Keep" })
+      Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
     })
 
@@ -1691,7 +1691,7 @@ let view (signIn: SignIn) (push: Push) =
       (isOpen Shell.SignOutDialog)
       (closed Shell.SignOutDialog)
       "Sign out?"
-      (p () { "Entra signs you out on this browser. To use the admin again, you must sign in again." })
+      (p () { "You'll be signed out on this browser and will need to sign in again to use the admin." })
       (Fragment() {
         Parts.Button(onClick = fun _ -> closed Shell.SignOutDialog ()).Has(Fragment() { "Cancel" })
 

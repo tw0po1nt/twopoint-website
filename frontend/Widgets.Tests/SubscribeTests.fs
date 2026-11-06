@@ -78,12 +78,12 @@ let tests =
 
     test "a refused subscription with no message shows a general message" {
       let model, _ = run (filled @ [ Subscribe.Submitted; refused None ])
-      Expect.equal model.Status (Subscribe.Failed "The subscription did not go through. Try again later.") "A general message"
+      Expect.equal model.Status (Subscribe.Failed "Couldn't subscribe you. Try again later.") "A general message"
     }
 
     test "a request with no answer shows that the site cannot get to the server, and the reader can send again" {
       let failed, _ = run (filled @ [ Subscribe.Submitted; Subscribe.Unanswered ])
-      Expect.equal failed.Status (Subscribe.Failed "The site cannot get to the server. Try again later.") "The message"
+      Expect.equal failed.Status (Subscribe.Failed "Couldn't reach the server. Try again later.") "The message"
 
       let _, effect = Subscribe.update Subscribe.Submitted failed
       Expect.isSome effect "A new submit sends again"

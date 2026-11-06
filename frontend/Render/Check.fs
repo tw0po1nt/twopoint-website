@@ -73,7 +73,7 @@ let private breakErrors (published: Post list) (found: (string * FileProblems * 
       for problem in fresh do
         Problem.error
           (Place.Post 1)
-          $"The change breaks a link in {names[otherFile]}, on {FileProblems.describePlace problems problem.Place}: {problem.Message}" ]
+          $"This change breaks a link in {names[otherFile]} ({FileProblems.describePlace problems problem.Place}): {problem.Message}" ]
 
 let private brokenElsewhere (published: Post list) (changedFile: string) (before: Map<string, FileProblems>) (after: Map<string, FileProblems>) =
   newLinkProblems changedFile Set.empty before after |> breakErrors published
@@ -141,7 +141,7 @@ let forPublish
 
 let private missingCategory (post: Post) =
   if FrontMatter.missesCategory post.FrontMatter then
-    [ Problem.error (Place.Field("category", post.FrontMatter.CategoryLine)) "The post has no category." ]
+    [ Problem.error (Place.Field("category", post.FrontMatter.CategoryLine)) "The post needs a category." ]
   else
     []
 

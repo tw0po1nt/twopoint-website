@@ -62,7 +62,7 @@ test('the Settings page shows that the notifications are on, with no button', as
   await settle();
 
   const section = document.querySelector('main .notifications');
-  assert.match(section.textContent, /This device gets notifications\./);
+  assert.match(section.textContent, /Notifications are on for this device\./);
   assert.ok(![...section.querySelectorAll('button')].some((button) => button.textContent.includes('Turn on')));
   assert.deepEqual([...document.querySelectorAll('main .device-row')].map((row) => row.id), ['aaaa']);
 });

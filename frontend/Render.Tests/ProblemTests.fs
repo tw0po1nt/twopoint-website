@@ -21,12 +21,12 @@ let tests =
     test "a front matter problem is an error on its field" {
       Expect.equal
         (problems (parseIn [ seriesRecord "a-series" ] "a-post" (text $"{frontMatter}\nseries: b-series" "Text.")))
-        [ Problem.error (Place.Field("series", 7)) "No series has the slug 'b-series'." ]
+        [ Problem.error (Place.Field("series", 7)) "There's no series with the slug 'b-series'." ]
         "The series field"
 
       Expect.equal
         (problems (parse "a-post" (text (frontMatter.Replace("author: Matthew Watt\n", "")) "Text.")))
-        [ Problem.error (Place.Field("author", 1)) "The front matter has no 'author' field." ]
+        [ Problem.error (Place.Field("author", 1)) "The front matter is missing the 'author' field." ]
         "A missing field is on the opening line"
     }
 
@@ -35,7 +35,7 @@ let tests =
         (problems (parse "a-post" (text frontMatter "Text.\n\n```js\nlet a = 1\n```")))
         [ Problem.error
             (Place.Body 4)
-            "The code block has the unknown language 'js'. Use one of these languages: fsharp, csharp, swift, sh, diff, json, xml, css." ]
+            "Unknown code block language 'js'. Use one of: fsharp, csharp, swift, sh, diff, json, xml, css." ]
         "Body line 1 is the line after the closing ---, so the fence on file line 11 is on body line 4"
     }
 
@@ -47,7 +47,7 @@ let tests =
 
       Expect.equal
         (problems (parse "A Post" (text frontMatter "Text.")))
-        [ Problem.error (Place.Post 1) "Give the file a slug as its name, for example a-post.md." ]
+        [ Problem.error (Place.Post 1) "Name the file with a slug, like a-post.md." ]
         "A file name that is not a slug"
     }
 
@@ -118,14 +118,14 @@ let tests =
 
       Expect.equal
         (problems (parseOn Stage.Local "a-post" (text frontMatter $"Text.\n\n::pdf{{file=\"{pdf}\"}}")))
-        [ Problem.error (Place.Body 4) $"The 'file' of '::pdf' is '{pdf}'. Give the https URL of a .pdf file." ]
+        [ Problem.error (Place.Body 4) $"The 'file' of '::pdf' must be an https URL to a .pdf file (got '{pdf}')." ]
         "The PDF needs https"
     }
 
     test "an http URL that is not on Azurite is still an error on local" {
       Expect.equal
         (errorLines (parseOn Stage.Local "a-post" (text frontMatter "![A cat](http://example.com/cat.jpg)")))
-        [ errorAt "a-post" 9 "Give the image 'http://example.com/cat.jpg' as an https URL." ]
+        [ errorAt "a-post" 9 "The image 'http://example.com/cat.jpg' must be an https URL." ]
         "Only Azurite gets the http exception"
     }
   ]

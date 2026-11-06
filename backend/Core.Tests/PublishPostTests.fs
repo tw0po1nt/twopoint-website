@@ -456,7 +456,7 @@ let tests =
       | Error(ActionError.Logic(PublishPost.HasErrors problems)) ->
         Expect.equal
           (problems |> List.map _.Message)
-          [ $"The front matter gives the Open Graph image {image}, and the build cannot make its crop: HTTP 404." ]
+          [ $"Couldn't crop the Open Graph image {image}: HTTP 404." ]
           "The message of the build"
       | other -> failtestf "Expected HasErrors, got %A" other
 
@@ -955,7 +955,7 @@ let changesTests =
       | Error(ActionError.Logic(PublishChanges.HasErrors problems)) ->
         Expect.equal
           (problems |> List.map _.Message)
-          [ $"The front matter gives the Open Graph image {image}, and the build cannot make its crop: HTTP 404." ]
+          [ $"Couldn't crop the Open Graph image {image}: HTTP 404." ]
           "The message of the build"
       | other -> failtestf "Expected HasErrors, got %A" other
 

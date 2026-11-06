@@ -224,7 +224,7 @@ let slugHint (slug: string) (model: Model) =
   | ChangeFailed reason -> reason
   | Changing -> ""
   | Idle when model.SlugInput = slug || Slug.isSlug model.SlugInput -> ""
-  | Idle -> "Use lowercase letters and digits, with a single - between them."
+  | Idle -> "Use lowercase letters, numbers, and single hyphens (like my-post-2)."
 
 let isChangingSlug (model: Model) = model.Slug = Changing
 

@@ -268,7 +268,7 @@ let tests =
 
       match checkOf (save fake "draft" (Some "v1") "Title" "Text.\n\n![](https://example.com/cat.png)\n") with
       | PostCheck.Problems problems ->
-        let problem = problems |> List.find (fun problem -> problem.Message.Contains "no alt text")
+        let problem = problems |> List.find (fun problem -> problem.Message.Contains "Add alt text")
         Expect.equal problem.Severity Severity.Warning "A warning"
         Expect.equal problem.Place (Place.Body 4) "The body line of the image"
       | other -> failtestf "Expected one warning, got %A" other
@@ -315,7 +315,7 @@ let tests =
 
       match checkOf (save fake "draft" (Some "v1") "Title" "![A cat](https://example.com/cat.png)\n") with
       | PostCheck.Problems problems ->
-        let problem = problems |> List.find (fun problem -> problem.Message.Contains "cannot read the size")
+        let problem = problems |> List.find (fun problem -> problem.Message.Contains "read the size of the image")
         Expect.equal problem.Severity Severity.Error "An error"
         Expect.stringContains problem.Message "HTTP 404" "The reason"
       | other -> failtestf "Expected the error, got %A" other

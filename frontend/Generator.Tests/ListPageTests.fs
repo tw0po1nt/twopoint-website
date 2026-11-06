@@ -136,13 +136,13 @@ let tests =
     test "a category page has the category title and a description" {
       let html = page [ talk ] "category/talks/index.html"
       Expect.stringContains html $"<title>Category &#39;Talks&#39; {emDash} TwoPoint</title>" "The title"
-      Expect.stringContains html """<meta name="description" content="Each post in the category Talks, the newest first.">""" "The description"
+      Expect.stringContains html """<meta name="description" content="Posts in Talks, newest first.">""" "The description"
       Expect.stringContains html """<link rel="canonical" href="https://twopoint.dev/category/talks/">""" "The canonical URL"
       Expect.stringContains html """<meta name="robots" content="index,follow">""" "The page is indexable"
 
       Expect.stringContains
         html
-        """<p class="path"><a href="/">~/twopoint</a> $ ls -l category/talks/</p><h1>Talks</h1><p class="excerpt">Each post in the category Talks, the newest first.</p><section class="log">"""
+        """<p class="path"><a href="/">~/twopoint</a> $ ls -l category/talks/</p><h1>Talks</h1><p class="excerpt">Posts in Talks, newest first.</p><section class="log">"""
         "The command, the heading, and the excerpt"
     }
 
@@ -182,13 +182,13 @@ let tests =
       let posts = [ partOne; talk ]
 
       let fsharp = page posts "tag/fsharp/index.html"
-      Expect.stringContains fsharp $"<title>Posts by tag &#39;F#&#39; {emDash} TwoPoint</title>" "The title of fsharp"
+      Expect.stringContains fsharp $"<title>Posts tagged &#39;F#&#39; {emDash} TwoPoint</title>" "The title of fsharp"
       Expect.stringContains fsharp "<h1>#F#</h1>" "The heading of fsharp"
-      Expect.stringContains fsharp """<meta name="description" content="Each post with the tag F#, the newest first.">""" "The description of fsharp"
+      Expect.stringContains fsharp """<meta name="description" content="Posts tagged F#, newest first.">""" "The description of fsharp"
 
       Expect.stringContains (page posts "tag/csharp/index.html") "<h1>#C#</h1>" "csharp shows as C#"
       Expect.stringContains (page posts "tag/net/index.html") "<h1>#.NET</h1>" ".NET keeps its title and gets the slug net"
-      Expect.stringContains (page posts "tag/fable/index.html") $"<title>Posts by tag &#39;Fable&#39; {emDash} TwoPoint</title>" "Another tag keeps its text"
+      Expect.stringContains (page posts "tag/fable/index.html") $"<title>Posts tagged &#39;Fable&#39; {emDash} TwoPoint</title>" "Another tag keeps its text"
     }
 
     test "a series page has the series title, its excerpt, and its Open Graph image" {

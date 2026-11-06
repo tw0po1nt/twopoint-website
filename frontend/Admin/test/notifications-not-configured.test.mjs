@@ -15,7 +15,7 @@ await load('http://localhost:4322/settings', { respond, push });
 const section = () => document.querySelector('main .notifications');
 
 test('a build with no VAPID public key says that it cannot turn on notifications, and still lists the devices', () => {
-  assert.match(section().textContent, /The admin config has no VAPID public key/);
+  assert.match(section().textContent, /Notifications aren't set up for this build/);
   assert.ok(![...section().querySelectorAll('button')].some((button) => button.textContent.includes('Turn on')));
   assert.deepEqual([...document.querySelectorAll('main .device-row')].map((row) => row.id), ['aaaa']);
 });

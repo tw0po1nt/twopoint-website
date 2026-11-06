@@ -7,7 +7,7 @@ type PostFilter =
   | All
   | Drafts
   | PendingEdits
-  | DeliveriesToStart
+  | PendingDeliveries
 
 [<RequireQualifiedAccess>]
 type SubscriptionFilter =
@@ -31,7 +31,7 @@ type Route =
 [<RequireQualifiedAccess>]
 module PostFilter =
 
-  let all = [ PostFilter.All; PostFilter.Drafts; PostFilter.PendingEdits; PostFilter.DeliveriesToStart ]
+  let all = [ PostFilter.All; PostFilter.Drafts; PostFilter.PendingEdits; PostFilter.PendingDeliveries ]
 
   /// "All" has no query string.
   let value (filter: PostFilter) =
@@ -39,7 +39,7 @@ module PostFilter =
     | PostFilter.All -> None
     | PostFilter.Drafts -> Some "drafts"
     | PostFilter.PendingEdits -> Some "pending-edits"
-    | PostFilter.DeliveriesToStart -> Some "deliveries-to-start"
+    | PostFilter.PendingDeliveries -> Some "pending-deliveries"
 
 [<RequireQualifiedAccess>]
 module SubscriptionFilter =

@@ -26,7 +26,7 @@ let init (query: (string * string) list) : Model * Effect option =
   | Some(_, id) when id.Trim() <> "" -> Sending, Some(Cancel { SubscriptionId = id.Trim() })
   | _ -> NoSubscriptionId, None
 
-let private refused = "The unsubscribe request did not go through. Try again later."
+let private refused = "Couldn't unsubscribe you. Try again later."
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model, msg with

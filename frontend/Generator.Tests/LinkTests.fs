@@ -30,7 +30,7 @@ let tests =
     test "a link to a series with no published post fails" {
       Expect.equal
         (check "Read [the series](/series/a-series/).")
-        [ errorAt "a-post" 9 "The output has no page at /series/a-series/." ]
+        [ errorAt "a-post" 9 "No page exists at /series/a-series/." ]
         "A series with no published post has no page"
     }
   ]

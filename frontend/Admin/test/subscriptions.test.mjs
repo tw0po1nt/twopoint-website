@@ -82,7 +82,7 @@ test('the list shows each subscription with its status, and the counts of the au
   assert.match(document.getElementById('grace').textContent, /grace@example\.com/);
   assert.match(document.getElementById('grace').textContent, /Inactive/);
   assert.match(document.getElementById('alan').textContent, /No name/);
-  assert.match(document.querySelector('main .toolbar').textContent, /2 active and 1 inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /2 active, 1 inactive/);
 });
 
 test('the filter shows only the active or the inactive subscriptions, with no API call', async () => {
@@ -93,7 +93,7 @@ test('the filter shows only the active or the inactive subscriptions, with no AP
   tab('Active').click();
   await settle();
   assert.deepEqual(rows(), ['ada', 'alan']);
-  assert.match(document.querySelector('main .toolbar').textContent, /2 active and 1 inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /2 active, 1 inactive/);
   assert.equal(reads.filter((path) => path === 'internal/subscriptions').length, 1);
 
   tab('All').click();
@@ -110,7 +110,7 @@ test('the search keeps its input, and shows the subscriptions that match', async
 
   await type('nothing');
   assert.deepEqual(rows(), []);
-  assert.match(document.querySelector('main').textContent, /No subscription matches the search\./);
+  assert.match(document.querySelector('main').textContent, /No subscriptions match your search\./);
 
   await type('');
   assert.deepEqual(rows(), ['ada', 'grace', 'alan']);
@@ -152,7 +152,7 @@ test('the sheet closes, and a sheet of an active subscription has no canceled da
   await settle();
   assert.equal(sheet().open, true);
   assert.doesNotMatch(sheet().textContent, /Canceled/);
-  assert.match(sheet().textContent, /This subscription has no delivery\./);
+  assert.match(sheet().textContent, /No deliveries yet\./);
 
   sheet().close();
   await settle();
@@ -193,7 +193,7 @@ test('Cancel subscription cancels an active subscription, sets the canceled date
   assert.match(sheet().textContent, /Canceled/);
   assert.match(sheet().textContent, /2026-03-01/);
   assert.match(document.getElementById('ada').textContent, /Inactive/);
-  assert.match(document.querySelector('main .toolbar').textContent, /1 active and 2 inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /1 active, 2 inactive/);
   assert.deepEqual(
     [...sheet().querySelectorAll('.actions button')].map((item) => item.textContent.trim()),
     ['Delete'],
@@ -208,7 +208,7 @@ test('Delete asks for a confirmation, and Keep in the dialog deletes nothing', a
   assert.equal(dialog.open, true);
   assert.deepEqual(actions.filter((action) => action.method === 'DELETE'), []);
 
-  press('Keep', dialog);
+  press('Cancel', dialog);
   await settle();
   assert.equal(dialog.open, false);
   assert.deepEqual(actions.filter((action) => action.method === 'DELETE'), []);

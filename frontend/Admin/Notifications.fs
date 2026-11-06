@@ -188,11 +188,11 @@ let section (model: Model) =
 let sectionText (section: Section) =
   match section with
   | AddToHomeScreen -> "Add the admin to the Home Screen to turn on notifications."
-  | CannotNotify -> "This browser cannot receive notifications."
-  | NotConfigured -> "The admin config has no VAPID public key, so this build cannot turn on notifications."
-  | Blocked -> "The browser blocks notifications for this site. Change the browser setting to allow them, then reload."
-  | Off -> "This device gets no notifications."
-  | On -> "This device gets notifications."
+  | CannotNotify -> "This browser doesn't support notifications."
+  | NotConfigured -> "Notifications aren't set up for this build (no VAPID public key)."
+  | Blocked -> "Notifications are blocked for this site. Allow them in your browser settings, then reload."
+  | Off -> "Notifications are off on this device."
+  | On -> "Notifications are on for this device."
 
 let registrationFailure (model: Model) =
   match model.Registration with
@@ -203,7 +203,7 @@ let registrationFailure (model: Model) =
 
 let isBusy (model: Model) = model.Registration = Registering
 
-let emptyText = "No device is registered."
+let emptyText = "No registered devices."
 
 let addedText (device: Api.Device) = $"Added {Dates.dateText device.CreatedDate}"
 

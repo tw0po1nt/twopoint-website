@@ -58,7 +58,7 @@ test('a load shows no permission prompt and sends no subscription', () => {
 });
 
 test('the Notifications section offers the button, and lists each registered device', () => {
-  assert.match(section().textContent, /This device gets no notifications\./);
+  assert.match(section().textContent, /Notifications are off on this device\./);
   assert.ok([...section().querySelectorAll('button')].some((button) => button.textContent.trim() === 'Turn on notifications on this device'));
   assert.deepEqual(rows(), ['aaaa', 'bbbb']);
 
@@ -93,5 +93,5 @@ test('Remove on the device of this browser also ends its subscription, and the s
   assert.deepEqual(writes.at(-1), { method: 'DELETE', authorization: 'Bearer token-1', id: 'cccc' });
   assert.deepEqual(rows(), ['bbbb']);
   assert.equal(push.events.filter((event) => event === 'unsubscribe').length, 1);
-  assert.match(section().textContent, /This device gets no notifications\./);
+  assert.match(section().textContent, /Notifications are off on this device\./);
 });

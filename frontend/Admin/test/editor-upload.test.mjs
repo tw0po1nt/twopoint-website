@@ -113,7 +113,7 @@ test('a failed upload removes the placeholder and shows a retry that sends the s
   assert.deepEqual(placeholders(), [], 'The placeholder is gone');
   assert.equal(doc(), before, 'The text did not change');
   assert.equal(notices().length, 1);
-  assert.match(notices()[0], /dog\.png did not upload\./);
+  assert.match(notices()[0], /Couldn't upload dog\.png\./);
   assert.match(notices()[0], /Upload a JPEG, PNG, WebP, GIF, or PDF file/);
 
   const file = uploads.at(-1).body;
@@ -134,7 +134,7 @@ test('an SVG is refused with no upload, and the author can dismiss the notice', 
   await drop(new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }));
 
   assert.equal(uploads.length, sent, 'No upload');
-  assert.match(notices()[0], /logo\.svg is not a JPEG, PNG, WebP, GIF, or PDF file\./);
+  assert.match(notices()[0], /logo\.svg isn't a supported type\. Use JPEG, PNG, WebP, GIF, or PDF\./);
   assert.equal([...document.querySelectorAll('.editor-notices button')].some((item) => item.textContent.trim() === 'Retry'), false);
 
   press('Dismiss');

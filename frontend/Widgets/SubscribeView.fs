@@ -30,14 +30,14 @@ let private statusClass (model: Subscribe.Model) =
 let private statusText (model: Subscribe.Model) =
   match model.Status with
   | Subscribe.Failed reason -> reason
-  | Subscribe.Subscribed -> "You are subscribed. The next post comes to your inbox."
+  | Subscribe.Subscribed -> "You're subscribed! The next post will land in your inbox."
   | Subscribe.Editing
   | Subscribe.Sending -> ""
 
 // JSX drops the space at the end of a text line and refuses a `>` in text, so these strings go in as values.
 let private emailLabel = "email>"
 let private nameLabel = "name>"
-let private notePrefix = "The site uses your email address only to send the newsletter. See the "
+let private notePrefix = "Your email is only used to send the newsletter. See the "
 
 [<SolidComponent>]
 let view (api: string) =
@@ -66,7 +66,7 @@ let view (api: string) =
     }
 
     Show(when' = Subscribe.showsEmailError (model ())) {
-      p (class' = "subscribe-error", role = "alert") { "Give a valid email address." }
+      p (class' = "subscribe-error", role = "alert") { "Enter a valid email address." }
     }
 
     label (class' = "subscribe-field") {

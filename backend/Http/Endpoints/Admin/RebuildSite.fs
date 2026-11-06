@@ -63,7 +63,7 @@ type RebuildSite(
             for repo, error in failed do
               logger.LogError("The dispatch of site.yml to {repo} failed: {error}", repo, error.DebugMessage)
             let repos = failed |> List.map (fst >> string) |> String.concat " and "
-            return failure $"The dispatch to {repos} failed." HttpStatusCode.BadGateway
+            return failure $"GitHub dispatch failed for {repos}." HttpStatusCode.BadGateway
           | Attempted (Error actionError) ->
             return failure (actionError.ToString()) HttpStatusCode.InternalServerError
         }

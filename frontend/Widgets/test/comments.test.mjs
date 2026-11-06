@@ -136,7 +136,7 @@ test('a submit with no comment shows the errors and sends nothing', async () => 
 
   assert.deepEqual(
     [...mount.querySelectorAll('.comment-error')].map((error) => error.textContent),
-    ['Give a valid email address.', 'Write a comment.'],
+    ['Enter a valid email address.', 'Write a comment.'],
   );
 });
 
@@ -159,7 +159,7 @@ test('a known email address posts the comment with its stored validation ID and 
   const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
   assert.equal(posted.length, 2, 'A second post request');
   assert.deepEqual(JSON.parse(posted[1].init.body), { ValidationId: 'validation-1', Comment: 'Nice post & thanks' });
-  assert.equal(status().textContent, 'Your comment is posted. It shows here after the author approves it.');
+  assert.equal(status().textContent, "Thanks! Your comment will appear here once it's approved.");
   assert.equal(field('email').value, '', 'The email input is empty');
   assert.equal(field('comment').value, '', 'The comment input is empty');
   assert.equal(mount.querySelectorAll('.comment').length, 2, 'The list stays');
@@ -179,7 +179,7 @@ test('the comment of a trusted commenter shows in the list at once', async () =>
   await settle();
 
   assert.equal(status().className, 'comment-status is-done');
-  assert.equal(status().textContent, 'Your comment is posted.');
+  assert.equal(status().textContent, 'Comment posted.');
   assert.equal(mount.querySelector('.comments-count').textContent, '3 comments');
 
   const items = [...mount.querySelectorAll('.comment')];
@@ -195,7 +195,7 @@ test('a request with no answer shows that the site cannot get to the server', as
   type(field('comment'), 'Again');
   submit();
   await settle();
-  assert.match(status().textContent, /cannot get to the server/);
+  assert.match(status().textContent, /Couldn't reach the server/);
 });
 
 const previewUrl = 'https://api.test/api/blog/comments/preview';
@@ -237,7 +237,7 @@ test('the preview calls the backend one time and shows the HTML, and an open wit
   answer = previewAnswer('<p>Use <code>List.map</code></p>\n');
   type(field('comment'), ' Use `List.map` ');
   tab('preview').click();
-  assert.equal(preview().textContent, 'Loading the preview…');
+  assert.equal(preview().textContent, 'Loading preview…');
   await settle();
 
   const sent = callsTo(previewUrl);
@@ -261,7 +261,7 @@ test('a failed preview says that the comment can still go, and [try again] calls
   await settle();
 
   assert.equal(preview().className, 'comment-preview is-failed');
-  assert.equal(preview().textContent, 'The site cannot show the preview now. You can still post your comment. [try again]');
+  assert.equal(preview().textContent, "Couldn't load the preview. You can still post your comment. [try again]");
 
   answer = previewAnswer('<p>Use <code>List.iter</code></p>\n');
   preview().querySelector('button').click();
@@ -277,7 +277,7 @@ test('[post comment] posts the comment from the preview tab', async () => {
 
   const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
   assert.deepEqual(JSON.parse(posted.at(-1).init.body), { ValidationId: 'validation-1', Comment: 'Use `List.iter`' });
-  assert.equal(status().textContent, 'Your comment is posted. It shows here after the author approves it.');
+  assert.equal(status().textContent, "Thanks! Your comment will appear here once it's approved.");
   assert.equal(tab('write').getAttribute('aria-selected'), 'true', 'The empty form shows the write tab');
   assert.equal(field('comment').value, '', 'The comment input is empty');
 });
@@ -297,7 +297,7 @@ test('[markdown help] opens and closes the table, with no call', async () => {
   assert.equal(rows.length, 7, 'Italic, bold, inline code, a link, a list, a quote, and a code block');
   assert.equal(rows[0].querySelector('pre').textContent, '*italic*');
   assert.equal(rows[0].querySelector('.comment-text').innerHTML, '<p><em>italic</em></p>\n');
-  assert.match(mount.querySelector('.comment-help-sheet > p').textContent, /Headings, images, and tables stay as you type them/);
+  assert.match(mount.querySelector('.comment-help-sheet > p').textContent, /Headings, images, and tables show as plain text/);
 
   help.click();
   await settle();
@@ -324,7 +324,7 @@ test('a new email address gets a validation email that links back to the panel, 
   });
 
   assert.equal(status().className, 'comment-status is-done');
-  assert.match(status().textContent, /sent an email to reader@example\.com/);
+  assert.match(status().textContent, /sent a verification link to reader@example\.com/);
 
   assert.deepEqual(
     ['name', 'email', 'comment'].map((name) => field(name).disabled),

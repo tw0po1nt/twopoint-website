@@ -96,7 +96,7 @@ let tests =
       let model, effect = model |> send (Series.FormMsg SeriesForm.SaveClicked)
       Expect.isNone effect "No save"
       Expect.equal (problems model) [ SeriesForm.EmptyTitle; SeriesForm.BadSlug; SeriesForm.EmptyExcerpt ] "Each empty field"
-      Expect.equal (Series.fieldProblem model.Series SeriesForm.TitleField) (Some "Give the series a title.") "The title text"
+      Expect.equal (Series.fieldProblem model.Series SeriesForm.TitleField) (Some "Add a title.") "The title text"
     }
 
     test "a bad slug, a slug of another series, and an image that is not https are problems at once" {
@@ -140,7 +140,7 @@ let tests =
 
       Expect.isNone model.Series.Form "The form closes"
       Expect.equal effect (Some(Shell.Send [ Shell.LoadSeries; Shell.PollSiteDeploy model.SiteDeploy.Generation ])) "Reload and poll"
-      Expect.equal (Series.noticeText model.Series.Notice) (Some "The series 'empty-again' is saved, and the site rebuilds.") "The notice"
+      Expect.equal (Series.noticeText model.Series.Notice) (Some "Saved 'empty-again'. The site is rebuilding.") "The notice"
     }
 
     test "the slug is locked while a published post, a draft, or a pending edit refers to the series" {
@@ -163,7 +163,7 @@ let tests =
 
       Expect.equal
         (Series.deleteReason (form model))
-        (Some "The series has 1 draft. Remove the series from each post first, and then delete the series.")
+        (Some "This series is used by 1 draft. Remove it from those posts before deleting it.")
         "The reason"
 
       let model, _ = listed () |> send (Series.Opened "fable")
@@ -171,7 +171,7 @@ let tests =
       Expect.equal
         (Series.deleteReason (form model))
         (Some
-          "The series has 1 published post, 1 upcoming post, 2 drafts and 1 pending edit. Remove the series from each post first, and then delete the series.")
+          "This series is used by 1 published post, 1 upcoming post, 2 drafts and 1 pending edit. Remove it from those posts before deleting it.")
         "Each kind of post, with its count"
 
       let model, _ = Shell.update (Shell.Opened Shell.DeleteSeriesDialog) model
@@ -213,6 +213,6 @@ let tests =
 
     test "a stale save keeps the form open with the reason" {
       let model, _ = listed () |> sendAll [ Series.Opened "notes"; Series.FormMsg SeriesForm.SaveClicked; Series.SaveAnswered(Error Api.Stale) ]
-      Expect.stringContains (SeriesForm.failure (form model) |> Option.defaultValue "") "changed in another place" "The reason"
+      Expect.stringContains (SeriesForm.failure (form model) |> Option.defaultValue "") "changed in another tab" "The reason"
     }
   ]

@@ -114,7 +114,7 @@ let tests =
       | Some(Shell.Send [ Shell.SavePost request ]) ->
         let model, effect = send (Editor.SaveAnswered("my-post", request.Version, Error(Api.Failed "No."))) model
         Expect.isNone effect "No check"
-        Expect.stringContains (Publish.reason (document' model).Publish |> Option.get) "The post did not save." "The reason"
+        Expect.stringContains (Publish.reason (document' model).Publish |> Option.get) "Couldn't save the post." "The reason"
       | other -> failtestf "Expected a save, got %A" other
     }
 
@@ -269,7 +269,7 @@ let tests =
         | other -> failtestf "Expected a save, got %A" other
 
       let model, _ = send (Editor.SaveAnswered("my-post", request.Version, Error Api.Stale)) model
-      Expect.equal (Editor.primaryAvailability (document' model)) (Editor.Unavailable "Another tab saved newer text. Reload the page.") "The reason"
+      Expect.equal (Editor.primaryAvailability (document' model)) (Editor.Unavailable "This post changed in another tab. Reload the page to get the latest version.") "The reason"
       let _, effect = send Editor.PublishClicked model
       Expect.isNone effect "No call"
     }
@@ -288,16 +288,16 @@ let menuTests =
 
       Expect.equal
         (Editor.menu (document' model) |> List.map (fun item -> item.Label))
-        [ "Save"; "Changes from live"; "Discard changes"; "Change the date"; "Unpublish"; "Revisions"; "Send to subscribers"; "Delete" ]
+        [ "Save"; "Compare with live"; "Discard changes"; "Change date"; "Unpublish"; "Revisions"; "Send to subscribers"; "Delete" ]
         "The actions"
 
-      Expect.equal (reasonOf Editor.SaveNow model) "The post is saved." "Save"
-      Expect.equal (reasonOf Editor.ChangesFromLive model) "A draft has no published text." "Changes from live"
-      Expect.equal (reasonOf Editor.DiscardChanges model) "A draft has no pending edit." "Discard changes"
-      Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Change the date"
-      Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
-      Expect.equal (reasonOf Editor.Revisions model) "Revisions are available after the next publish." "Revisions"
-      Expect.equal (reasonOf Editor.SendToSubscribers model) "Publish the post first." "Send to subscribers"
+      Expect.equal (reasonOf Editor.SaveNow model) "No unsaved changes." "Save"
+      Expect.equal (reasonOf Editor.ChangesFromLive model) "Only for published posts." "Compare with live"
+      Expect.equal (reasonOf Editor.DiscardChanges model) "Only for published posts." "Discard changes"
+      Expect.equal (reasonOf Editor.ChangeDate model) "Only for upcoming posts." "Change date"
+      Expect.equal (reasonOf Editor.Unpublish model) "Only for upcoming posts." "Unpublish"
+      Expect.equal (reasonOf Editor.Revisions model) "Only for published posts." "Revisions"
+      Expect.equal (reasonOf Editor.SendToSubscribers model) "Only for published posts." "Send to subscribers"
       Expect.equal (reasonOf Editor.Delete model) "" "Delete"
     }
 
@@ -309,7 +309,7 @@ let menuTests =
 
     test "the menu of a published post says that only an upcoming post can change its date" {
       let model = opened live
-      Expect.equal (reasonOf Editor.ChangeDate model) "Only an upcoming post can change its date." "Change the date"
-      Expect.equal (reasonOf Editor.Unpublish model) "You can unpublish only an upcoming post." "Unpublish"
+      Expect.equal (reasonOf Editor.ChangeDate model) "Only for upcoming posts." "Change date"
+      Expect.equal (reasonOf Editor.Unpublish model) "Only for upcoming posts." "Unpublish"
     }
   ]

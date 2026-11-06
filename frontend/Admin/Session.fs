@@ -82,10 +82,10 @@ let showsBanner (model: Model<'call>) =
 
 let bannerText (model: Model<'call>) =
   match model.Status with
-  | Expired true -> "The sign-in did not complete. Try again."
+  | Expired true -> "Sign-in failed. Try again."
   | Expired false
   | Renewing -> "Your session ended. Sign in again to continue."
-  | Refused -> "The API refused this account. Sign in with the author account."
+  | Refused -> "This account doesn't have access. Sign in with the author account."
   | Starting
   | Redirecting
   | Active

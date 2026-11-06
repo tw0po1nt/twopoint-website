@@ -78,11 +78,11 @@ module UnpublishMapping =
       match reason with
       | Unpublish.EditNotPublished(edit, failure) -> RemovalMapping.editNotPublished "unpublish" edit failure
       | Unpublish.WorkingBlobKept -> "Another tab saved the post during the unpublish.", HttpStatusCode.Conflict
-      | Unpublish.WorkingWriteFailed _ -> "The write of the draft text failed.", HttpStatusCode.InternalServerError
+      | Unpublish.WorkingWriteFailed _ -> "Couldn't save the draft text.", HttpStatusCode.InternalServerError
       | Unpublish.PublishedBlobKept ->
-        $"The published text of the post changed during the unpublish. {draftWritten}", HttpStatusCode.Conflict
+        $"The post changed while it was being unpublished. {draftWritten}", HttpStatusCode.Conflict
       | Unpublish.PublishedDeleteFailed _ ->
-        $"The delete of the published text failed. {draftWritten}", HttpStatusCode.InternalServerError
+        $"Couldn't remove the published post. {draftWritten}", HttpStatusCode.InternalServerError
 
     RemovalMapping.kept "unpublish" slug edits because warnings
 
@@ -90,9 +90,9 @@ module UnpublishMapping =
     match error with
     | Unpublish.Refused refusal -> UpcomingMapping.refusal refusal
     | Unpublish.BreaksLinks problems ->
-      $"The unpublish breaks a link in another post and is not done. {RemovalMapping.errors problems}", HttpStatusCode.UnprocessableEntity
+      $"Can't unpublish: other posts still link here. {RemovalMapping.errors problems}", HttpStatusCode.UnprocessableEntity
     | Unpublish.EditsChanged ->
-      "The pending edits that remove the links to the post changed. The admin did not unpublish the post. Check the unpublish again.",
+      "The pending edits that remove links to this post have changed. Close the dialog and try again.",
       HttpStatusCode.Conflict
 
 type UnpublishPost(

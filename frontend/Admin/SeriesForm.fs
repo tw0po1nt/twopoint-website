@@ -107,11 +107,11 @@ let problems (others: string list) (form: Form) =
 
 let problemText (problem: Problem) =
   match problem with
-  | EmptyTitle -> "Give the series a title."
-  | EmptyExcerpt -> "Give the series an excerpt."
-  | BadSlug -> "Use lowercase letters and digits, with a single - between them."
-  | SlugTaken -> "Another series has this slug."
-  | BadImage -> "Use an https URL, or upload an image."
+  | EmptyTitle -> "Add a title."
+  | EmptyExcerpt -> "Add an excerpt."
+  | BadSlug -> "Use lowercase letters, numbers, and single hyphens (like my-post-2)."
+  | SlugTaken -> "Another series already uses this slug."
+  | BadImage -> "Use an https URL or upload an image."
 
 let fieldProblem (others: string list) (form: Form) (field: Field) =
   problems others form
@@ -166,7 +166,7 @@ let update (others: string list) (msg: Msg) (form: Form) : Form * Effect option 
 
 let private failureReason (form: Form) (failure: Api.Failure) =
   match failure, form.Original with
-  | Api.Stale, Some _ -> "The series changed in another place after this page loaded it. Close the form and open the series again."
+  | Api.Stale, Some _ -> "This series changed in another tab. Close the form and reopen it."
   | Api.Stale, None -> problemText SlugTaken
   | failure, _ -> Api.reason failure
 
@@ -182,31 +182,31 @@ let isUploading (form: Form) = form.Upload = Uploading
 
 let uploadFailure (form: Form) =
   match form.Upload with
-  | UploadFailed reason -> Some $"The image did not upload. {reason}"
+  | UploadFailed reason -> Some $"Couldn't upload the image. {reason}"
   | NoUpload
   | Uploading -> None
 
 let failure (form: Form) =
   match form.State with
-  | Progress.NotDone(Save, reason) -> Some $"The series did not save. {reason}"
-  | Progress.NotDone(Delete, reason) -> Some $"The series did not go away. {reason}"
+  | Progress.NotDone(Save, reason) -> Some $"Couldn't save the series. {reason}"
+  | Progress.NotDone(Delete, reason) -> Some $"Couldn't delete the series. {reason}"
   | Progress.Ready
   | Progress.Sending _ -> None
 
 let slugHint (form: Form) =
   if slugLocked form then
-    "The slug stays while a post refers to the series, so each post keeps its series."
+    "Locked while posts use this series."
   else
-    "The address of the series page is /series/<slug>/."
+    "Used in the series URL: /series/<slug>/"
 
 let private warningText (warning: Api.SeriesWarning) =
   match warning with
-  | Api.OldRecordKept -> "The record at the old slug changed in another place, so it stays. Delete it from the list."
-  | Api.SeriesRebuild Api.ProductionRebuildFailed -> "The rebuild of the production site did not start. Select Rebuild site on the dashboard."
-  | Api.SeriesRebuild Api.StagingRebuildFailed -> "The rebuild of the staging site did not start."
-  | Api.SeriesRebuild Api.SiteNotRebuilt -> "The rebuild did not start. Select Rebuild site on the dashboard."
+  | Api.OldRecordKept -> "The series at the old slug changed in another tab, so it wasn't removed. Delete it from the list."
+  | Api.SeriesRebuild Api.ProductionRebuildFailed -> "Couldn't start the production rebuild. Click 'Rebuild site' on the dashboard."
+  | Api.SeriesRebuild Api.StagingRebuildFailed -> "Couldn't start the staging rebuild. Click 'Rebuild site' on the dashboard."
+  | Api.SeriesRebuild Api.SiteNotRebuilt -> "Couldn't start the rebuild. Click 'Rebuild site' on the dashboard."
   | Api.SeriesRebuild(Api.CommentRowMissing | Api.PendingEditKept | Api.NewerTextKept | Api.DeployNotTracked) -> ""
 
 let savedText (saved: Api.SavedSeries) =
   let warnings = saved.Warnings |> List.map warningText |> List.filter ((<>) "")
-  String.concat " " ($"The series '{saved.Slug}' is saved, and the site rebuilds." :: warnings)
+  String.concat " " ($"Saved '{saved.Slug}'. The site is rebuilding." :: warnings)

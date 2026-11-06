@@ -305,7 +305,7 @@ test('a PDF that does not load shows the error, and the download link stays', as
   await open(`<div id="mount" data-widget="pdf" data-file="${file}"></div>`);
   await until(() => status()?.classList.contains('is-failed'), 'the error');
 
-  assert.match(status().textContent, /did not load/);
+  assert.match(status().textContent, /Couldn't load the PDF/);
   assert.equal(frame().hidden, true, 'No page shows');
   assert.equal(mount().querySelector('.pdf-nav'), null, 'No page buttons');
   assert.equal(document.getElementById('download').getAttribute('href'), file, 'The download link stays');

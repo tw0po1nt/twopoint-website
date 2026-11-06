@@ -41,20 +41,20 @@ module RemovalMapping =
   /// `action` is the name of the removal in the text, `delete` or `unpublish`.
   let keptWarning (action : string) (warning : PublishSteps.Warning) =
     match warning with
-    | PublishSteps.CommentRowNotWritten _ -> "The post table has no row for a published edit, so readers cannot comment on that post yet."
-    | PublishSteps.PendingEditKept _ -> "A published edit keeps its pending edit. The published text is correct."
-    | PublishSteps.NewerTextKept -> $"Another tab saved newer text during the {action}. That text is a pending edit."
-    | PublishSteps.ProductionRebuildFailed _ -> "The production rebuild did not start. Select Rebuild site on the dashboard."
-    | PublishSteps.StagingRebuildFailed _ -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
-    | PublishSteps.SiteNotRebuilt _ -> "The site rebuild did not start. Select Rebuild site on the dashboard."
-    | PublishSteps.DeployNotTracked _ -> "The admin cannot show the deploy state of the published edits. The site still builds."
+    | PublishSteps.CommentRowNotWritten _ -> "Comments aren't open yet on one of the published edits (its post-table row is missing)."
+    | PublishSteps.PendingEditKept _ -> "A published edit is live, but a leftover pending edit wasn't cleared. Use 'Discard changes' to remove it."
+    | PublishSteps.NewerTextKept -> $"Edits saved in another tab during the {action} are kept as a pending edit."
+    | PublishSteps.ProductionRebuildFailed _ -> "Couldn't start the production rebuild. Click 'Rebuild site' on the dashboard."
+    | PublishSteps.StagingRebuildFailed _ -> "Couldn't start the staging rebuild. Click 'Rebuild site' on the dashboard."
+    | PublishSteps.SiteNotRebuilt _ -> "Couldn't start the rebuild. Click 'Rebuild site' on the dashboard."
+    | PublishSteps.DeployNotTracked _ -> "Can't track the deploy status of the published edits. The site is still rebuilding."
 
   let editNotPublished (action : string) (edit : Slug) (failure : PublishSteps.WriteFailure) =
     match failure with
-    | PublishSteps.WriteFailed _ -> $"The pending edit of the post '{edit}' did not publish.", HttpStatusCode.InternalServerError
+    | PublishSteps.WriteFailed _ -> $"Couldn't publish the pending edit of '{edit}'.", HttpStatusCode.InternalServerError
     | PublishSteps.RevisionTaken
     | PublishSteps.PublishedConditionFailed ->
-      $"The post '{edit}' changed during the {action}, so its pending edit did not publish.", HttpStatusCode.Conflict
+      $"'{edit}' changed during the {action}, so its pending edit wasn't published.", HttpStatusCode.Conflict
 
   /// The removal published the pending edits of `edits` and kept the post. `because` is the reason and its status.
   let kept
@@ -65,7 +65,7 @@ module RemovalMapping =
     (warnings : PublishSteps.Warning list)
     =
     let message =
-      $"The admin published the pending edits of the posts {names edits} and did not {action} the post '{slug}'. {because}"
+      $"Published the pending edits of {names edits}, but couldn't {action} '{slug}'. {because}"
 
     String.concat " " (message :: List.map (keptWarning action) warnings), statusCode
 

@@ -488,7 +488,7 @@ let private preview (model: unit -> Shell.Model) =
     }
 
     Show(when' = (previewFailure (model ()) <> "")) {
-      Parts.Alert(tone = Parts.Bad, title = "The preview did not load.").Has(p () { previewFailure (model ()) })
+      Parts.Alert(tone = Parts.Bad, title = "Couldn't load the preview.").Has(p () { previewFailure (model ()) })
     }
 
     Show(when' = ((previewProblems (model ())).Length > 0)) {
@@ -517,7 +517,7 @@ let private preview (model: unit -> Shell.Model) =
 let private loading (model: unit -> Shell.Model) =
   match (model ()).Editor with
   | Some(Editor.NotLoaded reason) ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "The post did not load.").Has(p () { reason }) }
+    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the post.").Has(p () { reason }) }
   | _ ->
     Fragment() {
       div (class' = "editor-column", ariaBusy = true) {
@@ -550,7 +550,7 @@ let private diffEntry (entry: Diff.Entry) : HtmlElement =
 
 [<SolidComponent>]
 let private noChanges () =
-  p (class' = "muted small") { "The title, the excerpt, and the body are the same as the published text." }
+  p (class' = "muted small") { "No changes from the live version." }
 
 [<SolidComponent>]
 let private changesView (model: unit -> Shell.Model) =
@@ -577,7 +577,7 @@ let private changesDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
     "changes-dialog"
     (fun () -> isChangesOpen (model ()))
     close
-    "Changes from live"
+    "Compare with live"
     (changesView model)
     (Fragment() { Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Close" }) })
 
@@ -591,20 +591,20 @@ let private discardDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
       if Confirm.isSending (discardState (model ())) then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.DiscardClosed) {
-    h2 (id = "discard-dialog-title") { "Discard the changes?" }
+    h2 (id = "discard-dialog-title") { "Discard changes?" }
 
     div (class' = "dialog-body") {
-      p () { "The pending edit goes away permanently. The editor shows the published text again." }
+      p () { "Your unpublished changes will be deleted, and the editor goes back to the live version. This can't be undone." }
 
       Show(when' = (Confirm.reason (discardState (model ()))).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = "The changes are not discarded.").Has(
+        Parts.Alert(tone = Parts.Bad, title = "Couldn't discard the changes.").Has(
           p () { Confirm.reason (discardState (model ())) |> Option.defaultValue "" }
         )
       }
     }
 
     div (class' = "actions") {
-      Parts.Button(disabled = Confirm.isSending (discardState (model ())), onClick = fun _ -> send Editor.DiscardClosed).Has(Fragment() { "Keep" })
+      Parts.Button(disabled = Confirm.isSending (discardState (model ())), onClick = fun _ -> send Editor.DiscardClosed).Has(Fragment() { "Cancel" })
 
       Parts.Button(
         kind = Parts.Danger,
@@ -657,15 +657,15 @@ let private revisionsDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
     div (class' = "dialog-body") {
       p () {
         if hasPendingEdit (model ()) then
-          "Each publish keeps a revision. A restore replaces the pending edit with the revision text. The site changes only at the next publish."
+          "Every publish saves a revision. Restoring one replaces your unpublished changes. The live site doesn't change until you publish."
         else
-          "Each publish keeps a revision. A restore makes the revision text a pending edit. The site changes only at the next publish."
+          "Every publish saves a revision. Restoring one loads it into the editor. The live site doesn't change until you publish."
       }
 
-      Show(when' = (state () = Revisions.Loading)) { p (class' = "muted small") { "Loading the revisions…" } }
+      Show(when' = (state () = Revisions.Loading)) { p (class' = "muted small") { "Loading revisions…" } }
 
       Show(when' = (match state () with Revisions.Listed [] -> true | _ -> false)) {
-        p (class' = "muted small") { "The post has no revision." }
+        p (class' = "muted small") { "No revisions yet." }
       }
 
       ul (class' = "revision-list") {
@@ -677,8 +677,8 @@ let private revisionsDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
           tone = Parts.Bad,
           title =
             (match state () with
-             | Revisions.LoadFailed _ -> "The revisions did not load."
-             | _ -> "The revision is not restored.")
+             | Revisions.LoadFailed _ -> "Couldn't load the revisions."
+             | _ -> "Couldn't restore the revision.")
         )
           .Has(p () { Revisions.reason (state ()) |> Option.defaultValue "" })
       }
@@ -689,18 +689,17 @@ let private revisionsDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
     }
   }
 
-/// `removes` ends the text about the pending edits, for example `deletes the post`. `blocked` is the title of the alert of a
-/// blocked check.
+/// `blocked` is the title of the alert of a blocked check.
 [<SolidComponent>]
-let private removalCheckView (check: unit -> RemovalCheck.State) (removes: string) (blocked: string) =
+let private removalCheckView (check: unit -> RemovalCheck.State) (blocked: string) =
   Fragment() {
     Show(when' = (check () = RemovalCheck.Checking)) {
-      p (class' = "muted small", role = "status") { "The check of the links to the post runs." }
+      p (class' = "muted small", role = "status") { "Checking for links to this post…" }
     }
 
     Show(when' = not (List.isEmpty (RemovalCheck.edits (check ())))) {
       p () {
-        $"Other posts link to this post. Their pending edits remove the links. The admin publishes these pending edits first, and then {removes}. The site rebuilds one time."
+        "Other posts link here. Their unpublished changes remove those links and will be published first, in the same rebuild."
       }
 
       ul (class' = "removal-edits", ariaLabel = "Pending edits to publish") {
@@ -719,7 +718,7 @@ let private removalCheckView (check: unit -> RemovalCheck.State) (removes: strin
     }
 
     Show(when' = (RemovalCheck.failure (check ())).IsSome) {
-      Parts.Alert(tone = Parts.Bad, title = "The check of the links to the post did not run. Close the dialog and try again.").Has(
+      Parts.Alert(tone = Parts.Bad, title = "Couldn't check for links to this post. Close the dialog and try again.").Has(
         p () { RemovalCheck.failure (check ()) |> Option.defaultValue "" }
       )
     }
@@ -735,22 +734,22 @@ let private unpublishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.
       if Confirm.isSending (unpublishState (model ())) then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.UnpublishClosed) {
-    h2 (id = "unpublish-dialog-title") { "Unpublish the post?" }
+    h2 (id = "unpublish-dialog-title") { "Unpublish this post?" }
 
     div (class' = "dialog-body") {
-      p () { "The post becomes a draft with no publish date, and the site no longer shows it. The pending edit stays as the draft text." }
+      p () { "The post goes back to being a draft and comes off the site. Any unpublished changes are kept in the draft." }
 
-      removalCheckView (fun () -> unpublishCheck (model ())) "unpublishes the post" "The admin cannot unpublish the post. A link to it stays."
+      removalCheckView (fun () -> unpublishCheck (model ())) "Can't unpublish: other posts still link here."
 
       Show(when' = (Confirm.reason (unpublishState (model ()))).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = "The post is not unpublished.").Has(
+        Parts.Alert(tone = Parts.Bad, title = "Couldn't unpublish the post.").Has(
           p () { Confirm.reason (unpublishState (model ())) |> Option.defaultValue "" }
         )
       }
     }
 
     div (class' = "actions") {
-      Parts.Button(disabled = Confirm.isSending (unpublishState (model ())), onClick = fun _ -> send Editor.UnpublishClosed).Has(Fragment() { "Keep" })
+      Parts.Button(disabled = Confirm.isSending (unpublishState (model ())), onClick = fun _ -> send Editor.UnpublishClosed).Has(Fragment() { "Cancel" })
 
       Parts.Button(kind = Parts.Danger, disabled = not (canUnpublish (model ())), onClick = fun _ -> send Editor.UnpublishConfirmed)
         .Has(Fragment() { unpublishButtonText (model ()) })
@@ -768,19 +767,22 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
       if sending () then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.DeleteClosed) {
-    h2 (id = "delete-dialog-title") { "Delete the post?" }
+    h2 (id = "delete-dialog-title") { "Delete this post?" }
 
     div (class' = "dialog-body") {
       Show(
         when' = (deleteConfirm (model ()) = Editor.TypeSlug),
-        fallback = p () { "The admin deletes the draft permanently." }
+        fallback = p () { "This draft will be deleted. This can't be undone." }
       ) {
-        p () { "The admin deletes the post, its pending edit, its revisions, and its comments permanently. The site rebuilds without the post. The delivery records stay." }
+        p () { "This deletes the post along with its unpublished changes, revisions, and comments, then rebuilds the site without it. Delivery records are kept. This can't be undone." }
 
-        removalCheckView (fun () -> deleteCheck (model ())) "deletes the post" "The admin cannot delete the post. A link to it stays."
+        removalCheckView (fun () -> deleteCheck (model ())) "Can't delete: other posts still link here."
 
         Parts
-          .Field(id = "delete-slug", label = "Type the slug of the post to confirm")
+          .Field(
+            id = "delete-slug",
+            label = $"""Type {(match document (model ()) with Some document -> document.Slug | None -> "the slug")} to confirm"""
+          )
           .Has(
             Parts
               .Input(
@@ -795,14 +797,14 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
       }
 
       Show(when' = (deleteReason (model ())).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = "The admin did not delete the post.").Has(
+        Parts.Alert(tone = Parts.Bad, title = "Couldn't delete the post.").Has(
           p () { deleteReason (model ()) |> Option.defaultValue "" }
         )
       }
     }
 
     div (class' = "actions") {
-      Parts.Button(disabled = sending (), onClick = fun _ -> send Editor.DeleteClosed).Has(Fragment() { "Keep" })
+      Parts.Button(disabled = sending (), onClick = fun _ -> send Editor.DeleteClosed).Has(Fragment() { "Cancel" })
 
       Parts.Button(
         kind = Parts.Danger,
@@ -825,13 +827,13 @@ let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell
       if sending () then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.ChangeDateClosed) {
-    h2 (id = "change-date-dialog-title") { "Change the date" }
+    h2 (id = "change-date-dialog-title") { "Change date" }
 
     div (class' = "dialog-body") {
       p (class' = "muted small", role = "status") { ChangeDate.statusText (state ()) }
 
       Parts
-        .Field(id = "new-publish-date", label = "Date and time in UTC", hint = "Until then, the site shows the post with the Upcoming badge.")
+        .Field(id = "new-publish-date", label = "Date and time in UTC", hint = "Until then, the post shows on the site as Upcoming.")
         .Has(
           Parts
             .Input(
@@ -845,7 +847,7 @@ let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell
         )
 
       Show(when' = (Typed.reason (state ())).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = "The date is not changed.").Has(
+        Parts.Alert(tone = Parts.Bad, title = "Couldn't change the date.").Has(
           p () { Typed.reason (state ()) |> Option.defaultValue "" }
         )
       }
@@ -859,7 +861,7 @@ let private changeDateDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell
         disabled = not (ChangeDate.canConfirm (state ())),
         onClick = fun _ -> send Editor.ChangeDateConfirmed
       )
-        .Has(Fragment() { "Change the date" })
+        .Has(Fragment() { "Change date" })
     }
   }
 
@@ -878,10 +880,10 @@ let private sendDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model
     h2 (id = "send-dialog-title") { "Send to subscribers?" }
 
     div (class' = "dialog-body") {
-      p () { "Each active subscription gets the newsletter of the post by email. A subscription that already has the post gets no second email." }
+      p () { "Emails this post to every active subscriber who hasn't already received it." }
 
       Parts
-        .Field(id = "send-intro", label = "Intro", hint = "Optional. The email shows it above the post.")
+        .Field(id = "send-intro", label = "Intro", hint = "Optional. Appears above the post in the email.")
         .Has(
           Parts
             .Textarea(
@@ -894,7 +896,7 @@ let private sendDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model
         )
 
       Show(when' = (Typed.reason (state ())).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = "The post is not sent.").Has(
+        Parts.Alert(tone = Parts.Bad, title = "Couldn't send the post.").Has(
           p () { Typed.reason (state ()) |> Option.defaultValue "" }
         )
       }
@@ -992,7 +994,7 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
       if Publish.isSending (publishModel (model ())) then
         event.preventDefault())
     .on ("close", fun _ -> send Editor.PublishClosed) {
-    h2 (id = "publish-dialog-title") { if publishesChanges (model ()) then "Publish the changes" else "Publish the post" }
+    h2 (id = "publish-dialog-title") { if publishesChanges (model ()) then "Publish changes" else "Publish post" }
 
     div (class' = "dialog-body") {
       p (class' = "muted small", role = "status") { Publish.statusText (publishModel (model ())) }
@@ -1007,9 +1009,9 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
             { Group = "Update date"
               FieldId = "update-date"
               FieldLabel = "Update date and time in UTC"
-              Hint = "The post page shows this date as the date of the update."
-              Plain = "Leave the update date as it is", Publish.Changes Publish.KeepDate
-              Dated = "Set the update date", (Publish.UpdateOn >> Publish.Changes) }
+              Hint = "Shown on the post as its updated date."
+              Plain = "Keep the current update date", Publish.Changes Publish.KeepDate
+              Dated = "Set a new update date", (Publish.UpdateOn >> Publish.Changes) }
         }
       }
 
@@ -1020,7 +1022,7 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
           { Group = "When to publish"
             FieldId = "publish-date"
             FieldLabel = "Date and time in UTC"
-            Hint = "Until then, the site shows the post with the Upcoming badge."
+            Hint = "Until then, the post shows on the site as Upcoming."
             Plain = "Now", Publish.Draft Publish.Now
             Dated = "On a date", (Publish.OnDate >> Publish.Draft) }
       }
@@ -1028,7 +1030,7 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
       publishProblems model
 
       Show(when' = (Publish.reason (publishModel (model ()))).IsSome) {
-        Parts.Alert(tone = Parts.Bad, title = (if publishesChanges (model ()) then "The changes are not published." else "The post is not published.")).Has(
+        Parts.Alert(tone = Parts.Bad, title = (if publishesChanges (model ()) then "Couldn't publish the changes." else "Couldn't publish the post.")).Has(
           p () { Publish.reason (publishModel (model ())) |> Option.defaultValue "" }
         )
       }
@@ -1049,7 +1051,7 @@ let private publishDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
 [<SolidComponent>]
 let private publishNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   Show(when' = not (List.isEmpty (publishModel (model ())).Warnings)) {
-    Parts.Alert(tone = Parts.Warn, title = "The post is published, and a step after the publish failed.").Has(
+    Parts.Alert(tone = Parts.Warn, title = "Published, with problems").Has(
       Fragment() {
         For(each = Array.ofList (publishModel (model ())).Warnings) { yield fun warning _ -> p () { Publish.warningText warning } }
 
@@ -1063,7 +1065,7 @@ let private publishNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
 [<SolidComponent>]
 let private changeNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   Show(when' = ((changeWarnings (model ())).Length > 0)) {
-    Parts.Alert(tone = Parts.Warn, title = "The change is made, and a step after it failed.").Has(
+    Parts.Alert(tone = Parts.Warn, title = "Done, with problems").Has(
       Fragment() {
         For(each = changeWarnings (model ())) { yield fun warning _ -> p () { Publish.changeWarningText warning } }
 
@@ -1077,7 +1079,7 @@ let private changeNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
 [<SolidComponent>]
 let private sentNotice (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   Show(when' = (queuedCount (model ())).IsSome) {
-    Parts.Alert(tone = Parts.Good, title = "The delivery started.").Has(
+    Parts.Alert(tone = Parts.Good, title = "Sending to subscribers").Has(
       Fragment() {
         p () { queuedCount (model ()) |> Option.map Editor.queuedText |> Option.defaultValue "" }
 

@@ -92,8 +92,8 @@ test('a refusal shows the reason in the dialog, and Send then sends the intro an
     { method: 'POST', body: { intro: 'A short note.' } },
   ]);
   assert.ok(!dialog().open, 'The dialog closes');
-  assert.match(document.querySelector('main').textContent, /The delivery started\./);
-  assert.match(document.querySelector('main').textContent, /The admin queued the email for 2 active subscriptions\./);
+  assert.match(document.querySelector('main').textContent, /Sending to subscribers/);
+  assert.match(document.querySelector('main').textContent, /Queued 2 emails\./);
 });
 
 test('after the start, Send to subscribers is not available', () => {

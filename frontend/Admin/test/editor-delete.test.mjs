@@ -68,7 +68,7 @@ const open = async () => {
 };
 
 const keep = async () => {
-  button('Keep').click();
+  button('Cancel').click();
   await settle();
 };
 
@@ -104,7 +104,7 @@ test('a blocked check shows the problems and keeps the delete disabled', async (
 
   await open();
   await type('my-post');
-  assert.match(dialog().textContent, /The admin cannot delete the post/);
+  assert.match(dialog().textContent, /Can't delete: other posts still link here/);
   assert.match(dialog().textContent, /The post 'c-post' links to the post and has no pending edit/);
   assert.equal(button('Delete').disabled, true);
   await keep();
@@ -161,5 +161,5 @@ test('a refusal shows its reason and checks again, and the next try deletes the 
   assert.equal(deletes.length, 2);
   assert.deepEqual(deletes[1].body, { confirmSlug: 'my-post', edits: [] });
   assert.equal(window.location.pathname, '/posts');
-  assert.match(document.body.textContent, /The comments of the post are still in the comment table/);
+  assert.match(document.body.textContent, /The post's comments weren't deleted, but no one can see them/);
 });

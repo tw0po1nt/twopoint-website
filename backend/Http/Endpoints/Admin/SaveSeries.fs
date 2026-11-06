@@ -40,9 +40,9 @@ module SaveSeriesMapping =
 
   let problem (problem : SaveSeries.FormProblem) =
     match problem with
-    | SaveSeries.EmptyTitle -> "Give the series a title."
-    | SaveSeries.EmptyExcerpt -> "Give the series an excerpt."
-    | SaveSeries.BadSlug slug -> $"The slug '{slug}' must have lowercase letters and digits, with a single - between them."
+    | SaveSeries.EmptyTitle -> "Add a title."
+    | SaveSeries.EmptyExcerpt -> "Add an excerpt."
+    | SaveSeries.BadSlug slug -> "Use lowercase letters, numbers, and single hyphens (like my-post-2)."
     | SaveSeries.BadImage image -> $"The image '{image}' must be an https URL."
 
   let warning (warning : SaveSeries.Warning) =
@@ -62,9 +62,9 @@ module SaveSeriesMapping =
     | SaveSeries.Invalid problems -> problems |> List.map problem |> String.concat " ", HttpStatusCode.UnprocessableEntity
     | SaveSeries.SeriesNotFound slug -> $"Series '{slug}' not found", HttpStatusCode.NotFound
     | SaveSeries.SeriesChanged -> "The series changed since you opened it", HttpStatusCode.PreconditionFailed
-    | SaveSeries.SlugTaken slug -> $"Another series has the slug '{slug}'.", HttpStatusCode.Conflict
+    | SaveSeries.SlugTaken slug -> $"Another series already uses the slug '{slug}'.", HttpStatusCode.Conflict
     | SaveSeries.SlugLocked posts ->
-      $"The slug stays while a post refers to the series: {SeriesMapping.titles posts}.", HttpStatusCode.Conflict
+      $"The slug is locked while posts use this series: {SeriesMapping.titles posts}.", HttpStatusCode.Conflict
 
 type SaveSeries(
   config : Config,
@@ -194,7 +194,7 @@ type DeleteSeries(
                 | DeleteSeries.SeriesNotFound missing -> $"Series '{missing}' not found", HttpStatusCode.NotFound
                 | DeleteSeries.SeriesChanged -> "The series changed since you opened it", HttpStatusCode.PreconditionFailed
                 | DeleteSeries.SeriesInUse posts ->
-                  $"Posts refer to the series, so it stays: {SeriesMapping.titles posts}.", HttpStatusCode.Conflict)
+                  $"This series is used by {SeriesMapping.titles posts}. Remove it from those posts before deleting it.", HttpStatusCode.Conflict)
 
           response.StatusCode <- statusCode
           do! response.WriteAsJsonAsync(apiResponse, ct)

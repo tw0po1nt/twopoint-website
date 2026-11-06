@@ -54,8 +54,8 @@ let private choices (model: Shell.Model) =
 
 let private optionsText (model: Shell.Model) =
   match (details model).Options with
-  | Details.Waiting -> "Loading the suggestions…"
-  | Details.NotLoaded reason -> $"The suggestions did not load. {reason}"
+  | Details.Waiting -> "Loading suggestions…"
+  | Details.NotLoaded reason -> $"Couldn't load the suggestions. {reason}"
   | Details.NotAsked
   | Details.Ready _ -> ""
 
@@ -96,7 +96,7 @@ let private slugField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
   let hint () = Details.slugHint (slug (model ())) (details (model ()))
 
   Parts
-    .Field(id = "details-slug", label = "Slug", hint = "The address of the post.")
+    .Field(id = "details-slug", label = "Slug", hint = "Used in the post's URL.")
     .Has(
       Fragment() {
         div (class' = "row") {
@@ -133,7 +133,7 @@ let private categoryField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mo
     .Field(id = "details-category", label = "Category")
     .Has(
       Fragment() {
-        Show(when' = locked ()) { p (class' = "hint") { "A post in a series has the category Series." } }
+        Show(when' = locked ()) { p (class' = "hint") { "Posts in a series always use the Series category." } }
 
         Show(when' = (details (model ())).Values.Category.IsSome) {
           div (class' = "chips") {
@@ -184,7 +184,7 @@ let private tagsField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
         Parts
           .Input(
             id = "details-tags",
-            placeholder = "Type a tag, and press Enter",
+            placeholder = "Add a tag and press Enter",
             value = (fun () -> (details (model ())).TagInput),
             onInput = (fun event -> send (Details.TagTyped(typed event))),
             onEnter = fun () -> send (Details.TagAdded (details (model ())).TagInput)
@@ -236,7 +236,7 @@ let private newSeries (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model)
 
       Parts
         .Button(kind = Parts.Primary, disabled = busy (), onClick = fun _ -> send (Details.NewSeriesMsg SeriesForm.SaveClicked))
-        .Has(Fragment() { if form () |> Option.exists SeriesForm.isSaving then "Saving…" else "Save the series" })
+        .Has(Fragment() { if form () |> Option.exists SeriesForm.isSaving then "Saving…" else "Save series" })
     }
   }
 
@@ -261,7 +261,7 @@ let private seriesField (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mode
     .Field(
       id = "details-series",
       label = "Series",
-      hint = "A series sets the category to Series."
+      hint = "Choosing a series sets the category to Series."
     )
     .Has(
       Fragment() {
@@ -305,7 +305,7 @@ let private problemText (dispatch: Shell.Msg -> unit) (problem: Api.Problem) (ta
 let private problemList (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   Fragment() {
     Show(when' = checkFailed (model ())) {
-      p (class' = "muted small", role = "status") { "The check did not run. Save again to see the problems." }
+      p (class' = "muted small", role = "status") { "Couldn't check the post. Save again to see any problems." }
     }
 
     Show(when' = ((problems (model ())).Length > 0)) {
@@ -336,7 +336,7 @@ let private fields (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
     seriesField dispatch model
 
     Parts
-      .Field(id = "details-image", label = "Card image", hint = "The https URL of the image.")
+      .Field(id = "details-image", label = "Card image", hint = "An https image URL.")
       .Has(
         Parts
           .Input(

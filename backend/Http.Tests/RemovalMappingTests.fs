@@ -23,7 +23,7 @@ let editReasons =
 
 let expectKept (action: string) (message: string) =
   Expect.stringContains message "'other', 'third'" "The message names the published edits"
-  Expect.stringContains message $"did not {action} the post 'soon'" "The message names the post"
+  Expect.stringContains message $"couldn't {action} 'soon'" "The message names the post"
 
 [<Tests>]
 let tests =
@@ -70,6 +70,6 @@ let tests =
       let message, _ =
         UnpublishMapping.kept "soon" [ other ] Unpublish.PublishedBlobKept [ PublishSteps.NewerTextKept ]
 
-      Expect.stringContains message "Another tab saved newer text during the unpublish." "The warning text"
+      Expect.stringContains message "Edits saved in another tab during the unpublish are kept as a pending edit." "The warning text"
     }
   ]

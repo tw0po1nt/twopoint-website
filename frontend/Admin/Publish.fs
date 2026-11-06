@@ -107,34 +107,34 @@ let statusText (model: Model) =
   let changes = choice model |> Option.exists isChanges
   match model.State with
   | Closed -> ""
-  | Saving -> "The post saves first."
-  | Choosing _ -> "Type the date and the time."
-  | Checking _ -> "The check runs."
-  | Checked(_, problems) when hasErrors problems -> "The post has errors. Fix them to publish."
-  | Checked(_, []) -> "The check found no problem."
-  | Checked _ -> "The check found warnings. A warning does not stop the publish."
-  | CheckFailed _ -> "The check did not run."
-  | Sending _ -> if changes then "The changes publish." else "The post publishes."
-  | Failed _ -> if changes then "The changes are not published." else "The post is not published."
+  | Saving -> "Saving the post…"
+  | Choosing _ -> "Enter a date and time."
+  | Checking _ -> "Checking the post…"
+  | Checked(_, problems) when hasErrors problems -> "Fix the errors below to publish."
+  | Checked(_, []) -> "No problems found."
+  | Checked _ -> "Warnings found. You can still publish."
+  | CheckFailed _ -> "Couldn't check the post."
+  | Sending _ -> if changes then "Publishing…" else "Publishing…"
+  | Failed _ -> if changes then "Couldn't publish the changes." else "Couldn't publish the post."
 
 let warningText (warning: Api.PublishWarning) =
   match warning with
-  | Api.CommentRowMissing -> "Readers cannot comment on this post yet. The post table has no row for it."
-  | Api.PendingEditKept -> "The post has a pending edit. The published text is correct."
-  | Api.NewerTextKept -> "Another tab saved newer text while the post published. That text is now a pending edit."
-  | Api.ProductionRebuildFailed -> "The production rebuild did not start. Select Rebuild site on the dashboard."
-  | Api.StagingRebuildFailed -> "The staging rebuild did not start. Select Rebuild site on the dashboard."
-  | Api.SiteNotRebuilt -> "The site rebuild did not start. Select Rebuild site on the dashboard."
-  | Api.DeployNotTracked -> "The admin cannot show the deploy state of this post. The site still builds."
+  | Api.CommentRowMissing -> "Comments aren't open on this post yet (its post-table row is missing)."
+  | Api.PendingEditKept -> "The post is live, but a leftover pending edit wasn't cleared. Use 'Discard changes' to remove it."
+  | Api.NewerTextKept -> "Edits saved in another tab during the publish are kept as a pending edit."
+  | Api.ProductionRebuildFailed -> "Couldn't start the production rebuild. Click 'Rebuild site' on the dashboard."
+  | Api.StagingRebuildFailed -> "Couldn't start the staging rebuild. Click 'Rebuild site' on the dashboard."
+  | Api.SiteNotRebuilt -> "Couldn't start the rebuild. Click 'Rebuild site' on the dashboard."
+  | Api.DeployNotTracked -> "Can't track this post's deploy status. The site is still rebuilding."
 
 let changeWarningText (warning: Api.ChangeWarning) =
   match warning with
-  | Api.PublishStep Api.NewerTextKept -> "Another tab saved newer text during the change. That text is a pending edit."
+  | Api.PublishStep Api.NewerTextKept -> "Edits saved in another tab during the change are kept as a pending edit."
   | Api.PublishStep Api.CommentRowMissing ->
-    "The post table keeps the old date for this post. Readers can comment on the post only after that date."
+    "Comments still follow the old publish date (its post-table row wasn't updated)."
   | Api.PublishStep step -> warningText step
-  | Api.PendingDateNotUpdated -> "The pending edit keeps the old publish date. Publish changes sets the right date."
+  | Api.PendingDateNotUpdated -> "The pending edit still has the old publish date. 'Publish changes' will correct it."
   | Api.PostRowKept ->
-    "The post table still has a row for this post. Readers can comment on the post until the row is deleted."
-  | Api.RevisionsKept -> "The revisions of the post are still in the post store. Nobody can see them."
-  | Api.CommentsKept -> "The comments of the post are still in the comment table. Nobody can see them."
+    "Comments are still open on this post (its post-table row wasn't deleted)."
+  | Api.RevisionsKept -> "The post's revisions weren't deleted, but no one can see them."
+  | Api.CommentsKept -> "The post's comments weren't deleted, but no one can see them."

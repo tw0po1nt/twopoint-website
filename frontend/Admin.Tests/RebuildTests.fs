@@ -33,7 +33,7 @@ let tests =
       let model, _ = Shell.init "/"
       let model, _ = clicked model
       let model, _ = answered (Ok(Api.Queued 42)) model
-      Expect.equal (Rebuild.text model.Rebuild) "The rebuild started. The production run is #42." "The run number"
+      Expect.equal (Rebuild.text model.Rebuild) "Rebuild started (production run #42)." "The run number"
     }
 
     test "a started rebuild with no run number says that the rebuild started" {
@@ -42,7 +42,7 @@ let tests =
       let model, _ = answered (Ok Api.QueuedWithoutRunNumber) model
       Expect.equal
         (Rebuild.text model.Rebuild)
-        "The rebuild started. GitHub did not send the number of the production run."
+        "Rebuild started. Check GitHub for details."
         "No run number"
     }
 
@@ -52,14 +52,14 @@ let tests =
       let model, _ = answered (Ok Api.Logged) model
       Expect.equal
         (Rebuild.text model.Rebuild)
-        "The local backend logged the rebuild and sent nothing to GitHub."
+        "Local mode: rebuild logged, nothing sent to GitHub."
         "The log"
     }
 
     test "a failed dispatch shows the reason from the API, and Rebuild site sends the call again" {
       let model, _ = Shell.init "/"
       let model, _ = clicked model
-      let reason = "The dispatch to tw0po1nt/twopoint-website-staging failed."
+      let reason = "GitHub dispatch failed for tw0po1nt/twopoint-website-staging."
       let model, _ = answered (Error(Api.Failed reason)) model
       Expect.equal model.Rebuild (Rebuild.NotStarted reason) "The reason"
       let _, effect = clicked model

@@ -72,7 +72,7 @@ let private comments (model: Comments.Model) =
 
 let private listText (model: Comments.Model) =
   match model.List with
-  | Comments.Loading -> "Loading the comments."
+  | Comments.Loading -> "Loading comments…"
   | Comments.Loaded comments -> Comments.countText comments.Length
   | Comments.NotLoaded reason -> reason
 
@@ -98,11 +98,11 @@ let private statusClass (model: Comments.Model) =
 let private statusText (model: Comments.Model) =
   match model.Status with
   | Comments.Failed reason -> reason
-  | Comments.Validated -> "Your email address is verified. Select [post comment] to post your comment."
+  | Comments.Validated -> "Email verified. Click [post comment] to post."
   | Comments.ValidationSent email ->
-    $"The site sent an email to {email}. Open the link in that email to verify your address, then post your comment."
-  | Comments.Posted Approved -> "Your comment is posted."
-  | Comments.Posted AwaitsApproval -> "Your comment is posted. It shows here after the author approves it."
+    $"Check your inbox. We sent a verification link to {email}. Open it, then post your comment."
+  | Comments.Posted Approved -> "Comment posted."
+  | Comments.Posted AwaitsApproval -> "Thanks! Your comment will appear here once it's approved."
   | Comments.Editing
   | Comments.Validating
   | Comments.Posting -> ""
@@ -117,7 +117,7 @@ let private helpText =
   "Markdown works: *italic*, **bold**, `code`, [text](https://…), lists, > quotes, and ``` code blocks. "
 
 let private helpNote =
-  "One new line is a line break. Headings, images, and tables stay as you type them."
+  "A single newline makes a line break. Headings, images, and tables show as plain text."
 
 let private isPreview (model: Comments.Model) =
   match model.Tab with
@@ -137,18 +137,18 @@ let private previewPart (model: Comments.Model) =
   match model.Tab with
   | Comments.Preview Comments.PreviewState.Empty ->
     { part with Class = "comment-preview is-muted"; Text = "Nothing to preview. Write a comment first." }
-  | Comments.Preview Comments.PreviewState.Loading -> { part with Class = "comment-preview is-muted"; Text = "Loading the preview…" }
+  | Comments.Preview Comments.PreviewState.Loading -> { part with Class = "comment-preview is-muted"; Text = "Loading preview…" }
   | Comments.Preview Comments.PreviewState.Failed ->
     { part with
         Class = "comment-preview is-failed"
-        Text = "The site cannot show the preview now. You can still post your comment. "
+        Text = "Couldn't load the preview. You can still post your comment. "
         Retry = true }
   | Comments.Preview(Comments.PreviewState.Shown html) -> { part with Html = Some html }
   | Comments.Write -> part
 
 let private notePrefix =
-  "To stop spam, the site sends an email to verify your address, and the author approves each comment. "
-  + "Your name shows with your comment. Your email address stays private. See the "
+  "To keep out spam, you'll verify your email, and comments may be reviewed before they appear. "
+  + "Your name is shown with your comment; your email stays private. See the "
 
 [<SolidComponent>]
 let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
@@ -221,7 +221,7 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
       }
 
       Show(when' = Comments.showsEmailError (model ())) {
-        p (class' = "comment-error", role = "alert") { "Give a valid email address." }
+        p (class' = "comment-error", role = "alert") { "Enter a valid email address." }
       }
 
       div (class' = "comment-editor") {

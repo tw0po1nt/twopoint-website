@@ -79,14 +79,14 @@ let tests =
     test "an unknown series slug fails with its line" {
       Expect.equal
         (errorsIn [ seriesRecord "a-series" ] "a-post" (withField "series: b-series"))
-        [ errorAt "a-post" 7 "No series has the slug 'b-series'." ]
+        [ errorAt "a-post" 7 "There's no series with the slug 'b-series'." ]
         "The series slug must have a series record"
     }
 
     test "a copy of the series fields fails" {
       Expect.equal
         (errorsIn [ seriesRecord "a-series" ] "a-post" (withField "series:\n  slug: a-series\n  title: A series\n  excerpt: Posts"))
-        [ errorAt "a-post" 8 "Give 'series' as text." ]
+        [ errorAt "a-post" 8 "'series' must be text." ]
         "A post refers to its series by the slug only"
     }
 
@@ -94,20 +94,20 @@ let tests =
       for field in [ "publishDate"; "author"; "title"; "excerpt" ] do
         Expect.equal
           (errors "a-post" (without field))
-          [ errorAt "a-post" 1 $"The front matter has no '{field}' field." ]
+          [ errorAt "a-post" 1 $"The front matter is missing the '{field}' field." ]
           $"{field} is required"
 
-      Expect.equal (errors "a-post" (without "category")) [ errorAt "a-post" 1 "The post has no category." ] "category is required"
+      Expect.equal (errors "a-post" (without "category")) [ errorAt "a-post" 1 "The post needs a category." ] "category is required"
     }
 
     test "a bad value fails with its line" {
       let cases =
-        [ "showOnHomepage: yes", "Give 'showOnHomepage' as true or false."
-          "updateDate: 2026-02-04T13:00:00+02:00", "Give 'updateDate' as an ISO 8601 UTC time, for example 2026-02-04T13:00:00Z."
-          "updateDate: soon", "Give 'updateDate' as an ISO 8601 UTC time, for example 2026-02-04T13:00:00Z."
-          "image: http://example.com/a.jpg", "Give 'image' as an https URL."
-          "tags: CSharp", "Give 'tags' as a list."
-          "series: [a-series]", "Give 'series' as text." ]
+        [ "showOnHomepage: yes", "'showOnHomepage' must be true or false."
+          "updateDate: 2026-02-04T13:00:00+02:00", "'updateDate' must be an ISO 8601 UTC time, like 2026-02-04T13:00:00Z."
+          "updateDate: soon", "'updateDate' must be an ISO 8601 UTC time, like 2026-02-04T13:00:00Z."
+          "image: http://example.com/a.jpg", "'image' must be an https URL."
+          "tags: CSharp", "'tags' must be a list."
+          "series: [a-series]", "'series' must be text." ]
 
       for field, message in cases do
         Expect.equal (errors "a-post" (withField field)) [ errorAt "a-post" 7 message ] $"'{field}' fails"
@@ -118,8 +118,8 @@ let tests =
 
       Expect.equal
         (errors "a-post" (text fields "Body text."))
-        [ errorAt "a-post" 1 "The front matter has no 'author' field."
-          errorAt "a-post" 6 "Give 'showOnHomepage' as true or false." ]
+        [ errorAt "a-post" 1 "The front matter is missing the 'author' field."
+          errorAt "a-post" 6 "'showOnHomepage' must be true or false." ]
         "The post gives each error"
     }
 
@@ -140,7 +140,7 @@ let tests =
     test "a file name that is not a slug fails" {
       Expect.equal
         (errors "A Post" (text frontMatter "Body text."))
-        [ errorAt "A Post" 1 "Give the file a slug as its name, for example a-post.md." ]
+        [ errorAt "A Post" 1 "Name the file with a slug, like a-post.md." ]
         "The file name is the slug"
     }
   ]
@@ -180,8 +180,8 @@ let seriesTests =
     test "each missing required field of a series record fails at line 1" {
       Expect.equal
         (seriesErrors "a-series" "image: https://example.com/a.jpg\n")
-        [ seriesErrorAt "a-series" 1 "The series record has no 'title' field."
-          seriesErrorAt "a-series" 1 "The series record has no 'excerpt' field." ]
+        [ seriesErrorAt "a-series" 1 "The series record is missing the 'title' field."
+          seriesErrorAt "a-series" 1 "The series record is missing the 'excerpt' field." ]
         "The title and the excerpt are required"
     }
 
@@ -189,7 +189,7 @@ let seriesTests =
       Expect.equal
         (seriesErrors "a-series" "- A series
 ")
-        [ seriesErrorAt "a-series" 1 "Give the series record as a YAML mapping." ]
+        [ seriesErrorAt "a-series" 1 "The series record must be a single YAML mapping." ]
         "A series record is a YAML mapping"
     }
 
@@ -201,14 +201,14 @@ let seriesTests =
 
       Expect.equal
         (seriesErrors "a-series" "title: A series\nexcerpt: Posts\nimage: http://example.com/a.jpg\n")
-        [ seriesErrorAt "a-series" 3 "Give 'image' as an https URL." ]
+        [ seriesErrorAt "a-series" 3 "'image' must be an https URL." ]
         "The image is an https URL"
     }
 
     test "a series file name that is not a slug fails" {
       Expect.equal
         (seriesErrors "A Series" "title: A series\nexcerpt: Posts\n")
-        [ seriesErrorAt "A Series" 1 "Give the file a slug as its name, for example a-series.yml." ]
+        [ seriesErrorAt "A Series" 1 "Name the file with a slug, like a-series.yml." ]
         "The file name is the slug"
     }
   ]

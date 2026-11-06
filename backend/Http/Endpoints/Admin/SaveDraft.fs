@@ -135,7 +135,7 @@ type SaveDraft (
               (function
                 | SaveDraft.Error.Stale -> "The post changed since you opened it", HttpStatusCode.PreconditionFailed
                 | SaveDraft.Error.FrontMatterUnreadable reason ->
-                  $"The front matter of the stored post is not readable: {reason}", HttpStatusCode.UnprocessableEntity
+                  $"Couldn't read the saved post's front matter: {reason}", HttpStatusCode.UnprocessableEntity
                 | SaveDraft.Error.PostNotFound slug -> $"Post '{slug}' not found", HttpStatusCode.NotFound)
 
           response.StatusCode <- statusCode

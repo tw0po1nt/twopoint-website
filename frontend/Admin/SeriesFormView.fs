@@ -117,7 +117,7 @@ let fields
             }
           }
 
-          p (class' = "hint") { "The https URL of the image, or upload an image." }
+          p (class' = "hint") { "An https image URL, or upload one." }
           error (problem SeriesForm.ImageField)
           error (fun () -> read SeriesForm.uploadFailure None () |> Option.defaultValue "")
         }
