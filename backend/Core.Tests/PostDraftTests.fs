@@ -175,6 +175,11 @@ let tests =
       Expect.equal (Slug.value created) "taken-3" "The next free slug"
     }
 
+    test "the slug of a title has the rule of the admin" {
+      for title, slug in TwoPoint.Tests.SlugTitles.table do
+        Expect.equal (DraftSlug.ofTitle title) (Option.defaultValue "untitled" slug) $"The slug of '{title}'"
+    }
+
     test "a new draft keeps the signs of the title out of the slug" {
       let created, _ = create (store [] []) "Part 1: C# & F#_rocks!"
       Expect.equal (Slug.value created) "part-1-c-and-f-rocks" "The slug"

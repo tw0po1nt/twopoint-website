@@ -252,6 +252,12 @@
   min-width: 0;
 }
 
+#details-sheet .slug-suggestion {
+  flex-wrap: wrap;
+  font-size: var(--t-xs);
+  color: var(--fg-muted);
+}
+
 #details-sheet .switch-row {
   gap: var(--s-3);
 }

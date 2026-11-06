@@ -89,6 +89,12 @@ let tests =
       Expect.equal (form model).Slug "fsharp-notes" "The typed slug stays"
     }
 
+    test "a series title with `_` gives a valid slug while the slug follows the title" {
+      let model, _ = listed () |> sendAll [ Series.NewClicked; Series.FormMsg(SeriesForm.TitleTyped "foo_bar") ]
+      Expect.equal (form model).Slug "foo-bar" "The post slug of the title"
+      Expect.isFalse (SeriesForm.problems [] (form model) |> List.exists (fst >> (=) SeriesForm.BadSlug)) "No bad slug"
+    }
+
     test "a new form shows no empty field as a problem before the first save" {
       let model, _ = listed () |> send Series.NewClicked
       Expect.isEmpty (problems model) "No problem yet"

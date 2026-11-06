@@ -372,16 +372,47 @@ let tests =
         "The reason"
     }
 
-    test "the slug of a draft with unsaved text waits for the save" {
-      let model, _ = send (Editor.BodyChanged "x") (withSheet draft)
-      let model, _ = detail (Details.SlugTyped "new-slug") model
-      let model, effect = send Editor.SlugChangeRequested model
-      Expect.isNone effect "No call"
+    test "the post slug of a title has the rule of the backend" {
+      for title, slug in TwoPoint.Tests.SlugTitles.table do
+        Expect.equal (Slug.ofTitle title) slug $"The slug of '{title}'"
+    }
 
-      Expect.equal
-        (document' model).Details.Slug
-        (Details.ChangeFailed "Save the post before changing the slug.")
-        "The reason"
+    test "a draft suggests the slug of its title, saved or unsaved" {
+      Expect.isNone (Editor.slugSuggestion (document' (withSheet draft))) "The title gives the slug of the draft"
+
+      let model, _ = send (Editor.TitleChanged "Hello, world_again") (withSheet draft)
+      Expect.equal (Editor.slugSuggestion (document' model)) (Some "hello-world-again") "The unsaved title"
+    }
+
+    test "the suggestion hides for a title with no slug, a published or upcoming post, and a slug in place" {
+      let suggestion (model: Shell.Model) = Editor.slugSuggestion (document' model)
+      let titled title post = fst (send (Editor.TitleChanged title) (withSheet post))
+
+      Expect.isNone (suggestion (titled "   " draft)) "A blank title"
+      Expect.isNone (suggestion (titled "?!…" draft)) "No letter or digit"
+      Expect.isNone (suggestion (titled "My post!" draft)) "The slug of the draft"
+      Expect.isNone (suggestion (titled "Hello world" (document Api.Published None noDetails))) "Published"
+      Expect.isNone (suggestion (titled "Hello world" (document Api.Upcoming None noDetails))) "Upcoming"
+
+      let model, _ = detail (Details.SlugTyped "hello-world") (titled "Hello world" draft)
+      Expect.isNone (suggestion model) "The text in the field"
+    }
+
+    test "the suggestion hides while a slug change is in progress" {
+      let model, _ = send (Editor.TitleChanged "Hello world") (withSheet draft)
+      let model, _ = detail (Details.SlugTyped "new-slug") model
+      let model, _ = send Editor.SlugChangeRequested model
+      Expect.isTrue (Details.isChangingSlug (document' model).Details) "In progress"
+      Expect.isNone (Editor.slugSuggestion (document' model)) "Hidden"
+    }
+
+    test "Use suggestion puts the slug in the field and sends no call" {
+      let model, _ = send (Editor.TitleChanged "Hello world") (withSheet draft)
+      let suggested = (Editor.slugSuggestion (document' model)).Value
+      let model, effect = detail (Details.SlugTyped suggested) model
+      Expect.isNone effect "No call"
+      Expect.equal (Details.typedSlug (document' model).Details) "hello-world" "The field"
+      Expect.isTrue (Editor.canChangeSlug (document' model)) "Change is ready"
     }
 
     test "a refused slug change shows the reason from the API and keeps the author on the editor" {

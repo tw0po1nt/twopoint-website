@@ -7,7 +7,10 @@ open System.Text.RegularExpressions
 /// The slug that the site gives to a category or a tag. It has the same rule as the build.
 let term (text: string) =
   let joined = Regex.Replace(text, "(\\S)['‘’‚‛′‵](\\S)", "$1$2").Replace("&", " and ")
-  let withoutMarks = Regex.Replace(joined.Normalize(Text.NormalizationForm.FormD), "[̀-ͯ]", "")
+  let withoutMarks =
+    joined.Normalize(Text.NormalizationForm.FormD)
+    |> String.filter (fun c -> Char.GetUnicodeCategory c <> Globalization.UnicodeCategory.NonSpacingMark)
+
   Regex.Replace(withoutMarks.ToLowerInvariant(), "[^a-z0-9_]+", "-").Trim '-'
 
 /// The title that the site shows for a category or a tag. For example, `FSharp` gives `F#`.
@@ -15,3 +18,10 @@ let termTitle (text: string) =
   Regex.Replace(Regex.Replace(text, "fsharp", "F#", RegexOptions.IgnoreCase), "csharp", "C#", RegexOptions.IgnoreCase)
 
 let isSlug (text: string) = Regex.IsMatch(text, "^[a-z0-9]+(-[a-z0-9]+)*$")
+
+/// The post slug that a title gives. It has the same rule as `DraftSlug.ofTitle` in the backend: a term slug can
+/// contain `_`, and a post slug cannot.
+let ofTitle (title: string) =
+  match Regex.Replace((term title).Replace('_', '-'), "-+", "-").Trim '-' with
+  | "" -> None
+  | slug -> Some slug
