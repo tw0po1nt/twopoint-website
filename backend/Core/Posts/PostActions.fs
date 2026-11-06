@@ -434,19 +434,34 @@ module NewComment =
   /// The `maxlength` of the comment form. Both count the source as typed, in UTF-16 code units.
   let maxLength = 1000
 
+  let blankMessage = "content must contain a character other than a space or a new line"
+
+  let parseContent (content : string) =
+    content
+    |> Constrained.String.between (Some 1) (Some maxLength) (nameof content) id
+    |> Result.bind (fun content -> if String.IsNullOrWhiteSpace content then Error [ blankMessage ] else Ok content)
+    |> Result.bind (NonEmptyString.create (Some (nameof content)))
+
   let create (dto : Dto) = validation {
     let (Post post) = dto.Post
     let (ValidationId validationId) = dto.ValidationId
     let (Comment content) = dto.Comment
     let! post = Slug.create post
     let! validationId = CommenterValidationId.create validationId
-    let! content =
-      content
-      |> Constrained.String.between (Some 1) (Some maxLength) (nameof content) id
-      |> Result.bind (NonEmptyString.create (Some (nameof content)))
+    let! content = parseContent content
     return { Post = post; ValidationId = validationId; Content = content }
   }
-  
+
+
+[<RequireQualifiedAccess>]
+module PreviewComment =
+
+  type Dto = { Content : string }
+
+  let preview (stage : TwoPoint.Site.Render.Stage) (dto : Dto) : Result<string, string list> =
+    NewComment.parseContent dto.Content
+    |> Result.map (fun content -> TwoPoint.Site.Render.CommentBody.html stage (content.ToString()))
+
 
 [<RequireQualifiedAccess>]
 module PostComment =

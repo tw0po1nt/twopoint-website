@@ -198,6 +198,113 @@ test('a request with no answer shows that the site cannot get to the server', as
   assert.match(status().textContent, /cannot get to the server/);
 });
 
+const previewUrl = 'https://api.test/api/blog/comments/preview';
+const tabs = () => [...mount.querySelectorAll('[role="tab"]')];
+const tab = (name) => tabs().find((element) => element.textContent === `[${name}]`);
+const preview = () => mount.querySelector('.comment-preview');
+const previewAnswer = (html) => (url) =>
+  url === previewUrl ? json(200, { success: true, message: null, data: html }) : json(200, { success: true, message: null, data: null });
+
+test('the comment field has the write and preview tabs, and write is selected', () => {
+  assert.deepEqual(
+    tabs().map((element) => [element.textContent, element.getAttribute('aria-selected')]),
+    [
+      ['[write]', 'true'],
+      ['[preview]', 'false'],
+    ],
+  );
+  assert.equal(preview(), null, 'No preview on the write tab');
+});
+
+test('the preview of an empty text says that there is nothing to preview, with no call', async () => {
+  type(field('comment'), '  ');
+  const before = calls.length;
+  tab('preview').click();
+  await settle();
+
+  assert.equal(calls.length, before, 'No request');
+  assert.equal(tab('preview').getAttribute('aria-selected'), 'true');
+  assert.equal(field('comment').classList.contains('is-hidden'), true, 'The preview replaces the text box');
+  assert.equal(preview().textContent, 'Nothing to preview. Write a comment first.');
+
+  tab('write').click();
+  await settle();
+  assert.equal(preview(), null, 'The write tab shows the text box');
+  assert.equal(field('comment').classList.contains('is-hidden'), false);
+});
+
+test('the preview calls the backend one time and shows the HTML, and an open with the same text makes no call', async () => {
+  answer = previewAnswer('<p>Use <code>List.map</code></p>\n');
+  type(field('comment'), ' Use `List.map` ');
+  tab('preview').click();
+  assert.equal(preview().textContent, 'Loading the preview…');
+  await settle();
+
+  const sent = callsTo(previewUrl);
+  assert.equal(sent.length, 1, 'One preview request');
+  assert.equal(sent[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(sent[0].init.body), { content: 'Use `List.map`' });
+  assert.equal(preview().querySelector('.comment-text').innerHTML, '<p>Use <code>List.map</code></p>\n');
+
+  tab('write').click();
+  tab('preview').click();
+  await settle();
+  assert.equal(callsTo(previewUrl).length, 1, 'Still one preview request');
+  assert.equal(preview().querySelector('.comment-text code').textContent, 'List.map', 'The kept HTML');
+});
+
+test('a failed preview says that the comment can still go, and [try again] calls again', async () => {
+  answer = (url) => (url === previewUrl ? json(500, { success: false, message: 'down', data: null }) : json(200, {}));
+  tab('write').click();
+  type(field('comment'), 'Use `List.iter`');
+  tab('preview').click();
+  await settle();
+
+  assert.equal(preview().className, 'comment-preview is-failed');
+  assert.equal(preview().textContent, 'The site cannot show the preview now. You can still post your comment. [try again]');
+
+  answer = previewAnswer('<p>Use <code>List.iter</code></p>\n');
+  preview().querySelector('button').click();
+  await settle();
+  assert.equal(callsTo(previewUrl).length, 3, 'A call for the edit and a call for [try again]');
+  assert.equal(preview().querySelector('.comment-text code').textContent, 'List.iter');
+});
+
+test('[post comment] posts the comment from the preview tab', async () => {
+  answer = () => json(200, { success: true, message: null, data: null });
+  submit();
+  await settle();
+
+  const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
+  assert.deepEqual(JSON.parse(posted.at(-1).init.body), { ValidationId: 'validation-1', Comment: 'Use `List.iter`' });
+  assert.equal(status().textContent, 'Your comment is posted. It shows here after the author approves it.');
+  assert.equal(tab('write').getAttribute('aria-selected'), 'true', 'The empty form shows the write tab');
+  assert.equal(field('comment').value, '', 'The comment input is empty');
+});
+
+test('[markdown help] opens and closes the table, with no call', async () => {
+  const before = calls.length;
+  const help = mount.querySelector('.comment-help button');
+  assert.equal(help.textContent, '[markdown help]');
+  assert.equal(mount.querySelector('.comment-help-sheet'), null, 'The help is closed');
+
+  help.click();
+  await settle();
+  assert.equal(help.getAttribute('aria-expanded'), 'true');
+  assert.deepEqual([...mount.querySelectorAll('.comment-help-sheet th')].map((cell) => cell.textContent), ['you type', 'readers see']);
+
+  const rows = [...mount.querySelectorAll('.comment-help-sheet tbody tr')];
+  assert.equal(rows.length, 7, 'Italic, bold, inline code, a link, a list, a quote, and a code block');
+  assert.equal(rows[0].querySelector('pre').textContent, '*italic*');
+  assert.equal(rows[0].querySelector('.comment-text').innerHTML, '<p><em>italic</em></p>\n');
+  assert.match(mount.querySelector('.comment-help-sheet > p').textContent, /Headings, images, and tables stay as you type them/);
+
+  help.click();
+  await settle();
+  assert.equal(mount.querySelector('.comment-help-sheet'), null, 'The help is closed again');
+  assert.equal(calls.length, before, 'No request');
+});
+
 test('a new email address gets a validation email that links back to the panel, and the form locks', async () => {
   answer = () => json(200, { success: true, message: null, data: null });
   type(field('name'), ' Reader ');
