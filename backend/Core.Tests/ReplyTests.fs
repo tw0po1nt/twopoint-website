@@ -296,12 +296,17 @@ let private authorReplyTests =
       | other -> failtestf "Expected Replied, got %A" other
     }
 
-    test "an author reply to an approved reply does not approve its new top-level comment" {
+    test "an author reply to an approved reply approves its new top-level comment" {
       let dependencies =
         FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New); postedOn olderPost (replyOf CommentApproval.Approved) ]
 
       match replyAsAuthor replyId dependencies with
-      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) -> Expect.isEmpty approved "Expected no approval"
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId ] "Expected the top-level comment"
+        Expect.equal
+          dependencies.Effects
+          [ Approved (commentId topLevelId); CreatedReply (commentId topLevelId, CommentApproval.Approved) ]
+          "Expected the approval before the reply"
       | other -> failtestf "Expected Replied, got %A" other
     }
 
@@ -316,7 +321,9 @@ let private authorReplyTests =
 
     for name, replyTo, stored in
       [ "a rejected top-level comment", topLevelId, [ postedOn olderPost (topLevel CommentApproval.Rejected) ]
-        "a rejected reply", replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Rejected) ] ] do
+        "a rejected reply", replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Rejected) ]
+        "a new reply under a rejected top-level comment", replyId, [ postedOn olderPost (topLevel CommentApproval.Rejected); postedOn olderPost (replyOf CommentApproval.New) ]
+        "an approved reply under a rejected top-level comment", replyId, [ postedOn olderPost (topLevel CommentApproval.Rejected); postedOn olderPost (replyOf CommentApproval.Approved) ] ] do
       test $"an author reply to {name} is refused, and the blog stores nothing" {
         let dependencies = FakeAuthorReply stored
 

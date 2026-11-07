@@ -246,7 +246,7 @@ let private editorView
       class' = (if isPreview (editor ()) then "is-hidden" else ""),
       name = noun,
       rows = 4,
-      maxlength = 1000,
+      maxlength = Comments.maxLength,
       ariaLabel = noun,
       disabled = locked (),
       onInput = (fun event -> dispatch (Comments.TextChanged(text event))),

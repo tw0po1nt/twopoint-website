@@ -58,7 +58,7 @@ let private authorReply : Api.Comment =
 let private replyTests =
   testList "the reply as the author" [
     test "an approved row offers the reply with no approval note" {
-      Expect.isTrue (AuthorReply.canReply Api.CommentApproval.Approved) "An approved row takes a reply"
+      Expect.isTrue (AuthorReply.canReply None Api.CommentApproval.Approved) "An approved row takes a reply"
       Expect.equal (AuthorReply.actionLabel Api.CommentApproval.Approved) "Reply" "The label"
       Expect.isNone (AuthorReply.approvalNote Api.CommentApproval.Approved) "No note"
 
@@ -67,10 +67,34 @@ let private replyTests =
     }
 
     test "a rejected row offers no reply, and an open asks for nothing" {
-      Expect.isFalse (AuthorReply.canReply Api.CommentApproval.Rejected) "A rejected row takes no reply"
+      Expect.isFalse (AuthorReply.canReply None Api.CommentApproval.Rejected) "A rejected row takes no reply"
       let model, effect = reply (AuthorReply.Opened "rejected") (loaded ())
       Expect.isNone (page model).Reply "No form"
       Expect.isNone effect "No call"
+    }
+
+    test "a reply under a rejected top-level comment offers no reply, and an open asks for nothing" {
+      let underRejected = { comment "under-rejected" Api.CommentApproval.Approved with ReplyTo = Some "rejected" }
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ rejected; underRejected ])) model
+      Expect.equal (PostComments.topLevelApproval underRejected (page model)) (Some Api.CommentApproval.Rejected) "The top-level approval"
+      Expect.isFalse (AuthorReply.canReply (Some Api.CommentApproval.Rejected) Api.CommentApproval.Approved) "No reply"
+
+      let model, effect = reply (AuthorReply.Opened "under-rejected") model
+      Expect.isNone (page model).Reply "No form"
+      Expect.isNone effect "No call"
+    }
+
+    test "a reject of the top-level comment closes the form of a reply under it" {
+      let underApproved = { comment "under-approved" Api.CommentApproval.Approved with ReplyTo = Some "approved" }
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ approved; underApproved ])) model
+      let model, _ = reply (AuthorReply.Opened "under-approved") model
+      Expect.isTrue (AuthorReply.isOpenOn "under-approved" (page model).Reply) "The form is open"
+
+      let model, _ = send (PostComments.Chosen("approved", Queue.Reject)) model
+      let model, _ = send (PostComments.Done("approved", Queue.Reject, Ok())) model
+      Expect.isNone (page model).Reply "The form closes"
     }
 
     test "a reject of the row closes its form" {

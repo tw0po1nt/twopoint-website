@@ -24,15 +24,14 @@ type Effect =
   | Preview of commentId: string * Comments.PreviewRequest
   | Post of commentId: string * content: string
 
-/// The `maxlength` of the reply box. The backend refuses a longer reply.
-let maxLength = 1000
-
-/// Readers can't see a rejected comment, so it gets no reply.
-let canReply (approval: Api.CommentApproval) =
-  match approval with
-  | Api.CommentApproval.New
-  | Api.CommentApproval.Approved -> true
-  | Api.CommentApproval.Rejected -> false
+/// Readers can't see a rejected comment or a reply under it, so neither gets a reply.
+/// `topLevel` is the approval of the top-level comment of a reply, when the page has that comment.
+let canReply (topLevel: Api.CommentApproval option) (approval: Api.CommentApproval) =
+  match approval, topLevel with
+  | Api.CommentApproval.Rejected, _
+  | _, Some Api.CommentApproval.Rejected -> false
+  | (Api.CommentApproval.New | Api.CommentApproval.Approved),
+    (None | Some(Api.CommentApproval.New | Api.CommentApproval.Approved)) -> true
 
 let actionLabel (approval: Api.CommentApproval) =
   match approval with
@@ -47,8 +46,8 @@ let approvalNote (approval: Api.CommentApproval) =
   | Api.CommentApproval.Approved
   | Api.CommentApproval.Rejected -> None
 
-let opened (comment: Api.Comment) =
-  if canReply comment.Status then
+let opened (topLevel: Api.CommentApproval option) (comment: Api.Comment) =
+  if canReply topLevel comment.Status then
     Some
       { CommentId = comment.Id
         Editor = Comments.emptyEditor
@@ -59,7 +58,7 @@ let opened (comment: Api.Comment) =
 let canPost (form: Form) =
   form.Posting <> Posting
   && Comments.isValidComment form.Editor.Text
-  && form.Editor.Text.Length <= maxLength
+  && form.Editor.Text.Length <= Comments.maxLength
 
 let failure (form: Form) =
   match form.Posting with
@@ -91,3 +90,7 @@ let update (msg: Msg) (form: Form option) : Form option * Effect option =
 
 let isOpenOn (commentId: string) (form: Form option) =
   form |> Option.exists (fun form -> form.CommentId = commentId)
+
+/// Closes the form when its comment is no longer in the list.
+let keepIf (isListed: string -> bool) (form: Form option) =
+  form |> Option.filter (fun form -> isListed form.CommentId)

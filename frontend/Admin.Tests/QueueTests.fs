@@ -71,7 +71,7 @@ let private answer (commentId: string) (approved: string list) : Api.AuthorReply
 let private replyTests =
   testList "the reply as the author" [
     test "a new row offers the reply with the approval in its label, and its form tells the author about the approval" {
-      Expect.isTrue (AuthorReply.canReply Api.CommentApproval.New) "A new row takes a reply"
+      Expect.isTrue (AuthorReply.canReply None Api.CommentApproval.New) "A new row takes a reply"
       Expect.equal (AuthorReply.actionLabel Api.CommentApproval.New) "Reply and approve" "The label names the approval"
       Expect.equal
         (AuthorReply.approvalNote Api.CommentApproval.New)
@@ -195,7 +195,12 @@ let tests =
 
     test "Approve and trust sends the trust, then the approval, and the answer removes the row" {
       let model, effect = send (Queue.Chosen("first", Queue.ApproveAndTrust)) (loadedWith [ first; second; third ])
-      Expect.equal effect (Some(Shell.Send [ Shell.TrustCommenter first ])) "The trust call"
+      let ada =
+        match first.Comment.Writer with
+        | Api.Writer.Commenter commenter -> commenter
+        | Api.Writer.Author -> failtest "Expected a commenter"
+
+      Expect.equal effect (Some(Shell.Send [ Shell.TrustCommenter(first, ada) ])) "The trust call"
       Expect.equal (commenterStatus "third" model) (Some Api.New) "The commenter stays new until the answer"
 
       let model, effect = send (Queue.Trusted("first", Ok())) model

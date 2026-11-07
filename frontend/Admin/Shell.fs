@@ -13,7 +13,7 @@ type Call =
   | LoadPosts
   | PollPosts of generation: int
   | LoadQueue
-  | TrustCommenter of comment: Api.PostedComment
+  | TrustCommenter of comment: Api.PostedComment * commenter: Api.Commenter
   | Moderate of comment: Api.PostedComment * Queue.Action
   | LoadPostComments of slug: string
   | ModeratePostComment of slug: string * comment: Api.Comment * Queue.Action
@@ -451,7 +451,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
         effect
         |> Option.map (fun effect ->
           match effect with
-          | Queue.Trust comment -> Send [ TrustCommenter comment ]
+          | Queue.Trust(comment, commenter) -> Send [ TrustCommenter(comment, commenter) ]
           | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ]
           | Queue.PreviewReply(commentId, request) -> Send [ PreviewReply(ReplyPage.OnQueue, commentId, request) ]
           | Queue.PostReply(comment, content) ->

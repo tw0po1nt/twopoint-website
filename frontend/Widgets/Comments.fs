@@ -375,6 +375,9 @@ let private listed (list: CommentList) (model: Model) =
 
 let isValidComment (comment: string) = comment.Trim() <> ""
 
+/// The `maxlength` of a comment box. The backend refuses a longer comment.
+let maxLength = 1000
+
 let showsEmailError (model: Model) =
   model.EmailTouched && not (Subscribe.isValidEmail model.Email)
 

@@ -31,7 +31,7 @@ type Msg =
   | Reply of AuthorReply.Msg
 
 type Effect =
-  | Trust of Api.PostedComment
+  | Trust of Api.PostedComment * Api.Commenter
   | Moderate of Api.PostedComment * Action
   | PreviewReply of commentId: string * TwoPoint.Site.Widgets.Comments.PreviewRequest
   | PostReply of Api.PostedComment * content: string
@@ -76,13 +76,14 @@ let private choose (commentId: string) (action: Action) (rows: Row list) =
   match find commentId rows with
   | Some({ State = Progress.Ready | Progress.NotDone _ } as row) when List.contains action (writerActions row.Comment.Comment.Writer) ->
     let effect =
-      match action with
-      | ApproveAndTrust -> Trust row.Comment
-      | Approve
-      | Reject
-      | Delete -> Moderate(row.Comment, action)
+      match action, row.Comment.Comment.Writer with
+      | ApproveAndTrust, Api.Writer.Commenter commenter -> Some(Trust(row.Comment, commenter))
+      | ApproveAndTrust, Api.Writer.Author -> None
+      | (Approve | Reject | Delete), _ -> Some(Moderate(row.Comment, action))
 
-    Loaded(change commentId (Progress.Sending action) rows), Some effect
+    match effect with
+    | Some _ -> Loaded(change commentId (Progress.Sending action) rows), effect
+    | None -> Loaded rows, None
   | Some _
   | None -> Loaded rows, None
 
@@ -101,8 +102,9 @@ let private reply (msg: AuthorReply.Msg) (model: Model) : Model * Effect option 
   match model.Comments, msg with
   | Loaded rows, AuthorReply.Opened commentId ->
     match find commentId rows with
+    // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/371): give the approval of the top-level comment, so a reply under a rejected one gets no form.
     | Some row when not (AuthorReply.isOpenOn commentId model.Reply) ->
-      { model with Reply = AuthorReply.opened row.Comment.Comment }, None
+      { model with Reply = AuthorReply.opened None row.Comment.Comment }, None
     | Some _
     | None -> model, None
   | Loaded rows, AuthorReply.Answered(commentId, Ok answer) when AuthorReply.isOpenOn commentId model.Reply ->
@@ -128,9 +130,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with
   | _, Answered(Ok comments) ->
     { Comments = Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Progress.Ready }))
-      Reply =
-        model.Reply
-        |> Option.filter (fun form -> comments |> List.exists (fun comment -> comment.Comment.Id = form.CommentId)) },
+      Reply = model.Reply |> AuthorReply.keepIf (fun commentId -> comments |> List.exists (fun comment -> comment.Comment.Id = commentId)) },
     None
   | _, Answered(Error failure) -> { Comments = NotLoaded(Api.reason failure); Reply = None }, None
   | Loaded rows, Chosen(commentId, action) -> model |> withRows (choose commentId action rows)
@@ -139,7 +139,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
     { model with Comments = Loaded(change commentId (Progress.NotDone(ApproveAndTrust, Api.reason failure)) rows) }, None
   | Loaded rows, Done(commentId, _, Ok()) ->
     { Comments = Loaded(rows |> List.filter (fun row -> id row <> commentId))
-      Reply = model.Reply |> Option.filter (fun form -> form.CommentId <> commentId) },
+      Reply = model.Reply |> AuthorReply.keepIf ((<>) commentId) },
     None
   | Loaded rows, Done(commentId, action, Error failure) ->
     { model with Comments = Loaded(change commentId (Progress.NotDone(action, Api.reason failure)) rows) }, None
@@ -151,7 +151,7 @@ let approvedElsewhere (commentIds: string list) (model: Model) =
   match model.Comments with
   | Loaded rows ->
     { Comments = Loaded(rows |> List.filter (fun row -> not (List.contains (id row) commentIds)))
-      Reply = model.Reply |> Option.filter (fun form -> not (List.contains form.CommentId commentIds)) }
+      Reply = model.Reply |> AuthorReply.keepIf (fun commentId -> not (List.contains commentId commentIds)) }
   | Waiting
   | NotLoaded _ -> model
 

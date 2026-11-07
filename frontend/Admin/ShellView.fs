@@ -20,7 +20,7 @@ let private fail (call: Shell.Call) =
   | Shell.LoadPosts -> Shell.Posts(Posts.Answered(Error Api.Unanswered))
   | Shell.PollPosts generation -> Shell.Posts(Posts.Polled(generation, Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
-  | Shell.TrustCommenter comment -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
+  | Shell.TrustCommenter(comment, _) -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
   | Shell.LoadPostComments slug -> Shell.PostComments(PostComments.Answered(slug, Error Api.Unanswered))
   | Shell.ModeratePostComment(_, comment, action) ->
@@ -100,10 +100,8 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.LoadQueue ->
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
-  | Shell.TrustCommenter comment ->
-    (match comment.Comment.Writer with
-     | Api.Writer.Commenter commenter -> Api.changeCommenterStatus (Config.api ()) token commenter.Id Api.Trusted
-     | Api.Writer.Author -> Promise.lift (Error Api.Invalid))
+  | Shell.TrustCommenter(comment, commenter) ->
+    Api.changeCommenterStatus (Config.api ()) token commenter.Id Api.Trusted
     |> Promise.map (fun result -> Shell.Queue(Queue.Trusted(comment.Comment.Id, result)))
   | Shell.Moderate(comment, action) ->
     moderate token comment.PostSlug comment.Comment action
@@ -703,7 +701,7 @@ let private replyForm
       id = $"reply-{comment.Id}",
       class' = (if isPreviewTab (editor ()) then "textarea is-hidden" else "textarea"),
       rows = 4,
-      maxlength = AuthorReply.maxLength,
+      maxlength = Comments.maxLength,
       ariaLabel = "Reply",
       disabled = posting (),
       onInput = fun event -> edit (Comments.TextChanged (event.target :?> HTMLTextAreaElement).value)
@@ -750,6 +748,7 @@ let private rowEnd
   (actions: Queue.Action list)
   (send: AuthorReply.Msg -> unit)
   (reply: unit -> AuthorReply.Form option)
+  (topLevel: unit -> Api.CommentApproval option)
   =
   let isOpen () = AuthorReply.isOpenOn comment.Id (reply ())
 
@@ -763,7 +762,7 @@ let private rowEnd
         yield fun action _ -> actionButton dispatch comment.Id choose (Progress.isSending state) action
       }
 
-      Show(when' = (AuthorReply.canReply comment.Status && not (isOpen ()))) {
+      Show(when' = (AuthorReply.canReply (topLevel ()) comment.Status && not (isOpen ()))) {
         Parts
           .Button(
             size = Parts.Small,
@@ -809,7 +808,7 @@ let private queueRow (dispatch: Shell.Msg -> unit) (reply: unit -> AuthorReply.F
     writerHead dispatch comment.Writer
     p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
     commentText comment.Content
-    rowEnd dispatch comment choose row.State (Queue.writerActions comment.Writer) send reply
+    rowEnd dispatch comment choose row.State (Queue.writerActions comment.Writer) send reply (fun () -> None)
   }
 
 let private queueRows (model: Queue.Model) =
@@ -861,7 +860,12 @@ let private approvalTone (approval: Api.CommentApproval) =
   | Api.CommentApproval.Rejected -> Parts.Bad
 
 [<SolidComponent>]
-let private postCommentRow (dispatch: Shell.Msg -> unit) (reply: unit -> AuthorReply.Form option) (row: PostComments.Row) =
+let private postCommentRow
+  (dispatch: Shell.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (topLevel: Api.Comment -> Api.CommentApproval option)
+  (row: PostComments.Row)
+  =
   let comment = row.Comment
   let choose action = dispatch (Shell.PostComments(PostComments.Chosen(comment.Id, action)))
   let send = PostComments.Reply >> Shell.PostComments >> dispatch
@@ -873,7 +877,7 @@ let private postCommentRow (dispatch: Shell.Msg -> unit) (reply: unit -> AuthorR
     }
 
     commentText comment.Content
-    rowEnd dispatch comment choose row.State (PostComments.actions comment.Status) send reply
+    rowEnd dispatch comment choose row.State (PostComments.actions comment.Status) send reply (fun () -> topLevel comment)
   }
 
 let private postCommentsReason (model: PostComments.Model) =
@@ -886,7 +890,12 @@ let private postCommentsReason (model: PostComments.Model) =
 [<SolidComponent>]
 let private postComments (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let page () =
-    (model ()).PostComments |> Option.defaultValue (PostComments.init "")
+    let current = model ()
+
+    match current.PostComments, current.Router.Route with
+    | Some page, _ -> page
+    | None, PostComments slug -> PostComments.init slug
+    | None, _ -> PostComments.init ""
 
   let rows () = PostComments.shown (page ())
   let reply () = (page ()).Reply
@@ -907,7 +916,7 @@ let private postComments (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     }
 
     Show(when' = not (List.isEmpty (rows ()))) {
-      div (class' = "queue") { For(each = Array.ofList (rows ())) { yield fun row _ -> postCommentRow dispatch reply row } }
+      div (class' = "queue") { For(each = Array.ofList (rows ())) { yield fun row _ -> postCommentRow dispatch reply (fun comment -> PostComments.topLevelApproval comment (page ())) row } }
     }
 
     Show(when' = (postCommentsReason (page ())).IsSome) {

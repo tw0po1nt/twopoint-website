@@ -252,16 +252,17 @@ type PostDependencies(
   }
 
   member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
+    // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/397): get the IDs and the time from an interface.
     let newDbComment =
       DbComment.OfAuthorReply(
-        Guid.NewGuid().ToString(), // todo: model as ISystemDependencies
-        DateTime.UtcNow, // todo: model as ISystemDependencies
+        Guid.NewGuid().ToString(),
+        DateTime.UtcNow,
         post,
         content,
         topLevel
       )
     let newDbStatus =
-      { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { DbCommentStatus.Id = Guid.NewGuid().ToString()
         CommentId = newDbComment.Id
         CreatedDate = newDbComment.CreatedDate
         Approval = approval.ToString().ToLower() }

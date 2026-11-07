@@ -90,6 +90,19 @@ let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (
 
 let private ready (comment: Api.Comment) = { Comment = comment; State = Progress.Ready }
 
+/// The approval of the top-level comment of a reply. A top-level comment has none.
+let private topLevelIn (rows: Row list) (comment: Api.Comment) =
+  comment.ReplyTo
+  |> Option.bind (fun topLevel -> rows |> List.tryFind (fun row -> id row = topLevel))
+  |> Option.map (fun row -> row.Comment.Status)
+
+/// Closes the reply form when its comment left the list or can no longer take a reply.
+let private keepReply (rows: Row list) (form: AuthorReply.Form option) =
+  form
+  |> AuthorReply.keepIf (fun commentId ->
+    rows
+    |> List.exists (fun row -> id row = commentId && AuthorReply.canReply (topLevelIn rows row.Comment) row.Comment.Status))
+
 /// The reply comes last, because the list is oldest first.
 let private replied (answer: Api.AuthorReply) (rows: Row list) =
   let approve row =
@@ -102,7 +115,7 @@ let private reply (msg: AuthorReply.Msg) (model: Model) : Model * Effect option 
   | Loaded rows, AuthorReply.Opened commentId ->
     match rows |> List.tryFind (fun row -> id row = commentId) with
     | Some row when not (AuthorReply.isOpenOn commentId model.Reply) ->
-      { model with Reply = AuthorReply.opened row.Comment }, None
+      { model with Reply = AuthorReply.opened (topLevelIn rows row.Comment) row.Comment }, None
     | Some _
     | None -> model, None
   | Loaded rows, AuthorReply.Answered(commentId, Ok answer) when AuthorReply.isOpenOn commentId model.Reply ->
@@ -126,24 +139,22 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with
   | _, Answered(slug, _) when slug <> model.Slug -> model, None
   | _, Answered(_, Ok comments) ->
+    let rows = comments |> List.map ready
+
     { model with
-        Comments = Loaded(comments |> List.map ready)
-        Reply = model.Reply |> Option.filter (fun form -> comments |> List.exists (fun comment -> comment.Id = form.CommentId)) },
+        Comments = Loaded rows
+        Reply = keepReply rows model.Reply },
     None
   | _, Answered(_, Error failure) -> { model with Comments = NotLoaded(Api.reason failure) }, None
   | _, Filtered filter -> { model with Filter = filter }, None
   | Loaded rows, Chosen(commentId, action) -> choose commentId action rows model
-  | Loaded rows, Done(commentId, Queue.Reject, Ok()) ->
+  | Loaded rows, Done(commentId, action, Ok()) ->
+    let rows = moderated commentId action rows
+
     { model with
-        Comments = Loaded(moderated commentId Queue.Reject rows)
-        Reply = model.Reply |> Option.filter (fun form -> form.CommentId <> commentId) },
+        Comments = Loaded rows
+        Reply = keepReply rows model.Reply },
     None
-  | Loaded rows, Done(commentId, Queue.Delete, Ok()) ->
-    { model with
-        Comments = Loaded(moderated commentId Queue.Delete rows)
-        Reply = model.Reply |> Option.filter (fun form -> form.CommentId <> commentId) },
-    None
-  | Loaded rows, Done(commentId, action, Ok()) -> { model with Comments = Loaded(moderated commentId action rows) }, None
   | Loaded rows, Done(commentId, action, Error failure) ->
     { model with Comments = Loaded(change commentId (fun row -> { row with State = Progress.NotDone(action, Api.reason failure) }) rows) },
     None
@@ -159,6 +170,12 @@ let shown (model: Model) =
 let tryFind (commentId: string) (model: Model) =
   match model.Comments with
   | Loaded rows -> rows |> List.tryFind (fun row -> id row = commentId)
+  | Waiting
+  | NotLoaded _ -> None
+
+let topLevelApproval (comment: Api.Comment) (model: Model) =
+  match model.Comments with
+  | Loaded rows -> topLevelIn rows comment
   | Waiting
   | NotLoaded _ -> None
 

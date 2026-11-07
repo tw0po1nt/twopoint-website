@@ -694,7 +694,7 @@ let replyAsAuthor
   let body = Encode.object [ "content", Encode.string content ] |> Encode.toString 0
   sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "comments"; commentId; "replies" ]) (Some(Json body)) []
 
-/// The comment form of the site uses the same preview, so the author sees what readers see.
+/// The comment form of the site uses the same preview.
 let previewComment (api: string) (token: string) (content: string) : JS.Promise<Result<string, Failure>> =
   let body = Encode.object [ "content", Encode.string content ] |> Encode.toString 0
   sendWith HttpMethod.POST api token "blog/comments/preview" (Some(Json body)) []
