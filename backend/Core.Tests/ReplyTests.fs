@@ -55,7 +55,8 @@ type private FakePostReply(post : Post, existing : Commenter, stored : PostedCom
     member _.GetPostedCommentById id =
       stored |> List.tryFind (fun comment -> comment.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
-    member _.CreateComment _ commenter newComment topLevel approval _ =
+    member _.NewCommentId () = CommentId.ofGuid (Guid otherReplyId)
+    member _.CreateComment _ _ commenter newComment topLevel approval _ =
       created.Add(topLevel, approval)
 
       Comment.create

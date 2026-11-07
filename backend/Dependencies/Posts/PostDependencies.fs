@@ -230,6 +230,7 @@ type PostDependencies(
   }
 
   member _.CreateComment
+    (id : CommentId)
     (post : Post)
     (commenter : Commenter)
     (newComment : NewComment)
@@ -239,7 +240,7 @@ type PostDependencies(
     = cancellableTaskResult {
     let newDbComment =
       DbComment.OfCommenter(
-        Guid.NewGuid().ToString(), // todo: model as ISystemDependencies
+        string id,
         DateTime.UtcNow, // todo: model as ISystemDependencies
         post.Id,
         commenter,

@@ -114,8 +114,9 @@ type PostComment (
       member this.GetUtcNow () = DateTime.UtcNow
       member this.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-      member this.CreateComment post commenter newComment topLevel approval replyEmails =
-        postDependencies.CreateComment post commenter newComment topLevel approval replyEmails
+      member this.NewCommentId () = CommentId.ofGuid (Guid.NewGuid())
+      member this.CreateComment id post commenter newComment topLevel approval replyEmails =
+        postDependencies.CreateComment id post commenter newComment topLevel approval replyEmails
       member this.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid (Guid.NewGuid())
       member this.CreateReplyEmailStop stop = postDependencies.CreateReplyEmailStop stop
       member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId

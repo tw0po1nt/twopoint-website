@@ -128,6 +128,21 @@ test('the page form has an unchecked reply-email checkbox, and the email field s
   assert.equal(field('email').getAttribute('placeholder'), 'to verify you, and for reply emails if you ask');
 });
 
+test('an open reply form has no reply-email checkbox', async () => {
+  const replyButton = [...mount.querySelectorAll('.comment-thread-end button')].find((button) => button.textContent === '[reply]');
+  replyButton.click();
+  await settle();
+
+  const replyForm = mount.querySelector('form.comment-reply-form');
+  assert.ok(replyForm, 'The reply form is open');
+  assert.equal(replyForm.querySelector('[name="replyEmails"]'), null, 'The reply form has no checkbox');
+  assert.equal(mount.querySelectorAll('[name="replyEmails"]').length, 1, 'Only the page form has the checkbox');
+
+  [...replyForm.querySelectorAll('button')].find((button) => button.textContent === '[cancel]').click();
+  await settle();
+  assert.equal(mount.querySelector('form.comment-reply-form'), null, 'The reply form is closed');
+});
+
 test('a second toggle makes no second fetch', async () => {
   panel.querySelector('summary').click();
   panel.querySelector('summary').click();

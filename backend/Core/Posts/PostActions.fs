@@ -420,7 +420,6 @@ type ReplyEmailsChoice =
   | Asked
   | NotAsked
 
-/// Only a top-level comment can ask for reply emails, because the reply form has no checkbox.
 [<RequireQualifiedAccess>]
 type NewCommentTarget =
   | TopLevel of ReplyEmailsChoice
@@ -564,8 +563,10 @@ module PostComment =
     abstract member GetUtcNow: unit -> DateTime
     abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
+    abstract member NewCommentId: unit -> CommentId
     abstract member CreateComment:
-      post: Post
+      id: CommentId
+        -> post: Post
         -> commenter: Commenter
         -> newComment: NewComment
         -> topLevel: Comment option
@@ -581,15 +582,17 @@ module PostComment =
 
     let handleCommentPosted (Success.Posted (post, comment, topLevel, commenter, approval, replyEmails)) : DependencyResult<RenderedComment> =
       cancellableTaskResult {
-        let! (created : Comment) = dependencies.CreateComment post commenter comment topLevel approval replyEmails
-
-        let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
+        let id = dependencies.NewCommentId()
 
         do!
           replyEmails
           |> Option.traverseCancellableTaskResult (fun consent ->
-            dependencies.CreateReplyEmailStop { Token = consent.StopToken; Post = post.Id; Comment = created.Id })
+            dependencies.CreateReplyEmailStop { Token = consent.StopToken; Post = post.Id; Comment = id })
           |> CancellableTaskResult.ignore
+
+        let! (created : Comment) = dependencies.CreateComment id post commenter comment topLevel approval replyEmails
+
+        let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
 
         return RenderedComment.ofComment dependencies.Stage created
       }

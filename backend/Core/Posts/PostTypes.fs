@@ -80,6 +80,8 @@ module CommentId =
       $"'{nameof CommentId}' must be a valid guid"
       CommentId
 
+  let ofGuid (guid : Guid) = CommentId guid
+
 
 type CommentApproval =
   | New
@@ -151,14 +153,6 @@ type ReplyEmailConsent =
   { ConsentDate : DateTime
     StopToken : ReplyEmailStopToken
     StopDate : DateTime option }
-
-module ReplyEmailConsent =
-  let create (consentDate : string) (stopToken : string) (stopDate : string option) = validation {
-    let! consentDate = DateTime.TryValidateUtc(consentDate, (nameof consentDate))
-    and! stopToken = ReplyEmailStopToken.create stopToken
-    and! stopDate = stopDate |> Option.traverseValidation (fun date -> DateTime.TryValidateUtc(date, (nameof stopDate)))
-    return { ConsentDate = consentDate; StopToken = stopToken; StopDate = stopDate }
-  }
 
 
 /// The parent of a reply is its top-level comment. Only a top-level comment has a reply-email consent.

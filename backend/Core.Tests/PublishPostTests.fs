@@ -320,7 +320,8 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
         member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
         member _.Stage = TwoPoint.Site.Render.Stage.Production
         member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
-        member _.CreateComment _ commenter newComment _ approval _ =
+        member _.NewCommentId () = CommentId.ofGuid (Guid "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40")
+        member _.CreateComment _ _ commenter newComment _ approval _ =
           let posted =
             Comment.create
               "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40"

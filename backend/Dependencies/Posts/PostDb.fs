@@ -252,13 +252,11 @@ module internal DbCommentWriter =
       |> Seq.tryFind (fun commenter -> commenter.ValidationId = commenterId)
       |> Option.map DbCommentWriter.Commenter
 
-/// The reply-email consent of a top-level comment.
 type internal DbReplyEmailConsent =
   { ConsentDate : DateTime
     StopToken : string
     StopDate : DateTime option }
 
-  /// An entity with no consent date and no stop token has no consent.
   static member FromEntity (entity : TableEntity) =
     match "ReplyEmailsConsentDate" |> entity.TryGetString, "ReplyEmailsStopToken" |> entity.TryGetString with
     | None, None -> Validation.ok None
@@ -276,9 +274,16 @@ type internal DbReplyEmailConsent =
       StopToken = consent.StopToken.ToString()
       StopDate = consent.StopDate }
 
-  member this.ToConsent() =
+  static member WriteTo (entity : TableEntity) (consent : DbReplyEmailConsent option) =
     let utc (value : DateTime) = value.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)
-    ReplyEmailConsent.create (utc this.ConsentDate) this.StopToken (this.StopDate |> Option.map utc)
+    entity["ReplyEmailsConsentDate"] <- consent |> Option.map (_.ConsentDate >> utc) |> Option.toObj
+    entity["ReplyEmailsStopToken"] <- consent |> Option.map _.StopToken |> Option.toObj
+    entity["ReplyEmailsStopDate"] <- consent |> Option.bind _.StopDate |> Option.map utc |> Option.toObj
+
+  member this.ToConsent() =
+    ReplyEmailStopToken.create this.StopToken
+    |> Validation.map (fun stopToken ->
+      { ReplyEmailConsent.ConsentDate = this.ConsentDate; StopToken = stopToken; StopDate = this.StopDate })
 
 /// <summary>
 /// Database representation of a comment
@@ -345,10 +350,7 @@ type internal DbComment =
     entity["CommenterId"] <- commenterId
     entity["ParentId"] <- this.ParentId |> Option.toObj
     entity["Writer"] <- writer
-    let utc (value : DateTime) = value.ToString("o", CultureInfo.InvariantCulture)
-    entity["ReplyEmailsConsentDate"] <- this.ReplyEmails |> Option.map (_.ConsentDate >> utc) |> Option.toObj
-    entity["ReplyEmailsStopToken"] <- this.ReplyEmails |> Option.map _.StopToken |> Option.toObj
-    entity["ReplyEmailsStopDate"] <- this.ReplyEmails |> Option.bind _.StopDate |> Option.map utc |> Option.toObj
+    DbReplyEmailConsent.WriteTo entity this.ReplyEmails
     entity
 
   static member OfCommenter

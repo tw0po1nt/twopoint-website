@@ -35,12 +35,31 @@ let private topLevel =
     "A question"
   |> ok
 
-type private FakePostComment(existing : Commenter) =
+[<RequireQualifiedAccess>]
+type private Write =
+  | Stop
+  | Comment
+  | Notice
+
+let private tableDown = { Dependency = Dependency.Database; Type = Unknown (exn "The table is down") }
+
+type private FakePostComment(existing : Commenter, failing : Write option) =
   let stored = ResizeArray<ReplyEmailConsent option>()
   let stops = ResizeArray<ReplyEmailStop>()
+  let writes = ResizeArray<Write>()
+
+  let write (kind : Write) (value : 'a) =
+    if failing = Some kind then
+      CancellableTaskResult.error tableDown
+    else
+      writes.Add kind
+      CancellableTaskResult.singleton value
+
+  new(existing : Commenter) = FakePostComment(existing, None)
 
   member _.Stored = List.ofSeq stored
   member _.Stops = List.ofSeq stops
+  member _.Writes = List.ofSeq writes
 
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
@@ -48,25 +67,26 @@ type private FakePostComment(existing : Commenter) =
     member _.GetPostedCommentById _ =
       CancellableTaskResult.singleton (Some { Post = olderPost.Id; PostTitle = olderPost.Info.Title; Comment = topLevel })
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
-    member _.CreateComment _ commenter newComment topLevel approval replyEmails =
-      stored.Add replyEmails
+    member _.NewCommentId () = CommentId.ofGuid (Guid newId)
+    member _.CreateComment id _ commenter newComment topLevel approval replyEmails =
       let createdDate = now.ToString "o"
 
-      Comment.create
-        newId
-        createdDate
-        {| Approval = approval.ToString(); CreatedDate = createdDate |}
-        (topLevel |> Option.map (_.Id >> string))
-        (CommentWriter.Commenter commenter)
-        replyEmails
-        (newComment.Content.ToString())
-      |> ok
-      |> CancellableTaskResult.singleton
+      let created =
+        Comment.create
+          (string id)
+          createdDate
+          {| Approval = approval.ToString(); CreatedDate = createdDate |}
+          (topLevel |> Option.map (_.Id >> string))
+          (CommentWriter.Commenter commenter)
+          replyEmails
+          (newComment.Content.ToString())
+        |> ok
+
+      write Write.Comment created |> CancellableTaskResult.map (fun created -> stored.Add replyEmails; created)
     member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid token
     member _.CreateReplyEmailStop stop =
-      stops.Add stop
-      CancellableTaskResult.singleton ()
-    member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton ()
+      write Write.Stop () |> CancellableTaskResult.map (fun () -> stops.Add stop)
+    member _.QueueNewCommentNotice _ = write Write.Notice ()
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private post (replyTo : string option) (replyEmails : bool) (dependencies : FakePostComment) =
@@ -150,5 +170,35 @@ let tests =
         Expect.isEmpty dependencies.Stored "Expected no comment in the store"
         Expect.isEmpty dependencies.Stops "Expected no stop row"
       | other -> failtestf "Expected Banned, got %A" other
+    }
+
+    test "a checked flag writes the stop row before the comment, and the comment before the notice" {
+      let dependencies = FakePostComment(commenter CommenterStatus.Trusted)
+
+      match post None true dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal dependencies.Writes [ Write.Stop; Write.Comment; Write.Notice ] "Expected the stop row first"
+        Expect.equal dependencies.Stops.Head.Comment posted.Comment.Id "Expected the stop row of the new comment"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a failed stop-row write stores no comment and queues no notice" {
+      let dependencies = FakePostComment(commenter CommenterStatus.Trusted, Some Write.Stop)
+
+      match post None true dependencies with
+      | Error (ActionError.Dependency error) ->
+        Expect.equal error tableDown "Expected the error of the stop-row write"
+        Expect.isEmpty dependencies.Writes "Expected no write"
+      | other -> failtestf "Expected a dependency error, got %A" other
+    }
+
+    test "a failed comment write queues no notice, and only the stop row stays" {
+      let dependencies = FakePostComment(commenter CommenterStatus.Trusted, Some Write.Comment)
+
+      match post None true dependencies with
+      | Error (ActionError.Dependency error) ->
+        Expect.equal error tableDown "Expected the error of the comment write"
+        Expect.equal dependencies.Writes [ Write.Stop ] "Expected only the stop row"
+      | other -> failtestf "Expected a dependency error, got %A" other
     }
   ]
