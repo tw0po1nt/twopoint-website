@@ -214,6 +214,13 @@ let private payloadTests =
       | None -> failtest "Expected a payload"
     }
 
+    test "a comment of the author gets no payload" {
+      let posted = posted CommentApproval.Approved "A post" "Ada" "Hi"
+      let comment = { posted with Comment = { posted.Comment with Writer = CommentWriter.Author } }
+
+      Expect.isNone (NewCommentPayload.ofComment 1 comment) "Expected no payload"
+    }
+
     test "a comment with no plain text gets the no-text mark" {
       let comment = posted CommentApproval.New "A post" "Ada" "![](https://x.com/a.png)"
 

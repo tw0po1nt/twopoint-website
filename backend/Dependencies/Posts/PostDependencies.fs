@@ -43,14 +43,14 @@ type PostDependencies(
 
   let allApprovals = CommentApproval.all |> List.map _.ToString()
 
-  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommenter option * DbCommentStatus) list, DependencyError>) =
+  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>) =
     cancellableTaskResult {
       let! dbPosts, dbComments = CancellableTaskResult.parallelZip (postDb.GetAllPosts()) readComments
       return!
         dbComments
-        |> List.traverseValidationA (fun (comment: DbComment, commenter, status) ->
+        |> List.traverseValidationA (fun (comment: DbComment, writer, status) ->
           let post = dbPosts |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
-          comment.ToPostedComment(post, status, commenter))
+          comment.ToPostedComment(post, status, writer))
         |> DependencyError.ofValidation source
     }
 
@@ -194,7 +194,7 @@ type PostDependencies(
     return!
       dbComments
       |> List.traverseValidationA (
-        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
+        fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer)
       )
       |> DependencyError.ofValidation source
   }
@@ -208,7 +208,7 @@ type PostDependencies(
     return!
       dbComments
       |> List.traverseValidationA (
-        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
+        fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer)
       )
       |> DependencyError.ofValidation source
   }
@@ -223,7 +223,7 @@ type PostDependencies(
 
     return!
       dbComment
-      |> Option.traverseValidation (fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter))
+      |> Option.traverseValidation (fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer))
       |> DependencyError.ofValidation source
   }
 
@@ -233,20 +233,19 @@ type PostDependencies(
         PostId = post.Id |> Slug.value
         CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
         Content = newComment.Content |> NonEmptyString.value
-        CommenterId = commenter.ValidationId.ToString()
         ParentId = None
-        Writer = DbCommentWriter.Commenter }
+        Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString()) }
     let newDbStatus =
       { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
         CommentId = newDbComment.Id
         CreatedDate = newDbComment.CreatedDate
         Approval = approval.ToString().ToLower() }
 
-    let! (dbComment: DbComment, dbCommenter, dbCommentStatus) =
+    let! (dbComment: DbComment, dbWriter, dbCommentStatus) =
       postDb.CreateComment newDbComment newDbStatus
 
     return!
-      dbComment.ToComment(dbCommentStatus, dbCommenter)
+      dbComment.ToComment(dbCommentStatus, dbWriter)
       |> DependencyError.ofValidation source
   }
 
@@ -255,11 +254,11 @@ type PostDependencies(
 
     match dbComment with
     | None -> return None
-    | Some (comment : DbComment, commenter, status) ->
+    | Some (comment : DbComment, writer, status) ->
       let! dbPost = postDb.GetPostBySlug comment.PostId
 
       return!
-        comment.ToPostedComment(dbPost, status, commenter)
+        comment.ToPostedComment(dbPost, status, writer)
         |> Result.map Some
         |> DependencyError.ofValidation source
   }

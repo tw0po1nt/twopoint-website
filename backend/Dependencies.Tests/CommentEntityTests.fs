@@ -36,8 +36,8 @@ let private entityWith (properties : (string * string) list) =
 
   entity
 
-let private read (commenter : DbCommenter option) (entity : TableEntity) =
-  DbComment.FromEntity entity |> Result.bind _.ToComment(status, commenter)
+let private read (writer : DbCommentWriter) (entity : TableEntity) =
+  DbComment.FromEntity entity |> Result.bind _.ToComment(status, writer)
 
 let private parent (comment : Comment) = comment.Parent |> Option.map string
 
@@ -48,7 +48,14 @@ let private commenterId (comment : Comment) =
 let tests =
   testList "Comment entity" [
     test "an entity with no ParentId and no Writer reads as a top-level comment from its commenter" {
-      match entityWith [ "CommenterId", commenter.ValidationId ] |> read (Some commenter) with
+      let entity = entityWith [ "CommenterId", commenter.ValidationId ]
+
+      Expect.equal
+        (entity |> DbComment.FromEntity |> Result.map _.Writer)
+        (Ok (DbCommentWriterKey.Commenter commenter.ValidationId))
+        "Expected the key of the commenter"
+
+      match entity |> read (DbCommentWriter.Commenter commenter) with
       | Ok comment ->
         Expect.equal (parent comment) None "Expected a top-level comment"
         Expect.equal (commenterId comment) (Some commenter.ValidationId) "Expected the commenter"
@@ -59,7 +66,7 @@ let tests =
       let entity =
         entityWith [ "CommenterId", commenter.ValidationId; "ParentId", parentId; "Writer", "commenter" ]
 
-      match entity |> read (Some commenter) with
+      match entity |> read (DbCommentWriter.Commenter commenter) with
       | Ok comment ->
         Expect.equal (parent comment) (Some parentId) "Expected the parent"
         Expect.equal (commenterId comment) (Some commenter.ValidationId) "Expected the commenter"
@@ -69,7 +76,7 @@ let tests =
     test "a reply from the author reads back with its parent and the author" {
       let entity = entityWith [ "CommenterId", ""; "ParentId", parentId; "Writer", "author" ]
 
-      match entity |> read None with
+      match entity |> read DbCommentWriter.Author with
       | Ok comment ->
         Expect.equal (parent comment) (Some parentId) "Expected the parent"
         Expect.equal comment.Writer CommentWriter.Author "Expected the author"
@@ -82,17 +89,30 @@ let tests =
       Expect.isError (DbComment.FromEntity entity) "Expected a refusal"
     }
 
+    test "an entity from the author with a CommenterId is refused" {
+      let entity = entityWith [ "CommenterId", commenter.ValidationId; "Writer", "author" ]
+
+      Expect.isError (DbComment.FromEntity entity) "Expected a refusal"
+    }
+
+    test "an entity from a commenter with an empty CommenterId is refused" {
+      for properties in [ [ "CommenterId", "" ]; [ "CommenterId", ""; "Writer", "commenter" ] ] do
+        Expect.isError (entityWith properties |> DbComment.FromEntity) "Expected a refusal"
+    }
+
     test "a comment written to an entity reads back with the same values" {
       let comment =
         { DbComment.Id = commentId
           PostId = "first-post"
           CreatedDate = date
           Content = "A reply"
-          CommenterId = ""
           ParentId = Some parentId
-          Writer = DbCommentWriter.Author }
+          Writer = DbCommentWriterKey.Author }
 
-      Expect.equal (comment.ToEntity() |> DbComment.FromEntity) (Ok comment) "Expected the same comment"
+      let entity = comment.ToEntity()
+
+      Expect.equal (entity.GetString "CommenterId") "" "Expected an empty CommenterId"
+      Expect.equal (DbComment.FromEntity entity) (Ok comment) "Expected the same comment"
     }
 
     test "a top-level comment written to an entity reads back with no parent" {
@@ -101,9 +121,8 @@ let tests =
           PostId = "first-post"
           CreatedDate = date
           Content = "A comment"
-          CommenterId = commenter.ValidationId
           ParentId = None
-          Writer = DbCommentWriter.Commenter }
+          Writer = DbCommentWriterKey.Commenter commenter.ValidationId }
 
       Expect.equal (comment.ToEntity() |> DbComment.FromEntity) (Ok comment) "Expected the same comment"
     }

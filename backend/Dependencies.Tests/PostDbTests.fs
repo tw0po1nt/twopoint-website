@@ -21,14 +21,13 @@ let private comment =
     PostId = "first-post"
     CreatedDate = date
     Content = "A comment"
-    CommenterId = commenter.ValidationId
     ParentId = None
-    Writer = DbCommentWriter.Commenter }
+    Writer = DbCommentWriterKey.Commenter commenter.ValidationId }
 
 let private orphan =
   { comment with
       Id = "9a7d2c3f-1e5b-4d4f-8c2b-3a6e7f8b9c0d"
-      CommenterId = "2b3c4d5e-6f7a-4b2c-9d3e-4f5a6b7c8d9e" }
+      Writer = DbCommentWriterKey.Commenter "2b3c4d5e-6f7a-4b2c-9d3e-4f5a6b7c8d9e" }
 
 let private statusOf (comment : DbComment) =
   { DbCommentStatus.Id = $"status-{comment.Id}"
@@ -43,24 +42,23 @@ let tests =
       let rows =
         PostDb.withLatestStatus NullLogger.Instance [ "new" ] [| comment; orphan |] [ commenter ] [ statusOf comment; statusOf orphan ]
 
-      Expect.equal rows (Ok [ comment, Some commenter, statusOf comment ]) "Expected only the comment with a commenter"
+      Expect.equal rows (Ok [ comment, DbCommentWriter.Commenter commenter, statusOf comment ]) "Expected only the comment with a commenter"
     }
 
-    test "a comment of the author stays with no commenter" {
+    test "a comment of the author stays, with the author as its writer" {
       let reply =
         { comment with
             Id = "4d5e6f7a-8b9c-4d4e-9f5a-6b7c8d9e0f1a"
             CreatedDate = date.AddMinutes 1.0
-            CommenterId = ""
             ParentId = Some comment.Id
-            Writer = DbCommentWriter.Author }
+            Writer = DbCommentWriterKey.Author }
 
       let rows =
         PostDb.withLatestStatus NullLogger.Instance [ "new" ] [| comment; reply |] [ commenter ] [ statusOf comment; statusOf reply ]
 
       Expect.equal
         rows
-        (Ok [ comment, Some commenter, statusOf comment; reply, None, statusOf reply ])
+        (Ok [ comment, DbCommentWriter.Commenter commenter, statusOf comment; reply, DbCommentWriter.Author, statusOf reply ])
         "Expected the comment and the reply of the author"
     }
   ]

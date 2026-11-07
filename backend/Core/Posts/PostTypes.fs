@@ -128,7 +128,7 @@ module CommentWriter =
     | CommentWriter.Author -> None
 
 
-/// The parent of a reply is its top-level comment. A top-level comment has no parent.
+/// The parent of a reply is its top-level comment.
 type Comment =
   { Id : CommentId
     CreatedDate : DateTime
