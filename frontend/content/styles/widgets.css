@@ -311,6 +311,19 @@
   border-bottom-color: var(--accent);
 }
 
+.comment-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.comment-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .comment-editor {
   display: flex;
   flex-direction: column;

@@ -120,6 +120,29 @@ test('the first toggle loads the view and fetches the comments one time', async 
   assert.equal(own.getAttribute('target'), null, 'A link to twopoint.dev opens in the same tab');
 });
 
+test('the page form has an unchecked reply-email checkbox, and the email field says what the address is for', () => {
+  const box = field('replyEmails');
+  assert.equal(box.type, 'checkbox');
+  assert.equal(box.checked, false, 'The checkbox is unchecked');
+  assert.equal(box.closest('label').textContent, 'email me when someone replies');
+  assert.equal(field('email').getAttribute('placeholder'), 'to verify you, and for reply emails if you ask');
+});
+
+test('an open reply form has no reply-email checkbox', async () => {
+  const replyButton = [...mount.querySelectorAll('.comment-thread-end button')].find((button) => button.textContent === '[reply]');
+  replyButton.click();
+  await settle();
+
+  const replyForm = mount.querySelector('form.comment-reply-form');
+  assert.ok(replyForm, 'The reply form is open');
+  assert.equal(replyForm.querySelector('[name="replyEmails"]'), null, 'The reply form has no checkbox');
+  assert.equal(mount.querySelectorAll('[name="replyEmails"]').length, 1, 'Only the page form has the checkbox');
+
+  [...replyForm.querySelectorAll('button')].find((button) => button.textContent === '[cancel]').click();
+  await settle();
+  assert.equal(mount.querySelector('form.comment-reply-form'), null, 'The reply form is closed');
+});
+
 test('a second toggle makes no second fetch', async () => {
   panel.querySelector('summary').click();
   panel.querySelector('summary').click();
@@ -158,11 +181,26 @@ test('a known email address posts the comment with its stored validation ID, and
 
   const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
   assert.equal(posted.length, 2, 'A second post request');
-  assert.deepEqual(JSON.parse(posted[1].init.body), { ValidationId: 'validation-1', Comment: 'Nice post & thanks' });
+  assert.deepEqual(JSON.parse(posted[1].init.body), { ValidationId: 'validation-1', Comment: 'Nice post & thanks', ReplyEmails: false });
   assert.equal(status().textContent, "Thanks! Your comment will appear here once it's approved.");
   assert.equal(field('email').value, 'known@example.com', 'The email input keeps the address for the next comment or reply');
   assert.equal(field('comment').value, '', 'The comment input is empty');
   assert.equal(mount.querySelectorAll('.comment').length, 2, 'The list stays');
+});
+
+test('a checked box posts its value, and the next comment starts with the box unchecked', async () => {
+  answer = () => json(200, { success: true, message: null, data: null });
+  type(field('email'), 'known@example.com');
+  type(field('comment'), 'Tell me more');
+  const box = field('replyEmails');
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  submit();
+  await settle();
+
+  const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
+  assert.deepEqual(JSON.parse(posted.at(-1).init.body), { ValidationId: 'validation-1', Comment: 'Tell me more', ReplyEmails: true });
+  assert.equal(field('replyEmails').checked, false, 'The checkbox is unchecked after the post');
 });
 
 test('the comment of a trusted commenter shows in the list at once', async () => {
@@ -276,7 +314,7 @@ test('[post comment] posts the comment from the preview tab', async () => {
   await settle();
 
   const posted = callsTo(listUrl).filter((call) => call.init.method === 'POST');
-  assert.deepEqual(JSON.parse(posted.at(-1).init.body), { ValidationId: 'validation-1', Comment: 'Use `List.iter`' });
+  assert.deepEqual(JSON.parse(posted.at(-1).init.body), { ValidationId: 'validation-1', Comment: 'Use `List.iter`', ReplyEmails: false });
   assert.equal(status().textContent, "Thanks! Your comment will appear here once it's approved.");
   assert.equal(tab('write').getAttribute('aria-selected'), 'true', 'The empty form shows the write tab');
   assert.equal(field('comment').value, '', 'The comment input is empty');
@@ -327,8 +365,8 @@ test('a new email address gets a validation email that links back to the panel, 
   assert.match(status().textContent, /sent a verification link to reader@example\.com/);
 
   assert.deepEqual(
-    ['name', 'email', 'comment'].map((name) => field(name).disabled),
-    [true, true, true],
+    ['name', 'email', 'comment', 'replyEmails'].map((name) => field(name).disabled),
+    [true, true, true, true],
     'Each field is locked',
   );
   assert.equal(mount.querySelector('button[type="submit"]').disabled, true, 'The button is locked');

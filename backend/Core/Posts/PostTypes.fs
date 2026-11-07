@@ -80,6 +80,8 @@ module CommentId =
       $"'{nameof CommentId}' must be a valid guid"
       CommentId
 
+  let ofGuid (guid : Guid) = CommentId guid
+
 
 type CommentApproval =
   | New
@@ -128,14 +130,40 @@ module CommentWriter =
     | CommentWriter.Author -> None
 
 
-/// The parent of a reply is its top-level comment.
+/// The stop link of each reply email of one comment contains this token.
+type ReplyEmailStopToken =
+  private | ReplyEmailStopToken of Guid
+
+  override this.ToString() =
+    let (ReplyEmailStopToken token) = this
+    token.ToString()
+
+module ReplyEmailStopToken =
+  let create =
+    Constrained.String.tryParse
+      Guid.TryParseOption
+      $"'{nameof ReplyEmailStopToken}' must be a valid guid"
+      ReplyEmailStopToken
+
+  let ofGuid (guid : Guid) = ReplyEmailStopToken guid
+
+
+/// A stop date ends the reply emails of the comment.
+type ReplyEmailConsent =
+  { ConsentDate : DateTime
+    StopToken : ReplyEmailStopToken
+    StopDate : DateTime option }
+
+
+/// The parent of a reply is its top-level comment. Only a top-level comment has a reply-email consent.
 type Comment =
   { Id : CommentId
     CreatedDate : DateTime
     Status : CommentStatus
     Parent : CommentId option
     Writer : CommentWriter
-    Content : NonEmptyString }
+    Content : NonEmptyString
+    ReplyEmails : ReplyEmailConsent option }
 
 module Comment =
   let create
@@ -148,6 +176,7 @@ module Comment =
     )
     (parent : string option)
     (writer : CommentWriter)
+    (replyEmails : ReplyEmailConsent option)
     content =
       validation {
         let! id = CommentId.create id
@@ -161,7 +190,8 @@ module Comment =
             Status = status
             Parent = parent
             Writer = writer
-            Content = content }
+            Content = content
+            ReplyEmails = replyEmails }
       }
 
   let commenter (comment : Comment) = CommentWriter.commenter comment.Writer
@@ -197,6 +227,13 @@ module Slug =
 
   module Unsafe =
     let create = Types.unsafeCreate create
+
+
+/// The stop page finds the comment of a stop token with this record.
+type ReplyEmailStop =
+  { Token : ReplyEmailStopToken
+    Post : Slug
+    Comment : CommentId }
 
 
 type PostCommentStats =

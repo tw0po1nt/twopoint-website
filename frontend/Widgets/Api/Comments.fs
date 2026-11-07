@@ -21,11 +21,13 @@ type CommenterValidation =
     Name : string option
     RedirectUri : string }
 
-/// `ReplyTo` is the ID of the top-level comment of a reply.
+/// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyEmails` is the checkbox of the page form, so a
+/// reply has none.
 type NewComment =
   { ValidationId : string
     Comment : string
-    ReplyTo : string option }
+    ReplyTo : string option
+    ReplyEmails : bool option }
 
 type Approval =
   | Approved

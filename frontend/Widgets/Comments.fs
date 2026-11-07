@@ -16,13 +16,21 @@ let validationIdKey = "commenterValidationId"
 [<Literal>]
 let replyToKey = "replyTo"
 
-/// `ReplyTo` is the ID of the top-level comment of a reply.
+[<Literal>]
+let replyEmailsKey = "replyEmails"
+
+let emailPlaceholder = "to verify you, and for reply emails if you ask"
+
+let replyEmailsLabel = "email me when someone replies"
+
+/// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyEmails` is the checkbox of the page form.
 type Return =
   { Email: string
     Name: string
     Comment: string
     ValidationId: string
-    ReplyTo: string option }
+    ReplyTo: string option
+    ReplyEmails: bool }
 
 /// The `thread` query of a reply email names the top-level comment, for a reply that is gone.
 type Link = { Comment: string; Thread: string option }
@@ -116,6 +124,8 @@ type Model =
     EmailTouched: bool
     Page: Editor
     PageStatus: Status
+    /// The checkbox of the page form. The reply form has none.
+    ReplyEmails: bool
     Reply: ReplyForm option
     /// The draft of each closed reply form, by its thread.
     Drafts: Map<string, Draft>
@@ -144,6 +154,7 @@ type Msg =
   | ListUnanswered
   | EmailChanged of string
   | NameChanged of string
+  | ReplyEmailsChanged of bool
   | EmailLeft
   | Edited of Form * Edit
   | Submitted of Form
@@ -194,7 +205,8 @@ let parse (query: (string * string) list) : Return option =
         Name = value "name" |> Option.defaultValue ""
         Comment = comment
         ValidationId = validationId.Trim()
-        ReplyTo = value replyToKey |> Option.map _.Trim() }
+        ReplyTo = value replyToKey |> Option.map _.Trim()
+        ReplyEmails = value replyEmailsKey |> Option.exists (fun choice -> choice.Trim() = "true") }
   | _ -> None
 
 /// A `#comment-<id>` link names this element.
@@ -233,6 +245,7 @@ let private empty (pageUrl: string) (validations: Map<string, string>) =
     EmailTouched = false
     Page = emptyEditor
     PageStatus = Editing
+    ReplyEmails = false
     Reply = None
     Drafts = Map.empty
     Awaiting = Set.empty
@@ -267,6 +280,7 @@ let init
         { filled with
             Page = { emptyEditor with Text = returned.Comment }
             PageStatus = Validated
+            ReplyEmails = returned.ReplyEmails
             Arrival = link |> Option.map Linked }
     | None -> { empty pageUrl validations with Arrival = link |> Option.map Linked }
 
@@ -430,6 +444,7 @@ let redirectUri (model: Model) (text: string) (replyTo: string option) =
       "comment", text.Trim()
       match replyTo with
       | Some thread -> replyToKey, thread
+      | None when model.ReplyEmails -> replyEmailsKey, "true"
       | None -> () ]
     |> List.map (fun (key, value) -> $"{key}={Uri.EscapeDataString value}")
     |> String.concat "&"
@@ -479,10 +494,10 @@ let private posted (answer: PostCommentAnswer) (list: CommentList) =
 let private send (model: Model) (form: Form) (text: string) =
   let email = model.Email.Trim()
 
-  let replyTo =
+  let replyTo, replyEmails =
     match form with
-    | Form.Page -> None
-    | Form.Reply thread -> Some thread
+    | Form.Page -> None, Some model.ReplyEmails
+    | Form.Reply thread -> Some thread, None
 
   match model.Validations.TryFind email with
   | Some validationId ->
@@ -491,7 +506,8 @@ let private send (model: Model) (form: Form) (text: string) =
       form,
       { ValidationId = validationId
         Comment = text.Trim()
-        ReplyTo = replyTo }
+        ReplyTo = replyTo
+        ReplyEmails = replyEmails }
     )
   | None ->
     let name = model.Name.Trim()
@@ -599,6 +615,7 @@ let private postAnswered (form: Form) (answer: PostCommentAnswer) (model: Model)
     { model with
         List = list
         PageStatus = Posted approval
+        ReplyEmails = false
         Page =
           { emptyEditor with
               Opening = model.Page.Opening
@@ -646,6 +663,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | ListUnanswered -> listed (NotLoaded unanswered) model
   | EmailChanged email -> { model with Email = email }, None
   | NameChanged name -> { model with Name = name }, None
+  | ReplyEmailsChanged asked -> { model with ReplyEmails = asked }, None
   | EmailLeft -> { model with EmailTouched = model.EmailTouched || model.Email.Trim() <> "" }, None
   | Edited(form, change) -> edited form change model
   | Submitted form -> submitted form model

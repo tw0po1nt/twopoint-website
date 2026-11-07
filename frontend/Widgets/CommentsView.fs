@@ -329,7 +329,7 @@ let private identityFields (model: unit -> Comments.Model) (locked: unit -> bool
         type' = "email",
         name = "email",
         autocomplete = "email",
-        placeholder = "only to verify you",
+        placeholder = Comments.emailPlaceholder,
         disabled = locked (),
         value = model().Email,
         onInput = (fun event -> dispatch (Comments.EmailChanged(text event))),
@@ -459,6 +459,18 @@ let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comme
 
       Show(when' = Comments.showsTextError (model ()).Page) {
         p (class' = "comment-error", role = "alert") { "Write a comment." }
+      }
+
+      label (class' = "comment-check") {
+        input (
+          type' = "checkbox",
+          name = Comments.replyEmailsKey,
+          disabled = pageLocked (),
+          checked' = model().ReplyEmails,
+          onChange = fun event -> dispatch (Comments.ReplyEmailsChanged (event.target :?> HTMLInputElement).``checked``)
+        )
+
+        span () { Comments.replyEmailsLabel }
       }
 
       button (type' = "submit", disabled = pageLocked ()) { buttonText (model ()) }

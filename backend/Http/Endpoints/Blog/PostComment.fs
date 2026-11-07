@@ -22,11 +22,12 @@ open System.Net
 open System.Text.Json
 open System.Threading
 
-/// `ReplyTo` is the ID of the top-level comment of a reply.
+/// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyEmails` is the checkbox of the page form.
 type NewCommentJson =
   { ValidationId : string option
     Comment : string option
-    ReplyTo : string option }
+    ReplyTo : string option
+    ReplyEmails : bool option }
 
 type PostedCommentDto =
   { Id : string
@@ -113,8 +114,11 @@ type PostComment (
       member this.GetUtcNow () = DateTime.UtcNow
       member this.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-      member this.CreateComment post commenter newComment topLevel approval =
-        postDependencies.CreateComment post commenter newComment topLevel approval
+      member this.NewCommentId () = CommentId.ofGuid (Guid.NewGuid())
+      member this.CreateComment id post commenter newComment topLevel approval replyEmails =
+        postDependencies.CreateComment id post commenter newComment topLevel approval replyEmails
+      member this.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid (Guid.NewGuid())
+      member this.CreateReplyEmailStop stop = postDependencies.CreateReplyEmailStop stop
       member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId
       member this.Stage = config.Stage
     }
@@ -123,7 +127,8 @@ type PostComment (
       { NewComment.Dto.Post = NewComment.Post slug
         NewComment.Dto.ValidationId = json.ValidationId |> Option.defaultValue "" |> NewComment.ValidationId
         NewComment.Dto.Comment = json.Comment |> Option.map NewComment.Comment |> Option.defaultValue (NewComment.Comment "")
-        NewComment.Dto.ReplyTo = json.ReplyTo |> Option.map NewComment.ReplyTo }
+        NewComment.Dto.ReplyTo = json.ReplyTo |> Option.map NewComment.ReplyTo
+        NewComment.Dto.ReplyEmails = json.ReplyEmails |> Option.defaultValue false |> NewComment.ReplyEmails }
 
     let! postCommentResult = ct |> postComment newComment
     let answer success message comment =

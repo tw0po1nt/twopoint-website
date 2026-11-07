@@ -13,6 +13,7 @@ let private date = DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc)
 
 let private commentId = "8f6c1b2e-0d4a-4c3e-9b1a-2f5d6e7a8b9c"
 let private parentId = "3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f"
+let private stopToken = "6b5a4f3e-2d1c-4b0a-9f8e-7d6c5b4a3f2e"
 
 let private commenter =
   { DbCommenter.ValidationId = "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d"
@@ -45,6 +46,27 @@ let private parent (comment : Comment) = comment.Parent |> Option.map string
 let private commenterId (comment : Comment) =
   comment |> Comment.commenter |> Option.map (_.ValidationId >> string)
 
+let private consentOn (consentDate : DateTime) =
+  { ReplyEmailConsent.ConsentDate = consentDate
+    StopToken = ReplyEmailStopToken.ofGuid (Guid stopToken)
+    StopDate = None }
+
+let private storedWith (consent : ReplyEmailConsent) =
+  match commenter.ToCommenter() with
+  | Ok writer ->
+    DbComment
+      .OfCommenter(
+        commentId,
+        date,
+        Slug.Unsafe.create "first-post",
+        writer,
+        NonEmptyString.Unsafe.create None "A comment",
+        None,
+        Some consent
+      )
+      .ToEntity()
+  | Error errors -> failwithf "Expected a commenter, got %A" errors
+
 [<Tests>]
 let tests =
   testList "Comment entity" [
@@ -61,6 +83,54 @@ let tests =
         Expect.equal (parent comment) None "Expected a top-level comment"
         Expect.equal (commenterId comment) (Some commenter.ValidationId) "Expected the commenter"
       | Error errors -> failtestf "Expected a comment, got %A" errors
+    }
+
+    test "an entity with no consent properties reads as a comment with no consent" {
+      match entityWith [ "CommenterId", commenter.ValidationId ] |> read (DbCommentWriter.Commenter commenter) with
+      | Ok comment -> Expect.isNone comment.ReplyEmails "Expected no consent"
+      | Error errors -> failtestf "Expected a comment, got %A" errors
+    }
+
+    test "an entity with a consent reads back with the consent date, the stop token, and the stop date" {
+      let stopDate = date.AddDays 3.0
+
+      let entity =
+        entityWith
+          [ "CommenterId", commenter.ValidationId
+            "ReplyEmailsConsentDate", date.ToString("o")
+            "ReplyEmailsStopToken", stopToken
+            "ReplyEmailsStopDate", stopDate.ToString("o") ]
+
+      match entity |> read (DbCommentWriter.Commenter commenter) with
+      | Ok { ReplyEmails = Some consent } ->
+        Expect.equal consent.ConsentDate date "Expected the consent date"
+        Expect.equal (string consent.StopToken) stopToken "Expected the stop token"
+        Expect.equal consent.StopDate (Some stopDate) "Expected the stop date"
+      | other -> failtestf "Expected a comment with a consent, got %A" other
+    }
+
+    test "an entity with a consent date and no stop token is refused" {
+      let entity = entityWith [ "CommenterId", commenter.ValidationId; "ReplyEmailsConsentDate", date.ToString("o") ]
+
+      Expect.isError (DbComment.FromEntity entity) "Expected a refusal"
+    }
+
+    test "a new comment with a consent is stored with the consent and no stop date" {
+      let consent = consentOn date
+      let entity = storedWith consent
+      Expect.isFalse (entity.ContainsKey "ReplyEmailsStopDate" && not (isNull entity["ReplyEmailsStopDate"])) "Expected no stop date"
+
+      match entity |> read (DbCommentWriter.Commenter commenter) with
+      | Ok read -> Expect.equal read.ReplyEmails (Some consent) "Expected the same consent"
+      | Error errors -> failtestf "Expected a comment, got %A" errors
+    }
+
+    test "a consent date in local time is stored in UTC and reads back as the same instant" {
+      let entity = storedWith (consentOn (date.ToLocalTime()))
+
+      match entity |> read (DbCommentWriter.Commenter commenter) with
+      | Ok { ReplyEmails = Some consent } -> Expect.equal consent.ConsentDate date "Expected the same instant in UTC"
+      | other -> failtestf "Expected a comment with a consent, got %A" other
     }
 
     test "a reply from a commenter reads back with its parent and its commenter" {
@@ -97,7 +167,8 @@ let tests =
             Slug.Unsafe.create "first-post",
             replier,
             NonEmptyString.Unsafe.create None "A reply",
-            Some topLevel
+            Some topLevel,
+            None
           )
 
         match reply.ToEntity() |> read (DbCommentWriter.Commenter commenter) with
@@ -153,7 +224,8 @@ let tests =
           CreatedDate = date
           Content = "A reply"
           ParentId = Some parentId
-          Writer = DbCommentWriterKey.Author }
+          Writer = DbCommentWriterKey.Author
+          ReplyEmails = None }
 
       let entity = comment.ToEntity()
 
@@ -168,7 +240,8 @@ let tests =
           CreatedDate = date
           Content = "A comment"
           ParentId = None
-          Writer = DbCommentWriterKey.Commenter commenter.ValidationId }
+          Writer = DbCommentWriterKey.Commenter commenter.ValidationId
+          ReplyEmails = None }
 
       Expect.equal (comment.ToEntity() |> DbComment.FromEntity) (Ok comment) "Expected the same comment"
     }

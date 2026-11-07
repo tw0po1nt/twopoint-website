@@ -87,7 +87,8 @@ let private returned: Comments.Return =
     Name = "Reader"
     Comment = "Nice post"
     ValidationId = "validation-2"
-    ReplyTo = None }
+    ReplyTo = None
+    ReplyEmails = false }
 
 let private at id (day: int) (replyTo: string option) (writer: Writer) : Comment =
   { Id = id
@@ -247,7 +248,7 @@ let tests =
       test "a submit with a known email address posts the comment with its validation ID" {
         let model, effect = run (filled "known@example.com" @ [ submitted ])
         Expect.equal model.PageStatus Comments.Posting "The form is sending"
-        Expect.equal effect (Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Nice post & thanks"; ReplyTo = None }))) "The post has the trimmed comment"
+        Expect.equal effect (Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Nice post & thanks"; ReplyTo = None; ReplyEmails = Some false }))) "The post has the trimmed comment"
       }
 
       test "a submit with an email address that is not valid or no comment sends nothing and shows each error" {
@@ -494,7 +495,7 @@ let tests =
       test "a submit from the preview tab posts the comment, and the form goes back to write" {
         let sending, effect = from previewing [ Comments.EmailChanged "known@example.com"; submitted ]
         Expect.equal sending.PageStatus Comments.Posting "The form is sending"
-        Expect.equal effect (Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Use `List.map`"; ReplyTo = None }))) "The post has the comment"
+        Expect.equal effect (Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Use `List.map`"; ReplyTo = None; ReplyEmails = Some false }))) "The post has the comment"
 
         let posted, _ = from sending [ postAnswered(postAnswer true None None) ]
         Expect.equal posted.Page.Tab Comments.Write "The empty form shows the write tab"
@@ -737,7 +738,7 @@ let tests =
 
         Expect.equal
           effect
-          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-1"; Comment = "Me too"; ReplyTo = Some "a" })))
+          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-1"; Comment = "Me too"; ReplyTo = Some "a"; ReplyEmails = None })))
           "The reply posts with the shared email address"
       }
     ]
@@ -750,7 +751,7 @@ let tests =
 
         Expect.equal
           effect
-          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-1"; Comment = "Me too"; ReplyTo = Some "a" })))
+          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-1"; Comment = "Me too"; ReplyTo = Some "a"; ReplyEmails = None })))
           "The post of the reply"
       }
 
@@ -869,7 +870,7 @@ let tests =
 
         Expect.equal
           posted
-          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-2"; Comment = "Me too"; ReplyTo = Some "a" })))
+          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-2"; Comment = "Me too"; ReplyTo = Some "a"; ReplyEmails = None })))
           "The post of the reply"
       }
 
@@ -884,6 +885,92 @@ let tests =
         Expect.equal scroll (Some(Comments.ScrollTo Comments.ToSection)) "The scroll to the section when the list does not load"
         Expect.isNone failed.Reply "No form is open when the list does not load"
         Expect.equal (failed.Drafts.TryFind "a" |> Option.map _.Editor.Text) (Some "Me too") "The text is kept when the list does not load"
+      }
+    ]
+
+    testList "reply emails" [
+      test "the checkbox starts unchecked, and the post of the page form sends its value" {
+        Expect.isFalse start.ReplyEmails "The checkbox is unchecked"
+
+        let _, unchecked = run (filled "known@example.com" @ [ submitted ])
+        let _, checkedBox = run (filled "known@example.com" @ [ Comments.ReplyEmailsChanged true; submitted ])
+
+        let post replyEmails =
+          Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Nice post & thanks"; ReplyTo = None; ReplyEmails = Some replyEmails }))
+
+        Expect.equal unchecked (post false) "The post of an unchecked box"
+        Expect.equal checkedBox (post true) "The post of a checked box"
+      }
+
+      test "a reply sends no reply-email choice, also when the checkbox of the page form is checked" {
+        let _, effect =
+          from verified [ Comments.ReplyEmailsChanged true; Comments.ReplyOpened "a"; replyTo "a" (Comments.TextChanged "Me too"); Comments.Submitted(Comments.Form.Reply "a") ]
+
+        Expect.equal
+          effect
+          (Some(Comments.Post(Comments.Form.Reply "a", { ValidationId = "validation-1"; Comment = "Me too"; ReplyTo = Some "a"; ReplyEmails = None })))
+          "The post of the reply"
+      }
+
+      test "a checked box goes in the link back of a new email address, and comes back checked" {
+        let _, effect = run (filled "reader@example.com" @ [ Comments.ReplyEmailsChanged true; submitted ])
+
+        Expect.equal
+          effect
+          (Some(
+            pageValidate
+              { EmailAddress = "reader@example.com"
+                Name = Some "Reader"
+                RedirectUri = "https://twopoint.dev/posts/a-post/?email=reader%40example.com&name=Reader&comment=Nice%20post%20%26%20thanks&replyEmails=true#comments" }
+          ))
+          "The redirect URI has the checkbox"
+
+        let parsed =
+          Comments.parse [ "email", "reader@example.com"; "name", "Reader"; "comment", "Nice post"; "commenterValidationId", "validation-2"; "replyEmails", "true" ]
+
+        Expect.equal parsed (Some { returned with ReplyEmails = true }) "The query gives the checkbox back"
+
+        let model, _ = Comments.init pageUrl known parsed None
+        Expect.isTrue model.ReplyEmails "The checkbox is checked again after the return"
+      }
+
+      test "a query with no replyEmails or another value leaves the checkbox unchecked" {
+        let query = [ "email", "reader@example.com"; "comment", "Nice post"; "commenterValidationId", "validation-2" ]
+
+        for value in [ None; Some "false"; Some " " ] do
+          let parsed = Comments.parse (query @ (value |> Option.map (fun value -> "replyEmails", value) |> Option.toList))
+          Expect.equal (parsed |> Option.map _.ReplyEmails) (Some false) $"Unchecked for %A{value}"
+      }
+
+      test "the link back of a reply has no checkbox value" {
+        let _, effect =
+          from
+            withThreads
+            [ Comments.ReplyEmailsChanged true
+              Comments.ReplyOpened "a"
+              Comments.EmailChanged "reader@example.com"
+              replyTo "a" (Comments.TextChanged "Me too")
+              Comments.Submitted(Comments.Form.Reply "a") ]
+
+        Expect.equal
+          effect
+          (Some(
+            Comments.Validate(
+              Comments.Form.Reply "a",
+              { EmailAddress = "reader@example.com"
+                Name = None
+                RedirectUri = "https://twopoint.dev/posts/a-post/?email=reader%40example.com&comment=Me%20too&replyTo=a#comments" }
+            )
+          ))
+          "The redirect URI has the thread only"
+      }
+
+      test "a post that goes through unchecks the box for the next comment" {
+        let model, _ = run (filled "known@example.com" @ [ Comments.ReplyEmailsChanged true; submitted; postAnswered (postAnswer true None None) ])
+        Expect.isFalse model.ReplyEmails "The checkbox is unchecked"
+
+        let failed, _ = run (filled "known@example.com" @ [ Comments.ReplyEmailsChanged true; submitted; unanswered ])
+        Expect.isTrue failed.ReplyEmails "A failed post keeps the checkbox"
       }
     ]
 
