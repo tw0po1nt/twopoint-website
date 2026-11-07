@@ -618,16 +618,16 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None
 
-/// None when that page has no such comment.
-let deleteChosen (model: Model) =
+/// The comment of the delete dialog, with the message of its delete. None when that page has no such comment.
+let private deleteTarget (model: Model) =
   match model.Overlay, model.Router.Route with
   | Some(DeleteDialog commentId), Route.ModerationQueue ->
     Queue.tryFind commentId model.Queue
-    |> Option.map (fun _ -> Queue(Queue.Chosen(commentId, Queue.Delete)))
+    |> Option.map (fun row -> row.Comment.Comment, Queue(Queue.Chosen(commentId, Queue.Delete)))
   | Some(DeleteDialog commentId), Route.PostComments _ ->
     model.PostComments
     |> Option.bind (PostComments.tryFind commentId)
-    |> Option.map (fun _ -> PostComments(PostComments.Chosen(commentId, Queue.Delete)))
+    |> Option.map (fun row -> row.Comment, PostComments(PostComments.Chosen(commentId, Queue.Delete)))
   | Some(DeleteDialog _), _
   | Some DeleteCommenterDialog, _
   | Some DeleteSubscriptionDialog, _
@@ -635,6 +635,13 @@ let deleteChosen (model: Model) =
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
+
+/// None when that page has no such comment.
+let deleteChosen (model: Model) = deleteTarget model |> Option.map snd
+
+/// The number of replies that go with the comment of the delete dialog.
+let deleteReplyCount (model: Model) =
+  deleteTarget model |> Option.map (fun (comment, _) -> comment.ReplyCount)
 
 let deleteCommenterChosen (model: Model) =
   match model.Overlay, model.Router.Route with
@@ -649,6 +656,10 @@ let deleteCommenterChosen (model: Model) =
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
+
+/// The number of replies from other writers that go with the commenter of the delete dialog.
+let deleteCommenterOtherReplies (model: Model) =
+  deleteCommenterChosen model |> Option.bind (fun _ -> model.Commenter |> Option.bind Commenter.tryOtherReplies)
 
 let deleteSubscriptionChosen (model: Model) =
   match model.Overlay, model.Router.Route, model.Subscriptions.Sheet with

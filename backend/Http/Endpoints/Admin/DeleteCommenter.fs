@@ -53,6 +53,7 @@ type DeleteCommenter(
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
           member _.GetCommentsOfCommenter commenter = postDependencies.GetCommentsOfCommenter commenter
+          member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
           member _.DeleteComment comment = postDependencies.DeleteComment comment
           member _.DeleteCommenter commenter = postDependencies.DeleteCommenter commenter
         }
@@ -60,6 +61,11 @@ type DeleteCommenter(
         let deletion = { CommenterDeletion.Dto.ValidationId = CommenterDeletion.ValidationId validationId }
 
         let! deletionResult = ct |> deleteCommenter deletion
+
+        match deletionResult with
+        | Ok (DeleteCommenter.Event.Deleted (_, others)) ->
+          logger.LogInformation("Deleted commenter '{validationId}' with {others} replies from other writers", validationId, others)
+        | Error _ -> ()
         let apiResponse, statusCode =
           deletionResult
           |> ActionResult.toApiResponse

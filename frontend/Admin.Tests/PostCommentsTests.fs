@@ -17,7 +17,8 @@ let private comment id approval : Api.Comment =
     Status = approval
     Content = "A comment"
     ReplyTo = None
-    TopLevel = None }
+    TopLevel = None
+    ReplyCount = 0 }
 
 let private waiting = comment "waiting" Api.CommentApproval.New
 let private approved = comment "approved" Api.CommentApproval.Approved
@@ -55,7 +56,8 @@ let private authorReply : Api.Comment =
     Status = Api.CommentApproval.Approved
     Content = "An answer"
     ReplyTo = Some "waiting"
-    TopLevel = None }
+    TopLevel = None
+    ReplyCount = 0 }
 
 let private replyTests =
   testList "the reply as the author" [
@@ -153,9 +155,9 @@ let private threaded () =
       (PostComments.Answered(
         "first",
         Ok
-          [ approved
+          [ { approved with ReplyCount = 2 }
             replyTo "approved" "first-reply" Api.CommentApproval.Approved
-            waiting
+            { waiting with ReplyCount = 1 }
             replyTo "approved" "second-reply" Api.CommentApproval.New
             replyTo "waiting" "third-reply" Api.CommentApproval.Rejected ]
       ))
@@ -221,10 +223,70 @@ let private threadTests =
     }
   ]
 
+/// The reply count and the text of the delete dialog of the comment.
+let private deleteDialog (commentId: string) (model: Shell.Model) =
+  let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog commentId)) model
+  Shell.deleteReplyCount model, Shell.deleteReplyCount model |> Option.map Queue.deleteText
+
+let private deleted (commentId: string) (model: Shell.Model) =
+  let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog commentId)) model
+  let model, _ = Shell.update (Shell.deleteChosen model).Value model
+  fst (send (PostComments.Done(commentId, Queue.Delete, Ok())) model)
+
+let private deleteTests =
+  testList "the delete of a thread" [
+    test "the delete dialog of a top-level comment gives the number of replies that go with it" {
+      Expect.equal
+        (deleteDialog "approved" (threaded ()))
+        (Some 2,
+         Some
+           "This permanently deletes the comment, its 2 replies, and their history. To hide the thread from readers but keep it, reject the comment instead.")
+        "Two replies"
+
+      Expect.equal
+        (deleteDialog "waiting" (threaded ()) |> snd)
+        (Some
+          "This permanently deletes the comment, its 1 reply, and their history. To hide the thread from readers but keep it, reject the comment instead.")
+        "One reply"
+    }
+
+    test "the delete dialog of a reply names no other comment" {
+      Expect.equal
+        (deleteDialog "first-reply" (threaded ()))
+        (Some 0,
+         Some "This permanently deletes the comment and its history. To hide it from readers but keep it, reject it instead.")
+        "No reply"
+    }
+
+    test "the delete of a top-level comment removes its replies from the page" {
+      let model = deleted "approved" (threaded ())
+      Expect.equal (heads model) [ "waiting" ] "The other thread stays"
+      Expect.isNone (PostComments.tryFind "first-reply" (page model)) "The first reply goes"
+      Expect.isNone (PostComments.tryFind "second-reply" (page model)) "The second reply goes"
+      Expect.equal (replies "waiting" model) [ "third-reply", Api.CommentApproval.Rejected ] "The reply of the other thread stays"
+    }
+
+    test "the delete of a reply lowers the count of its thread" {
+      let model = deleted "first-reply" (threaded ())
+      Expect.equal (replies "approved" model |> List.map fst) [ "second-reply" ] "The other reply stays"
+      Expect.equal (deleteDialog "approved" model |> fst) (Some 1) "One reply left"
+    }
+
+    test "a posted reply from the author raises the count of its thread" {
+      let model, _ = reply (AuthorReply.Opened "approved") (threaded ())
+      let model, _ = typed "approved" "An answer" model
+      let model, _ = reply AuthorReply.Submitted model
+      let answer = { authorReply with ReplyTo = Some "approved" }
+      let model, _ = reply (AuthorReply.Answered("approved", Ok { Reply = answer; Approved = [] })) model
+      Expect.equal (deleteDialog "approved" model |> fst) (Some 3) "Three replies"
+    }
+  ]
+
 [<Tests>]
 let tests =
   testList "PostComments" [
     threadTests
+    deleteTests
 
     test "a start on the page of a post loads its comments with the first API calls" {
       let model, effect = start "/posts/first/comments"

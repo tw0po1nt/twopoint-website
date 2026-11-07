@@ -25,7 +25,8 @@ let private posted id (commenter: Api.Commenter) approval : Api.PostedComment =
         Status = approval
         Content = "A comment"
         ReplyTo = None
-        TopLevel = None } }
+        TopLevel = None
+        ReplyCount = 0 } }
 
 let private waiting = posted "waiting" ada Api.CommentApproval.New
 let private approved = posted "approved" ada Api.CommentApproval.Approved
@@ -46,10 +47,20 @@ let private send msg model = Shell.update (Shell.Commenter msg) model
 
 let private opened () =
   let model, _ = start "/commenters/ada"
-  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [ waiting; approved ] })) model
+  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [ waiting; approved ]; OtherReplies = 0 })) model
   model
 
 let private page (model: Shell.Model) = model.Commenter |> Option.get
+
+/// The count and the text of the delete dialog of a commenter with `otherReplies` replies from others in their threads.
+let private deleteDialogWith (otherReplies: int) =
+  let model, _ = start "/commenters/ada"
+
+  let model, _ =
+    send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [ waiting; approved ]; OtherReplies = otherReplies })) model
+
+  let model, _ = Shell.update (Shell.Opened Shell.DeleteCommenterDialog) model
+  Shell.deleteCommenterOtherReplies model, Shell.deleteCommenterOtherReplies model |> Option.map Commenter.deleteText
 
 let private loaded (model: Shell.Model) =
   match (page model).Page with
@@ -120,7 +131,7 @@ let private pageTests =
 
     test "an answer for another commenter changes nothing" {
       let model, _ = start "/commenters/grace"
-      let next, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [] })) model
+      let next, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = []; OtherReplies = 0 })) model
       Expect.equal next model "The page still waits for its own commenter"
     }
 
@@ -180,6 +191,27 @@ let private pageTests =
       Expect.equal page.Commenter.Status Api.New "The status stays"
     }
 
+    test "the delete dialog gives the number of replies from others that go with the commenter" {
+      Expect.equal
+        (deleteDialogWith 2)
+        (Some 2,
+         Some
+           "This permanently deletes the commenter, all their comments, and 2 replies from others in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead.")
+        "Two replies"
+
+      Expect.equal
+        (deleteDialogWith 1 |> snd)
+        (Some
+          "This permanently deletes the commenter, all their comments, and 1 reply from someone else in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead.")
+        "One reply"
+
+      Expect.equal
+        (deleteDialogWith 0 |> snd)
+        (Some
+          "This permanently deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead.")
+        "No reply"
+    }
+
     test "a delete with no confirmation sends nothing" {
       let _, effect = send (Commenter.Chosen Commenter.Delete) (opened ())
       Expect.isNone effect "No call"
@@ -229,7 +261,7 @@ let private replyTo (topLevelId: string) approval (comment: Api.PostedComment) =
 
 let private withReplies (comments: Api.PostedComment list) =
   let model, _ = start "/commenters/ada"
-  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = comments })) model
+  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = comments; OtherReplies = 0 })) model
   model
 
 let private topLevelOf (commentId: string) (model: Shell.Model) =

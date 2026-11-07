@@ -136,7 +136,10 @@ let private queued = queuedWith "A comment"
 let private rendered (posted : PostedComment) =
   { AdminPostedComment.Post = posted.Post
     PostTitle = posted.PostTitle
-    Comment = { Comment = RenderedComment.ofComment TwoPoint.Site.Render.Stage.Production posted.Comment; TopLevel = None } }
+    Comment =
+      { Comment = RenderedComment.ofComment TwoPoint.Site.Render.Stage.Production posted.Comment
+        TopLevel = None
+        ReplyCount = 0 } }
 
 let private queueTests =
   testList "GetModerationQueue" [
@@ -618,6 +621,11 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
       comments.AddRange postedAfterFirstRead
       postedAfterFirstRead.Clear()
       CancellableTaskResult.singleton read
+    member _.GetRepliesOf topLevels =
+      comments
+      |> Seq.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+      |> List.ofSeq
+      |> CancellableTaskResult.singleton
     member _.DeleteComment comment =
       comments.RemoveAll(fun stored -> stored.Id = comment.Id) |> ignore
       CancellableTaskResult.singleton ()
@@ -658,7 +666,7 @@ let private deleteTests =
       let store = FakeCommenterStore ([ commenter CommenterStatus.Banned ], commentsOfCommenter @ [ otherComment ])
 
       match deleteCommenter store with
-      | Ok (DeleteCommenter.Event.Deleted deleted) ->
+      | Ok (DeleteCommenter.Event.Deleted (deleted, _)) ->
         Expect.equal deleted.ValidationId (commenter CommenterStatus.Banned).ValidationId "Expected the deleted commenter"
         Expect.isEmpty store.Commenters "Expected no commenter in the store"
         Expect.equal store.Comments [ otherComment ] "Expected only the comment of another commenter"
@@ -704,6 +712,7 @@ type private FakeCommenterDependencies(existing : Commenter option, comments : P
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
     member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
     member _.GetCommentById _ = CancellableTaskResult.singleton None
+    member _.GetRepliesOf _ = CancellableTaskResult.singleton []
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private getCommenter (dependencies : FakeCommenterDependencies) =
@@ -728,7 +737,7 @@ let private commenterQueryTests =
 
       Expect.equal
         (getCommenter (FakeCommenterDependencies (Some (commenter CommenterStatus.Trusted), [ newest; oldest ])))
-        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] |> List.map rendered }))
+        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] |> List.map rendered; OtherReplies = 0 }))
         "Expected the oldest comment first"
     }
 

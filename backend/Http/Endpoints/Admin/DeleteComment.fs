@@ -53,12 +53,18 @@ type DeleteComment(
           new DeleteComment.Dependencies with
           
           member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
           member _.DeleteComment comment = postDependencies.DeleteComment comment
         }
 
         let deletion = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
 
         let! deletionResult = ct |> deleteComment deletion
+
+        match deletionResult with
+        | Ok (DeleteComment.Event.Deleted (deletedId, others)) ->
+          logger.LogInformation("Deleted comment '{commentId}' with {others} replies", deletedId.ToString(), others)
+        | Error _ -> ()
         let apiResponse, statusCode =
           deletionResult
           |> ActionResult.toApiResponse

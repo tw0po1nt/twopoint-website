@@ -20,7 +20,8 @@ let private queued id (name: string) status : Api.PostedComment =
         Status = Api.CommentApproval.New
         Content = "A comment"
         ReplyTo = None
-        TopLevel = None } }
+        TopLevel = None
+        ReplyCount = 0 } }
 
 let private first = queued "first" "Ada" Api.New
 let private second = queued "second" "Grace" Api.Trusted
@@ -67,7 +68,8 @@ let private answer (commentId: string) (approved: string list) : Api.AuthorReply
         Status = Api.CommentApproval.Approved
         Content = "An answer"
         ReplyTo = Some commentId
-        TopLevel = None }
+        TopLevel = None
+        ReplyCount = 0 }
     Approved = approved }
 
 let private replyTests =
@@ -243,10 +245,40 @@ let private contextTests =
     }
   ]
 
+let private deleteTests =
+  testList "the delete of a thread in the queue" [
+    test "the delete dialog gives the number of replies that go with the comment" {
+      let topLevel = queued "top-level" "Ada" Api.New
+      let model = loadedWith [ { topLevel with Comment.ReplyCount = 1 }; replyOf second ]
+      let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog "top-level")) model
+      Expect.equal (Shell.deleteReplyCount model) (Some 1) "One reply"
+
+      Expect.equal
+        (Shell.deleteReplyCount model |> Option.map Queue.deleteText)
+        (Some
+          "This permanently deletes the comment, its 1 reply, and their history. To hide the thread from readers but keep it, reject the comment instead.")
+        "The text names the reply"
+
+      let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog "second")) model
+      Expect.equal (Shell.deleteReplyCount model) (Some 0) "A reply has none"
+    }
+
+    test "the delete of a top-level comment removes its replies from the queue" {
+      let topLevel = queued "top-level" "Ada" Api.New
+      let model = loadedWith [ { topLevel with Comment.ReplyCount = 1 }; replyOf second; first ]
+      let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog "top-level")) model
+      let model, _ = Shell.update (Shell.deleteChosen model).Value model
+      let model, _ = send (Queue.Done("top-level", Queue.Delete, Ok())) model
+      Expect.isNone (Queue.tryFind "second" model.Queue) "The reply goes"
+      Expect.equal (Queue.count model.Queue) (Some 1) "Only the other comment stays"
+    }
+  ]
+
 [<Tests>]
 let tests =
   testList "Queue" [
     contextTests
+    deleteTests
 
     test "the navigation count is the number of comments in the queue, after the queue loads" {
       let model, _ = Shell.init "/comments"

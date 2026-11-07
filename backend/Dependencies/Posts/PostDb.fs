@@ -352,6 +352,10 @@ type internal IPostDb =
     approvals: string list
       -> post: DbPost
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
+  abstract member GetRepliesOf:
+    approvals: string list
+      -> topLevelIds: string seq
+      -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentsOnAllPosts:
     approvals: string list
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
@@ -473,6 +477,25 @@ module internal PostDb =
       return comment.Writer |> DbCommentWriter.tryOfKey (commenter |> Option.flatten |> Option.toList)
     }
 
+    /// Reads the commenter and the statuses of each comment.
+    let withWriters approvals (dbComments : DbComment array) = cancellableTaskResult {
+      let getCommenters =
+        dbComments
+        |> Array.choose (_.Writer >> DbCommentWriterKey.commenterId)
+        |> whereAnyKey commentersTable DbCommenter.FromEntity (fun commenterId ->
+          eq "PartitionKey" commenterId + eq "RowKey" commenterId
+        )
+
+      let getCommentStatuses =
+        dbComments
+        |> Array.map _.Id
+        |> whereAnyKey commentStatusesTable DbCommentStatus.FromEntity (eq "PartitionKey")
+
+      let! commenters, statuses = CancellableTaskResult.parallelZip getCommenters getCommentStatuses
+
+      return! withLatestStatus logger approvals dbComments commenters statuses
+    }
+
     { new IPostDb with
       
       member _.GetAllPosts () =
@@ -521,27 +544,13 @@ module internal PostDb =
         deleteByKeys commentersTable PostDbError.validation validationId validationId
         
       member _.GetCommentsForPost approvals post = cancellableTaskResult {
-        // Get comments
         let! dbComments = eq "PartitionKey" post.Slug |> where commentsTable DbComment.FromEntity
-        let dbComments = dbComments |> List.toArray
-      
-        // for every comment, get the commenter
-        let getCommenters =
-          dbComments
-          |> Array.choose (_.Writer >> DbCommentWriterKey.commenterId)
-          |> whereAnyKey commentersTable DbCommenter.FromEntity (fun commenterId ->
-            eq "PartitionKey" commenterId + eq "RowKey" commenterId
-          )
+        return! withWriters approvals (dbComments |> List.toArray)
+      }
 
-        // for every comment, get the comment statuses
-        let getCommentStatuses =
-          dbComments
-          |> Array.map _.Id
-          |> whereAnyKey commentStatusesTable DbCommentStatus.FromEntity (eq "PartitionKey")
-
-        let! commenters, statuses = CancellableTaskResult.parallelZip getCommenters getCommentStatuses
-
-        return! withLatestStatus logger approvals dbComments commenters statuses
+      member _.GetRepliesOf approvals topLevelIds = cancellableTaskResult {
+        let! dbComments = topLevelIds |> whereAnyKey commentsTable DbComment.FromEntity (eq "ParentId")
+        return! withWriters approvals (dbComments |> List.toArray)
       }
 
       member _.GetCommentsOnAllPosts approvals = cancellableTaskResult {

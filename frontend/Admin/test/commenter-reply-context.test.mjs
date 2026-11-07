@@ -17,7 +17,7 @@ const topLevel = (status) => ({
 const posted = (id, comment) => ({
   postSlug: 'first',
   postTitle: 'First',
-  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, writer: 'commenter', status: 'approved', content: '<p>It keeps it.</p>', ...comment },
+  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, writer: 'commenter', status: 'approved', content: '<p>It keeps it.</p>', replyCount: 0, ...comment },
 });
 
 const page = {
@@ -27,6 +27,7 @@ const page = {
     posted('c-2', { content: '<p>A top-level comment.</p>' }),
     posted('c-8', { replyTo: 'c-0', topLevel: topLevel('rejected') }),
   ],
+  otherReplies: 0,
 };
 
 const respond = (url) => {

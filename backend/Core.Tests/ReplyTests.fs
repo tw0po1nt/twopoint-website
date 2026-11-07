@@ -395,6 +395,10 @@ type private FakeCommenterPage(comments : PostedComment list, others : Comment l
     member _.GetCommentById id =
       reads.Add id
       others |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetRepliesOf topLevels =
+      others
+      |> List.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+      |> CancellableTaskResult.singleton
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private topLevelOf (comment : AdminComment) =
@@ -498,6 +502,178 @@ let private countTests =
     }
   ]
 
+// Two threads on one post: Ada starts the first and replies in the second, which Ben starts.
+let private adaId = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+let private benId = "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e"
+let private namedCommenter (validationId : string) (name : string) =
+  Commenter.create validationId $"{name.ToLowerInvariant()}@example.com" (Some name) "2026-01-01T00:00:00.0000000Z" "trusted" |> ok
+let private ada = namedCommenter adaId "Ada"
+let private ben = namedCommenter benId "Ben"
+
+let private threadComment (number : int) (parent : int option) (writer : CommentWriter) =
+  let idOf (number : int) = sprintf "00000000-0000-4000-8000-%012d" number
+  commentWith (idOf number) (parent |> Option.map idOf) writer CommentApproval.Approved $"2026-02-{number:D2}T00:00:00.0000000Z"
+
+let private adaThread = threadComment 1 None (CommentWriter.Commenter ada)
+let private benInAdaThread = threadComment 2 (Some 1) (CommentWriter.Commenter ben)
+let private authorInAdaThread = threadComment 3 (Some 1) CommentWriter.Author
+let private adaInAdaThread = threadComment 4 (Some 1) (CommentWriter.Commenter ada)
+let private benThread = threadComment 5 None (CommentWriter.Commenter ben)
+let private adaInBenThread = threadComment 6 (Some 5) (CommentWriter.Commenter ada)
+let private benInBenThread = threadComment 7 (Some 5) (CommentWriter.Commenter ben)
+
+let private bothThreads =
+  [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; benThread; adaInBenThread; benInBenThread ]
+
+let private writtenBy (commenter : Commenter) (comment : Comment) =
+  Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId)
+
+type private FakeCommentStore(commenters : Commenter list, comments : Comment list) =
+  let mutable commenters = commenters
+  let mutable comments = comments
+  let deleted = ResizeArray<CommentId>()
+
+  member _.Comments = comments
+  member _.Commenters = commenters
+  member _.Deleted = List.ofSeq deleted
+
+  member _.RepliesOf (topLevels : Comment list) =
+    comments
+    |> List.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+    |> CancellableTaskResult.singleton
+
+  member _.DeleteComment (comment : Comment) =
+    deleted.Add comment.Id
+    comments <- comments |> List.filter (fun stored -> stored.Id <> comment.Id)
+    CancellableTaskResult.singleton ()
+
+  interface DeleteComment.Dependencies with
+    member _.GetCommentById id = comments |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
+    member this.GetRepliesOf topLevels = this.RepliesOf topLevels
+    member this.DeleteComment comment = this.DeleteComment comment
+
+  interface DeleteCommenter.Dependencies with
+    member _.GetCommenterByValidationId validationId =
+      commenters |> List.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
+    member _.GetCommentsOfCommenter commenter =
+      comments |> List.filter (writtenBy commenter) |> CancellableTaskResult.singleton
+    member this.GetRepliesOf topLevels = this.RepliesOf topLevels
+    member this.DeleteComment comment = this.DeleteComment comment
+    member _.DeleteCommenter commenter =
+      commenters <- commenters |> List.filter (fun stored -> stored.ValidationId <> commenter.ValidationId)
+      CancellableTaskResult.singleton ()
+
+let private deleteCommentOf (store : FakeCommentStore) (comment : Comment) =
+  let dto = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId (string comment.Id) }
+  (DeleteComment.withDependencies store dto CancellationToken.None).Result
+
+let private deleteCommenterOf (store : FakeCommentStore) (commenter : Commenter) =
+  let dto = { CommenterDeletion.Dto.ValidationId = CommenterDeletion.ValidationId (string commenter.ValidationId) }
+  (DeleteCommenter.withDependencies store dto CancellationToken.None).Result
+
+let private ids (comments : Comment list) = comments |> List.map (_.Id >> string)
+
+let private deleteTests =
+  testList "the deletes" [
+    test "a thread delete removes the top-level comment and each reply, also a reply from the author, with the count" {
+      let removal = CommentDeleteRule.thread bothThreads adaThread
+
+      Expect.equal
+        (ids removal.Comments)
+        (ids [ benInAdaThread; authorInAdaThread; adaInAdaThread; adaThread ])
+        "Expected each reply of the thread, then the top-level comment"
+      Expect.equal removal.Others 3 "Expected the number of replies"
+    }
+
+    test "a delete of a reply removes only that reply" {
+      let removal = CommentDeleteRule.thread bothThreads adaInBenThread
+
+      Expect.equal (ids removal.Comments) (ids [ adaInBenThread ]) "Expected only the reply"
+      Expect.equal removal.Others 0 "Expected no other comment"
+    }
+
+    test "a commenter delete removes the threads of the commenter and the replies of the commenter in other threads" {
+      let own = bothThreads |> List.filter (writtenBy ada)
+      let removal = CommentDeleteRule.commenter own bothThreads
+
+      Expect.equal
+        (ids removal.Comments |> Set.ofList)
+        (ids [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; adaInBenThread ] |> Set.ofList)
+        "Expected the thread of Ada and the reply of Ada in the thread of Ben"
+      Expect.equal (ids removal.Comments |> List.last) (string adaThread.Id) "Expected the top-level comment after the replies"
+      Expect.equal removal.Others 2 "Expected the replies from Ben and from the author"
+    }
+
+    test "the delete of a top-level comment removes its thread, and keeps the other threads" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+
+      match deleteCommentOf store adaThread with
+      | Ok (DeleteComment.Event.Deleted (deletedId, others)) ->
+        Expect.equal deletedId adaThread.Id "Expected the deleted comment"
+        Expect.equal others 3 "Expected the number of replies"
+        Expect.equal (ids store.Comments) (ids [ benThread; adaInBenThread; benInBenThread ]) "Expected only the thread of Ben"
+        Expect.equal (store.Deleted |> List.last) adaThread.Id "Expected the top-level comment last"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a reply keeps its thread" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+
+      match deleteCommentOf store adaInBenThread with
+      | Ok (DeleteComment.Event.Deleted (_, others)) ->
+        Expect.equal others 0 "Expected no other comment"
+        Expect.equal store.Comments (bothThreads |> List.filter (fun comment -> comment.Id <> adaInBenThread.Id)) "Expected each other comment"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a commenter removes their threads and their replies in other threads, and keeps the other threads" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+
+      match deleteCommenterOf store ada with
+      | Ok (DeleteCommenter.Event.Deleted (deleted, others)) ->
+        Expect.equal deleted.ValidationId ada.ValidationId "Expected the deleted commenter"
+        Expect.equal others 2 "Expected the replies from Ben and from the author"
+        Expect.equal (ids store.Comments) (ids [ benThread; benInBenThread ]) "Expected the thread of Ben without the reply of Ada"
+        Expect.equal store.Commenters [ ben ] "Expected only Ben"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the admin answers give the number of replies that go with each comment" {
+      let threads = FakeThreads(olderPost, bothThreads)
+
+      Expect.equal
+        (adminCommentsOf threads |> List.map (fun comment -> string comment.Comment.Comment.Id, comment.ReplyCount))
+        (bothThreads |> List.map (fun comment -> string comment.Id, if comment = adaThread then 3 elif comment = benThread then 2 else 0))
+        "Expected the replies of each top-level comment, and none for a reply"
+    }
+
+    test "the commenter page gives the number of replies from other writers that go with the commenter" {
+      let page =
+        FakeCommenterPage(
+          bothThreads |> List.filter (writtenBy ada) |> List.map (postedOn olderPost),
+          bothThreads |> List.filter (writtenBy ada >> not)
+        )
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal commenterPage.OtherReplies 2 "Expected the replies from Ben and from the author"
+        Expect.equal
+          (commenterPage.Comments |> List.map (fun posted -> posted.Comment.ReplyCount))
+          [ 3; 0; 0 ]
+          "Expected each reply of the thread of Ada on its top-level comment"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+  ]
+
 [<Tests>]
 let tests =
-  testList "Replies" [ replyCheckTests; approvalTests; visibilityTests; answerTests; authorReplyTests; adminAnswerTests; countTests ]
+  testList "Replies" [
+    replyCheckTests
+    approvalTests
+    visibilityTests
+    answerTests
+    authorReplyTests
+    adminAnswerTests
+    countTests
+    deleteTests
+  ]

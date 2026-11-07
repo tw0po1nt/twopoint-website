@@ -90,6 +90,43 @@ module CommentVisibility =
       | None -> true
       | Some parent -> approvedTopLevel.Contains parent)
 
+/// The comments that a delete removes, each reply before the top-level comments. A second try after a failed delete
+/// then finds each top-level comment that is left, with its replies. `Others` is the number of comments that go with
+/// the target of the delete.
+type CommentRemoval =
+  { Comments : Comment list
+    Others : int }
+
+[<RequireQualifiedAccess>]
+module CommentDeleteRule =
+
+  let private repliesFirst (comments : Comment list) =
+    comments |> List.sortBy (fun comment -> comment.Parent.IsNone)
+
+  /// A delete of a top-level comment removes its thread, also a reply from the author. A reply goes alone.
+  /// `known` is each comment that can be a reply under `target`.
+  let thread (known : Comment list) (target : Comment) : CommentRemoval =
+    match target.Parent with
+    | Some _ -> { Comments = [ target ]; Others = 0 }
+    | None ->
+      let replies = known |> List.filter (fun comment -> comment.Parent = Some target.Id) |> List.distinctBy _.Id
+      { Comments = replies @ [ target ]; Others = replies.Length }
+
+  /// A delete of a commenter removes each comment of the commenter and each thread that a comment of the commenter
+  /// starts. A reply of the commenter in another thread goes alone. `Others` is the number of replies from other
+  /// writers. `own` is each comment of the commenter, and `known` is each comment that can be a reply under a
+  /// top-level comment of the commenter.
+  let commenter (own : Comment list) (known : Comment list) : CommentRemoval =
+    let ownIds = own |> List.map _.Id |> Set.ofList
+    let threads = own |> List.filter (fun comment -> comment.Parent.IsNone) |> List.map _.Id |> Set.ofList
+
+    let others =
+      known
+      |> List.filter (fun comment -> not (ownIds.Contains comment.Id) && comment.Parent |> Option.exists threads.Contains)
+      |> List.distinctBy _.Id
+
+    { Comments = repliesFirst (others @ own); Others = others.Length }
+
 /// A comment as the public comments answer gives it. It has no email address.
 type PublicComment =
   { Id : string
@@ -125,10 +162,12 @@ type TopLevelComment =
   { Comment : RenderedComment
     Excerpt : string }
 
-/// `TopLevel` is None for a top-level comment, and for a reply whose top-level comment is gone.
+/// `TopLevel` is None for a top-level comment, and for a reply whose top-level comment is gone. `ReplyCount` is the
+/// number of replies that a delete of the comment removes with it.
 type AdminComment =
   { Comment : RenderedComment
-    TopLevel : TopLevelComment option }
+    TopLevel : TopLevelComment option
+    ReplyCount : int }
 
 [<RequireQualifiedAccess>]
 module AdminComment =
@@ -145,7 +184,7 @@ module AdminComment =
     |> Seq.map _.ToString()
     |> String.concat ""
 
-  /// `known` is each comment that can be the top-level comment of a comment in `comments`.
+  /// `known` is each comment that can be the top-level comment or a reply of a comment in `comments`.
   let ofComments (stage : TwoPoint.Site.Render.Stage) (known : Comment list) (comments : Comment list) =
     let topLevels = known |> List.filter (fun comment -> comment.Parent.IsNone) |> List.map (fun comment -> comment.Id, comment) |> Map.ofList
 
@@ -156,7 +195,10 @@ module AdminComment =
 
     comments
     |> List.sortBy _.CreatedDate
-    |> List.map (fun comment -> { Comment = RenderedComment.ofComment stage comment; TopLevel = topLevelOf comment })
+    |> List.map (fun comment ->
+      { Comment = RenderedComment.ofComment stage comment
+        TopLevel = topLevelOf comment
+        ReplyCount = (CommentDeleteRule.thread known comment).Others })
 
 type AdminPostedComment =
   { Post : Slug
@@ -166,7 +208,8 @@ type AdminPostedComment =
 [<RequireQualifiedAccess>]
 module AdminPostedComment =
 
-  /// `known` is each comment that can be the top-level comment of a comment in `comments`. The list is oldest first.
+  /// `known` is each comment that can be the top-level comment or a reply of a comment in `comments`. The list is
+  /// oldest first.
   let ofPostedComments (stage : TwoPoint.Site.Render.Stage) (known : Comment list) (comments : PostedComment list) =
     let postedById = comments |> List.map (fun posted -> posted.Comment.Id, posted) |> Map.ofList
 
@@ -177,6 +220,8 @@ module AdminPostedComment =
       let posted = postedById[comment.Comment.Comment.Id]
       { Post = posted.Post; PostTitle = posted.PostTitle; Comment = comment })
 
+/// `OtherReplies` is the number of replies from other writers that a delete of the commenter removes.
 type CommenterComments =
   { Commenter : Commenter
-    Comments : AdminPostedComment list }
+    Comments : AdminPostedComment list
+    OtherReplies : int }

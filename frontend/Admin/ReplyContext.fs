@@ -35,3 +35,20 @@ let withTopLevelApproval (topLevelIds: string list) (approval: Api.CommentApprov
         TopLevel = Some { topLevel with Status = approval } }
   | Some _
   | None -> comment
+
+/// The comment after the delete of `deleted`, or None when it goes with it. A top-level comment takes its replies,
+/// and a reply leaves its top-level comment with one reply fewer.
+let afterDelete (deleted: Api.Comment) (comment: Api.Comment) =
+  if comment.Id = deleted.Id || comment.ReplyTo = Some deleted.Id then
+    None
+  elif deleted.ReplyTo = Some comment.Id then
+    Some { comment with ReplyCount = comment.ReplyCount - 1 }
+  else
+    Some comment
+
+/// The comment after a new reply: its top-level comment has one reply more.
+let afterReply (reply: Api.Comment) (comment: Api.Comment) =
+  if reply.ReplyTo = Some comment.Id then
+    { comment with ReplyCount = comment.ReplyCount + 1 }
+  else
+    comment

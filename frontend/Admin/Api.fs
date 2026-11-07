@@ -134,7 +134,8 @@ type TopLevel =
     Excerpt: string
     Content: string }
 
-/// `ReplyTo` is the ID of the top-level comment of a reply.
+/// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyCount` is the number of replies that a delete of
+/// the comment removes with it.
 type Comment =
   { Id: string
     CreatedDate: string
@@ -142,7 +143,8 @@ type Comment =
     Status: CommentApproval
     Content: string
     ReplyTo: string option
-    TopLevel: TopLevel option }
+    TopLevel: TopLevel option
+    ReplyCount: int }
 
 /// `Approved` is the ID of each comment that the reply approved.
 type AuthorReply = { Reply: Comment; Approved: string list }
@@ -152,9 +154,11 @@ type PostedComment =
     PostTitle: string
     Comment: Comment }
 
+/// `OtherReplies` is the number of replies from other writers that a delete of the commenter removes.
 type CommenterComments =
   { Commenter: Commenter
-    Comments: PostedComment list }
+    Comments: PostedComment list
+    OtherReplies: int }
 
 type Approval =
   | Approved
@@ -453,7 +457,8 @@ let private comment: Decoder<Comment> =
       Status = get.Required.Field "status" commentApproval
       Content = get.Required.Field "content" Decode.string
       ReplyTo = get.Optional.Field "replyTo" Decode.string
-      TopLevel = get.Optional.Field "topLevel" topLevel })
+      TopLevel = get.Optional.Field "topLevel" topLevel
+      ReplyCount = get.Required.Field "replyCount" Decode.int })
 
 let private deliveryTypeName (deliveryType: DeliveryType) =
   match deliveryType with

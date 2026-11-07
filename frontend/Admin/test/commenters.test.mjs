@@ -17,10 +17,10 @@ const commenters = [ada, commenter('Grace', 'trusted', '2026-01-02T00:00:00Z'), 
 const posted = (id, approval, content) => ({
   postSlug: 'first',
   postTitle: 'First',
-  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, status: approval, content },
+  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, status: approval, content, replyCount: 0 },
 });
 
-const page = { commenter: ada, comments: [posted('c-1', 'new', 'The first comment.'), posted('c-6', 'approved', rendered('An old comment.'))] };
+const page = { commenter: ada, comments: [posted('c-1', 'new', 'The first comment.'), posted('c-6', 'approved', rendered('An old comment.'))], otherReplies: 2 };
 
 const reads = [];
 const actions = [];
@@ -88,6 +88,7 @@ test('Delete in the confirmation deletes the commenter and opens the commenter l
   await settle();
   const dialog = document.getElementById('delete-commenter');
   assert.equal(dialog.open, true);
+  assert.match(dialog.textContent, /all their comments, and 2 replies from others in their threads\./);
 
   press('Delete', dialog);
   await settle();

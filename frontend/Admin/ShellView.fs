@@ -1713,9 +1713,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     (fun () -> (Shell.deleteChosen (model ())).IsSome)
     close
     "Delete this comment?"
-    (p () {
-      "This permanently deletes the comment and its history. To hide it from readers but keep it, reject it instead."
-    })
+    (p () { Queue.deleteText (Shell.deleteReplyCount (model ()) |> Option.defaultValue 0) })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
@@ -1731,9 +1729,7 @@ let private deleteCommenterDialog (dispatch: Shell.Msg -> unit) (model: unit -> 
     (fun () -> (Shell.deleteCommenterChosen (model ())).IsSome)
     close
     "Delete this commenter?"
-    (p () {
-      "This permanently deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead."
-    })
+    (p () { Commenter.deleteText (Shell.deleteCommenterOtherReplies (model ()) |> Option.defaultValue 0) })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
