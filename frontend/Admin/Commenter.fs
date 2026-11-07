@@ -15,17 +15,24 @@ type Page =
   | Loaded of Api.CommenterComments * State
   | NotLoaded of reason: string
 
-type Model = { Id: string; Page: Page }
+type Model =
+  { Id: string
+    Page: Page
+    Opened: ReplyContext.Opened }
 
 type Msg =
   | Answered of commenterId: string * Result<Api.CommenterComments, Api.Failure>
   /// A delete comes here only after the confirmation.
   | Chosen of Action
   | Done of commenterId: string * Action * Result<unit, Api.Failure>
+  | TopLevelToggled of commentId: string
 
 type Effect = Change of commenterId: string * Action
 
-let init (commenterId: string) = { Id = commenterId; Page = Waiting }
+let init (commenterId: string) =
+  { Id = commenterId
+    Page = Waiting
+    Opened = Set.empty }
 
 /// The backend refuses to trust a banned commenter.
 let actions (status: Api.CommenterStatus) =
@@ -50,14 +57,27 @@ let statusAfter (action: Action) =
   | Ban -> Some Api.Banned
   | Delete -> None
 
-/// The ban rejects each new comment in the backend, so the page does the same.
+/// The ban rejects each new comment in the backend, so the page does the same, also on each reply under such a comment.
 let private changed (status: Api.CommenterStatus) (page: Api.CommenterComments) =
+  let rejected =
+    match status with
+    | Api.Banned ->
+      page.Comments
+      |> List.filter (fun comment -> comment.Comment.Status = Api.CommentApproval.New)
+      |> List.map _.Comment.Id
+    | Api.New
+    | Api.Trusted -> []
+
   let reject (comment: Api.PostedComment) =
-    match status, comment.Comment.Status with
-    | Api.Banned, Api.CommentApproval.New ->
+    let comment =
+      { comment with
+          Comment = ReplyContext.withTopLevelApproval rejected Api.CommentApproval.Rejected comment.Comment }
+
+    if List.contains comment.Comment.Id rejected then
       { comment with
           Comment.Status = Api.CommentApproval.Rejected }
-    | _ -> comment
+    else
+      comment
 
   { page with
       Commenter = { page.Commenter with Status = status }
@@ -85,6 +105,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded(page, _), Done(_, action, Error failure) ->
     { model with Page = Loaded(page, Progress.NotDone(action, Api.reason failure)) }, None
   | (Waiting | NotLoaded _), Done _ -> model, None
+  | _, TopLevelToggled commentId -> { model with Opened = ReplyContext.toggle commentId model.Opened }, None
 
 let tryCommenter (model: Model) =
   match model.Page with

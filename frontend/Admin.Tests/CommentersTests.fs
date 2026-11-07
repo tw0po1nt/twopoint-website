@@ -24,7 +24,8 @@ let private posted id (commenter: Api.Commenter) approval : Api.PostedComment =
         Writer = Api.Writer.Commenter commenter
         Status = approval
         Content = "A comment"
-        ReplyTo = None } }
+        ReplyTo = None
+        TopLevel = None } }
 
 let private waiting = posted "waiting" ada Api.CommentApproval.New
 let private approved = posted "approved" ada Api.CommentApproval.Approved
@@ -215,5 +216,67 @@ let private pageTests =
     }
   ]
 
+let private replyTo (topLevelId: string) approval (comment: Api.PostedComment) =
+  { comment with
+      Comment.ReplyTo = Some topLevelId
+      Comment.TopLevel =
+        Some
+          { Id = topLevelId
+            Writer = Api.Writer.Commenter grace
+            Status = approval
+            Excerpt = "Why does List.map keep the order?"
+            Content = "<p>Why does <code>List.map</code> keep the order?</p>" } }
+
+let private withReplies (comments: Api.PostedComment list) =
+  let model, _ = start "/commenters/ada"
+  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = comments })) model
+  model
+
+let private topLevelOf (commentId: string) (model: Shell.Model) =
+  (fst (loaded model)).Comments
+  |> List.find (fun comment -> comment.Comment.Id = commentId)
+  |> _.Comment.TopLevel
+
+let private contextTests =
+  testList "the reply context on the commenter page" [
+    test "the page stays a flat list, and each reply names its top-level comment and shows its excerpt" {
+      let model = withReplies [ waiting |> replyTo "graces-comment" Api.CommentApproval.Approved; approved ]
+      Expect.equal ((fst (loaded model)).Comments |> List.map _.Comment.Id) [ "waiting"; "approved" ] "The flat list"
+
+      let context = topLevelOf "waiting" model |> Option.get
+      Expect.equal (ReplyContext.replyLine context) "Reply to grace" "The reply line"
+      Expect.equal context.Excerpt "Why does List.map keep the order?" "The excerpt"
+      Expect.isNone (topLevelOf "approved" model) "A top-level comment has no reply line"
+    }
+
+    test "the excerpt opens the full text of the top-level comment, and a second click closes it" {
+      let model = withReplies [ waiting |> replyTo "graces-comment" Api.CommentApproval.Approved ]
+      let model, effect = send (Commenter.TopLevelToggled "waiting") model
+      Expect.isNone effect "No call"
+      Expect.equal (page model).Opened (set [ "waiting" ]) "The full text"
+      Expect.equal (topLevelOf "waiting" model |> Option.map _.Content) (Some "<p>Why does <code>List.map</code> keep the order?</p>") "The full HTML"
+
+      let model, _ = send (Commenter.TopLevelToggled "waiting") model
+      Expect.isEmpty (page model).Opened "The excerpt again"
+    }
+
+    test "a reply under a rejected top-level comment tells the author that readers won't see it" {
+      let model = withReplies [ waiting |> replyTo "graces-comment" Api.CommentApproval.Rejected ]
+
+      Expect.equal
+        (topLevelOf "waiting" model |> Option.bind ReplyContext.rejectedNote)
+        (Some "Readers won't see this reply, because grace's comment is rejected.")
+        "The note"
+    }
+
+    test "a ban rejects the new top-level comment of the commenter, and each reply under it gets the note" {
+      let ownReply = approved |> replyTo "waiting" Api.CommentApproval.New
+      let model = withReplies [ waiting; ownReply ]
+      let model, _ = send (Commenter.Chosen Commenter.Ban) model
+      let model, _ = send (Commenter.Done("ada", Commenter.Ban, Ok())) model
+      Expect.equal (topLevelOf "approved" model |> Option.map _.Status) (Some Api.CommentApproval.Rejected) "The reply knows of the reject"
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Commenters" [ listTests; pageTests ]
+let tests = testList "Commenters" [ listTests; pageTests; contextTests ]

@@ -121,6 +121,13 @@ comment is new, the action approves it before the reply, and also its top-level 
 comment is new. The reply is approved, has no commenter, and sends no Web Push. The queue and the
 comments of a post show the reply form under the row.
 
+The queue, the comments of a post, and the commenter page give the top-level comment of each reply,
+with its ID, writer, approval, HTML, and a plain-text excerpt of 200 characters. The rule is the
+pure function `AdminComment.ofComments`. A reply row in the queue and on the commenter page shows
+"Reply to <name>" and the excerpt, and the excerpt opens the HTML. The comments of a post show
+each thread, with the replies indented under the top-level comment. Each comment count includes
+the replies.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

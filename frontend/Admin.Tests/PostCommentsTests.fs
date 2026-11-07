@@ -16,7 +16,8 @@ let private comment id approval : Api.Comment =
           CreatedDate = "2026-01-01T00:00:00Z" }
     Status = approval
     Content = "A comment"
-    ReplyTo = None }
+    ReplyTo = None
+    TopLevel = None }
 
 let private waiting = comment "waiting" Api.CommentApproval.New
 let private approved = comment "approved" Api.CommentApproval.Approved
@@ -53,7 +54,8 @@ let private authorReply : Api.Comment =
     Writer = Api.Writer.Author
     Status = Api.CommentApproval.Approved
     Content = "An answer"
-    ReplyTo = Some "waiting" }
+    ReplyTo = Some "waiting"
+    TopLevel = None }
 
 let private replyTests =
   testList "the reply as the author" [
@@ -132,9 +134,98 @@ let private replyTests =
     }
   ]
 
+let private replyTo (topLevelId: string) (id: string) approval : Api.Comment =
+  { comment id approval with
+      ReplyTo = Some topLevelId
+      TopLevel =
+        Some
+          { Id = topLevelId
+            Writer = waiting.Writer
+            Status = Api.CommentApproval.Approved
+            Excerpt = "A comment"
+            Content = "<p>A comment</p>" } }
+
+let private threaded () =
+  let model, _ = start "/posts/first/comments"
+
+  let model, _ =
+    send
+      (PostComments.Answered(
+        "first",
+        Ok
+          [ approved
+            replyTo "approved" "first-reply" Api.CommentApproval.Approved
+            waiting
+            replyTo "approved" "second-reply" Api.CommentApproval.New
+            replyTo "waiting" "third-reply" Api.CommentApproval.Rejected ]
+      ))
+      model
+
+  model
+
+let private heads (model: Shell.Model) =
+  PostComments.heads (page model) |> List.map _.Comment.Id
+
+let private replies (topLevelId: string) (model: Shell.Model) =
+  PostComments.replies topLevelId (page model) |> List.map (fun row -> row.Comment.Id, row.Comment.Status)
+
+let private threadTests =
+  testList "the threads" [
+    test "each thread shows its top-level comment, then its replies oldest first, each with its status" {
+      let model = threaded ()
+      Expect.equal (heads model) [ "approved"; "waiting" ] "The top-level comments, oldest first"
+
+      Expect.equal
+        (replies "approved" model)
+        [ "first-reply", Api.CommentApproval.Approved; "second-reply", Api.CommentApproval.New ]
+        "The replies of the first thread, oldest first"
+
+      Expect.equal (replies "waiting" model) [ "third-reply", Api.CommentApproval.Rejected ] "The reply of the second thread"
+    }
+
+    test "a filter that hides the top-level comment shows the reply in the place of its thread, with the name of the top-level comment" {
+      let model, _ = send (PostComments.Filtered(PostComments.Only Api.CommentApproval.New)) (threaded ())
+      Expect.equal (heads model) [ "second-reply"; "waiting" ] "The new reply in the place of its thread"
+      Expect.isEmpty (replies "waiting" model) "The rejected reply is hidden"
+
+      let reply = PostComments.tryFind "second-reply" (page model) |> Option.get
+      Expect.equal (PostComments.topLevel reply.Comment (page model) |> Option.map ReplyContext.replyLine) (Some "Reply to Ada") "The reply line"
+    }
+
+    test "a filter that shows the top-level comment keeps the shown replies under it" {
+      let model, _ = send (PostComments.Filtered(PostComments.Only Api.CommentApproval.Approved)) (threaded ())
+      Expect.equal (heads model) [ "approved" ] "The approved top-level comment"
+      Expect.equal (replies "approved" model) [ "first-reply", Api.CommentApproval.Approved ] "The approved reply under it"
+    }
+
+    test "a posted reply from the author goes at the end of its thread" {
+      let model, _ = reply (AuthorReply.Opened "approved") (threaded ())
+      let model, _ = typed "approved" "An answer" model
+      let model, _ = reply AuthorReply.Submitted model
+      let answer = { authorReply with ReplyTo = Some "approved" }
+      let model, _ = reply (AuthorReply.Answered("approved", Ok { Reply = answer; Approved = [] })) model
+      Expect.equal (heads model) [ "approved"; "waiting" ] "The threads stay"
+      Expect.equal (replies "approved" model |> List.map fst) [ "first-reply"; "second-reply"; "answer" ] "The answer comes last"
+    }
+
+    test "the top-level comment of a reply has the approval that it has on the page" {
+      let model = threaded ()
+      let model, _ = send (PostComments.Chosen("approved", Queue.Reject)) model
+      let model, _ = send (PostComments.Done("approved", Queue.Reject, Ok())) model
+      let reply = PostComments.tryFind "first-reply" (page model) |> Option.get
+
+      Expect.equal
+        (PostComments.topLevel reply.Comment (page model) |> Option.map _.Status)
+        (Some Api.CommentApproval.Rejected)
+        "The reject on the page"
+    }
+  ]
+
 [<Tests>]
 let tests =
   testList "PostComments" [
+    threadTests
+
     test "a start on the page of a post loads its comments with the first API calls" {
       let model, effect = start "/posts/first/comments"
       Expect.equal

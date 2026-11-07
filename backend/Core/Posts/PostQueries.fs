@@ -338,7 +338,7 @@ module GetCommentsForPost =
   type Query =
     Approvals
       -> Slug
-      -> CancellableTask<QueryResult<RenderedComment list option>>
+      -> CancellableTask<QueryResult<AdminComment list option>>
 
   type Dependencies =
     abstract member GetPostBySlug: slug: TwoPoint.Core.Posts.Slug -> DependencyResult<Post option>
@@ -363,12 +363,15 @@ module GetCommentsForPost =
         |> List.sequenceValidationA
         |> Result.mapError QueryError.Validation
         |> Result.map (List.defaultIfEmpty CommentApproval.all)
-      return! 
+      return!
         post
-        |> Option.traverseCancellableTaskResult (dependencies.GetCommentsForPost approvals)
+        |> Option.traverseCancellableTaskResult (dependencies.GetCommentsForPost CommentApproval.all)
         |> CancellableTaskResult.mapError QueryError.Dependency
         |> CancellableTaskResult.map (
-          Option.map (List.sortBy _.CreatedDate >> List.map (RenderedComment.ofComment dependencies.Stage))
+          Option.map (fun known ->
+            known
+            |> List.filter (fun comment -> approvals |> List.contains comment.Status.Approval)
+            |> AdminComment.ofComments dependencies.Stage known)
         )
     }
 
@@ -410,7 +413,7 @@ module GetPublicComments =
 [<RequireQualifiedAccess>]
 module GetModerationQueue =
 
-  type Query = unit -> CancellableTask<QueryResult<RenderedPostedComment list>>
+  type Query = unit -> CancellableTask<QueryResult<AdminPostedComment list>>
 
   type Dependencies =
     abstract member GetCommentsOnAllPosts:
@@ -420,9 +423,12 @@ module GetModerationQueue =
 
   let withDependencies (dependencies : Dependencies) : Query =
     fun () ->
-      dependencies.GetCommentsOnAllPosts [ CommentApproval.New ]
+      dependencies.GetCommentsOnAllPosts CommentApproval.all
       |> CancellableTaskResult.mapError QueryError.Dependency
-      |> CancellableTaskResult.map (RenderedPostedComment.ofPostedCommentsByDate dependencies.Stage)
+      |> CancellableTaskResult.map (fun known ->
+        known
+        |> List.filter (fun posted -> posted.Comment.Status.Approval = CommentApproval.New)
+        |> AdminPostedComment.ofPostedComments dependencies.Stage (known |> List.map _.Comment))
 
 // ====================================================================================================================
 // Get all commenters
@@ -458,6 +464,7 @@ module GetCommenter =
     abstract member GetCommentsOfCommenter:
       commenter: Commenter
         -> DependencyResult<PostedComment list>
+    abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Query =
@@ -473,9 +480,20 @@ module GetCommenter =
         commenter
         |> Option.traverseCancellableTaskResult (fun commenter -> cancellableTaskResult {
           let! comments = dependencies.GetCommentsOfCommenter commenter
+          let own = comments |> List.map (fun (posted : PostedComment) -> posted.Comment)
+          let ownIds = own |> List.map _.Id |> Set.ofList
+
+          let! topLevels =
+            (CancellableTaskResult.singleton [], own |> List.choose _.Parent |> List.distinct |> List.filter (ownIds.Contains >> not))
+            ||> List.fold (fun found commentId -> cancellableTaskResult {
+              let! found = found
+              let! topLevel = dependencies.GetCommentById commentId
+              return found @ Option.toList topLevel
+            })
+
           return
             { Commenter = commenter
-              Comments = RenderedPostedComment.ofPostedCommentsByDate dependencies.Stage comments }
+              Comments = AdminPostedComment.ofPostedComments dependencies.Stage (own @ topLevels) comments }
         })
         |> CancellableTaskResult.mapError QueryError.Dependency
     }

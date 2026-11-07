@@ -528,6 +528,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Commenter.Done(_, _, Ok()) -> next, Some(Send [ LoadQueue ])
     | Commenter.Answered _
     | Commenter.Chosen _
+    | Commenter.TopLevelToggled _
     | Commenter.Done(_, _, Error _) ->
       next,
       effect

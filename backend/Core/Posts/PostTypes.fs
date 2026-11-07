@@ -211,6 +211,15 @@ type PostCommentStats =
   static member (+) (a: PostCommentStats, b: PostCommentStats) =
     { New = a.New + b.New; Approved = a.Approved + b.Approved; Rejected = a.Rejected + b.Rejected }
 
+  /// A reply counts as a comment.
+  static member OfComments (comments : Comment list) =
+    (PostCommentStats.Zero, comments)
+    ||> List.fold (fun stats comment ->
+      match comment.Status.Approval with
+      | CommentApproval.New -> { stats with New = stats.New + 1u }
+      | CommentApproval.Approved -> { stats with Approved = stats.Approved + 1u }
+      | CommentApproval.Rejected -> { stats with Rejected = stats.Rejected + 1u })
+
 type PostInfo =
   { Slug : Slug
     Title : NonEmptyString
@@ -332,26 +341,6 @@ type PostedComment =
   { Post : Slug
     PostTitle : NonEmptyString
     Comment : Comment }
-
-type RenderedPostedComment =
-  { Post : Slug
-    PostTitle : NonEmptyString
-    Comment : RenderedComment }
-
-module RenderedPostedComment =
-  let ofPostedComment (stage : TwoPoint.Site.Render.Stage) (posted : PostedComment) =
-    { Post = posted.Post
-      PostTitle = posted.PostTitle
-      Comment = RenderedComment.ofComment stage posted.Comment }
-
-  let ofPostedCommentsByDate (stage : TwoPoint.Site.Render.Stage) (comments : PostedComment list) =
-    comments
-    |> List.sortBy _.Comment.CreatedDate
-    |> List.map (ofPostedComment stage)
-
-type CommenterComments =
-  { Commenter : Commenter
-    Comments : RenderedPostedComment list }
 
 type Post =
   { Id: Slug
