@@ -425,7 +425,7 @@ let private validationTests =
       | other -> failtestf "Expected Validated, got %A" other
     }
 
-    test "the verify flow accepts the redirect URI of a reply, with the ID of its top-level comment, and keeps it in the email" {
+    test "the verify flow accepts the redirect URI of a reply, with the ID of its top-level comment, and passes it on unchanged" {
       let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
       let redirectUri =
         "https://twopoint.dev/posts/older-post/?email=commenter%40example.com&name=Commenter&comment=Me%20too"

@@ -110,7 +110,7 @@ let private listClass (model: Comments.Model) =
   | Comments.Loaded _ -> "comments-count"
 
 let private buttonText (model: Comments.Model) =
-  if Comments.isSending model.Status then "[sending]" else "[post comment]"
+  if Comments.isSending model.PageStatus then "[sending]" else "[post comment]"
 
 let private statusClass (status: Comments.Status) =
   match status with
@@ -123,7 +123,7 @@ let private statusClass (status: Comments.Status) =
   | Comments.Posting -> "comment-status"
 
 let private statusText (model: Comments.Model) =
-  match model.Status with
+  match model.PageStatus with
   | Comments.Failed reason -> reason
   | Comments.Validated -> "Email verified. Click [post comment] to post."
   | Comments.ValidationSent email ->
@@ -345,9 +345,6 @@ let private identityFields (model: unit -> Comments.Model) (locked: unit -> bool
 let private replyOf (model: Comments.Model) =
   model.Reply |> Option.defaultValue { Thread = ""; Editor = Comments.emptyEditor; Identity = Comments.Fields; Status = Comments.Editing }
 
-let private isVerifiedLine (model: Comments.Model) =
-  model.Reply |> Option.exists (fun reply -> reply.Identity = Comments.Verified)
-
 let private replyButtonText (status: Comments.Status) =
   if Comments.isSending status then "[sending]" else "[post reply]"
 
@@ -368,7 +365,7 @@ let private replyFormView (author: string) (thread: TwoPoint.Api.Comments.Commen
   ) {
     p (class' = "comment-note") { Comments.replyToText author thread }
 
-    Show(when' = isVerifiedLine (model ()), fallback = identityFields model locked dispatch) {
+    Show(when' = Comments.showsIdentityLine (model ()), fallback = identityFields model locked dispatch) {
       p (class' = "comment-note") {
         $"as {Comments.shownName (model ())} ({model().Email.Trim()}) "
         button (type' = "button", disabled = locked (), onClick = fun _ -> dispatch Comments.IdentityChanged) { "[change]" }
@@ -391,9 +388,6 @@ let private replyFormView (author: string) (thread: TwoPoint.Api.Comments.Commen
     p(class' = statusClass (reply ()).Status).attr ("aria-live", "polite") { Comments.replyStatusText (reply ()).Status }
   }
 
-let private isOpen (model: Comments.Model) (thread: string) =
-  model.Reply |> Option.exists (fun reply -> reply.Thread = thread)
-
 [<SolidComponent>]
 let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comments.Return option) (link: Comments.Link option) =
   let pageUrl = window.location.origin + window.location.pathname
@@ -402,7 +396,7 @@ let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comme
   let list = createMemo (fun () -> model().List)
   let expanded = createMemo (fun () -> model().Expanded)
   let threads = createMemo (fun () -> Array.ofList (Comments.shownThreads (expanded ()) (list ())))
-  let pageLocked () = Comments.isLocked (model ()).Status
+  let pageLocked () = Comments.isLocked (model ()).PageStatus
 
   div (class' = "comments") {
     p (class' = listClass (model ())) { listText (model ()) }
@@ -438,7 +432,7 @@ let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comme
 
               div (class' = "comment-thread-end") {
                 Show(
-                  when' = isOpen (model ()) thread.Comment.Id,
+                  when' = Comments.isReplyOpen thread.Comment.Id (model ()),
                   fallback =
                     button (type' = "button", onClick = fun _ -> dispatch (Comments.ReplyOpened thread.Comment.Id)) {
                       "[reply]"
@@ -468,7 +462,7 @@ let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comme
       }
 
       button (type' = "submit", disabled = pageLocked ()) { buttonText (model ()) }
-      p(class' = statusClass (model ()).Status).attr ("aria-live", "polite") { statusText (model ()) }
+      p(class' = statusClass (model ()).PageStatus).attr ("aria-live", "polite") { statusText (model ()) }
 
       p (class' = "comment-note") {
         notePrefix

@@ -46,7 +46,7 @@ test('the return of a reply opens the reply form of its thread with the text, an
 
 test('the reply form shows the verified line and tells the reader to post', () => {
   assert.equal(form().querySelector('.comment-note + .comment-note').textContent, 'as Reader (reader@example.com) [change]');
-  assert.equal(form().querySelector('.comment-status').textContent, 'Email verified. Click [post reply] to post your reply.');
+  assert.equal(form().querySelector('.comment-status').textContent, 'Email verified. Click [post reply] to post.');
 });
 
 test('the page form stays empty, and the URL loses its query', () => {

@@ -13,7 +13,6 @@ let storageKey = "commenterValidations"
 [<Literal>]
 let validationIdKey = "commenterValidationId"
 
-/// The widget sets this query key in the redirect URI of a reply.
 [<Literal>]
 let replyToKey = "replyTo"
 
@@ -98,6 +97,8 @@ type ReplyForm =
     Identity: Identity
     Status: Status }
 
+type Draft = { Editor: Editor; Status: Status }
+
 [<RequireQualifiedAccess>]
 type Form =
   | Page
@@ -114,10 +115,10 @@ type Model =
     Name: string
     EmailTouched: bool
     Page: Editor
-    Status: Status
+    PageStatus: Status
     Reply: ReplyForm option
-    /// The editor of each closed reply form, by its thread.
-    Drafts: Map<string, Editor>
+    /// The draft of each closed reply form, by its thread.
+    Drafts: Map<string, Draft>
     /// The threads of the replies that wait for approval.
     Awaiting: Set<string>
     Arrival: Arrival option
@@ -184,16 +185,16 @@ let private find (query: (string * string) list) key =
   |> Option.map snd
 
 let parse (query: (string * string) list) : Return option =
-  let find = find query
+  let value = find query
 
-  match find "email", find "comment", find validationIdKey with
+  match value "email", value "comment", value validationIdKey with
   | Some email, Some comment, Some validationId ->
     Some
       { Email = email.Trim()
-        Name = find "name" |> Option.defaultValue ""
+        Name = value "name" |> Option.defaultValue ""
         Comment = comment
         ValidationId = validationId.Trim()
-        ReplyTo = find replyToKey |> Option.map _.Trim() }
+        ReplyTo = value replyToKey |> Option.map _.Trim() }
   | _ -> None
 
 /// A `#comment-<id>` link names this element.
@@ -231,7 +232,7 @@ let private empty (pageUrl: string) (validations: Map<string, string>) =
     Name = ""
     EmailTouched = false
     Page = emptyEditor
-    Status = Editing
+    PageStatus = Editing
     Reply = None
     Drafts = Map.empty
     Awaiting = Set.empty
@@ -265,7 +266,7 @@ let init
       | None ->
         { filled with
             Page = { emptyEditor with Text = returned.Comment }
-            Status = Validated
+            PageStatus = Validated
             Arrival = link |> Option.map Linked }
     | None -> { empty pageUrl validations with Arrival = link |> Option.map Linked }
 
@@ -354,7 +355,7 @@ let private stash (model: Model) =
   | Some reply ->
     { model with
         Reply = None
-        Drafts = model.Drafts.Add(reply.Thread, closed reply.Editor) }
+        Drafts = model.Drafts.Add(reply.Thread, { Editor = closed reply.Editor; Status = reply.Status }) }
   | None -> model
 
 let private listed (list: CommentList) (model: Model) =
@@ -369,8 +370,8 @@ let private listed (list: CommentList) (model: Model) =
     comments |> List.exists (fun comment -> comment.Id = thread && comment.ReplyTo.IsNone)
     ->
     next, Some(ScrollTo(ToReply thread))
-  | Some(Returned _), Loaded _ -> stash next, Some(ScrollTo ToSection)
-  | Some _, (Loading | NotLoaded _) -> next, Some(ScrollTo ToSection)
+  | Some(Returned _), (Loaded _ | Loading | NotLoaded _) -> stash next, Some(ScrollTo ToSection)
+  | Some(Linked _), (Loading | NotLoaded _) -> next, Some(ScrollTo ToSection)
 
 let isValidComment (comment: string) = comment.Trim() <> ""
 
@@ -403,6 +404,12 @@ let isLocked (status: Status) =
 
 let isVerified (model: Model) =
   Subscribe.isValidEmail model.Email && model.Validations.ContainsKey(model.Email.Trim())
+
+let isReplyOpen (thread: string) (model: Model) =
+  model.Reply |> Option.exists (fun reply -> reply.Thread = thread)
+
+let showsIdentityLine (model: Model) =
+  isVerified model && model.Reply |> Option.exists (fun reply -> reply.Identity = Verified)
 
 let shownName (model: Model) =
   match model.Name.Trim() with
@@ -438,7 +445,7 @@ let countText (count: int) =
 let replyStatusText (status: Status) =
   match status with
   | Failed reason -> reason
-  | Validated -> "Email verified. Click [post reply] to post your reply."
+  | Validated -> "Email verified. Click [post reply] to post."
   | ValidationSent email -> $"Check your inbox. We sent a verification link to {email}. Open it, then post your reply."
   | Editing
   | Validating
@@ -532,7 +539,6 @@ let private edit (edit: Edit) (editor: Editor) : Editor * PreviewRequest option 
   | PreviewUnanswered _ -> editor, None
   | HelpToggled -> { editor with HelpShown = not editor.HelpShown }, None
 
-/// A message for a reply form that is closed changes nothing.
 let private withReply (thread: string) (change: ReplyForm -> Model * Effect option) (model: Model) =
   match model.Reply with
   | Some reply when reply.Thread = thread -> change reply
@@ -554,7 +560,7 @@ let private edited (form: Form) (change: Edit) (model: Model) =
 
 let private submitted (form: Form) (model: Model) =
   match form with
-  | Form.Page when isLocked model.Status -> model, None
+  | Form.Page when isLocked model.PageStatus -> model, None
   | Form.Page when not (Subscribe.isValidEmail model.Email && isValidComment model.Page.Text) ->
     { model with
         EmailTouched = true
@@ -562,7 +568,7 @@ let private submitted (form: Form) (model: Model) =
     None
   | Form.Page ->
     let status, effect = send model form model.Page.Text
-    { model with Status = status }, Some effect
+    { model with PageStatus = status }, Some effect
   | Form.Reply thread ->
     model
     |> withReply thread (fun reply ->
@@ -579,7 +585,7 @@ let private submitted (form: Form) (model: Model) =
 
 let private withStatus (form: Form) (status: Status) (model: Model) =
   match form with
-  | Form.Page -> { model with Status = status }, None
+  | Form.Page -> { model with PageStatus = status }, None
   | Form.Reply thread -> model |> withReply thread (fun reply -> { model with Reply = Some { reply with Status = status } }, None)
 
 let private postAnswered (form: Form) (answer: PostCommentAnswer) (model: Model) =
@@ -589,7 +595,7 @@ let private postAnswered (form: Form) (answer: PostCommentAnswer) (model: Model)
   | Form.Page ->
     { model with
         List = list
-        Status = Posted approval
+        PageStatus = Posted approval
         Page =
           { emptyEditor with
               Opening = model.Page.Opening
@@ -610,18 +616,22 @@ let private isReplySending (model: Model) =
   model.Reply |> Option.exists (fun reply -> isSending reply.Status)
 
 let private replyOpened (thread: string) (model: Model) =
-  if isReplySending model || model.Reply |> Option.exists (fun reply -> reply.Thread = thread) then
+  if isReplySending model || isReplyOpen thread model then
     model, None
   else
     let next = stash model
+
+    let draft =
+      next.Drafts.TryFind thread
+      |> Option.defaultValue { Editor = emptyEditor; Status = Editing }
 
     { next with
         Reply =
           Some
             { Thread = thread
-              Editor = next.Drafts.TryFind thread |> Option.defaultValue emptyEditor
+              Editor = draft.Editor
               Identity = if isVerified model then Verified else Fields
-              Status = Editing }
+              Status = draft.Status }
         Drafts = next.Drafts.Remove thread
         Awaiting = next.Awaiting.Remove thread },
     None

@@ -148,7 +148,7 @@ let tests =
         let model, effect = Comments.init pageUrl known None None
         Expect.equal effect (Some Comments.Load) "The widget loads the comments"
         Expect.equal model.List Comments.Loading "The list is loading"
-        Expect.equal model.Status Comments.Editing "No result"
+        Expect.equal model.PageStatus Comments.Editing "No result"
         Expect.isFalse (Comments.showsEmailError model || Comments.showsTextError model.Page) "No error"
       }
 
@@ -157,7 +157,7 @@ let tests =
         Expect.equal effect (Some Comments.Load) "The widget loads the comments"
         Expect.equal (model.Email, model.Name, model.Page.Text) ("reader@example.com", "Reader", "Nice post") "The form has the comment"
         Expect.equal model.Validations (known.Add("reader@example.com", "validation-2")) "The validation ID is beside the others"
-        Expect.equal model.Status Comments.Validated "The status tells the reader to post the comment"
+        Expect.equal model.PageStatus Comments.Validated "The status tells the reader to post the comment"
       }
     ]
 
@@ -217,7 +217,7 @@ let tests =
 
       test "a submit with a new email address sends the validation with a link back to the panel" {
         let model, effect = run (filled "reader@example.com" @ [ submitted ])
-        Expect.equal model.Status Comments.Validating "The form is sending"
+        Expect.equal model.PageStatus Comments.Validating "The form is sending"
 
         Expect.equal
           effect
@@ -246,7 +246,7 @@ let tests =
 
       test "a submit with a known email address posts the comment with its validation ID" {
         let model, effect = run (filled "known@example.com" @ [ submitted ])
-        Expect.equal model.Status Comments.Posting "The form is sending"
+        Expect.equal model.PageStatus Comments.Posting "The form is sending"
         Expect.equal effect (Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Nice post & thanks"; ReplyTo = None }))) "The post has the trimmed comment"
       }
 
@@ -255,7 +255,7 @@ let tests =
         Expect.isNone effect "No request"
         Expect.isTrue (Comments.showsEmailError model) "The email error shows"
         Expect.isTrue (Comments.showsTextError model.Page) "The comment error shows"
-        Expect.equal model.Status Comments.Editing "The form is not sending"
+        Expect.equal model.PageStatus Comments.Editing "The form is not sending"
       }
 
       test "the errors show after the reader leaves a field that is not valid, and go when the field is valid" {
@@ -284,7 +284,7 @@ let tests =
       test "a validation that goes through keeps the form and tells the reader to open the email" {
         let model, effect = run (filled "reader@example.com" @ [ submitted; validationAnswered(answer true None) ])
         Expect.isNone effect "No request"
-        Expect.equal model.Status (Comments.ValidationSent "reader@example.com") "The status names the address"
+        Expect.equal model.PageStatus (Comments.ValidationSent "reader@example.com") "The status names the address"
         Expect.equal model.Page.Text " Nice post & thanks " "The form keeps the comment"
       }
 
@@ -294,14 +294,14 @@ let tests =
         let sent, _ = Comments.update (validationAnswered(answer true None)) validating
 
         for name, model in [ "Validating", validating; "Posting", posting; "Validation sent", sent ] do
-          Expect.isTrue (Comments.isLocked model.Status) $"{name}: the form is locked"
+          Expect.isTrue (Comments.isLocked model.PageStatus) $"{name}: the form is locked"
           let again, effect = Comments.update submitted model
           Expect.isNone effect $"{name}: a submit sends nothing"
           Expect.equal again model $"{name}: the model does not change"
 
         let failed, _ = Comments.update unanswered posting
-        Expect.isFalse (Comments.isLocked failed.Status) "After a failed request, the form is not locked"
-        Expect.isFalse (Comments.isLocked start.Status) "A new form is not locked"
+        Expect.isFalse (Comments.isLocked failed.PageStatus) "After a failed request, the form is not locked"
+        Expect.isFalse (Comments.isLocked start.PageStatus) "A new form is not locked"
       }
 
       test "a post that goes through empties the text, and keeps the name, the email address, the list, and the validations" {
@@ -318,7 +318,7 @@ let tests =
           model
           { start with
               List = Comments.Loaded [ comment "1" ]
-              Status = Comments.Posted AwaitsApproval
+              PageStatus = Comments.Posted AwaitsApproval
               Name = " Reader "
               Email = " known@example.com " }
           "The text is empty"
@@ -332,7 +332,7 @@ let tests =
             @ [ submitted; postAnswered(postAnswer true None (Some(posted AwaitsApproval))) ]
           )
 
-        Expect.equal model.Status (Comments.Posted AwaitsApproval) "The status says that the comment shows after approval"
+        Expect.equal model.PageStatus (Comments.Posted AwaitsApproval) "The status says that the comment shows after approval"
         Expect.equal model.List (Comments.Loaded [ comment "1" ]) "The list stays"
       }
 
@@ -345,7 +345,7 @@ let tests =
           )
 
         Expect.isNone effect "No request"
-        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
+        Expect.equal model.PageStatus (Comments.Posted Approved) "The status says that the comment is posted"
 
         Expect.equal
           model.List
@@ -364,7 +364,7 @@ let tests =
 
       test "an approved comment while the list is not loaded keeps the list as it is" {
         let model, _ = run (filled "known@example.com" @ [ submitted; postAnswered(postAnswer true None (Some(posted Approved))) ])
-        Expect.equal model.Status (Comments.Posted Approved) "The status says that the comment is posted"
+        Expect.equal model.PageStatus (Comments.Posted Approved) "The status says that the comment is posted"
         Expect.equal model.List Comments.Loading "The list is still loading"
       }
 
@@ -373,16 +373,16 @@ let tests =
           [ "reader@example.com", (fun message -> validationAnswered(answer false message))
             "known@example.com", (fun message -> postAnswered(postAnswer false message None)) ] do
           let withMessage, _ = run (filled email @ [ submitted; answered (Some "The commenter is banned") ])
-          Expect.equal withMessage.Status (Comments.Failed "The commenter is banned") $"The message of the API for {email}"
+          Expect.equal withMessage.PageStatus (Comments.Failed "The commenter is banned") $"The message of the API for {email}"
           Expect.equal withMessage.Page.Text " Nice post & thanks " "The form keeps the comment"
 
           let general, _ = run (filled email @ [ submitted; answered None ])
-          Expect.equal general.Status (Comments.Failed "Couldn't post your comment. Try again later.") $"A general message for {email}"
+          Expect.equal general.PageStatus (Comments.Failed "Couldn't post your comment. Try again later.") $"A general message for {email}"
       }
 
       test "a request with no answer shows that the site cannot get to the server, and the reader can submit again" {
         let model, _ = run (filled "known@example.com" @ [ submitted; unanswered ])
-        Expect.equal model.Status (Comments.Failed "Couldn't reach the server. Try again later.") "No answer"
+        Expect.equal model.PageStatus (Comments.Failed "Couldn't reach the server. Try again later.") "No answer"
 
         let _, effect = Comments.update submitted model
         Expect.isSome effect "A second submit sends again"
@@ -493,7 +493,7 @@ let tests =
 
       test "a submit from the preview tab posts the comment, and the form goes back to write" {
         let sending, effect = from previewing [ Comments.EmailChanged "known@example.com"; submitted ]
-        Expect.equal sending.Status Comments.Posting "The form is sending"
+        Expect.equal sending.PageStatus Comments.Posting "The form is sending"
         Expect.equal effect (Some(Comments.Post(Comments.Form.Page, { ValidationId = "validation-1"; Comment = "Use `List.map`"; ReplyTo = None }))) "The post has the comment"
 
         let posted, _ = from sending [ postAnswered(postAnswer true None None) ]
@@ -614,6 +614,23 @@ let tests =
         Expect.equal (openForm reopened) (Some("a", "Draft")) "The text comes back"
       }
 
+      test "a closed form keeps its status, so a form that waits for the verification link stays locked at the next open" {
+        let sent, _ =
+          from
+            withThreads
+            [ Comments.ReplyOpened "a"
+              Comments.EmailChanged "reader@example.com"
+              replyTo "a" (Comments.TextChanged "Me too")
+              Comments.Submitted(Comments.Form.Reply "a")
+              Comments.ValidationAnswered(Comments.Form.Reply "a", answer true None) ]
+
+        for closing in [ Comments.ReplyCanceled; Comments.ReplyOpened "b" ] do
+          let model, effect = from sent [ closing; Comments.ReplyOpened "a"; Comments.Submitted(Comments.Form.Reply "a") ]
+          Expect.isNone effect $"No second verification email after %A{closing}"
+          Expect.equal model.Reply.Value.Status (Comments.ValidationSent "reader@example.com") "The form still names the address"
+          Expect.equal (openForm model) (Some("a", "Me too")) "The text comes back"
+      }
+
       test "a [reply] on the open form keeps its text" {
         let opened, _ = from withThreads [ Comments.ReplyOpened "a"; replyTo "a" (Comments.TextChanged "Draft") ]
         let model, _ = from opened [ Comments.ReplyOpened "a" ]
@@ -678,6 +695,18 @@ let tests =
         let changed, effect = from model [ Comments.IdentityChanged ]
         Expect.isNone effect "No request"
         Expect.equal changed.Reply.Value.Identity Comments.Fields "The fields"
+        Expect.isFalse (Comments.showsIdentityLine changed) "No line"
+      }
+
+      test "the one line shows only while the shared email address has a validation ID" {
+        let model, _ = from verified [ Comments.ReplyOpened "a" ]
+        Expect.isTrue (Comments.showsIdentityLine model) "One line"
+
+        let changed, _ = from model [ Comments.EmailChanged "other@example.com" ]
+        Expect.isFalse (Comments.showsIdentityLine changed) "The fields for an address with no validation ID"
+
+        let back, _ = from changed [ Comments.EmailChanged "known@example.com" ]
+        Expect.isTrue (Comments.showsIdentityLine back) "One line again"
       }
 
       test "a verified reader with no name shows as Anonymous" {
@@ -717,7 +746,7 @@ let tests =
       test "a reply posts only the validation ID, the text, and its top-level comment, with no reply-email choice" {
         let model, effect = from verified [ Comments.ReplyOpened "a"; replyTo "a" (Comments.TextChanged " Me too "); Comments.Submitted(Comments.Form.Reply "a") ]
         Expect.equal model.Reply.Value.Status Comments.Posting "The reply form is sending"
-        Expect.equal model.Status Comments.Editing "The page form is not sending"
+        Expect.equal model.PageStatus Comments.Editing "The page form is not sending"
 
         Expect.equal
           effect
@@ -802,7 +831,7 @@ let tests =
           Expect.equal (openForm model) (Some("a", "Me too")) "The form stays with its text"
           Expect.equal model.Reply.Value.Status (Comments.Failed status) "The reason"
           Expect.equal (Comments.replyStatusText model.Reply.Value.Status) status "The status line"
-          Expect.equal model.Status Comments.Editing "The page form has no result"
+          Expect.equal model.PageStatus Comments.Editing "The page form has no result"
       }
     ]
 
@@ -825,8 +854,8 @@ let tests =
         Expect.equal (openForm model) (Some("a", "Me too")) "The reply form of the thread has the text"
         Expect.equal model.Reply.Value.Identity Comments.Verified "One line for the verified address"
         Expect.equal model.Reply.Value.Status Comments.Validated "The reply form tells the reader to post"
-        Expect.equal (Comments.replyStatusText model.Reply.Value.Status) "Email verified. Click [post reply] to post your reply." "The message"
-        Expect.equal (model.Page.Text, model.Status) ("", Comments.Editing) "The page form is empty, with no result"
+        Expect.equal (Comments.replyStatusText model.Reply.Value.Status) "Email verified. Click [post reply] to post." "The message"
+        Expect.equal (model.Page.Text, model.PageStatus) ("", Comments.Editing) "The page form is empty, with no result"
         Expect.equal model.Validations (known.Add("reader@example.com", "validation-2")) "The validation ID is beside the others"
       }
 
@@ -849,10 +878,12 @@ let tests =
         let model, effect = from start [ loaded [ topLevel "b" 2 ] ]
         Expect.equal effect (Some(Comments.ScrollTo Comments.ToSection)) "The scroll to the section"
         Expect.isNone model.Reply "No form is open"
-        Expect.equal (model.Drafts.TryFind "a" |> Option.map _.Text) (Some "Me too") "The text is kept"
+        Expect.equal (model.Drafts.TryFind "a" |> Option.map _.Editor.Text) (Some "Me too") "The text is kept"
 
-        let _, failed = from start [ Comments.ListUnanswered ]
-        Expect.equal failed (Some(Comments.ScrollTo Comments.ToSection)) "The scroll to the section when the list does not load"
+        let failed, scroll = from start [ Comments.ListUnanswered ]
+        Expect.equal scroll (Some(Comments.ScrollTo Comments.ToSection)) "The scroll to the section when the list does not load"
+        Expect.isNone failed.Reply "No form is open when the list does not load"
+        Expect.equal (failed.Drafts.TryFind "a" |> Option.map _.Editor.Text) (Some "Me too") "The text is kept when the list does not load"
       }
     ]
 
