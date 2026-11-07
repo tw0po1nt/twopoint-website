@@ -22,25 +22,45 @@ open System.Net
 open System.Text.Json
 open System.Threading
 
+/// `ReplyTo` is the ID of the top-level comment of a reply.
 type NewCommentJson =
   { ValidationId : string option
-    Comment : string option }
+    Comment : string option
+    ReplyTo : string option }
 
 type PostedCommentDto =
   { Id : string
     CreatedDate : DateTime
     Commenter : string
     Content : string
-    Approval : string }
+    Approval : string
+    ReplyTo : string option
+    Writer : string }
 
 module PostedCommentDto =
   let ofComment (comment : RenderedComment) =
-    let dto = comment.ToDto()
-    { Id = dto.Id
-      CreatedDate = dto.CreatedDate
-      Commenter = dto.Commenter
-      Content = dto.Content
-      Approval = comment.Comment.Status.Approval.ToString() }
+    let answer = PublicComment.ofRendered comment
+    { Id = answer.Id
+      CreatedDate = answer.CreatedDate
+      Commenter = answer.Commenter
+      Content = answer.Content
+      Approval = comment.Comment.Status.Approval.ToString()
+      ReplyTo = answer.ReplyTo
+      Writer = answer.Writer }
+
+[<RequireQualifiedAccess>]
+module PostCommentMapping =
+
+  let replyRefused (reason : ReplyRefusal) =
+    let message =
+      match reason with
+      | ReplyRefusal.ParentIsReply -> "You can reply only to a top-level comment."
+      | ReplyRefusal.ParentNew -> "This comment is waiting for approval, so you can't reply to it yet."
+      | ReplyRefusal.ParentRejected -> "This comment isn't on the post anymore, so you can't reply to it."
+      | ReplyRefusal.ParentMissing -> "Couldn't find the comment that you're replying to."
+      | ReplyRefusal.PostUpcoming -> "This post isn't published yet, so you can't reply to its comments."
+
+    message, HttpStatusCode.Conflict
 
 /// An older Comments widget reads a `data` that is not null as an invalid answer, so the comment goes beside it.
 type PostCommentResponse =
@@ -91,6 +111,7 @@ type PostComment (
       
       member this.GetPostBySlug slug = postDependencies.GetPostBySlug slug
       member this.GetUtcNow () = DateTime.UtcNow
+      member this.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
       member this.CreateComment post commenter newComment approval =
         postDependencies.CreateComment post commenter newComment approval
@@ -101,7 +122,8 @@ type PostComment (
     let newComment =
       { NewComment.Dto.Post = NewComment.Post slug
         NewComment.Dto.ValidationId = json.ValidationId |> Option.defaultValue "" |> NewComment.ValidationId
-        NewComment.Dto.Comment = json.Comment |> Option.map NewComment.Comment |> Option.defaultValue (NewComment.Comment "") }
+        NewComment.Dto.Comment = json.Comment |> Option.map NewComment.Comment |> Option.defaultValue (NewComment.Comment "")
+        NewComment.Dto.ReplyTo = json.ReplyTo |> Option.map NewComment.ReplyTo }
 
     let! postCommentResult = ct |> postComment newComment
     let answer success message comment =
@@ -112,6 +134,9 @@ type PostComment (
         answer true None (Some (PostedCommentDto.ofComment comment)), HttpStatusCode.OK
       | Error (Logic (PostComment.Error.Banned _)) ->
         answer true None None, HttpStatusCode.OK
+      | Error (Logic (PostComment.Error.ReplyRefused reason)) ->
+        let message, statusCode = PostCommentMapping.replyRefused reason
+        answer false (Some message) None, statusCode
       | Error (Logic postCommentError) ->
         let errorMessage =
           match postCommentError with

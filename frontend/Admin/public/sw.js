@@ -20,8 +20,6 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(resubscribe(event));
 });
 
-const bodyLength = 120;
-
 const readData = (event) => {
   try {
     return event.data ? event.data.json() : null;
@@ -35,10 +33,11 @@ const targetOf = (data) =>
     ? `/posts/${encodeURIComponent(data.slug)}/comments#${encodeURIComponent(data.commentId)}`
     : `/comments#${encodeURIComponent(data.commentId)}`;
 
+// The backend writes the title and the body.
 const commentNoticeOf = (data) => ({
-  title: `${data.case === 'approved' ? 'Comment posted on' : 'New comment on'} ${data.postTitle}`,
+  title: String(data.title ?? 'New comment'),
   options: {
-    body: `${data.commenter}: ${[...String(data.text)].slice(0, bodyLength).join('')}`,
+    body: String(data.body ?? ''),
     tag: data.commentId,
     data: { target: targetOf(data) },
   },

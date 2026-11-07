@@ -317,6 +317,7 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
             |> ok)
           |> CancellableTaskResult.singleton
         member _.GetUtcNow () = clock
+        member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
         member _.Stage = TwoPoint.Site.Render.Stage.Production
         member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
         member _.CreateComment _ commenter newComment approval =
@@ -336,7 +337,8 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
   let dto =
     { NewComment.Dto.Post = NewComment.Post "my-draft"
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
-      NewComment.Dto.Comment = NewComment.Comment "A comment" }
+      NewComment.Dto.Comment = NewComment.Comment "A comment"
+      NewComment.Dto.ReplyTo = None }
 
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
 

@@ -373,6 +373,37 @@ module GetCommentsForPost =
     }
 
 // ====================================================================================================================
+// Get public comments
+// ====================================================================================================================
+
+[<RequireQualifiedAccess>]
+module GetPublicComments =
+
+  type Query = Slug -> CancellableTask<QueryResult<PublicComment list option>>
+
+  let withDependencies (dependencies : GetCommentsForPost.Dependencies) : Query =
+    fun slug -> cancellableTaskResult {
+      let! slug =
+        slug
+        |> Slug.create
+        |> Result.mapError QueryError.Validation
+      let! post =
+        dependencies.GetPostBySlug slug
+        |> CancellableTaskResult.mapError QueryError.Dependency
+      return!
+        post
+        |> Option.traverseCancellableTaskResult (dependencies.GetCommentsForPost [ CommentApproval.Approved ])
+        |> CancellableTaskResult.mapError QueryError.Dependency
+        |> CancellableTaskResult.map (
+          Option.map (
+            CommentVisibility.visible
+            >> List.sortBy _.CreatedDate
+            >> List.map (RenderedComment.ofComment dependencies.Stage >> PublicComment.ofRendered)
+          )
+        )
+    }
+
+// ====================================================================================================================
 // Get moderation queue
 // ====================================================================================================================
 

@@ -216,6 +216,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
     member _.GetUtcNow () = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+    member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
     member _.CreateComment _ commenter newComment approval =
       created.Add approval
@@ -234,7 +235,8 @@ let private postCommentWith (content : string) (dependencies : FakePostCommentDe
   let dto =
     { NewComment.Dto.Post = NewComment.Post (olderPost.Id.ToString())
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
-      NewComment.Dto.Comment = NewComment.Comment content }
+      NewComment.Dto.Comment = NewComment.Comment content
+      NewComment.Dto.ReplyTo = None }
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
 
 let private postComment = postCommentWith "A comment"
