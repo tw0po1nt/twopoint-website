@@ -251,6 +251,30 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
+    // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/397): get the IDs and the time from an interface.
+    let newDbComment =
+      DbComment.OfAuthorReply(
+        Guid.NewGuid().ToString(),
+        DateTime.UtcNow,
+        post,
+        content,
+        topLevel
+      )
+    let newDbStatus =
+      { DbCommentStatus.Id = Guid.NewGuid().ToString()
+        CommentId = newDbComment.Id
+        CreatedDate = newDbComment.CreatedDate
+        Approval = approval.ToString().ToLower() }
+
+    let! (dbComment: DbComment, dbWriter, dbCommentStatus) =
+      postDb.CreateComment newDbComment newDbStatus
+
+    return!
+      dbComment.ToComment(dbCommentStatus, dbWriter)
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetPostedCommentById (commentId : CommentId) = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())
 

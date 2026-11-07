@@ -375,6 +375,9 @@ let private listed (list: CommentList) (model: Model) =
 
 let isValidComment (comment: string) = comment.Trim() <> ""
 
+/// The `maxlength` of a comment box. The backend refuses a longer comment.
+let maxLength = 1000
+
 let showsEmailError (model: Model) =
   model.EmailTouched && not (Subscribe.isValidEmail model.Email)
 
@@ -523,7 +526,7 @@ let private previewed (request: PreviewRequest) (response: ApiResponse<string>) 
         Kept = Some { Source = request.Source; Html = html } }
   | _ -> { editor with Tab = Preview PreviewState.Failed }
 
-let private edit (edit: Edit) (editor: Editor) : Editor * PreviewRequest option =
+let edit (edit: Edit) (editor: Editor) : Editor * PreviewRequest option =
   match edit with
   | TextChanged text -> { editor with Text = text }, None
   | TextLeft -> { editor with Touched = editor.Touched || editor.Text <> "" }, None

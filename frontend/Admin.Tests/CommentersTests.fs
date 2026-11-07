@@ -21,9 +21,10 @@ let private posted id (commenter: Api.Commenter) approval : Api.PostedComment =
     Comment =
       { Id = id
         CreatedDate = "2026-02-01T00:00:00Z"
-        Commenter = commenter
+        Writer = Api.Writer.Commenter commenter
         Status = approval
-        Content = "A comment" } }
+        Content = "A comment"
+        ReplyTo = None } }
 
 let private waiting = posted "waiting" ada Api.CommentApproval.New
 let private approved = posted "approved" ada Api.CommentApproval.Approved

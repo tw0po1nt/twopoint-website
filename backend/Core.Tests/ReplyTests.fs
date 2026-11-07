@@ -231,5 +231,143 @@ let private answerTests =
     }
   ]
 
+/// Each call that changes the store, in order. An author reply has no other effect, so a notification would show here.
+type private AuthorReplyEffect =
+  | Approved of CommentId
+  | CreatedReply of topLevel : CommentId * approval : CommentApproval
+
+type private FakeAuthorReply(stored : PostedComment list) =
+  let effects = ResizeArray<AuthorReplyEffect>()
+
+  member _.Effects = List.ofSeq effects
+
+  interface ReplyAsAuthor.Dependencies with
+    member _.GetPostedCommentById id =
+      stored |> List.tryFind (fun comment -> comment.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.UpdateCommentApproval comment approval =
+      effects.Add(Approved comment.Id)
+      CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
+    member _.CreateAuthorReply _ topLevel content approval =
+      effects.Add(CreatedReply(topLevel.Id, approval))
+
+      Comment.create
+        authorReplyId
+        "2026-03-01T00:00:00.0000000Z"
+        {| Approval = approval.ToString(); CreatedDate = "2026-03-01T00:00:00.0000000Z" |}
+        (Some (string topLevel.Id))
+        CommentWriter.Author
+        (content.ToString())
+      |> ok
+      |> CancellableTaskResult.singleton
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private replyAsAuthor (replyTo : string) (dependencies : FakeAuthorReply) =
+  let dto = { AuthorReply.Dto.Post = olderPost.Id.ToString(); AuthorReply.Dto.ReplyTo = replyTo; AuthorReply.Dto.Content = "An answer" }
+  (ReplyAsAuthor.withDependencies dependencies dto CancellationToken.None).Result
+
+let private commentId (id : string) = CommentId.create id |> ok
+
+let private authorReplyTests =
+  testList "an author reply" [
+    test "an author reply to a new reply approves the reply and its new top-level comment" {
+      let dependencies =
+        FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New); postedOn olderPost (replyOf CommentApproval.New) ]
+
+      match replyAsAuthor replyId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId; replyId ] "Expected both comments in the answer"
+        Expect.isTrue (approved |> List.forall (fun comment -> comment.Status.Approval = CommentApproval.Approved)) "Expected approved comments"
+        Expect.equal
+          dependencies.Effects
+          [ Approved (commentId topLevelId); Approved (commentId replyId); CreatedReply (commentId topLevelId, CommentApproval.Approved) ]
+          "Expected the approvals before the reply"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply on a reply row goes to the top-level comment" {
+      let dependencies =
+        FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Approved) ]
+
+      match replyAsAuthor replyId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (reply, approved)) ->
+        Expect.equal (reply.Comment.Parent |> Option.map string) (Some topLevelId) "Expected the top-level comment as the parent"
+        Expect.isEmpty approved "Expected no approval of an approved comment"
+        Expect.equal dependencies.Effects [ CreatedReply (commentId topLevelId, CommentApproval.Approved) ] "Expected only the reply"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply to an approved reply approves its new top-level comment" {
+      let dependencies =
+        FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New); postedOn olderPost (replyOf CommentApproval.Approved) ]
+
+      match replyAsAuthor replyId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId ] "Expected the top-level comment"
+        Expect.equal
+          dependencies.Effects
+          [ Approved (commentId topLevelId); CreatedReply (commentId topLevelId, CommentApproval.Approved) ]
+          "Expected the approval before the reply"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply to a new top-level comment approves it" {
+      let dependencies = FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New) ]
+
+      match replyAsAuthor topLevelId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId ] "Expected the top-level comment"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    for name, replyTo, stored in
+      [ "a rejected top-level comment", topLevelId, [ postedOn olderPost (topLevel CommentApproval.Rejected) ]
+        "a rejected reply", replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Rejected) ]
+        "a new reply under a rejected top-level comment", replyId, [ postedOn olderPost (topLevel CommentApproval.Rejected); postedOn olderPost (replyOf CommentApproval.New) ]
+        "an approved reply under a rejected top-level comment", replyId, [ postedOn olderPost (topLevel CommentApproval.Rejected); postedOn olderPost (replyOf CommentApproval.Approved) ] ] do
+      test $"an author reply to {name} is refused, and the blog stores nothing" {
+        let dependencies = FakeAuthorReply stored
+
+        Expect.equal
+          (replyAsAuthor replyTo dependencies)
+          (Error (Logic (ReplyAsAuthor.Refused AuthorReplyRefusal.ReplyToRejected)))
+          "Expected the refusal"
+        Expect.isEmpty dependencies.Effects "Expected no change"
+      }
+
+    for name, stored in
+      [ "a missing comment", []
+        "a comment on another post", [ postedOn latestPost (topLevel CommentApproval.Approved) ] ] do
+      test $"an author reply to {name} is refused as missing" {
+        let dependencies = FakeAuthorReply stored
+
+        Expect.equal
+          (replyAsAuthor topLevelId dependencies)
+          (Error (Logic (ReplyAsAuthor.Refused AuthorReplyRefusal.ReplyToMissing)))
+          "Expected the refusal"
+        Expect.isEmpty dependencies.Effects "Expected no change"
+      }
+
+    test "an author reply is approved, has no commenter, and sends no notification" {
+      let dependencies = FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.Approved) ]
+
+      match replyAsAuthor topLevelId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (reply, _)) ->
+        Expect.equal reply.Comment.Status.Approval CommentApproval.Approved "Expected an approved reply"
+        Expect.equal reply.Comment.Writer CommentWriter.Author "Expected the author as the writer"
+        Expect.isNone (Comment.commenter reply.Comment) "Expected no commenter"
+        Expect.equal dependencies.Effects [ CreatedReply (commentId topLevelId, CommentApproval.Approved) ] "Expected no other effect"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply of 1,001 characters is refused" {
+      let dependencies = FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.Approved) ]
+      let dto = { AuthorReply.Dto.Post = olderPost.Id.ToString(); AuthorReply.Dto.ReplyTo = topLevelId; AuthorReply.Dto.Content = String('x', NewComment.maxLength + 1) }
+
+      match (ReplyAsAuthor.withDependencies dependencies dto CancellationToken.None).Result with
+      | Error (ActionError.Validation _) -> Expect.isEmpty dependencies.Effects "Expected no change"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Replies" [ replyCheckTests; approvalTests; visibilityTests; answerTests ]
+let tests = testList "Replies" [ replyCheckTests; approvalTests; visibilityTests; answerTests; authorReplyTests ]

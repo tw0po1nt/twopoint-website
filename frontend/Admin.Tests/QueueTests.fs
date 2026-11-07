@@ -10,14 +10,16 @@ let private queued id (name: string) status : Api.PostedComment =
     Comment =
       { Id = id
         CreatedDate = "2026-02-01T00:00:00Z"
-        Commenter =
-          { Id = $"{name.ToLower()}-id"
-            Email = $"{name.ToLower()}@example.com"
-            Name = name
-            Status = status
-            CreatedDate = "2026-01-01T00:00:00Z" }
+        Writer =
+          Api.Writer.Commenter
+            { Id = $"{name.ToLower()}-id"
+              Email = $"{name.ToLower()}@example.com"
+              Name = name
+              Status = status
+              CreatedDate = "2026-01-01T00:00:00Z" }
         Status = Api.CommentApproval.New
-        Content = "A comment" } }
+        Content = "A comment"
+        ReplyTo = None } }
 
 let private first = queued "first" "Ada" Api.New
 let private second = queued "second" "Grace" Api.Trusted
@@ -34,11 +36,127 @@ let private loadedWith comments =
 let private loaded () = loadedWith [ first; second ]
 
 let private trusted (comment: Api.PostedComment) =
-  { comment with
-      Comment.Commenter.Status = Api.Trusted }
+  match comment.Comment.Writer with
+  | Api.Writer.Commenter commenter ->
+    { comment with
+        Comment.Writer = Api.Writer.Commenter { commenter with Status = Api.Trusted } }
+  | Api.Writer.Author -> comment
 
 let private commenterStatus commentId (model: Shell.Model) =
-  Queue.tryFind commentId model.Queue |> Option.map _.Comment.Comment.Commenter.Status
+  Queue.tryFind commentId model.Queue
+  |> Option.bind (fun row ->
+    match row.Comment.Comment.Writer with
+    | Api.Writer.Commenter commenter -> Some commenter.Status
+    | Api.Writer.Author -> None)
+
+let private replyOf (comment: Api.PostedComment) =
+  { comment with
+      Comment.ReplyTo = Some "top-level" }
+
+let private reply msg model = send (Queue.Reply msg) model
+
+let private typed (commentId: string) (text: string) model =
+  reply (AuthorReply.Edited(commentId, TwoPoint.Site.Widgets.Comments.TextChanged text)) model
+
+let private answer (commentId: string) (approved: string list) : Api.AuthorReply =
+  { Reply =
+      { Id = "answer"
+        CreatedDate = "2026-03-01T00:00:00Z"
+        Writer = Api.Writer.Author
+        Status = Api.CommentApproval.Approved
+        Content = "An answer"
+        ReplyTo = Some commentId }
+    Approved = approved }
+
+let private replyTests =
+  testList "the reply as the author" [
+    test "a new row offers the reply with the approval in its label, and its form tells the author about the approval" {
+      Expect.isTrue (AuthorReply.canReply None Api.CommentApproval.New) "A new row takes a reply"
+      Expect.equal (AuthorReply.actionLabel Api.CommentApproval.New) "Reply and approve" "The label names the approval"
+      Expect.equal
+        (AuthorReply.approvalNote Api.CommentApproval.New)
+        (Some "Posting your reply also approves this comment.")
+        "The note of a new row"
+    }
+
+    test "the reply opens a form under its row, and a second reply moves the form to that row" {
+      let model, effect = reply (AuthorReply.Opened "first") (loaded ())
+      Expect.isNone effect "No call at the open"
+      Expect.isTrue (AuthorReply.isOpenOn "first" model.Queue.Reply) "The form is open on the first row"
+
+      let model, _ = reply (AuthorReply.Opened "second") model
+      Expect.isTrue (AuthorReply.isOpenOn "second" model.Queue.Reply) "One form at a time"
+    }
+
+    test "the preview of a reply asks the backend for the HTML" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = typed "first" "An *answer*" model
+      let _, effect = reply (AuthorReply.Edited("first", TwoPoint.Site.Widgets.Comments.PreviewSelected)) model
+
+      match effect with
+      | Some(Shell.Send [ Shell.PreviewReply(Shell.ReplyPage.OnQueue, "first", request) ]) ->
+        Expect.equal request.Source "An *answer*" "The text of the reply"
+      | other -> failtestf "Expected the preview call, got %A" other
+    }
+
+    test "an empty reply sends nothing" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = typed "first" "   " model
+      let _, effect = reply AuthorReply.Submitted model
+      Expect.isNone effect "No call"
+    }
+
+    test "a posted reply on a new row removes the approved row and lowers the navigation count" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = typed "first" "An answer" model
+      let model, effect = reply AuthorReply.Submitted model
+      Expect.equal effect (Some(Shell.Send [ Shell.PostReply(Shell.ReplyPage.OnQueue, "first-post", "first", "An answer") ])) "The reply call"
+
+      let model, effect = reply (AuthorReply.Answered("first", Ok(answer "first" [ "first" ]))) model
+      Expect.equal effect (Some(Shell.SetBadge 1)) "The badge shows the new count"
+      Expect.isNone (Queue.tryFind "first" model.Queue) "The approved row goes away"
+      Expect.isNone model.Queue.Reply "The form closes"
+    }
+
+    test "a reply on a reply row posts to that row, and the backend moves it to the top-level comment" {
+      let model, _ = reply (AuthorReply.Opened "first") (loadedWith [ replyOf first; second ])
+      let model, _ = typed "first" "An answer" model
+      let _, effect = reply AuthorReply.Submitted model
+      Expect.equal effect (Some(Shell.Send [ Shell.PostReply(Shell.ReplyPage.OnQueue, "first-post", "first", "An answer") ])) "The reply call"
+    }
+
+    test "a failed reply keeps the form and its text, and shows the reason" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = typed "first" "An answer" model
+      let model, _ = reply AuthorReply.Submitted model
+      let model, _ = reply (AuthorReply.Answered("first", Error(Api.Failed "This comment is rejected, so you can't reply to it."))) model
+      let form = model.Queue.Reply |> Option.get
+      Expect.equal form.Editor.Text "An answer" "The text stays"
+      Expect.equal (AuthorReply.failure form) (Some "Couldn't post the reply. This comment is rejected, so you can't reply to it.") "The reason"
+      Expect.equal (Queue.count model.Queue) (Some 2) "The rows stay"
+    }
+
+    test "Cancel closes the form" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = reply AuthorReply.Canceled model
+      Expect.isNone model.Queue.Reply "The form closes"
+    }
+
+    test "a reload of the queue keeps the open form" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = typed "first" "An answer" model
+      let model, _ = send (Queue.Answered(Ok [ first; second; third ])) model
+      Expect.equal (model.Queue.Reply |> Option.map _.Editor.Text) (Some "An answer") "The draft stays"
+    }
+
+    test "a refused token on a reply offers another account" {
+      let model, _ = reply (AuthorReply.Opened "first") (loaded ())
+      let model, _ = typed "first" "An answer" model
+      let model, _ = reply AuthorReply.Submitted model
+      let model, _ = reply (AuthorReply.Answered("first", Error Api.Refused)) model
+      Expect.equal model.Session.Status Session.Refused "The banner offers another account"
+    }
+  ]
 
 [<Tests>]
 let tests =
@@ -77,7 +195,12 @@ let tests =
 
     test "Approve and trust sends the trust, then the approval, and the answer removes the row" {
       let model, effect = send (Queue.Chosen("first", Queue.ApproveAndTrust)) (loadedWith [ first; second; third ])
-      Expect.equal effect (Some(Shell.Send [ Shell.TrustCommenter first ])) "The trust call"
+      let ada =
+        match first.Comment.Writer with
+        | Api.Writer.Commenter commenter -> commenter
+        | Api.Writer.Author -> failtest "Expected a commenter"
+
+      Expect.equal effect (Some(Shell.Send [ Shell.TrustCommenter(first, ada) ])) "The trust call"
       Expect.equal (commenterStatus "third" model) (Some Api.New) "The commenter stays new until the answer"
 
       let model, effect = send (Queue.Trusted("first", Ok())) model
@@ -182,7 +305,7 @@ let tests =
     test "a queue that did not load shows the reason" {
       let model, _ = Shell.init "/comments"
       let model, _ = send (Queue.Answered(Error Api.Unanswered)) model
-      Expect.equal model.Queue (Queue.NotLoaded "The server didn't respond. Check your connection and try again.") "The reason"
+      Expect.equal model.Queue.Comments (Queue.NotLoaded "The server didn't respond. Check your connection and try again.") "The reason"
     }
 
     test "a refused token offers another account" {
@@ -190,4 +313,6 @@ let tests =
       let model, _ = send (Queue.Done("first", Queue.Approve, Error Api.Refused)) model
       Expect.equal model.Session.Status Session.Refused "The banner offers another account"
     }
+
+    replyTests
   ]

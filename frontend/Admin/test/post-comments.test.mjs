@@ -17,6 +17,17 @@ const comments = [
   comment('c-5', 'Alan', 'rejected', 'A rejected comment.'),
 ];
 
+const authorReply = {
+  id: 'c-9',
+  createdDate: '2026-02-05T00:00:00Z',
+  commenter: null,
+  status: 'approved',
+  content: '<p>An <em>answer</em></p>',
+  replyTo: 'c-4',
+  writer: 'author',
+};
+
+const previews = [];
 const reads = [];
 const actions = [];
 
@@ -24,6 +35,16 @@ const respond = (url, init) => {
   if (url.endsWith('/api/internal/posts/first/comments')) {
     reads.push(url.replace(/^.*\/api\//, ''));
     return answer(200, { success: true, message: null, data: comments });
+  }
+
+  if (url.endsWith('/api/blog/comments/preview')) {
+    previews.push(JSON.parse(init.body).content);
+    return answer(200, { success: true, message: null, data: '<p>An <em>answer</em></p>' });
+  }
+
+  if (url.endsWith('/replies')) {
+    actions.push({ method: init.method, url: url.replace(/^.*\/api\//, ''), body: init.body ?? null });
+    return answer(200, { success: true, message: null, data: { reply: authorReply, approved: [] } });
   }
 
   if (url.includes('/api/internal/posts/')) {
@@ -60,8 +81,8 @@ test('a comment row of the post shows the rendered HTML of the comment', () => {
 });
 
 test('each row offers only the changes that its approval allows', () => {
-  assert.deepEqual(buttons('c-1'), ['Approve', 'Reject', 'Delete']);
-  assert.deepEqual(buttons('c-4'), ['Reject', 'Delete']);
+  assert.deepEqual(buttons('c-1'), ['Approve', 'Reject', 'Delete', 'Reply and approve']);
+  assert.deepEqual(buttons('c-4'), ['Reject', 'Delete', 'Reply']);
   assert.deepEqual(buttons('c-5'), ['Approve', 'Delete']);
 });
 
@@ -106,4 +127,35 @@ test('Delete in the confirmation deletes the comment', async () => {
   assert.equal(dialog.open, false);
   assert.deepEqual(actions[1], { method: 'DELETE', url: 'internal/posts/first/comments/c-5', body: null });
   assert.deepEqual(rows(), ['c-1', 'c-4']);
+});
+
+test('Reply opens a form under the row, keeps the focus while the author types, and previews the reply', async () => {
+  tab('All').click();
+  await settle();
+  press('Reply', row('c-4'));
+  await settle();
+  const box = row('c-4').querySelector('textarea');
+  assert.ok(box, 'The form is under the row');
+  assert.equal(box.getAttribute('maxlength'), '1000');
+
+  box.focus();
+  box.value = 'An *answer*';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await settle();
+  assert.equal(document.activeElement, row('c-4').querySelector('textarea'), 'The same box keeps the focus');
+
+  tab('Preview').click();
+  await settle();
+  assert.deepEqual(previews, ['An *answer*']);
+  assert.match(row('c-4').querySelector('.reply-preview').innerHTML, /<em>answer<\/em>/);
+});
+
+test('Post reply sends the reply, and the reply from the author shows at the end', async () => {
+  press('Post reply', row('c-4'));
+  await settle();
+  assert.deepEqual(actions.at(-1), { method: 'POST', url: 'internal/posts/first/comments/c-4/replies', body: '{"content":"An *answer*"}' });
+  assert.equal(row('c-4').querySelector('textarea'), null, 'The form closes');
+  assert.deepEqual(rows(), ['c-1', 'c-4', 'c-9']);
+  assert.match(row('c-9').textContent, /You/);
+  assert.match(row('c-9').textContent, /Author/);
 });

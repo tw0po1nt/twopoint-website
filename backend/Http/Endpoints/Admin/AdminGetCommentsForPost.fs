@@ -28,7 +28,11 @@ type AdminCommentDto =
     CreatedDate : DateTime
     Commenter : AdminCommenterDto option
     Status : string
-    Content : string }
+    Content : string
+    /// The ID of the top-level comment of a reply.
+    ReplyTo : string option
+    /// `commenter` or `author`. A comment from the author has no commenter.
+    Writer : string }
 
 [<AutoOpen>]
 module CommentTypesExt =
@@ -47,7 +51,12 @@ module CommentTypesExt =
         CreatedDate = this.Comment.CreatedDate
         Commenter = this.Comment |> Comment.commenter |> Option.map _.ToDto()
         Status = this.Comment.Status.Approval.ToString()
-        Content = this.Html }
+        Content = this.Html
+        ReplyTo = this.Comment.Parent |> Option.map string
+        Writer =
+          match this.Comment.Writer with
+          | CommentWriter.Commenter _ -> "commenter"
+          | CommentWriter.Author -> "author" }
 
 type AdminGetCommentsForPost (
   config: Config,
