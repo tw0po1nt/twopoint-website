@@ -481,17 +481,17 @@ module PostComment =
   and Data =
     | Post of Slug
     | Commenter of CommenterValidationId
-  type Success = Posted of post: Post * comment: NewComment * commenter: Commenter * approval: CommentApproval
+  type Success =
+    | Posted of post: Post * comment: NewComment * topLevel: Comment option * commenter: Commenter * approval: CommentApproval
   type Decision = Decision<Success, Error>
   type Event = Posted of Post * RenderedComment
 
   // Logic
 
-  /// The parent is the comment with the ID of `ReplyTo`, from any post.
   type Logic =
     DateTime
       -> Post option
-      -> PostedComment option
+      -> NewCommentPlace
       -> Commenter option
       -> NewComment
       -> Decision
@@ -499,17 +499,24 @@ module PostComment =
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun utcNow existingPost parent existingCommenter newComment -> result {
+      fun utcNow existingPost place existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
 
-        match newComment.ReplyTo with
-        | None -> do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
-        | Some _ -> do! ReplyCheck.check utcNow post parent |> Result.ignore |> Result.mapError ReplyRefused
+        let! topLevel =
+          match place with
+          | NewCommentPlace.TopLevel ->
+            post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post) |> Result.map (fun () -> None)
+          | NewCommentPlace.Reply replyTo ->
+            ReplyCheck.check utcNow post replyTo |> Result.map Some |> Result.mapError ReplyRefused
 
         let! commenter = existingCommenter |> Result.requireSome (newComment.ValidationId |> Data.Commenter |> Error.NotFound)
-        let! approval = CommentApproval.ofCommenterStatus commenter.Status |> Result.requireSome (Banned commenter)
+        let! approval =
+          match commenter.Status with
+          | CommenterStatus.New -> Ok CommentApproval.New
+          | CommenterStatus.Trusted -> Ok CommentApproval.Approved
+          | CommenterStatus.Banned -> Error (Banned commenter)
 
-        return Success.Posted (post, newComment, commenter, approval)
+        return Success.Posted (post, newComment, topLevel, commenter, approval)
       }
 
   // Action
@@ -527,6 +534,7 @@ module PostComment =
       post: Post
         -> commenter: Commenter
         -> newComment: NewComment
+        -> topLevel: Comment option
         -> approval: CommentApproval
         -> DependencyResult<Comment>
     abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
@@ -534,9 +542,9 @@ module PostComment =
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<RenderedComment> =
+    let handleCommentPosted (Success.Posted (post, comment, topLevel, commenter, approval)) : DependencyResult<RenderedComment> =
       cancellableTaskResult {
-        let! (created : Comment) = dependencies.CreateComment post commenter comment approval
+        let! (created : Comment) = dependencies.CreateComment post commenter comment topLevel approval
 
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
         return RenderedComment.ofComment dependencies.Stage created
@@ -552,17 +560,17 @@ module PostComment =
         dependencies.GetPostBySlug newComment.Post
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let! parent =
-        newComment.ReplyTo
-        |> Option.traverseCancellableTaskResult dependencies.GetPostedCommentById
-        |> CancellableTaskResult.map Option.flatten
+      let! place =
+        (match newComment.ReplyTo with
+         | None -> CancellableTaskResult.singleton NewCommentPlace.TopLevel
+         | Some replyTo -> dependencies.GetPostedCommentById replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! existingCommenter =
         dependencies.GetCommenterByValidationId newComment.ValidationId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost parent existingCommenter newComment
+      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost place existingCommenter newComment
 
       let commentPostedEvent existingPost comment = Event.Posted (existingPost, comment)
 

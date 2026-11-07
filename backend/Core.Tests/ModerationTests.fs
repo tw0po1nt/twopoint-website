@@ -218,7 +218,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
     member _.GetUtcNow () = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
     member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
-    member _.CreateComment _ commenter newComment approval =
+    member _.CreateComment _ commenter newComment _ approval =
       created.Add approval
       let posted = comment firstId "2026-02-01T00:00:00.0000000Z" approval
       CancellableTaskResult.singleton { posted with Writer = CommentWriter.Commenter commenter; Content = newComment.Content }

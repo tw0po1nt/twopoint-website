@@ -54,8 +54,8 @@ module NewCommentPayload =
     |> Option.defaultValue (string commenter.EmailAddress)
     |> truncate maxCommenterLength
 
-  /// `parent` is the top-level comment of a reply, and None for a top-level comment or a parent that is gone.
-  let ofComment (newCount : int) (parent : Comment option) (posted : PostedComment) : NewCommentPayload option =
+  /// `topLevel` is None for a top-level comment, and for a reply whose top-level comment is gone.
+  let ofComment (newCount : int) (topLevel : Comment option) (posted : PostedComment) : NewCommentPayload option =
     let comment = posted.Comment
 
     let payload case =
@@ -69,8 +69,8 @@ module NewCommentPayload =
         let title, body =
           match comment.Parent with
           | Some _ ->
-            let parentName = parent |> Option.bind Comment.commenter |> Option.map nameOf |> Option.defaultValue "a comment"
-            $"{name} replied to {parentName}", text
+            let topLevelName = topLevel |> Option.bind Comment.commenter |> Option.map nameOf |> Option.defaultValue "a comment"
+            $"{name} replied to {topLevelName}", text
           | None ->
             match case with
             | AwaitsModeration -> $"New comment on {postTitle}", $"{name}: {text}"
@@ -140,13 +140,13 @@ module NotifyNewComment =
           dependencies.CountNewComments()
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-        let! parent =
+        let! topLevel =
           posted.Comment.Parent
           |> Option.traverseCancellableTaskResult dependencies.GetPostedComment
-          |> CancellableTaskResult.map (Option.flatten >> Option.map (fun (parent : PostedComment) -> parent.Comment))
+          |> CancellableTaskResult.map (Option.flatten >> Option.map (fun (topLevel : PostedComment) -> topLevel.Comment))
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-        match NewCommentPayload.ofComment newCount parent posted with
+        match NewCommentPayload.ofComment newCount topLevel posted with
         | None -> return Skipped commentId
         | Some payload ->
           let! devices =

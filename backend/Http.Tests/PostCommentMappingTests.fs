@@ -11,10 +11,10 @@ let tests =
   testList "PostCommentMapping" [
     test "each reason of the reply check gives 409 with its own message" {
       let reasons =
-        [ ReplyRefusal.ParentIsReply
-          ReplyRefusal.ParentNew
-          ReplyRefusal.ParentRejected
-          ReplyRefusal.ParentMissing
+        [ ReplyRefusal.ReplyToReply
+          ReplyRefusal.ReplyToNew
+          ReplyRefusal.ReplyToRejected
+          ReplyRefusal.ReplyToMissing
           ReplyRefusal.PostUpcoming ]
 
       let answers = reasons |> List.map PostCommentMapping.replyRefused

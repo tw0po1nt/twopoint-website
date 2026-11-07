@@ -281,6 +281,16 @@ type internal DbComment =
     entity["Writer"] <- writer
     entity
 
+  static member OfCommenter
+    (id : string, createdDate : DateTime, post : Slug, commenter : Commenter, content : NonEmptyString, topLevel : Comment option)
+    =
+    { Id = id
+      PostId = Slug.value post
+      CreatedDate = createdDate
+      Content = NonEmptyString.value content
+      ParentId = topLevel |> Option.map (_.Id >> string)
+      Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString()) }
+
   member this.ToComment(status: DbCommentStatus, writer: DbCommentWriter) = validation {
     let! writer =
       match writer with

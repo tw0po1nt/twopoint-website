@@ -102,13 +102,6 @@ module CommentApproval =
 
   let all = [New; Approved; Rejected]
 
-  /// None for a banned commenter, because the blog keeps no comment from a banned commenter.
-  let ofCommenterStatus (status : CommenterStatus) =
-    match status with
-    | CommenterStatus.New -> Some New
-    | CommenterStatus.Trusted -> Some Approved
-    | CommenterStatus.Banned -> None
-
 
 type CommentStatus =
   { Approval : CommentApproval

@@ -4,29 +4,35 @@ open System
 
 [<RequireQualifiedAccess>]
 type ReplyRefusal =
-  | ParentIsReply
-  | ParentNew
-  | ParentRejected
-  | ParentMissing
+  | ReplyToReply
+  | ReplyToNew
+  | ReplyToRejected
+  | ReplyToMissing
   | PostUpcoming
+
+/// A reply has the comment that its `ReplyTo` names, or None when no comment has that ID.
+[<RequireQualifiedAccess>]
+type NewCommentPlace =
+  | TopLevel
+  | Reply of replyTo : PostedComment option
 
 [<RequireQualifiedAccess>]
 module ReplyCheck =
 
-  /// A commenter can reply only to an approved top-level comment of the same post, after the publish date of the post.
-  let check (utcNow : DateTime) (post : Post) (parent : PostedComment option) : Result<Comment, ReplyRefusal> =
+  /// A comment on another post is missing for this post.
+  let check (utcNow : DateTime) (post : Post) (replyTo : PostedComment option) : Result<Comment, ReplyRefusal> =
     if post.Info.CreatedDate > utcNow then
       Error ReplyRefusal.PostUpcoming
     else
-      match parent with
-      | None -> Error ReplyRefusal.ParentMissing
-      | Some parent when parent.Post <> post.Id -> Error ReplyRefusal.ParentMissing
-      | Some { Comment = { Parent = Some _ } } -> Error ReplyRefusal.ParentIsReply
-      | Some { Comment = parent } ->
-        match parent.Status.Approval with
-        | CommentApproval.New -> Error ReplyRefusal.ParentNew
-        | CommentApproval.Rejected -> Error ReplyRefusal.ParentRejected
-        | CommentApproval.Approved -> Ok parent
+      match replyTo with
+      | None -> Error ReplyRefusal.ReplyToMissing
+      | Some replyTo when replyTo.Post <> post.Id -> Error ReplyRefusal.ReplyToMissing
+      | Some { Comment = { Parent = Some _ } } -> Error ReplyRefusal.ReplyToReply
+      | Some { Comment = topLevel } ->
+        match topLevel.Status.Approval with
+        | CommentApproval.New -> Error ReplyRefusal.ReplyToNew
+        | CommentApproval.Rejected -> Error ReplyRefusal.ReplyToRejected
+        | CommentApproval.Approved -> Ok topLevel
 
 [<RequireQualifiedAccess>]
 module CommentVisibility =

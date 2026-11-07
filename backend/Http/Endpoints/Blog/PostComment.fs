@@ -54,10 +54,10 @@ module PostCommentMapping =
   let replyRefused (reason : ReplyRefusal) =
     let message =
       match reason with
-      | ReplyRefusal.ParentIsReply -> "You can reply only to a top-level comment."
-      | ReplyRefusal.ParentNew -> "This comment is waiting for approval, so you can't reply to it yet."
-      | ReplyRefusal.ParentRejected -> "This comment isn't on the post anymore, so you can't reply to it."
-      | ReplyRefusal.ParentMissing -> "Couldn't find the comment that you're replying to."
+      | ReplyRefusal.ReplyToReply -> "You can reply only to a top-level comment."
+      | ReplyRefusal.ReplyToNew -> "This comment is waiting for approval, so you can't reply to it yet."
+      | ReplyRefusal.ReplyToRejected -> "This comment isn't on the post anymore, so you can't reply to it."
+      | ReplyRefusal.ReplyToMissing -> "Couldn't find the comment that you're replying to."
       | ReplyRefusal.PostUpcoming -> "This post isn't published yet, so you can't reply to its comments."
 
     message, HttpStatusCode.Conflict
@@ -113,8 +113,8 @@ type PostComment (
       member this.GetUtcNow () = DateTime.UtcNow
       member this.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-      member this.CreateComment post commenter newComment approval =
-        postDependencies.CreateComment post commenter newComment approval
+      member this.CreateComment post commenter newComment topLevel approval =
+        postDependencies.CreateComment post commenter newComment topLevel approval
       member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId
       member this.Stage = config.Stage
     }

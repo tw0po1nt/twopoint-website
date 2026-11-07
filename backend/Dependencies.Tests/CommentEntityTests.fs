@@ -1,6 +1,7 @@
 module TwoPoint.Dependencies.Tests.CommentEntityTests
 
 open TwoPoint.Core.Posts
+open TwoPoint.Core.Shared
 open TwoPoint.Dependencies.Posts
 
 open Azure.Data.Tables
@@ -81,6 +82,28 @@ let tests =
         Expect.equal (parent comment) (Some parentId) "Expected the parent"
         Expect.equal comment.Writer CommentWriter.Author "Expected the author"
       | Error errors -> failtestf "Expected a comment, got %A" errors
+    }
+
+    test "a new reply from a commenter is stored with the ID of its top-level comment" {
+      let topLevel = entityWith [ "CommenterId", commenter.ValidationId ] |> read (DbCommentWriter.Commenter commenter)
+      let replier = commenter.ToCommenter()
+
+      match topLevel, replier with
+      | Ok topLevel, Ok replier ->
+        let reply =
+          DbComment.OfCommenter(
+            parentId,
+            date,
+            Slug.Unsafe.create "first-post",
+            replier,
+            NonEmptyString.Unsafe.create None "A reply",
+            Some topLevel
+          )
+
+        match reply.ToEntity() |> read (DbCommentWriter.Commenter commenter) with
+        | Ok comment -> Expect.equal (parent comment) (Some commentId) "Expected the top-level comment as the parent"
+        | Error errors -> failtestf "Expected a comment, got %A" errors
+      | topLevel, replier -> failtestf "Expected a comment and a commenter, got %A and %A" topLevel replier
     }
 
     test "an entity with an unknown Writer is refused" {

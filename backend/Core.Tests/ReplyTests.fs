@@ -41,8 +41,8 @@ let private replyOf (approval : CommentApproval) =
 let private postedOn (post : Post) (comment : Comment) =
   { PostedComment.Post = post.Id; PostTitle = post.Info.Title; Comment = comment }
 
-type private FakePostReply(post : Post, existing : Commenter, parents : PostedComment list) =
-  let created = ResizeArray<NewComment * CommentApproval>()
+type private FakePostReply(post : Post, existing : Commenter, stored : PostedComment list) =
+  let created = ResizeArray<Comment option * CommentApproval>()
   let queued = ResizeArray<CommentId>()
 
   member _.Created = List.ofSeq created
@@ -52,16 +52,16 @@ type private FakePostReply(post : Post, existing : Commenter, parents : PostedCo
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
     member _.GetUtcNow () = now
     member _.GetPostedCommentById id =
-      parents |> List.tryFind (fun parent -> parent.Comment.Id = id) |> CancellableTaskResult.singleton
+      stored |> List.tryFind (fun comment -> comment.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
-    member _.CreateComment _ commenter newComment approval =
-      created.Add(newComment, approval)
+    member _.CreateComment _ commenter newComment topLevel approval =
+      created.Add(topLevel, approval)
 
       Comment.create
         otherReplyId
         "2026-03-01T00:00:00.0000000Z"
         {| Approval = approval.ToString(); CreatedDate = "2026-03-01T00:00:00.0000000Z" |}
-        (newComment.ReplyTo |> Option.map string)
+        (topLevel |> Option.map (_.Id >> string))
         (CommentWriter.Commenter commenter)
         (newComment.Content.ToString())
       |> ok
@@ -84,16 +84,16 @@ let private postReply = postReplyWith "A reply" topLevelId
 let private replyCheckTests =
   testList "the reply check" [
     let refusals =
-      [ "a reply as parent", olderPost, replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Approved) ], ReplyRefusal.ParentIsReply
-        "a new parent", olderPost, topLevelId, [ postedOn olderPost (topLevel CommentApproval.New) ], ReplyRefusal.ParentNew
-        "a rejected parent", olderPost, topLevelId, [ postedOn olderPost (topLevel CommentApproval.Rejected) ], ReplyRefusal.ParentRejected
-        "a missing parent", olderPost, topLevelId, [], ReplyRefusal.ParentMissing
-        "a parent on another post", olderPost, topLevelId, [ postedOn latestPost (topLevel CommentApproval.Approved) ], ReplyRefusal.ParentMissing
+      [ "a reply to a reply", olderPost, replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Approved) ], ReplyRefusal.ReplyToReply
+        "a reply to a new comment", olderPost, topLevelId, [ postedOn olderPost (topLevel CommentApproval.New) ], ReplyRefusal.ReplyToNew
+        "a reply to a rejected comment", olderPost, topLevelId, [ postedOn olderPost (topLevel CommentApproval.Rejected) ], ReplyRefusal.ReplyToRejected
+        "a reply to a missing comment", olderPost, topLevelId, [], ReplyRefusal.ReplyToMissing
+        "a reply to a comment on another post", olderPost, topLevelId, [ postedOn latestPost (topLevel CommentApproval.Approved) ], ReplyRefusal.ReplyToMissing
         "an upcoming post", upcomingPost, topLevelId, [ postedOn upcomingPost (topLevel CommentApproval.Approved) ], ReplyRefusal.PostUpcoming ]
 
-    for name, post, replyTo, parents, reason in refusals do
+    for name, post, replyTo, stored, reason in refusals do
       test $"{name} refuses the reply with its reason, and the blog stores nothing and notifies no one" {
-        let dependencies = FakePostReply(post, commenter "Ben" CommenterStatus.Trusted, parents)
+        let dependencies = FakePostReply(post, commenter "Ben" CommenterStatus.Trusted, stored)
 
         Expect.equal (postReplyWith "A reply" replyTo dependencies) (Error (Logic (PostComment.ReplyRefused reason))) "Expected the reason"
         Expect.isEmpty dependencies.Created "Expected no comment in the store"
@@ -106,7 +106,7 @@ let private replyCheckTests =
       match postReply dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
         Expect.equal (posted.Comment.Parent |> Option.map string) (Some topLevelId) "Expected the top-level comment as the parent"
-        Expect.equal (dependencies.Created |> List.map (fst >> _.ReplyTo >> Option.map string)) [ Some topLevelId ] "Expected the parent in the store"
+        Expect.equal (dependencies.Created |> List.map (fst >> Option.map (_.Id >> string))) [ Some topLevelId ] "Expected the top-level comment in the store"
         Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected the reply on the new_comment queue"
       | other -> failtestf "Expected Posted, got %A" other
     }

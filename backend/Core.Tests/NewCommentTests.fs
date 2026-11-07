@@ -245,7 +245,7 @@ let private reply (approval : CommentApproval) (name : string) (content : string
 
 let private replyTests =
   testList "a reply" [
-    test "the notice of a reply names the writer and the top-level commenter, and the body is the plain text" {
+    test "the notification of a reply names the writer and the top-level commenter, and the body is the plain text" {
       let fake = Fake(Some (reply CommentApproval.New "Ben" "**Use** `List.map`."), [ topLevel "Ada" ], [ first ], Map.empty)
 
       match notify fake with
@@ -263,7 +263,7 @@ let private replyTests =
       | None -> failtest "Expected a payload"
     }
 
-    test "a reply whose top-level comment is gone still sends a notice" {
+    test "a reply whose top-level comment is gone still sends a notification" {
       let fake = Fake(Some (reply CommentApproval.Approved "Ben" "Hi"), [], [ first ], Map.empty)
 
       match notify fake with
