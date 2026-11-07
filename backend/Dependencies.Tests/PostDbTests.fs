@@ -22,7 +22,8 @@ let private comment =
     CreatedDate = date
     Content = "A comment"
     ParentId = None
-    Writer = DbCommentWriterKey.Commenter commenter.ValidationId }
+    Writer = DbCommentWriterKey.Commenter commenter.ValidationId
+    ReplyEmails = None }
 
 let private orphan =
   { comment with

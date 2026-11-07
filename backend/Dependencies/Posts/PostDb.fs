@@ -128,6 +128,37 @@ type internal DbCommenter =
       (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
       this.Status
 
+
+/// <summary>
+/// The comment of a reply-email stop token
+/// </summary>
+/// <remarks>
+/// The <c>ReplyEmailStop</c> entity has the token as its PartitionKey and its RowKey, and the properties
+/// <c>PostId</c> and <c>CommentId</c>.
+/// </remarks>
+type internal DbReplyEmailStop =
+  { Token : string
+    PostId : string
+    CommentId : string }
+
+  static member FromEntity (entity : TableEntity) = validation {
+    let entityName = nameof DbReplyEmailStop
+    let! postId = "PostId" |> entity.RequireString entityName
+    and! commentId = "CommentId" |> entity.RequireString entityName
+    return { Token = entity.RowKey; PostId = postId; CommentId = commentId }
+  }
+
+  member this.ToEntity() =
+    let entity = TableEntity(partitionKey = this.Token, rowKey = this.Token)
+    entity["PostId"] <- this.PostId
+    entity["CommentId"] <- this.CommentId
+    entity
+
+  static member OfStop (stop : ReplyEmailStop) =
+    { Token = stop.Token.ToString()
+      PostId = Slug.value stop.Post
+      CommentId = stop.Comment.ToString() }
+
 /// <summary>
 /// Database representation of a comment status
 /// </summary>
@@ -221,6 +252,34 @@ module internal DbCommentWriter =
       |> Seq.tryFind (fun commenter -> commenter.ValidationId = commenterId)
       |> Option.map DbCommentWriter.Commenter
 
+/// The reply-email consent of a top-level comment.
+type internal DbReplyEmailConsent =
+  { ConsentDate : DateTime
+    StopToken : string
+    StopDate : DateTime option }
+
+  /// An entity with no consent date and no stop token has no consent.
+  static member FromEntity (entity : TableEntity) =
+    match "ReplyEmailsConsentDate" |> entity.TryGetString, "ReplyEmailsStopToken" |> entity.TryGetString with
+    | None, None -> Validation.ok None
+    | Some consentDate, Some stopToken -> validation {
+        let! consentDate = consentDate |> DateTime.TryValidateUtc
+        and! stopDate = "ReplyEmailsStopDate" |> entity.TryGetString |> Option.traverseValidation DateTime.TryValidateUtc
+        return Some { ConsentDate = consentDate; StopToken = stopToken; StopDate = stopDate }
+      }
+    | _ ->
+      Validation.error
+        $"DbComment.ReplyEmailsConsentDate and ReplyEmailsStopToken must both be set or both be missing, in TableEntity with RowKey: '{entity.RowKey}'"
+
+  static member OfConsent (consent : ReplyEmailConsent) =
+    { ConsentDate = consent.ConsentDate
+      StopToken = consent.StopToken.ToString()
+      StopDate = consent.StopDate }
+
+  member this.ToConsent() =
+    let utc (value : DateTime) = value.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)
+    ReplyEmailConsent.create (utc this.ConsentDate) this.StopToken (this.StopDate |> Option.map utc)
+
 /// <summary>
 /// Database representation of a comment
 /// </summary>
@@ -235,11 +294,15 @@ module internal DbCommentWriter =
 ///    "Content": "&lt;string&gt;",
 ///    "CommenterId": "&lt;commenter rowKey&gt;" | "",
 ///    "ParentId": "&lt;comment rowKey&gt;" | null,
-///    "Writer": "&lt;commenter | author&gt;" | null
+///    "Writer": "&lt;commenter | author&gt;" | null,
+///    "ReplyEmailsConsentDate": "&lt;date&gt;" | null,
+///    "ReplyEmailsStopToken": "&lt;guid&gt;" | null,
+///    "ReplyEmailsStopDate": "&lt;date&gt;" | null
 ///}
 /// </c>
 /// A missing <c>ParentId</c> is a top-level comment, and a missing <c>Writer</c> is a commenter.
-/// <c>CommenterId</c> is empty when the writer is the author.
+/// <c>CommenterId</c> is empty when the writer is the author. A missing <c>ReplyEmailsConsentDate</c> is a comment
+/// with no reply-email consent.
 /// </remarks>
 type internal DbComment =
   { Id : string
@@ -247,7 +310,8 @@ type internal DbComment =
     CreatedDate : DateTime
     Content : string
     ParentId : string option
-    Writer : DbCommentWriterKey }
+    Writer : DbCommentWriterKey
+    ReplyEmails : DbReplyEmailConsent option }
   
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbComment
@@ -261,6 +325,7 @@ type internal DbComment =
     let! commenterId = "CommenterId" |> entity.RequireString entityName
     let parentId = "ParentId" |> entity.TryGetString
     let! writer = DbCommentWriterKey.ofEntityValues ("Writer" |> entity.TryGetString) commenterId
+    let! replyEmails = DbReplyEmailConsent.FromEntity entity
 
     return
       { Id = id
@@ -268,7 +333,8 @@ type internal DbComment =
         CreatedDate = createdDate
         Content = content
         ParentId = parentId
-        Writer = writer }
+        Writer = writer
+        ReplyEmails = replyEmails }
   }
   
   member this.ToEntity() =
@@ -279,17 +345,29 @@ type internal DbComment =
     entity["CommenterId"] <- commenterId
     entity["ParentId"] <- this.ParentId |> Option.toObj
     entity["Writer"] <- writer
+    let utc (value : DateTime) = value.ToString("o", CultureInfo.InvariantCulture)
+    entity["ReplyEmailsConsentDate"] <- this.ReplyEmails |> Option.map (_.ConsentDate >> utc) |> Option.toObj
+    entity["ReplyEmailsStopToken"] <- this.ReplyEmails |> Option.map _.StopToken |> Option.toObj
+    entity["ReplyEmailsStopDate"] <- this.ReplyEmails |> Option.bind _.StopDate |> Option.map utc |> Option.toObj
     entity
 
   static member OfCommenter
-    (id : string, createdDate : DateTime, post : Slug, commenter : Commenter, content : NonEmptyString, topLevel : Comment option)
-    =
+    (
+      id : string,
+      createdDate : DateTime,
+      post : Slug,
+      commenter : Commenter,
+      content : NonEmptyString,
+      topLevel : Comment option,
+      replyEmails : ReplyEmailConsent option
+    ) =
     { Id = id
       PostId = Slug.value post
       CreatedDate = createdDate
       Content = NonEmptyString.value content
       ParentId = topLevel |> Option.map (_.Id >> string)
-      Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString()) }
+      Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString())
+      ReplyEmails = replyEmails |> Option.map DbReplyEmailConsent.OfConsent }
 
   static member OfAuthorReply(id : string, createdDate : DateTime, post : Slug, content : NonEmptyString, topLevel : Comment) =
     { Id = id
@@ -297,13 +375,16 @@ type internal DbComment =
       CreatedDate = createdDate
       Content = NonEmptyString.value content
       ParentId = Some (string topLevel.Id)
-      Writer = DbCommentWriterKey.Author }
+      Writer = DbCommentWriterKey.Author
+      ReplyEmails = None }
 
   member this.ToComment(status: DbCommentStatus, writer: DbCommentWriter) = validation {
     let! writer =
       match writer with
       | DbCommentWriter.Commenter commenter -> commenter.ToCommenter() |> Validation.map CommentWriter.Commenter
       | DbCommentWriter.Author -> Validation.ok CommentWriter.Author
+
+    let! replyEmails = this.ReplyEmails |> Option.traverseValidation _.ToConsent()
 
     return!
       Comment.create
@@ -313,6 +394,7 @@ type internal DbComment =
            CreatedDate = status.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) |}
         this.ParentId
         writer
+        replyEmails
         this.Content
   }
 
@@ -370,6 +452,7 @@ type internal IPostDb =
       -> CancellableTaskResult<DbComment * DbCommentWriter * DbCommentStatus, DependencyError>
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
   abstract member DeleteComment: commentId: string -> CancellableTaskResult<unit, DependencyError>
+  abstract member CreateReplyEmailStop: stop: DbReplyEmailStop -> CancellableTaskResult<DbReplyEmailStop, DependencyError>
 
 
 module internal PostDbError =
@@ -464,6 +547,7 @@ module internal PostDb =
     let commentsTable = "comments"
     let commentStatusesTable = "commentStatuses"
     let commentersTable = "commenters"
+    let replyEmailStopsTable = "replyEmailStops"
 
     let getCommenterByValidationId validationId =
       validationId |> trySingle commentersTable DbCommenter.FromEntity (Some validationId)
@@ -611,5 +695,8 @@ module internal PostDb =
         do! eq "PartitionKey" commentId |> delete commentStatusesTable PostDbError.validation
         do! eq "RowKey" commentId |> delete commentsTable PostDbError.validation
       }
+
+      member _.CreateReplyEmailStop stop =
+        stop.ToEntity() |> add replyEmailStopsTable PostDbError.validation DbReplyEmailStop.FromEntity
     }
   

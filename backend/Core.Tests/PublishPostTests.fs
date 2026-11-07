@@ -320,7 +320,7 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
         member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
         member _.Stage = TwoPoint.Site.Render.Stage.Production
         member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
-        member _.CreateComment _ commenter newComment _ approval =
+        member _.CreateComment _ commenter newComment _ approval _ =
           let posted =
             Comment.create
               "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40"
@@ -328,17 +328,21 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
               {| Approval = approval.ToString(); CreatedDate = "2026-03-02T00:00:00.0000000Z" |}
               None
               (CommentWriter.Commenter commenter)
+              None
               "A comment"
             |> ok
 
           CancellableTaskResult.singleton { posted with Content = newComment.Content }
+        member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
+        member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
         member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton () }
 
   let dto =
     { NewComment.Dto.Post = NewComment.Post "my-draft"
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
       NewComment.Dto.Comment = NewComment.Comment "A comment"
-      NewComment.Dto.ReplyTo = None }
+      NewComment.Dto.ReplyTo = None
+      NewComment.Dto.ReplyEmails = NewComment.ReplyEmails false }
 
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
 

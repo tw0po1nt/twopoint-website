@@ -3,7 +3,7 @@ title: Privacy policy
 description: The data that TwoPoint collects, why it collects the data, and how long it keeps the data.
 ---
 
-_Last updated: October 19, 2026_
+_Last updated: November 7, 2026_
 
 This page tells you what data twopoint.dev collects, why it collects the data, and how long it keeps the data.
 
@@ -45,6 +45,15 @@ the date of your first comment, and a moderation status.
 
 Your name shows publicly with each of your comments. Your email address stays private. The site sends a validation
 email to your address before it accepts comments from you.
+
+The comment form has the checkbox "email me when someone replies". The checkbox is not checked when the form opens. If
+you check it, the site sends you a reply email when someone else posts an approved reply to that comment.
+The reply email contains the reply and a link to the comment on the post. The site sends no reply email for a comment
+where you did not check the box. The reply form has no checkbox, so a reply that you write gets no reply email.
+
+When you check the box, the site records your consent and its date with the comment. Each reply email has a stop link.
+When you open the link and confirm, the site sends no more reply emails for that comment and records the date of the
+stop. The stop applies only to that comment.
 
 The site keeps your commenter record and your comments until you ask for deletion. To delete them, send an email to
 [matt@twopoint.dev](mailto:matt@twopoint.dev).

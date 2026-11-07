@@ -415,12 +415,22 @@ module ValidateCommenter =
 
 // Input
 
-/// `ReplyTo` is the ID of the top-level comment of a reply.
+[<RequireQualifiedAccess>]
+type ReplyEmailsChoice =
+  | Asked
+  | NotAsked
+
+/// Only a top-level comment can ask for reply emails, because the reply form has no checkbox.
+[<RequireQualifiedAccess>]
+type NewCommentTarget =
+  | TopLevel of ReplyEmailsChoice
+  | Reply of topLevel : CommentId
+
 type NewComment =
   { Post : Slug
     ValidationId : CommenterValidationId
     Content : NonEmptyString
-    ReplyTo : CommentId option }
+    Target : NewCommentTarget }
 
 module NewComment =
   
@@ -428,17 +438,22 @@ module NewComment =
   type ValidationId = ValidationId of string
   type Comment = Comment of string
   type ReplyTo = ReplyTo of string
+  type ReplyEmails = ReplyEmails of bool
   
+  /// `ReplyTo` is the ID of the top-level comment of a reply.
   type Dto =
     { Post : Post
       ValidationId : ValidationId
       Comment : Comment
-      ReplyTo : ReplyTo option }
+      ReplyTo : ReplyTo option
+      ReplyEmails : ReplyEmails }
 
   /// The `maxlength` of the comment form. Both count the source as typed, in UTF-16 code units.
   let maxLength = 1000
 
   let blankMessage = "content must contain a character other than a space or a new line"
+
+  let replyEmailsOnReplyMessage = "replyEmails must be false for a reply, because a reply has no checkbox"
 
   let parseContent (content : string) =
     content
@@ -453,8 +468,13 @@ module NewComment =
     let! post = Slug.create post
     let! validationId = CommenterValidationId.create validationId
     let! content = parseContent content
-    and! replyTo = dto.ReplyTo |> Option.traverseResult (fun (ReplyTo replyTo) -> CommentId.create replyTo)
-    return { Post = post; ValidationId = validationId; Content = content; ReplyTo = replyTo }
+    and! target =
+      match dto.ReplyTo, dto.ReplyEmails with
+      | None, ReplyEmails true -> Ok (NewCommentTarget.TopLevel ReplyEmailsChoice.Asked)
+      | None, ReplyEmails false -> Ok (NewCommentTarget.TopLevel ReplyEmailsChoice.NotAsked)
+      | Some (ReplyTo replyTo), ReplyEmails false -> CommentId.create replyTo |> Result.map NewCommentTarget.Reply
+      | Some _, ReplyEmails true -> Error [ replyEmailsOnReplyMessage ]
+    return { Post = post; ValidationId = validationId; Content = content; Target = target }
   }
 
 
@@ -482,7 +502,13 @@ module PostComment =
     | Post of Slug
     | Commenter of CommenterValidationId
   type Success =
-    | Posted of post: Post * comment: NewComment * topLevel: Comment option * commenter: Commenter * approval: CommentApproval
+    | Posted of
+      post: Post *
+      comment: NewComment *
+      topLevel: Comment option *
+      commenter: Commenter *
+      approval: CommentApproval *
+      replyEmails: ReplyEmailConsent option
   type Decision = Decision<Success, Error>
   type Event = Posted of Post * RenderedComment
 
@@ -490,6 +516,7 @@ module PostComment =
 
   type Logic =
     DateTime
+      -> ReplyEmailStopToken
       -> Post option
       -> NewCommentPlace
       -> Commenter option
@@ -499,7 +526,7 @@ module PostComment =
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun utcNow existingPost place existingCommenter newComment -> result {
+      fun utcNow stopToken existingPost place existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
 
         let! topLevel =
@@ -516,7 +543,14 @@ module PostComment =
           | CommenterStatus.Trusted -> Ok CommentApproval.Approved
           | CommenterStatus.Banned -> Error (Banned commenter)
 
-        return Success.Posted (post, newComment, topLevel, commenter, approval)
+        let replyEmails =
+          match newComment.Target with
+          | NewCommentTarget.TopLevel ReplyEmailsChoice.Asked ->
+            Some { ConsentDate = utcNow; StopToken = stopToken; StopDate = None }
+          | NewCommentTarget.TopLevel ReplyEmailsChoice.NotAsked
+          | NewCommentTarget.Reply _ -> None
+
+        return Success.Posted (post, newComment, topLevel, commenter, approval, replyEmails)
       }
 
   // Action
@@ -536,17 +570,27 @@ module PostComment =
         -> newComment: NewComment
         -> topLevel: Comment option
         -> approval: CommentApproval
+        -> replyEmails: ReplyEmailConsent option
         -> DependencyResult<Comment>
+    abstract member NewReplyEmailStopToken: unit -> ReplyEmailStopToken
+    abstract member CreateReplyEmailStop: stop: ReplyEmailStop -> DependencyResult<unit>
     abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentPosted (Success.Posted (post, comment, topLevel, commenter, approval)) : DependencyResult<RenderedComment> =
+    let handleCommentPosted (Success.Posted (post, comment, topLevel, commenter, approval, replyEmails)) : DependencyResult<RenderedComment> =
       cancellableTaskResult {
-        let! (created : Comment) = dependencies.CreateComment post commenter comment topLevel approval
+        let! (created : Comment) = dependencies.CreateComment post commenter comment topLevel approval replyEmails
 
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
+
+        do!
+          replyEmails
+          |> Option.traverseCancellableTaskResult (fun consent ->
+            dependencies.CreateReplyEmailStop { Token = consent.StopToken; Post = post.Id; Comment = created.Id })
+          |> CancellableTaskResult.ignore
+
         return RenderedComment.ofComment dependencies.Stage created
       }
 
@@ -561,16 +605,17 @@ module PostComment =
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! place =
-        (match newComment.ReplyTo with
-         | None -> CancellableTaskResult.singleton NewCommentPlace.TopLevel
-         | Some replyTo -> dependencies.GetPostedCommentById replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
+        (match newComment.Target with
+         | NewCommentTarget.TopLevel _ -> CancellableTaskResult.singleton NewCommentPlace.TopLevel
+         | NewCommentTarget.Reply replyTo -> dependencies.GetPostedCommentById replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! existingCommenter =
         dependencies.GetCommenterByValidationId newComment.ValidationId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost place existingCommenter newComment
+      let decision =
+        Logic.decide (dependencies.GetUtcNow()) (dependencies.NewReplyEmailStopToken()) existingPost place existingCommenter newComment
 
       let commentPostedEvent existingPost comment = Event.Posted (existingPost, comment)
 

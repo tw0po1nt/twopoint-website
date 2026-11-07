@@ -27,7 +27,7 @@ let private commenter (name : string) (status : CommenterStatus) =
   |> ok
 
 let private commentWith (id : string) (parent : string option) (writer : CommentWriter) (approval : CommentApproval) (createdDate : string) =
-  Comment.create id createdDate {| Approval = approval.ToString(); CreatedDate = createdDate |} parent writer "A comment"
+  Comment.create id createdDate {| Approval = approval.ToString(); CreatedDate = createdDate |} parent writer None "A comment"
   |> ok
 
 let private fromAda = CommentWriter.Commenter (commenter "Ada" CommenterStatus.Trusted)
@@ -55,7 +55,7 @@ type private FakePostReply(post : Post, existing : Commenter, stored : PostedCom
     member _.GetPostedCommentById id =
       stored |> List.tryFind (fun comment -> comment.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
-    member _.CreateComment _ commenter newComment topLevel approval =
+    member _.CreateComment _ commenter newComment topLevel approval _ =
       created.Add(topLevel, approval)
 
       Comment.create
@@ -64,9 +64,12 @@ type private FakePostReply(post : Post, existing : Commenter, stored : PostedCom
         {| Approval = approval.ToString(); CreatedDate = "2026-03-01T00:00:00.0000000Z" |}
         (topLevel |> Option.map (_.Id >> string))
         (CommentWriter.Commenter commenter)
+        None
         (newComment.Content.ToString())
       |> ok
       |> CancellableTaskResult.singleton
+    member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
+    member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
     member _.QueueNewCommentNotice commentId =
       queued.Add commentId
       CancellableTaskResult.singleton ()
@@ -77,7 +80,8 @@ let private postReplyWith (content : string) (replyTo : string) (dependencies : 
     { NewComment.Dto.Post = NewComment.Post (olderPost.Id.ToString())
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
       NewComment.Dto.Comment = NewComment.Comment content
-      NewComment.Dto.ReplyTo = Some (NewComment.ReplyTo replyTo) }
+      NewComment.Dto.ReplyTo = Some (NewComment.ReplyTo replyTo)
+      NewComment.Dto.ReplyEmails = NewComment.ReplyEmails false }
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
 
 let private postReply = postReplyWith "A reply" topLevelId
@@ -257,6 +261,7 @@ type private FakeAuthorReply(stored : PostedComment list) =
         {| Approval = approval.ToString(); CreatedDate = "2026-03-01T00:00:00.0000000Z" |}
         (Some (string topLevel.Id))
         CommentWriter.Author
+        None
         (content.ToString())
       |> ok
       |> CancellableTaskResult.singleton

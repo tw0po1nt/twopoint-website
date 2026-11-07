@@ -229,7 +229,14 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreateComment (post : Post) (commenter : Commenter) (newComment : NewComment) (topLevel : Comment option) (approval : CommentApproval) = cancellableTaskResult {
+  member _.CreateComment
+    (post : Post)
+    (commenter : Commenter)
+    (newComment : NewComment)
+    (topLevel : Comment option)
+    (approval : CommentApproval)
+    (replyEmails : ReplyEmailConsent option)
+    = cancellableTaskResult {
     let newDbComment =
       DbComment.OfCommenter(
         Guid.NewGuid().ToString(), // todo: model as ISystemDependencies
@@ -237,7 +244,8 @@ type PostDependencies(
         post.Id,
         commenter,
         newComment.Content,
-        topLevel
+        topLevel,
+        replyEmails
       )
     let newDbStatus =
       { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
@@ -252,6 +260,9 @@ type PostDependencies(
       dbComment.ToComment(dbCommentStatus, dbWriter)
       |> DependencyError.ofValidation source
   }
+
+  member _.CreateReplyEmailStop (stop : ReplyEmailStop) =
+    postDb.CreateReplyEmailStop (DbReplyEmailStop.OfStop stop) |> CancellableTaskResult.ignore
 
   member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
     // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/397): get the IDs and the time from an interface.

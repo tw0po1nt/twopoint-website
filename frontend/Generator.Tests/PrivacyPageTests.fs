@@ -45,6 +45,20 @@ let tests =
         Expect.stringContains html $"<code>{key}</code>" $"The policy names {key}"
     }
 
+    test "the comments section names the reply email, the opt-in checkbox, the record of the consent, and the stop link" {
+      let html = siteText (map Stage.Production) "privacy/index.html"
+      let start = html.IndexOf "<h2 id=\"comments\">"
+      let section = html.Substring(start, html.IndexOf("<h2", start + 1) - start)
+
+      for part in
+        [ "email me when someone replies"
+          "The checkbox is not checked when the form opens"
+          "reply email"
+          "records your consent and its date"
+          "stop link" ] do
+        Expect.stringContains section part $"The comments section says '{part}'"
+    }
+
     test "a link from the page to a path that is not in the output fails the build" {
       let content = { content [] with Privacy = page "Text.\n\nRead [c](/posts/c-post/)." }
 

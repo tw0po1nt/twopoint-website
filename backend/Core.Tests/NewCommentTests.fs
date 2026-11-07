@@ -32,6 +32,7 @@ let private posted (approval : CommentApproval) (title : string) (name : string)
         "new"
        |> Fixtures.ok
        |> CommentWriter.Commenter)
+      None
       content
     |> Fixtures.ok
 

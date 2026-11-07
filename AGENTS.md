@@ -136,6 +136,13 @@ before the top-level comment, so a second try after a failure finds each thread 
 admin comment gives `replyCount`, and the commenter page gives `otherReplies`. The confirm dialog
 of each delete shows that number.
 
+The page form of the Comments widget has the checkbox "email me when someone replies". The reply
+form has no checkbox. A checked `replyEmails` on `POST blog/posts/{slug}/comments` stores the
+reply-email consent on the top-level comment, with its date and a stop token. The backend also
+writes a row from the token to the post slug and the comment ID in the table `replyEmailStops`.
+A request with `replyTo` and `replyEmails` gets `400`. A comment with no consent sends no reply
+email.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a
