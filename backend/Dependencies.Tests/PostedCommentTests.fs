@@ -14,7 +14,8 @@ let private comment =
     PostId = "first-post"
     CreatedDate = date
     Content = "A comment"
-    CommenterId = "ada@example.com" }
+    ParentId = None
+    Writer = DbCommentWriterKey.Commenter "ada@example.com" }
 
 let private commenter =
   { DbCommenter.ValidationId = "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d"
@@ -30,7 +31,7 @@ let private status =
     Approval = "new" }
 
 let private title (post : DbPost option) =
-  comment.ToPostedComment(post, status, commenter)
+  comment.ToPostedComment(post, status, DbCommentWriter.Commenter commenter)
   |> Result.map (_.PostTitle >> NonEmptyString.value)
 
 [<Tests>]

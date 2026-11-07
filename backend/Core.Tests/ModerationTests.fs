@@ -18,11 +18,15 @@ let private commentWith (content : string) (id : string) (createdDate : string) 
     id
     createdDate
     {| Approval = approval.ToString(); CreatedDate = createdDate |}
-    {| ValidationId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
-       EmailAddress = "commenter@example.com"
-       Name = Some "Commenter"
-       CreatedDate = "2026-01-01T00:00:00.0000000Z"
-       Status = "new" |}
+    None
+    (Commenter.create
+      "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+      "commenter@example.com"
+      (Some "Commenter")
+      "2026-01-01T00:00:00.0000000Z"
+      "new"
+     |> ok
+     |> CommentWriter.Commenter)
     content
   |> ok
 
@@ -61,8 +65,8 @@ let private approvalTests =
       match update dependencies CommentApproval.Approved with
       | Ok (UpdateCommentApproval.Event.Updated updated) ->
         Expect.equal updated.Status.Approval CommentApproval.Approved "Expected an approved comment"
-        Expect.equal updated.Commenter existing.Commenter "Expected the same commenter"
-        Expect.equal updated.Commenter.Status CommenterStatus.New "Expected a new commenter"
+        Expect.equal updated.Writer existing.Writer "Expected the same commenter"
+        Expect.equal (Comment.commenter updated |> Option.map _.Status) (Some CommenterStatus.New) "Expected a new commenter"
       | other -> failtestf "Expected Updated, got %A" other
     }
 
@@ -216,7 +220,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
     member _.CreateComment _ commenter newComment approval =
       created.Add approval
       let posted = comment firstId "2026-02-01T00:00:00.0000000Z" approval
-      CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
+      CancellableTaskResult.singleton { posted with Writer = CommentWriter.Commenter commenter; Content = newComment.Content }
     member _.Stage = TwoPoint.Site.Render.Stage.Production
     member _.QueueNewCommentNotice commentId =
       queued.Add commentId
@@ -545,7 +549,9 @@ let private otherCommenterId = "8e1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e22"
 
 let private commentOf (validationId : string) (id : string) (createdDate : string) =
   let posted = comment id createdDate CommentApproval.Approved
-  { posted with Commenter = { posted.Commenter with ValidationId = CommenterValidationId.create validationId |> ok } }
+  let commenter = Comment.commenter posted |> Option.get
+  { posted with
+      Writer = CommentWriter.Commenter { commenter with ValidationId = CommenterValidationId.create validationId |> ok } }
 
 type private FakeCommenterStore(commenters : Commenter list, comments : Comment list, postedAfterFirstRead : Comment list) =
   let commenters = ResizeArray commenters
@@ -565,7 +571,8 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
     member _.GetCommentsOfCommenter commenter =
       let read =
         comments
-        |> Seq.filter (fun comment -> comment.Commenter.ValidationId = commenter.ValidationId)
+        |> Seq.filter (fun comment ->
+          Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId))
         |> List.ofSeq
       comments.AddRange postedAfterFirstRead
       postedAfterFirstRead.Clear()

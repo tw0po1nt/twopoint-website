@@ -23,11 +23,15 @@ let private posted (approval : CommentApproval) (title : string) (name : string)
       commentId
       createdDate
       {| Approval = approval.ToString(); CreatedDate = createdDate |}
-      {| ValidationId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
-         EmailAddress = "commenter@example.com"
-         Name = Some name
-         CreatedDate = "2026-01-01T00:00:00.0000000Z"
-         Status = "new" |}
+      None
+      (Commenter.create
+        "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+        "commenter@example.com"
+        (Some name)
+        "2026-01-01T00:00:00.0000000Z"
+        "new"
+       |> Fixtures.ok
+       |> CommentWriter.Commenter)
       content
     |> Fixtures.ok
 
@@ -208,6 +212,13 @@ let private payloadTests =
       match NewCommentPayload.ofComment 1 comment with
       | Some payload -> Expect.equal payload.Text expected "Expected 120 characters of the plain text"
       | None -> failtest "Expected a payload"
+    }
+
+    test "a comment of the author gets no payload" {
+      let posted = posted CommentApproval.Approved "A post" "Ada" "Hi"
+      let comment = { posted with Comment = { posted.Comment with Writer = CommentWriter.Author } }
+
+      Expect.isNone (NewCommentPayload.ofComment 1 comment) "Expected no payload"
     }
 
     test "a comment with no plain text gets the no-text mark" {

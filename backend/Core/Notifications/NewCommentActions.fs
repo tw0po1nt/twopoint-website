@@ -51,20 +51,23 @@ module NewCommentPayload =
 
   let ofComment (newCount : int) (posted : PostedComment) : NewCommentPayload option =
     let comment = posted.Comment
-    let commenter =
-      comment.Commenter.Name
-      |> Option.map NonEmptyString.value
-      |> Option.defaultValue (string comment.Commenter.EmailAddress)
 
     let payload case =
-      Some
+      comment
+      |> Comment.commenter
+      |> Option.map (fun commenter ->
+        let commenter =
+          commenter.Name
+          |> Option.map NonEmptyString.value
+          |> Option.defaultValue (string commenter.EmailAddress)
+
         { Case = case
           CommentId = string comment.Id
           Slug = Slug.value posted.Post
           PostTitle = posted.PostTitle |> NonEmptyString.value |> truncate maxTitleLength
           Commenter = commenter |> truncate maxCommenterLength
           Text = comment.Content |> NonEmptyString.value |> TwoPoint.Site.Render.CommentBody.plainText |> textOf |> truncate maxTextLength
-          NewCount = newCount }
+          NewCount = newCount })
 
     match comment.Status.Approval with
     | CommentApproval.New -> payload AwaitsModeration

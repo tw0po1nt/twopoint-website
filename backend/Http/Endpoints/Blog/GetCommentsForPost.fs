@@ -29,7 +29,11 @@ module PostTypesExt =
     member this.ToDto() =
       { CommentDto.Id = this.Comment.Id.ToString()
         CreatedDate = this.Comment.CreatedDate
-        Commenter = this.Comment.Commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+        Commenter =
+          match this.Comment.Writer with
+          | CommentWriter.Commenter commenter ->
+            commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+          | CommentWriter.Author -> ""
         Content = this.Html }
 
 

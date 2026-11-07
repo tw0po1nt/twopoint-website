@@ -18,6 +18,7 @@
     <Compile Include="DeviceDbTests.fs" />
     <Compile Include="SubscriptionDbTests.fs" />
     <Compile Include="PostedCommentTests.fs" />
+    <Compile Include="CommentEntityTests.fs" />
     <Compile Include="DbTests.fs" />
     <Compile Include="PostDbTests.fs" />
     <Compile Include="PublishedParseCacheTests.fs" />

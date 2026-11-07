@@ -115,11 +115,26 @@ module CommentStatus =
   }
 
 
+/// The author has no commenter record.
+[<RequireQualifiedAccess>]
+type CommentWriter =
+  | Commenter of Commenter
+  | Author
+
+module CommentWriter =
+  let commenter writer =
+    match writer with
+    | CommentWriter.Commenter commenter -> Some commenter
+    | CommentWriter.Author -> None
+
+
+/// The parent of a reply is its top-level comment.
 type Comment =
   { Id : CommentId
     CreatedDate : DateTime
     Status : CommentStatus
-    Commenter : Commenter
+    Parent : CommentId option
+    Writer : CommentWriter
     Content : NonEmptyString }
 
 module Comment =
@@ -131,24 +146,25 @@ module Comment =
          CreatedDate : string
       |}
     )
-    (commenter:
-      {| ValidationId : string
-         EmailAddress : string
-         Name : string option
-         CreatedDate : string
-         Status : string
-      |}
-    )
+    (parent : string option)
+    (writer : CommentWriter)
     content =
       validation {
         let! id = CommentId.create id
         let! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
         let! status = CommentStatus.create status.Approval status.CreatedDate
-        let! commenter =
-          Commenter.create commenter.ValidationId commenter.EmailAddress commenter.Name commenter.CreatedDate commenter.Status
+        let! parent = parent |> Option.traverseResult CommentId.create
         let! content = NonEmptyString.create (Some (nameof content)) content
-        return { Id = id; CreatedDate = createdDate; Status = status; Commenter = commenter; Content = content }
+        return
+          { Id = id
+            CreatedDate = createdDate
+            Status = status
+            Parent = parent
+            Writer = writer
+            Content = content }
       }
+
+  let commenter (comment : Comment) = CommentWriter.commenter comment.Writer
 
 
 type RenderedComment =
