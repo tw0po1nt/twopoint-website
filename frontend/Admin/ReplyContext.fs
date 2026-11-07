@@ -46,6 +46,21 @@ let afterDelete (deleted: Api.Comment) (comment: Api.Comment) =
   else
     Some comment
 
+/// Each row after the delete of the comment `commentId`, or None when no row has that comment. `comment` gives the
+/// comment of a row, and `withComment` puts a changed comment into its row.
+let rowsAfterDelete
+  (comment: 'row -> Api.Comment)
+  (withComment: Api.Comment -> 'row -> 'row)
+  (commentId: string)
+  (rows: 'row list)
+  =
+  rows
+  |> List.tryFind (fun row -> (comment row).Id = commentId)
+  |> Option.map (fun deleted ->
+    rows
+    |> List.choose (fun row ->
+      afterDelete (comment deleted) (comment row) |> Option.map (fun changed -> withComment changed row)))
+
 /// The comment after a new reply: its top-level comment has one reply more.
 let afterReply (reply: Api.Comment) (comment: Api.Comment) =
   if reply.ReplyTo = Some comment.Id then

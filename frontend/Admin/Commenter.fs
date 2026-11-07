@@ -125,10 +125,10 @@ let deleteText (otherReplies: int) =
   let replies =
     match otherReplies with
     | 0 -> "the commenter and all their comments"
-    | 1 -> "the commenter, all their comments, and 1 reply from someone else in their threads"
-    | count -> $"the commenter, all their comments, and {count} replies from others in their threads"
+    | 1 -> "the commenter, all their comments, and 1 other reply in their threads"
+    | count -> $"the commenter, all their comments, and {count} other replies in their threads"
 
-  $"This permanently deletes {replies}. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead."
+  $"This deletes {replies}. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone."
 
 let failure (state: State) =
   match state with

@@ -477,7 +477,6 @@ module internal PostDb =
       return comment.Writer |> DbCommentWriter.tryOfKey (commenter |> Option.flatten |> Option.toList)
     }
 
-    /// Reads the commenter and the statuses of each comment.
     let withWriters approvals (dbComments : DbComment array) = cancellableTaskResult {
       let getCommenters =
         dbComments

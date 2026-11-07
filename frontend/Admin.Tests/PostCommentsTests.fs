@@ -240,13 +240,13 @@ let private deleteTests =
         (deleteDialog "approved" (threaded ()))
         (Some 2,
          Some
-           "This permanently deletes the comment, its 2 replies, and their history. To hide the thread from readers but keep it, reject the comment instead.")
+           "This deletes the comment, its 2 replies, and their history. To hide the thread from readers but keep it, reject the comment instead. This can't be undone.")
         "Two replies"
 
       Expect.equal
         (deleteDialog "waiting" (threaded ()) |> snd)
         (Some
-          "This permanently deletes the comment, its 1 reply, and their history. To hide the thread from readers but keep it, reject the comment instead.")
+          "This deletes the comment, its reply, and their history. To hide the thread from readers but keep it, reject the comment instead. This can't be undone.")
         "One reply"
     }
 
@@ -254,7 +254,7 @@ let private deleteTests =
       Expect.equal
         (deleteDialog "first-reply" (threaded ()))
         (Some 0,
-         Some "This permanently deletes the comment and its history. To hide it from readers but keep it, reject it instead.")
+         Some "This deletes the comment and its history. To hide it from readers but keep it, reject it instead. This can't be undone.")
         "No reply"
     }
 

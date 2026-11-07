@@ -196,19 +196,19 @@ let private pageTests =
         (deleteDialogWith 2)
         (Some 2,
          Some
-           "This permanently deletes the commenter, all their comments, and 2 replies from others in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead.")
+           "This deletes the commenter, all their comments, and 2 other replies in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone.")
         "Two replies"
 
       Expect.equal
         (deleteDialogWith 1 |> snd)
         (Some
-          "This permanently deletes the commenter, all their comments, and 1 reply from someone else in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead.")
+          "This deletes the commenter, all their comments, and 1 other reply in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone.")
         "One reply"
 
       Expect.equal
         (deleteDialogWith 0 |> snd)
         (Some
-          "This permanently deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead.")
+          "This deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone.")
         "No reply"
     }
 

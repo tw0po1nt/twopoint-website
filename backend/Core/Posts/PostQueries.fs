@@ -465,7 +465,6 @@ module GetCommenter =
       commenter: Commenter
         -> DependencyResult<PostedComment list>
     abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
-    /// Each reply under one of the top-level comments.
     abstract member GetRepliesOf: topLevels: Comment list -> DependencyResult<Comment list>
     abstract member Stage: TwoPoint.Site.Render.Stage
 

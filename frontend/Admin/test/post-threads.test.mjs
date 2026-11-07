@@ -67,7 +67,7 @@ test('the delete dialog of a top-level comment names the number of replies that 
   await settle();
   const dialog = document.getElementById('delete-comment');
   assert.equal(dialog.open, true);
-  assert.match(dialog.textContent, /This permanently deletes the comment, its 2 replies, and their history\./);
+  assert.match(dialog.textContent, /This deletes the comment, its 2 replies, and their history\./);
 
   press('Cancel', dialog);
   await settle();

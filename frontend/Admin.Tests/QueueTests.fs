@@ -256,7 +256,7 @@ let private deleteTests =
       Expect.equal
         (Shell.deleteReplyCount model |> Option.map Queue.deleteText)
         (Some
-          "This permanently deletes the comment, its 1 reply, and their history. To hide the thread from readers but keep it, reject the comment instead.")
+          "This deletes the comment, its reply, and their history. To hide the thread from readers but keep it, reject the comment instead. This can't be undone.")
         "The text names the reply"
 
       let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog "second")) model

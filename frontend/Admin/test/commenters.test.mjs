@@ -88,7 +88,7 @@ test('Delete in the confirmation deletes the commenter and opens the commenter l
   await settle();
   const dialog = document.getElementById('delete-commenter');
   assert.equal(dialog.open, true);
-  assert.match(dialog.textContent, /all their comments, and 2 replies from others in their threads\./);
+  assert.match(dialog.textContent, /all their comments, and 2 other replies in their threads\./);
 
   press('Delete', dialog);
   await settle();

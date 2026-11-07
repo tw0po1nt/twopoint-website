@@ -79,12 +79,9 @@ let private moderated (commentId: string) (action: Queue.Action) (rows: Row list
   | Queue.ApproveAndTrust -> change commentId (withApproval Api.CommentApproval.Approved) rows
   | Queue.Reject -> change commentId (withApproval Api.CommentApproval.Rejected) rows
   | Queue.Delete ->
-    match rows |> List.tryFind (fun row -> id row = commentId) with
-    | Some deleted ->
-      rows
-      |> List.choose (fun row ->
-        ReplyContext.afterDelete deleted.Comment row.Comment |> Option.map (fun comment -> { row with Comment = comment }))
-    | None -> rows
+    rows
+    |> ReplyContext.rowsAfterDelete _.Comment (fun comment row -> { row with Comment = comment }) commentId
+    |> Option.defaultValue rows
 
 let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (model: Model) =
   match rows |> List.tryFind (fun row -> id row = commentId) with
