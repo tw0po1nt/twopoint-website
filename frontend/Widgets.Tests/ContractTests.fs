@@ -8,7 +8,7 @@ open Microsoft.FSharp.Reflection
 let private subscribe = Contract.Widget.Subscribe { Api = "http://localhost:7071" }
 
 let private comments =
-  Contract.Widget.Comments { Api = "https://api.example"; Slug = "fable-reminders-part-1" }
+  Contract.Widget.Comments { Api = "https://api.example"; Slug = "fable-reminders-part-1"; Author = "Matthew Watt" }
 
 let private unsubscribe = Contract.Widget.Unsubscribe { Api = "https://api.example" }
 
@@ -33,8 +33,11 @@ let tests =
 
       Expect.equal
         (Contract.toAttributes comments)
-        [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "fable-reminders-part-1" ]
-        "The Comments mount has its name, the API origin, and the slug"
+        [ "data-widget", "comments"
+          "data-api", "https://api.example"
+          "data-slug", "fable-reminders-part-1"
+          "data-author", "Matthew Watt" ]
+        "The Comments mount has its name, the API origin, the slug, and the author name"
 
       Expect.equal
         (Contract.toAttributes unsubscribe)
@@ -83,7 +86,7 @@ let tests =
           $"'{value}' is not valid"
     }
   
-    test "a Comments mount with no API origin or no slug gives an error" {
+    test "a Comments mount with no API origin, no slug, or no author gives an error" {
       Expect.equal
         (Contract.parse [ "data-widget", "comments"; "data-slug", "a-post" ])
         (Error "The comments mount has no 'data-api' attribute.")
@@ -93,6 +96,19 @@ let tests =
         (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example" ])
         (Error "The comments mount has no 'data-slug' attribute.")
         "No data-slug"
+
+      Expect.equal
+        (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "a-post" ])
+        (Error "The comments mount has no 'data-author' attribute.")
+        "No data-author"
+    }
+
+    test "a Comments mount with an empty author gives an error" {
+      for value in [ ""; "  " ] do
+        Expect.equal
+          (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "a-post"; "data-author", value ])
+          (Error "The 'data-author' of the comments mount is empty. Give the author name of the post.")
+          $"'{value}' is not valid"
     }
 
     test "a Comments mount with a bad API origin gives the error of the API origin" {

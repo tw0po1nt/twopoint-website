@@ -127,10 +127,10 @@ let tests =
       Expect.stringContains html """<a href="mailto:?subject=Fable%20Reminders%20-%20Part%202&amp;body=""" "The email link stays in the tab"
     }
 
-    test "the closed Comments panel has the Comments mount with the API origin of the stage and the slug" {
+    test "the closed Comments panel has the Comments mount with the API origin of the stage, the slug, and the author name of the post" {
       Expect.stringContains
         (page Stage.Local middle)
-        """<details class="panel" id="comments"><summary>$ comments --list</summary><div data-widget="comments" data-api="http://localhost:7071" data-slug="fable-reminders-part-2"><p class="comments-fallback">The comments need JavaScript.</p></div></details>"""
+        """<details class="panel" id="comments"><summary>$ comments --list</summary><div data-widget="comments" data-api="http://localhost:7071" data-slug="fable-reminders-part-2" data-author="Matthew Watt"><p class="comments-fallback">The comments need JavaScript.</p></div></details>"""
         "The panel has the mount"
     }
 

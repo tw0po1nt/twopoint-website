@@ -26,7 +26,7 @@ let private watch (mount: HTMLElement) (props: Contract.CommentsProps) =
         loaded <- true
         load mount props
 
-    if queryHas Comments.validationIdKey then
+    if queryHas Comments.validationIdKey || window.location.hash.StartsWith "#comment-" then
       panel?``open`` <- true
 
     loadOnce ()

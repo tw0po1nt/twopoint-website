@@ -19,6 +19,26 @@ type Return =
     Comment: string
     ValidationId: string }
 
+/// The `thread` query of a reply email names the top-level comment, for a reply that is gone.
+type Link = { Comment: string; Thread: string option }
+
+type Scroll =
+  | ToComment of id: string
+  | ToThread of id: string
+  | ToSection
+
+type Thread = { Comment: Comment; Replies: Comment list }
+
+type ShownThread =
+  { Comment: Comment
+    /// The count of the hidden earlier replies.
+    Earlier: int
+    Replies: Comment list }
+
+type Byline =
+  | Reader of name: string
+  | PostAuthor of name: string
+
 type CommentList =
   | Loading
   | Loaded of Comment list
@@ -63,7 +83,11 @@ type Model =
     Kept: Kept option
     /// The count of tab changes. An answer for an older open has a smaller count.
     Opening: int
-    HelpShown: bool }
+    HelpShown: bool
+    /// The link of the URL, until the comments load.
+    Link: Link option
+    /// The IDs of the top-level comments that show their earlier replies.
+    Expanded: Set<string> }
 
 /// One call for the preview of a source. `Opening` is the count of tab changes at the call, so an answer for an older
 /// open has a smaller count than the model.
@@ -87,12 +111,14 @@ type Msg =
   | PreviewAnswered of PreviewRequest * ApiResponse<string>
   | PreviewUnanswered of PreviewRequest
   | HelpToggled
+  | EarlierShown of threadId: string
 
 type Effect =
   | Load
   | Validate of CommenterValidation
   | Post of NewComment
   | PreviewComment of PreviewRequest
+  | ScrollTo of Scroll
 
 type HelpRow = { YouType: string; ReadersSee: string }
 
@@ -126,6 +152,19 @@ let parse (query: (string * string) list) : Return option =
         ValidationId = validationId.Trim() }
   | _ -> None
 
+let parseLink (hash: string) (query: (string * string) list) : Link option =
+  let prefix = "#comment-"
+
+  if hash.StartsWith prefix && hash.Length > prefix.Length then
+    Some
+      { Comment = hash.Substring prefix.Length
+        Thread =
+          query
+          |> List.tryFind (fun (name, value) -> name = "thread" && value.Trim() <> "")
+          |> Option.map (snd >> _.Trim()) }
+  else
+    None
+
 let private empty (pageUrl: string) (validations: Map<string, string>) =
   { PageUrl = pageUrl
     Validations = validations
@@ -139,9 +178,16 @@ let private empty (pageUrl: string) (validations: Map<string, string>) =
     Tab = Write
     Kept = None
     Opening = 0
-    HelpShown = false }
+    HelpShown = false
+    Link = None
+    Expanded = Set.empty }
 
-let init (pageUrl: string) (validations: Map<string, string>) (returned: Return option) : Model * Effect option =
+let init
+  (pageUrl: string)
+  (validations: Map<string, string>)
+  (returned: Return option)
+  (link: Link option)
+  : Model * Effect option =
   let model =
     match returned with
     | Some returned ->
@@ -152,7 +198,83 @@ let init (pageUrl: string) (validations: Map<string, string>) (returned: Return 
           Status = Validated }
     | None -> empty pageUrl validations
 
-  model, Some Load
+  { model with Link = link }, Some Load
+
+/// A reply with no top-level comment in the list has no thread.
+let threads (comments: Comment list) : Thread list =
+  let sorted = comments |> List.sortBy _.CreatedDate
+  let replies = sorted |> List.filter _.ReplyTo.IsSome
+
+  sorted
+  |> List.filter _.ReplyTo.IsNone
+  |> List.map (fun comment ->
+    { Comment = comment
+      Replies = replies |> List.filter (fun reply -> reply.ReplyTo = Some comment.Id) })
+
+let collapseAbove = 3
+
+let newestShown = 2
+
+let private shownThread (expanded: Set<string>) (thread: Thread) : ShownThread =
+  let count = thread.Replies.Length
+
+  if count > collapseAbove && not (expanded.Contains thread.Comment.Id) then
+    { Comment = thread.Comment
+      Earlier = count - newestShown
+      Replies = List.skip (count - newestShown) thread.Replies }
+  else
+    { Comment = thread.Comment
+      Earlier = 0
+      Replies = thread.Replies }
+
+let private shownIn (expanded: Set<string>) (comments: Comment list) =
+  comments |> threads |> List.map (shownThread expanded)
+
+let shownThreads (expanded: Set<string>) (list: CommentList) : ShownThread list =
+  match list with
+  | Loaded comments -> shownIn expanded comments
+  | Loading
+  | NotLoaded _ -> []
+
+let earlierText (count: int) = $"[show {count} earlier replies]"
+
+/// `author` is the author name of the post, because the backend gives no name for a reply from the author.
+let byline (author: string) (comment: Comment) =
+  match comment.Writer with
+  | Author -> PostAuthor author
+  | Commenter -> Reader comment.Commenter
+
+let private isShown (expanded: Set<string>) (comments: Comment list) (id: string) =
+  shownIn expanded comments
+  |> List.exists (fun thread -> thread.Comment.Id = id || thread.Replies |> List.exists (fun reply -> reply.Id = id))
+
+let private reveal (link: Link) (comments: Comment list) (expanded: Set<string>) : Set<string> * Scroll =
+  let opened =
+    comments
+    |> List.tryFind (fun comment -> comment.Id = link.Comment)
+    |> Option.bind _.ReplyTo
+    |> Option.map expanded.Add
+    |> Option.defaultValue expanded
+
+  if isShown expanded comments link.Comment then
+    expanded, ToComment link.Comment
+  elif isShown opened comments link.Comment then
+    opened, ToComment link.Comment
+  else
+    match link.Thread with
+    | Some thread when isShown expanded comments thread -> expanded, ToThread thread
+    | Some _
+    | None -> expanded, ToSection
+
+let private listed (list: CommentList) (model: Model) =
+  let next = { model with List = list; Link = None }
+
+  match model.Link, list with
+  | None, _ -> next, None
+  | Some link, Loaded comments ->
+    let expanded, scroll = reveal link comments model.Expanded
+    { next with Expanded = expanded }, Some(ScrollTo scroll)
+  | Some _, (Loading | NotLoaded _) -> next, Some(ScrollTo ToSection)
 
 let isValidComment (comment: string) = comment.Trim() <> ""
 
@@ -264,9 +386,9 @@ let private previewed (request: PreviewRequest) (response: ApiResponse<string>) 
 
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match msg with
-  | ListAnswered response when response.Success -> { model with List = Loaded(response.Data |> Option.defaultValue []) }, None
-  | ListAnswered response -> { model with List = NotLoaded(response.Message |> Option.defaultValue listFailed) }, None
-  | ListUnanswered -> { model with List = NotLoaded unanswered }, None
+  | ListAnswered response when response.Success -> listed (Loaded(response.Data |> Option.defaultValue [])) model
+  | ListAnswered response -> listed (NotLoaded(response.Message |> Option.defaultValue listFailed)) model
+  | ListUnanswered -> listed (NotLoaded unanswered) model
   | EmailChanged email -> { model with Email = email }, None
   | NameChanged name -> { model with Name = name }, None
   | CommentChanged comment -> { model with Comment = comment }, None
@@ -288,7 +410,8 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
         List = list
         Status = Posted approval
         Opening = model.Opening
-        HelpShown = model.HelpShown },
+        HelpShown = model.HelpShown
+        Expanded = model.Expanded },
     None
   | PostAnswered answer -> { model with Status = failed answer.Message }, None
   | Unanswered -> { model with Status = Failed unanswered }, None
@@ -303,3 +426,4 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | PreviewAnswered _
   | PreviewUnanswered _ -> model, None
   | HelpToggled -> { model with HelpShown = not model.HelpShown }, None
+  | EarlierShown threadId -> { model with Expanded = model.Expanded.Add threadId }, None

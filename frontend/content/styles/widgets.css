@@ -112,9 +112,67 @@
   display: none;
 }
 
-.comment {
+.comment-thread {
   padding: 10px 0;
   border-bottom: 1px dashed var(--line);
+}
+
+.comment-replies {
+  margin: 8px 0 0 1ch;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--line);
+}
+
+.comment-replies > li {
+  padding: 6px 0 6px 1.5ch;
+}
+
+/* The 2px line covers the 1px line of the thread. */
+.comment-replies > .comment.is-author {
+  margin-left: -1px;
+  border-left: 2px solid var(--accent-2);
+}
+
+.comment-badge {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.comment-earlier button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 12px var(--mono);
+  color: var(--accent);
+}
+
+.comment-earlier button:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* The widget removes the class after the 2s of the animation. */
+.comment.is-marked {
+  animation: comment-mark 2s ease-out;
+}
+
+@keyframes comment-mark {
+  from {
+    background: var(--bg-2);
+  }
+
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comment.is-marked {
+    animation: none;
+    background: var(--bg-2);
+  }
 }
 
 .comment-meta,

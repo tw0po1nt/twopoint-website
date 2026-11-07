@@ -10,8 +10,8 @@ const manifest = JSON.parse(await readFile('dist/manifest.json', 'utf8'));
 GlobalRegistrator.register({ url: 'http://localhost:4321/posts/a-post/' });
 
 document.body.innerHTML = `
-  <details id="panel"><summary>$ comments --list</summary><div id="good" data-widget="comments" data-api="https://api.test" data-slug="a-post"><p>static</p></div></details>
-  <details id="open-panel" open><summary>$ comments --list</summary><div id="open" data-widget="comments" data-api="https://api.test" data-slug="open-post"><p>static</p></div></details>
+  <details id="panel"><summary>$ comments --list</summary><div id="good" data-widget="comments" data-api="https://api.test" data-slug="a-post" data-author="Matthew Watt"><p>static</p></div></details>
+  <details id="open-panel" open><summary>$ comments --list</summary><div id="open" data-widget="comments" data-api="https://api.test" data-slug="open-post" data-author="Matthew Watt"><p>static</p></div></details>
   <details><summary>$ comments --list</summary><div id="bad" data-widget="comments" data-api="https://api.test" data-slug="A Post"><p>static</p></div></details>`;
 
 localStorage.setItem('commenterValidations', JSON.stringify({ 'known@example.com': 'validation-1' }));
