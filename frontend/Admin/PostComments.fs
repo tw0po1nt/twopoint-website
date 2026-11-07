@@ -173,8 +173,7 @@ let private rowsOf (model: Model) =
   | Waiting
   | NotLoaded _ -> []
 
-/// Each top-level comment that the filter shows, and each reply whose top-level comment the filter hides.
-/// A thread keeps the place of its top-level comment in the list, which is oldest first.
+/// A reply whose top-level comment the filter hides keeps the place of that thread.
 let heads (model: Model) =
   let rows = rowsOf model
   let shown = shown model

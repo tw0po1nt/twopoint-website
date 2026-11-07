@@ -42,7 +42,6 @@ type AdminCommentDto =
     ReplyTo : string option
     /// `commenter` or `author`. A comment from the author has no commenter.
     Writer : string
-    /// None for a top-level comment, and for a reply whose top-level comment is gone.
     TopLevel : AdminTopLevelDto option }
 
 [<AutoOpen>]

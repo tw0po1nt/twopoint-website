@@ -135,7 +135,6 @@ type TopLevel =
     Content: string }
 
 /// `ReplyTo` is the ID of the top-level comment of a reply.
-/// `TopLevel` is None for a top-level comment, and for a reply whose top-level comment is gone.
 type Comment =
   { Id: string
     CreatedDate: string

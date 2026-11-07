@@ -29,7 +29,16 @@ type PostDependencies(
 
   let statsOf (dbComments : (DbComment * DbCommentWriter * DbCommentStatus) list) =
     dbComments
-    |> List.choose (fun (comment, writer, status) -> comment.ToComment(status, writer) |> Result.toOption)
+    |> List.choose (fun (comment, writer, status) ->
+      match comment.ToComment(status, writer) with
+      | Ok comment -> Some comment
+      | Error errors ->
+        logger.LogWarning(
+          "Comment '{commentId}' is not valid ({errors}). The comment counts leave it out.",
+          comment.Id,
+          String.Join("; ", errors)
+        )
+        None)
     |> PostCommentStats.OfComments
 
   let postDb = PostDb.live tableServiceClient logger

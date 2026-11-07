@@ -908,7 +908,7 @@ let private postCommentRow
   let choose action = dispatch (Shell.PostComments(PostComments.Chosen(comment.Id, action)))
   let send = PostComments.Reply >> Shell.PostComments >> dispatch
   let topLevel () = PostComments.topLevel comment (page ())
-  let isAlone () =
+  let topLevelHidden () =
     comment.ReplyTo |> Option.exists (fun topLevelId -> PostComments.replies topLevelId (page ()) |> List.isEmpty)
 
   article (id = comment.Id, class' = "card card-body queue-row") {
@@ -917,7 +917,7 @@ let private postCommentRow
       Parts.badge (approvalTone comment.Status) (PostComments.approvalText comment.Status)
     }
 
-    Show(when' = (isAlone () && (topLevel ()).IsSome)) {
+    Show(when' = (topLevelHidden () && (topLevel ()).IsSome)) {
       p (class' = "muted small") { topLevel () |> Option.map ReplyContext.replyLine |> Option.defaultValue "" }
     }
 

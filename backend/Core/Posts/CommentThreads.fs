@@ -168,13 +168,13 @@ module AdminPostedComment =
 
   /// `known` is each comment that can be the top-level comment of a comment in `comments`. The list is oldest first.
   let ofPostedComments (stage : TwoPoint.Site.Render.Stage) (known : Comment list) (comments : PostedComment list) =
-    let titles = comments |> List.map (fun posted -> posted.Comment.Id, posted) |> Map.ofList
+    let postedById = comments |> List.map (fun posted -> posted.Comment.Id, posted) |> Map.ofList
 
     comments
     |> List.map _.Comment
     |> AdminComment.ofComments stage known
     |> List.map (fun comment ->
-      let posted = titles[comment.Comment.Comment.Id]
+      let posted = postedById[comment.Comment.Comment.Id]
       { Post = posted.Post; PostTitle = posted.PostTitle; Comment = comment })
 
 type CommenterComments =
