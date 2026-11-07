@@ -117,7 +117,11 @@ let private moderated (commentId: string) (action: Action) (rows: Row list) =
     |> List.map (fun row ->
       { row with
           Comment.Comment = ReplyContext.withTopLevelApproval [ commentId ] Api.CommentApproval.Rejected row.Comment.Comment })
-  | Delete -> rows |> List.filter (fun row -> id row <> commentId)
+  | Delete ->
+    rows
+    |> ReplyContext.rowsAfterDelete _.Comment.Comment (fun comment row -> { row with Comment.Comment = comment }) commentId
+    // A delete on the comments of a post can remove a comment that is not in the queue, with its replies.
+    |> Option.defaultWith (fun () -> rows |> List.filter (fun row -> row.Comment.Comment.ReplyTo <> Some commentId))
 
 let private reply (msg: AuthorReply.Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with
@@ -198,6 +202,17 @@ let tryFind (commentId: string) (model: Model) =
   | Loaded rows -> find commentId rows
   | Waiting
   | NotLoaded _ -> None
+
+/// The body of the confirm dialog of a comment delete. `replyCount` is the number of replies that go with it.
+let deleteText (replyCount: int) =
+  let thread (replies: string) =
+    $"This deletes the comment, {replies}, and their history. To hide the thread from readers but keep it, reject the comment instead. This can't be undone."
+
+  match replyCount with
+  | 0 ->
+    "This deletes the comment and its history. To hide it from readers but keep it, reject it instead. This can't be undone."
+  | 1 -> thread "its reply"
+  | count -> thread $"its {count} replies"
 
 let failure (state: RowState) =
   match state with

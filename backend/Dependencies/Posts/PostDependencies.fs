@@ -191,6 +191,16 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  /// Each reply under one of the top-level comments, with each approval.
+  member _.GetRepliesOf (topLevels : Comment list) = cancellableTaskResult {
+    let! dbComments = topLevels |> List.map (_.Id >> string) |> postDb.GetRepliesOf allApprovals
+
+    return!
+      dbComments
+      |> List.traverseValidationA (fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer))
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetCommentsOnAllPosts (approvals : CommentApproval list) =
     postDb.GetCommentsOnAllPosts (approvals |> List.map _.ToString()) |> postedComments
 

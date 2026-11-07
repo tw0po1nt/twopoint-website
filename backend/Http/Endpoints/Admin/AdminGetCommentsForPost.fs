@@ -42,7 +42,9 @@ type AdminCommentDto =
     ReplyTo : string option
     /// `commenter` or `author`. A comment from the author has no commenter.
     Writer : string
-    TopLevel : AdminTopLevelDto option }
+    TopLevel : AdminTopLevelDto option
+    /// The number of replies that a delete of the comment removes with it.
+    ReplyCount : int }
 
 [<AutoOpen>]
 module CommentTypesExt =
@@ -69,7 +71,8 @@ module CommentTypesExt =
         Content = this.Html
         ReplyTo = this.Comment.Parent |> Option.map string
         Writer = writerName this.Comment.Writer
-        TopLevel = None }
+        TopLevel = None
+        ReplyCount = 0 }
 
   type TopLevelComment with
     member this.ToDto() =
@@ -84,7 +87,9 @@ module CommentTypesExt =
 
   type AdminComment with
     member this.ToDto() =
-      { this.Comment.ToAdminDto() with TopLevel = this.TopLevel |> Option.map _.ToDto() }
+      { this.Comment.ToAdminDto() with
+          TopLevel = this.TopLevel |> Option.map _.ToDto()
+          ReplyCount = this.ReplyCount }
 
 type AdminGetCommentsForPost (
   config: Config,

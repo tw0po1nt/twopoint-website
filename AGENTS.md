@@ -128,6 +128,14 @@ pure function `AdminComment.ofComments`. A reply row in the queue and on the com
 each thread, with the replies indented under the top-level comment. Each comment count includes
 the replies.
 
+`Admin-Posts-Comments-Delete` and `Admin-Commenters-Delete` follow the pure function
+`CommentDeleteRule`. A delete of a top-level comment removes its thread, also a reply from the
+author. A delete of a commenter removes each comment of the commenter and each thread that a comment
+of the commenter starts. A reply of the commenter in another thread goes alone. The replies go
+before the top-level comment, so a second try after a failure finds each thread that stays. Each
+admin comment gives `replyCount`, and the commenter page gives `otherReplies`. The confirm dialog
+of each delete shows that number.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

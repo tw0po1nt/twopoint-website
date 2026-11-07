@@ -78,7 +78,10 @@ let private moderated (commentId: string) (action: Queue.Action) (rows: Row list
   | Queue.Approve
   | Queue.ApproveAndTrust -> change commentId (withApproval Api.CommentApproval.Approved) rows
   | Queue.Reject -> change commentId (withApproval Api.CommentApproval.Rejected) rows
-  | Queue.Delete -> rows |> List.filter (fun row -> id row <> commentId)
+  | Queue.Delete ->
+    rows
+    |> ReplyContext.rowsAfterDelete _.Comment (fun comment row -> { row with Comment = comment }) commentId
+    |> Option.defaultValue rows
 
 let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (model: Model) =
   match rows |> List.tryFind (fun row -> id row = commentId) with
@@ -108,7 +111,10 @@ let private replied (answer: Api.AuthorReply) (rows: Row list) =
   let approve row =
     if List.contains (id row) answer.Approved then withApproval Api.CommentApproval.Approved row else row
 
-  (rows |> List.map approve) @ [ ready answer.Reply ]
+  let counted row =
+    { row with Comment = ReplyContext.afterReply answer.Reply row.Comment }
+
+  (rows |> List.map (approve >> counted)) @ [ ready answer.Reply ]
 
 let private reply (msg: AuthorReply.Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with

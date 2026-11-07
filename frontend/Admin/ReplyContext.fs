@@ -35,3 +35,35 @@ let withTopLevelApproval (topLevelIds: string list) (approval: Api.CommentApprov
         TopLevel = Some { topLevel with Status = approval } }
   | Some _
   | None -> comment
+
+/// The comment after the delete of `deleted`, or None when it goes with it. A top-level comment takes its replies,
+/// and a reply leaves its top-level comment with one reply fewer.
+let afterDelete (deleted: Api.Comment) (comment: Api.Comment) =
+  if comment.Id = deleted.Id || comment.ReplyTo = Some deleted.Id then
+    None
+  elif deleted.ReplyTo = Some comment.Id then
+    Some { comment with ReplyCount = comment.ReplyCount - 1 }
+  else
+    Some comment
+
+/// Each row after the delete of the comment `commentId`, or None when no row has that comment. `comment` gives the
+/// comment of a row, and `withComment` puts a changed comment into its row.
+let rowsAfterDelete
+  (comment: 'row -> Api.Comment)
+  (withComment: Api.Comment -> 'row -> 'row)
+  (commentId: string)
+  (rows: 'row list)
+  =
+  rows
+  |> List.tryFind (fun row -> (comment row).Id = commentId)
+  |> Option.map (fun deleted ->
+    rows
+    |> List.choose (fun row ->
+      afterDelete (comment deleted) (comment row) |> Option.map (fun changed -> withComment changed row)))
+
+/// The comment after a new reply: its top-level comment has one reply more.
+let afterReply (reply: Api.Comment) (comment: Api.Comment) =
+  if reply.ReplyTo = Some comment.Id then
+    { comment with ReplyCount = comment.ReplyCount + 1 }
+  else
+    comment

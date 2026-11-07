@@ -465,6 +465,7 @@ module GetCommenter =
       commenter: Commenter
         -> DependencyResult<PostedComment list>
     abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
+    abstract member GetRepliesOf: topLevels: Comment list -> DependencyResult<Comment list>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Query =
@@ -491,9 +492,13 @@ module GetCommenter =
               return found @ Option.toList topLevel
             })
 
+          let! replies = own |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
+          let known = own @ topLevels @ replies |> List.distinctBy _.Id
+
           return
             { Commenter = commenter
-              Comments = AdminPostedComment.ofPostedComments dependencies.Stage (own @ topLevels) comments }
+              Comments = AdminPostedComment.ofPostedComments dependencies.Stage known comments
+              OtherReplies = (CommentDeleteRule.commenter own replies).Others }
         })
         |> CancellableTaskResult.mapError QueryError.Dependency
     }

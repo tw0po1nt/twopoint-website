@@ -113,6 +113,23 @@ let tryCommenter (model: Model) =
   | Waiting
   | NotLoaded _ -> None
 
+let tryOtherReplies (model: Model) =
+  match model.Page with
+  | Loaded(page, _) -> Some page.OtherReplies
+  | Waiting
+  | NotLoaded _ -> None
+
+/// The body of the confirm dialog of a commenter delete. `otherReplies` is the number of replies from other writers
+/// that go with it.
+let deleteText (otherReplies: int) =
+  let replies =
+    match otherReplies with
+    | 0 -> "the commenter and all their comments"
+    | 1 -> "the commenter, all their comments, and 1 other reply in their threads"
+    | count -> $"the commenter, all their comments, and {count} other replies in their threads"
+
+  $"This deletes {replies}. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone."
+
 let failure (state: State) =
   match state with
   | Progress.NotDone(Trust, reason) -> Some $"Couldn't trust the commenter. {reason}"

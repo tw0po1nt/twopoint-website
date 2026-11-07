@@ -9,6 +9,7 @@ const comment = (id, name, status, content) => ({
   commenter: { id: `${name.toLowerCase()}-id`, email: `${name.toLowerCase()}@example.com`, name, status: 'new', createdDate: '2026-01-01T00:00:00Z' },
   status,
   content,
+  replyCount: 0,
 });
 
 const comments = [
@@ -25,6 +26,7 @@ const authorReply = {
   content: '<p>An <em>answer</em></p>',
   replyTo: 'c-4',
   writer: 'author',
+  replyCount: 0,
 };
 
 const previews = [];
