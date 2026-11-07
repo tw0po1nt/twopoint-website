@@ -60,10 +60,17 @@ const iife = async (name, entry, { sourcemap = false } = {}) => {
   return { file: path.relative(outDir, file), bytes: output.bytes, inputs: Object.keys(output.inputs), written: Object.keys(result.metafile.outputs) };
 };
 
+// The widget name of an entry is its file name in kebab case, for example `StopReplyEmails.jsx` is `stop-reply-emails`.
+const widgetName = (file) =>
+  path
+    .basename(file, '.jsx')
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase();
+
 const widgetEntries = async () => {
   const files = (await readdir(entriesDir)).filter((file) => file.endsWith('.jsx')).sort();
 
-  return Object.fromEntries(files.map((file) => [path.basename(file, '.jsx').toLowerCase(), path.join(entriesDir, file)]));
+  return Object.fromEntries(files.map((file) => [widgetName(file), path.join(entriesDir, file)]));
 };
 
 const staticImports = (outputs, file) => {

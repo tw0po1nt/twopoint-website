@@ -143,6 +143,15 @@ writes a row from the token to the post slug and the comment ID in the table `re
 A request with `replyTo` and `replyEmails` gets `400`. A comment with no consent sends no reply
 email.
 
+The stop page `/comments/stop/?token=<token>` has the `stop-reply-emails` widget. The widget reads
+the state of the token with `GET blog/reply-emails/{token}`: `active` with the post title,
+`stopped`, or `unknown`. A deleted comment or a token that is not a GUID is `unknown`. Only the
+button `[stop reply emails]` sends `POST blog/reply-emails/{token}/stop`, so a mail scanner that
+opens the link stops nothing. The stop writes the stop date on the consent of that one comment. A
+second stop answers `stopped` and writes nothing. The rule is the pure module
+`ReplyEmailStopRule`. The widget build names each entry with the kebab case of its file name, so
+`Entries/StopReplyEmails.fs` is the entry `stop-reply-emails`.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

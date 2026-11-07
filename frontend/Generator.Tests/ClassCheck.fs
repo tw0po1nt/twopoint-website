@@ -13,6 +13,7 @@ let widgetClasses =
         "comment-help-sheet"; "comment-thread"; "comment-replies"; "comment-earlier"; "comment-badge"; "is-author"; "is-marked"
         "comment-thread-end"; "comment-reply-form"; "comment-actions"
         "unsubscribe"; "unsubscribe-status"; "unsubscribe-note"
+        "stop-reply-emails"; "stop-reply-emails-status"; "stop-reply-emails-error"
         "pdf-viewer"; "pdf-frame"; "pdf-page"; "pdf-nav"; "pdf-count"; "pdf-status"
         "textLayer"; "markedContent"; "annotationLayer"; "linkAnnotation" ]
 

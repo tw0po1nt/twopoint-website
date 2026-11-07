@@ -26,6 +26,11 @@ let unsubscribe (config: StageConfig) =
     (Contract.Widget.Unsubscribe { Api = apiOrigin config })
     (p (class' = "unsubscribe-fallback") { "The unsubscribe link needs JavaScript." })
 
+let stopReplyEmails (config: StageConfig) =
+  view
+    (Contract.Widget.StopReplyEmails { Api = apiOrigin config })
+    (p (class' = "stop-reply-emails-fallback") { "The stop link needs JavaScript." })
+
 let subscribe (config: StageConfig) =
   view
     (Contract.Widget.Subscribe { Api = apiOrigin config })
