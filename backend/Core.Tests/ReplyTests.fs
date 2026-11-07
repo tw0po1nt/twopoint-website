@@ -3,6 +3,7 @@ module TwoPoint.Core.Tests.ReplyTests
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Posts.Queries
+open TwoPoint.Core.Shared
 open TwoPoint.Core.Tests.Fixtures
 open TwoPoint.Core.Util
 
@@ -369,5 +370,134 @@ let private authorReplyTests =
     }
   ]
 
+let private adminCommentsOf (threads : FakeThreads) =
+  (GetCommentsForPost.withDependencies threads [] (olderPost.Id.ToString()) CancellationToken.None).Result |> ok |> Option.get
+
+let private longText = String.replicate 30 "word *one* "
+
+let private withContent (content : string) (comment : Comment) =
+  { comment with Content = NonEmptyString.create None content |> ok }
+
+type private FakeQueue(comments : PostedComment list) =
+  interface GetModerationQueue.Dependencies with
+    member _.GetCommentsOnAllPosts approvals =
+      comments |> List.filter (fun posted -> approvals |> List.contains posted.Comment.Status.Approval) |> CancellableTaskResult.singleton
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+type private FakeCommenterPage(comments : PostedComment list, others : Comment list) =
+  let reads = ResizeArray<CommentId>()
+
+  member _.Reads = List.ofSeq reads
+
+  interface GetCommenter.Dependencies with
+    member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some (commenter "Ben" CommenterStatus.Trusted))
+    member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
+    member _.GetCommentById id =
+      reads.Add id
+      others |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private topLevelOf (comment : AdminComment) =
+  comment.TopLevel
+  |> Option.map (fun topLevel ->
+    string topLevel.Comment.Comment.Id,
+    topLevel.Comment.Comment |> Comment.commenter |> Option.bind _.Name |> Option.map string,
+    topLevel.Comment.Comment.Status.Approval)
+
+let private adminAnswerTests =
+  testList "the admin answers" [
+    test "the comments of a post give the top-level comment of each reply, and none for a top-level comment" {
+      let threads = FakeThreads(olderPost, [ topLevel CommentApproval.Rejected; replyOf CommentApproval.New ])
+
+      Expect.equal
+        (adminCommentsOf threads |> List.map topLevelOf)
+        [ None; Some (topLevelId, Some "Ada", CommentApproval.Rejected) ]
+        "Expected the ID, the name, and the approval of the top-level comment on the reply"
+    }
+
+    test "the top-level comment of a reply gives a plain-text excerpt of 200 characters and the full HTML" {
+      let threads = FakeThreads(olderPost, [ topLevel CommentApproval.Approved |> withContent longText; replyOf CommentApproval.New ])
+
+      match adminCommentsOf threads with
+      | [ _; { TopLevel = Some topLevel } ] ->
+        Expect.equal topLevel.Excerpt ((String.replicate 30 "word one ").Substring(0, AdminComment.excerptLength)) "Expected the start of the plain text"
+        Expect.stringContains topLevel.Comment.Html "<em>one</em>" "Expected the full HTML"
+      | other -> failtestf "Expected a top-level comment and a reply, got %A" other
+    }
+
+    test "the queue gives the top-level comment of a new reply, also when the top-level comment is not in the queue" {
+      let queue = FakeQueue [ topLevel CommentApproval.Approved |> postedOn olderPost; replyOf CommentApproval.New |> postedOn olderPost ]
+
+      match (GetModerationQueue.withDependencies queue () CancellationToken.None).Result with
+      | Ok [ reply ] ->
+        Expect.equal (string reply.Comment.Comment.Comment.Id) replyId "Expected only the new reply"
+        Expect.equal (topLevelOf reply.Comment) (Some (topLevelId, Some "Ada", CommentApproval.Approved)) "Expected the top-level comment"
+      | other -> failtestf "Expected one reply, got %A" other
+    }
+
+    test "the commenter page reads each top-level comment of another commenter once, and gives it on each reply" {
+      let secondReply = commentWith otherReplyId (Some topLevelId) fromBen CommentApproval.Approved "2026-02-03T00:00:00.0000000Z"
+      let page = FakeCommenterPage([ replyOf CommentApproval.New |> postedOn olderPost; secondReply |> postedOn olderPost ], [ topLevel CommentApproval.Approved ])
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal
+          (commenterPage.Comments |> List.map (_.Comment >> topLevelOf))
+          [ Some (topLevelId, Some "Ada", CommentApproval.Approved); Some (topLevelId, Some "Ada", CommentApproval.Approved) ]
+          "Expected the top-level comment on each reply"
+        Expect.equal (page.Reads |> List.map string) [ topLevelId ] "Expected one read"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+
+    test "the commenter page reads no top-level comment that is on the page" {
+      let ownTopLevel = commentWith topLevelId None fromBen CommentApproval.Approved "2026-02-01T00:00:00.0000000Z"
+      let page = FakeCommenterPage([ ownTopLevel |> postedOn olderPost; replyOf CommentApproval.New |> postedOn olderPost ], [])
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal
+          (commenterPage.Comments |> List.map (_.Comment >> topLevelOf))
+          [ None; Some (topLevelId, Some "Ben", CommentApproval.Approved) ]
+          "Expected the own top-level comment on the reply"
+        Expect.isEmpty page.Reads "Expected no read"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+
+    test "a reply whose top-level comment is gone has no top-level comment" {
+      let page = FakeCommenterPage([ replyOf CommentApproval.New |> postedOn olderPost ], [])
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some { Comments = [ reply ] }) -> Expect.isNone reply.Comment.TopLevel "Expected no top-level comment"
+      | other -> failtestf "Expected one reply, got %A" other
+    }
+  ]
+
+let private countTests =
+  testList "the comment counts" [
+    test "the counts of a post include each reply" {
+      let rejectedReply = commentWith otherReplyId (Some topLevelId) fromBen CommentApproval.Rejected "2026-02-03T00:00:00.0000000Z"
+      let authorReply = commentWith authorReplyId (Some topLevelId) CommentWriter.Author CommentApproval.Approved "2026-02-04T00:00:00.0000000Z"
+
+      Expect.equal
+        (PostCommentStats.OfComments [ topLevel CommentApproval.Approved; replyOf CommentApproval.New; rejectedReply; authorReply ])
+        { New = 1u; Approved = 2u; Rejected = 1u }
+        "Expected the top-level comment and each reply"
+    }
+
+    test "the queue, and so the count of the dashboard, includes each new reply" {
+      let queue =
+        FakeQueue
+          [ topLevel CommentApproval.New |> postedOn olderPost
+            replyOf CommentApproval.New |> postedOn olderPost
+            commentWith authorReplyId (Some topLevelId) CommentWriter.Author CommentApproval.Approved "2026-02-04T00:00:00.0000000Z" |> postedOn olderPost ]
+
+      Expect.equal
+        ((GetModerationQueue.withDependencies queue () CancellationToken.None).Result |> Result.map (List.map (_.Comment.Comment.Comment.Id >> string)))
+        (Ok [ topLevelId; replyId ])
+        "Expected the new top-level comment and the new reply"
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Replies" [ replyCheckTests; approvalTests; visibilityTests; answerTests; authorReplyTests ]
+let tests =
+  testList "Replies" [ replyCheckTests; approvalTests; visibilityTests; answerTests; authorReplyTests; adminAnswerTests; countTests ]

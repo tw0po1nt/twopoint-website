@@ -799,16 +799,53 @@ let private writerHead (dispatch: Shell.Msg -> unit) (writer: Api.Writer) =
     }
 
 [<SolidComponent>]
-let private queueRow (dispatch: Shell.Msg -> unit) (reply: unit -> AuthorReply.Form option) (row: Queue.Row) =
+let private replyContext (topLevel: Api.TopLevel) (opened: unit -> bool) (toggle: unit -> unit) =
+  div (class' = "reply-context") {
+    p (class' = "muted small") { ReplyContext.replyLine topLevel }
+
+    Show(when' = not (opened ())) {
+      button(type' = "button", class' = "reply-excerpt", onClick = fun _ -> toggle ()).attr ("aria-expanded", "false") {
+        topLevel.Excerpt
+      }
+    }
+
+    Show(when' = opened ()) {
+      div (class' = "reply-excerpt is-open") {
+        commentText topLevel.Content
+
+        button(type' = "button", class' = "reply-less", onClick = fun _ -> toggle ()).attr ("aria-expanded", "true") {
+          "Show less"
+        }
+      }
+    }
+
+    For(each = Array.ofList (Option.toList (ReplyContext.rejectedNote topLevel))) {
+      yield fun note _ -> Parts.Alert(tone = Parts.Warn).Has(p () { note })
+    }
+  }
+
+[<SolidComponent>]
+let private queueRow
+  (dispatch: Shell.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (opened: unit -> ReplyContext.Opened)
+  (row: Queue.Row)
+  =
   let comment = row.Comment.Comment
   let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
   let send = Queue.Reply >> Shell.Queue >> dispatch
+  let toggle () = dispatch (Shell.Queue(Queue.TopLevelToggled comment.Id))
 
   article (id = comment.Id, class' = "card card-body queue-row") {
     writerHead dispatch comment.Writer
     p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
+
+    For(each = Array.ofList (Option.toList comment.TopLevel)) {
+      yield fun topLevel _ -> replyContext topLevel (fun () -> (opened ()).Contains comment.Id) toggle
+    }
+
     commentText comment.Content
-    rowEnd dispatch comment choose row.State (Queue.writerActions comment.Writer) send reply (fun () -> None)
+    rowEnd dispatch comment choose row.State (Queue.writerActions comment.Writer) send reply (fun () -> ReplyContext.topLevelApproval comment)
   }
 
 let private queueRows (model: Queue.Model) =
@@ -829,6 +866,7 @@ let private queue (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
   let page () = (model ()).Queue
   let rows () = queueRows (page ())
   let reply () = (page ()).Reply
+  let opened () = (page ()).Opened
 
   Fragment() {
     Show(when' = ((page ()).Comments = Queue.Waiting)) {
@@ -843,7 +881,7 @@ let private queue (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
     }
 
     Show(when' = not (List.isEmpty (rows ()))) {
-      div (class' = "queue") { For(each = Array.ofList (rows ())) { yield fun row _ -> queueRow dispatch reply row } }
+      div (class' = "queue") { For(each = Array.ofList (rows ())) { yield fun row _ -> queueRow dispatch reply opened row } }
     }
 
     Show(when' = (queueReason (page ())).IsSome) {
@@ -863,12 +901,15 @@ let private approvalTone (approval: Api.CommentApproval) =
 let private postCommentRow
   (dispatch: Shell.Msg -> unit)
   (reply: unit -> AuthorReply.Form option)
-  (topLevel: Api.Comment -> Api.CommentApproval option)
+  (page: unit -> PostComments.Model)
   (row: PostComments.Row)
   =
   let comment = row.Comment
   let choose action = dispatch (Shell.PostComments(PostComments.Chosen(comment.Id, action)))
   let send = PostComments.Reply >> Shell.PostComments >> dispatch
+  let topLevel () = PostComments.topLevel comment (page ())
+  let isAlone () =
+    comment.ReplyTo |> Option.exists (fun topLevelId -> PostComments.replies topLevelId (page ()) |> List.isEmpty)
 
   article (id = comment.Id, class' = "card card-body queue-row") {
     div (class' = "row-top") {
@@ -876,8 +917,31 @@ let private postCommentRow
       Parts.badge (approvalTone comment.Status) (PostComments.approvalText comment.Status)
     }
 
+    Show(when' = (isAlone () && (topLevel ()).IsSome)) {
+      p (class' = "muted small") { topLevel () |> Option.map ReplyContext.replyLine |> Option.defaultValue "" }
+    }
+
     commentText comment.Content
-    rowEnd dispatch comment choose row.State (PostComments.actions comment.Status) send reply (fun () -> topLevel comment)
+    rowEnd dispatch comment choose row.State (PostComments.actions comment.Status) send reply (fun () -> PostComments.topLevelApproval comment (page ()))
+  }
+
+[<SolidComponent>]
+let private postThread
+  (dispatch: Shell.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (page: unit -> PostComments.Model)
+  (head: PostComments.Row)
+  =
+  let replies () = PostComments.replies head.Comment.Id (page ())
+
+  div (class' = "thread") {
+    postCommentRow dispatch reply page head
+
+    Show(when' = not (List.isEmpty (replies ()))) {
+      div (class' = "thread-replies") {
+        For(each = Array.ofList (replies ())) { yield fun row _ -> postCommentRow dispatch reply page row }
+      }
+    }
   }
 
 let private postCommentsReason (model: PostComments.Model) =
@@ -898,6 +962,7 @@ let private postComments (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     | None, _ -> PostComments.init ""
 
   let rows () = PostComments.shown (page ())
+  let heads () = PostComments.heads (page ())
   let reply () = (page ()).Reply
   let filter = PostComments.Filtered >> Shell.PostComments >> dispatch
 
@@ -916,7 +981,7 @@ let private postComments (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     }
 
     Show(when' = not (List.isEmpty (rows ()))) {
-      div (class' = "queue") { For(each = Array.ofList (rows ())) { yield fun row _ -> postCommentRow dispatch reply (fun comment -> PostComments.topLevelApproval comment (page ())) row } }
+      div (class' = "queue") { For(each = Array.ofList (heads ())) { yield fun head _ -> postThread dispatch reply page head } }
     }
 
     Show(when' = (postCommentsReason (page ())).IsSome) {
@@ -991,8 +1056,9 @@ let private commenterAction (dispatch: Shell.Msg -> unit) (sending: bool) (actio
     .Has(Fragment() { Commenter.label action })
 
 [<SolidComponent>]
-let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedComment) =
+let private commenterComment (dispatch: Shell.Msg -> unit) (opened: ReplyContext.Opened) (comment: Api.PostedComment) =
   let route = Shell.Router >> dispatch
+  let toggle () = dispatch (Shell.Commenter(Commenter.TopLevelToggled comment.Comment.Id))
 
   article (id = comment.Comment.Id, class' = "card card-body queue-row") {
     div (class' = "row-top") {
@@ -1003,6 +1069,10 @@ let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedC
       }
 
       Parts.badge (approvalTone comment.Comment.Status) (PostComments.approvalText comment.Comment.Status)
+    }
+
+    For(each = Array.ofList (Option.toList comment.Comment.TopLevel)) {
+      yield fun topLevel _ -> replyContext topLevel (fun () -> opened.Contains comment.Comment.Id) toggle
     }
 
     commentText comment.Comment.Content
@@ -1052,7 +1122,7 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
         h2 () { "Comments" }
 
         Show(when' = List.isEmpty page.Comments) { p (class' = "muted") { "No comments yet." } }
-        For(each = Array.ofList page.Comments) { yield fun comment _ -> commenterComment dispatch comment }
+        For(each = Array.ofList page.Comments) { yield fun comment _ -> commenterComment dispatch model.Opened comment }
       }
     }
   | Commenter.NotLoaded reason ->

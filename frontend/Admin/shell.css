@@ -427,6 +427,64 @@ button.row-link {
   gap: var(--s-2);
 }
 
+.reply-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.reply-excerpt {
+  display: block;
+  width: 100%;
+  padding: 0 0 0 var(--s-3);
+  border: 0;
+  border-left: 2px solid var(--border-strong);
+  color: var(--fg-muted);
+  background: none;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+button.reply-excerpt {
+  cursor: pointer;
+}
+
+button.reply-excerpt:hover {
+  color: var(--fg);
+}
+
+.reply-excerpt.is-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+
+.reply-less {
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  background: none;
+  font: inherit;
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.thread-replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-left: var(--s-4);
+  border-left: 1px solid var(--border-strong);
+}
+
 .reply-form {
   display: flex;
   flex-direction: column;

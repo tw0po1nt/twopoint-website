@@ -27,14 +27,10 @@ type PostDependencies(
   logger : ILogger
 ) =
 
-  let statsForApproval = function
-    | "new" ->
-      { New = 1u; Approved = 0u; Rejected = 0u }
-    | "approved" ->
-      { New = 0u; Approved = 1u; Rejected = 0u }
-    | "rejected" ->
-      { New = 0u; Approved = 0u; Rejected = 1u }
-    | _ -> PostCommentStats.Zero
+  let statsOf (dbComments : (DbComment * DbCommentWriter * DbCommentStatus) list) =
+    dbComments
+    |> List.choose (fun (comment, writer, status) -> comment.ToComment(status, writer) |> Result.toOption)
+    |> PostCommentStats.OfComments
 
   let postDb = PostDb.live tableServiceClient logger
   let commsService = CommsService.live emailClient tableServiceClient logger emailSender
@@ -67,13 +63,7 @@ type PostDependencies(
     return!
       ([], dbPostsAndComments)
       ||> TaskSeq.fold (fun s (post, comments) ->
-        let stats =
-          ({ New = 0u; Approved = 0u; Rejected = 0u }, comments)
-          ||> List.fold (fun stats (_, _, status: DbCommentStatus) ->
-            let updates = statsForApproval status.Approval
-            stats + updates
-          )
-        post.ToPost(stats)
+        post.ToPost(statsOf comments)
         |> Result.toOption
         |> Option.map (fun p -> p.Info :: s)
         |> Option.defaultValue s
@@ -87,16 +77,9 @@ type PostDependencies(
       |> Option.traverseCancellableTaskResult (postDb.GetCommentsForPost allApprovals)
       |> CancellableTaskResult.map (Option.defaultValue [])
 
-    let commentStats =
-      ({ New = 0u; Approved = 0u; Rejected = 0u }, dbComments)
-      ||> List.fold (fun stats (_, _, status: DbCommentStatus) ->
-        let updates = statsForApproval status.Approval
-        stats + updates
-      )
-
     return!
       dbPost
-      |> Option.traverseResult (fun (dbo: DbPost) -> dbo.ToPost(commentStats))
+      |> Option.traverseResult (fun (dbo: DbPost) -> dbo.ToPost(statsOf dbComments))
       |> DependencyError.ofValidation source
   }
 

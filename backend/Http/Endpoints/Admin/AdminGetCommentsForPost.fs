@@ -23,6 +23,15 @@ type AdminCommenterDto =
     Status : string
     CreatedDate : DateTime }
 
+/// `Excerpt` is the start of the plain text, and `Content` is the full HTML.
+type AdminTopLevelDto =
+  { Id : string
+    Commenter : AdminCommenterDto option
+    Writer : string
+    Status : string
+    Excerpt : string
+    Content : string }
+
 type AdminCommentDto =
   { Id : string
     CreatedDate : DateTime
@@ -32,7 +41,9 @@ type AdminCommentDto =
     /// The ID of the top-level comment of a reply.
     ReplyTo : string option
     /// `commenter` or `author`. A comment from the author has no commenter.
-    Writer : string }
+    Writer : string
+    /// None for a top-level comment, and for a reply whose top-level comment is gone.
+    TopLevel : AdminTopLevelDto option }
 
 [<AutoOpen>]
 module CommentTypesExt =
@@ -45,6 +56,11 @@ module CommentTypesExt =
         Status = this.Status.ToString()
         CreatedDate = this.CreatedDate }
 
+  let private writerName (writer : CommentWriter) =
+    match writer with
+    | CommentWriter.Commenter _ -> "commenter"
+    | CommentWriter.Author -> "author"
+
   type RenderedComment with
     member this.ToAdminDto() =
       { AdminCommentDto.Id = this.Comment.Id.ToString()
@@ -53,10 +69,23 @@ module CommentTypesExt =
         Status = this.Comment.Status.Approval.ToString()
         Content = this.Html
         ReplyTo = this.Comment.Parent |> Option.map string
-        Writer =
-          match this.Comment.Writer with
-          | CommentWriter.Commenter _ -> "commenter"
-          | CommentWriter.Author -> "author" }
+        Writer = writerName this.Comment.Writer
+        TopLevel = None }
+
+  type TopLevelComment with
+    member this.ToDto() =
+      let comment = this.Comment.Comment
+
+      { AdminTopLevelDto.Id = comment.Id.ToString()
+        Commenter = comment |> Comment.commenter |> Option.map _.ToDto()
+        Writer = writerName comment.Writer
+        Status = comment.Status.Approval.ToString()
+        Excerpt = this.Excerpt
+        Content = this.Comment.Html }
+
+  type AdminComment with
+    member this.ToDto() =
+      { this.Comment.ToAdminDto() with TopLevel = this.TopLevel |> Option.map _.ToDto() }
 
 type AdminGetCommentsForPost (
   config: Config,
@@ -104,7 +133,7 @@ type AdminGetCommentsForPost (
         let apiResponse, statusCode =
           match commentsResult with
           | Ok (Some comments) ->
-            { Success = true; Message = None; Data = comments |> List.map _.ToAdminDto() |> Some }, HttpStatusCode.OK
+            { Success = true; Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
           | Ok None ->
             { Success = false; Message = Some $"Post ''{slug}'' not found"; Data = None }, HttpStatusCode.NotFound
           | Error queryError when queryError.IsValidation ->

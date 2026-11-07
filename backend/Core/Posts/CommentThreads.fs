@@ -1,5 +1,7 @@
 namespace TwoPoint.Core.Posts
 
+open TwoPoint.Core.Shared
+
 open System
 
 [<RequireQualifiedAccess>]
@@ -118,3 +120,63 @@ module PublicComment =
         match comment.Writer with
         | CommentWriter.Commenter _ -> "commenter"
         | CommentWriter.Author -> "author" }
+
+type TopLevelComment =
+  { Comment : RenderedComment
+    Excerpt : string }
+
+/// `TopLevel` is None for a top-level comment, and for a reply whose top-level comment is gone.
+type AdminComment =
+  { Comment : RenderedComment
+    TopLevel : TopLevelComment option }
+
+[<RequireQualifiedAccess>]
+module AdminComment =
+
+  /// The length of the excerpt in characters of the plain text.
+  let excerptLength = 200
+
+  let excerpt (comment : Comment) =
+    comment.Content
+    |> NonEmptyString.value
+    |> TwoPoint.Site.Render.CommentBody.plainText
+    |> _.EnumerateRunes()
+    |> Seq.truncate excerptLength
+    |> Seq.map _.ToString()
+    |> String.concat ""
+
+  /// `known` is each comment that can be the top-level comment of a comment in `comments`.
+  let ofComments (stage : TwoPoint.Site.Render.Stage) (known : Comment list) (comments : Comment list) =
+    let topLevels = known |> List.filter (fun comment -> comment.Parent.IsNone) |> List.map (fun comment -> comment.Id, comment) |> Map.ofList
+
+    let topLevelOf (comment : Comment) =
+      comment.Parent
+      |> Option.bind topLevels.TryFind
+      |> Option.map (fun topLevel -> { Comment = RenderedComment.ofComment stage topLevel; Excerpt = excerpt topLevel })
+
+    comments
+    |> List.sortBy _.CreatedDate
+    |> List.map (fun comment -> { Comment = RenderedComment.ofComment stage comment; TopLevel = topLevelOf comment })
+
+type AdminPostedComment =
+  { Post : Slug
+    PostTitle : NonEmptyString
+    Comment : AdminComment }
+
+[<RequireQualifiedAccess>]
+module AdminPostedComment =
+
+  /// `known` is each comment that can be the top-level comment of a comment in `comments`. The list is oldest first.
+  let ofPostedComments (stage : TwoPoint.Site.Render.Stage) (known : Comment list) (comments : PostedComment list) =
+    let titles = comments |> List.map (fun posted -> posted.Comment.Id, posted) |> Map.ofList
+
+    comments
+    |> List.map _.Comment
+    |> AdminComment.ofComments stage known
+    |> List.map (fun comment ->
+      let posted = titles[comment.Comment.Comment.Id]
+      { Post = posted.Post; PostTitle = posted.PostTitle; Comment = comment })
+
+type CommenterComments =
+  { Commenter : Commenter
+    Comments : AdminPostedComment list }

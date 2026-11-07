@@ -126,14 +126,24 @@ type Writer =
   | Commenter of Commenter
   | Author
 
+/// The top-level comment of a reply. `Excerpt` is the start of its plain text, and `Content` is its full HTML.
+type TopLevel =
+  { Id: string
+    Writer: Writer
+    Status: CommentApproval
+    Excerpt: string
+    Content: string }
+
 /// `ReplyTo` is the ID of the top-level comment of a reply.
+/// `TopLevel` is None for a top-level comment, and for a reply whose top-level comment is gone.
 type Comment =
   { Id: string
     CreatedDate: string
     Writer: Writer
     Status: CommentApproval
     Content: string
-    ReplyTo: string option }
+    ReplyTo: string option
+    TopLevel: TopLevel option }
 
 /// `Approved` is the ID of each comment that the reply approved.
 type AuthorReply = { Reply: Comment; Approved: string list }
@@ -428,6 +438,14 @@ let private writer: Decoder<Writer> =
     | Some "commenter" -> Decode.field "commenter" commenter |> Decode.map Writer.Commenter
     | Some name -> Decode.fail $"The writer '{name}' is not known.")
 
+let private topLevel: Decoder<TopLevel> =
+  Decode.object (fun get ->
+    { Id = get.Required.Field "id" Decode.string
+      Writer = get.Required.Raw writer
+      Status = get.Required.Field "status" commentApproval
+      Excerpt = get.Required.Field "excerpt" Decode.string
+      Content = get.Required.Field "content" Decode.string })
+
 let private comment: Decoder<Comment> =
   Decode.object (fun get ->
     { Id = get.Required.Field "id" Decode.string
@@ -435,7 +453,8 @@ let private comment: Decoder<Comment> =
       Writer = get.Required.Raw writer
       Status = get.Required.Field "status" commentApproval
       Content = get.Required.Field "content" Decode.string
-      ReplyTo = get.Optional.Field "replyTo" Decode.string })
+      ReplyTo = get.Optional.Field "replyTo" Decode.string
+      TopLevel = get.Optional.Field "topLevel" topLevel })
 
 let private deliveryTypeName (deliveryType: DeliveryType) =
   match deliveryType with

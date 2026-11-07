@@ -167,6 +167,43 @@ let shown (model: Model) =
   | Loaded rows, Only approval -> rows |> List.filter (fun row -> row.Comment.Status = approval)
   | (Waiting | NotLoaded _), _ -> []
 
+let private rowsOf (model: Model) =
+  match model.Comments with
+  | Loaded rows -> rows
+  | Waiting
+  | NotLoaded _ -> []
+
+/// Each top-level comment that the filter shows, and each reply whose top-level comment the filter hides.
+/// A thread keeps the place of its top-level comment in the list, which is oldest first.
+let heads (model: Model) =
+  let rows = rowsOf model
+  let shown = shown model
+  let shownIds = shown |> List.map id |> Set.ofList
+  let place (commentId: string) = rows |> List.tryFindIndex (fun row -> id row = commentId)
+
+  shown
+  |> List.filter (fun row -> row.Comment.ReplyTo |> Option.forall (shownIds.Contains >> not))
+  |> List.sortBy (fun row ->
+    let own = place (id row) |> Option.defaultValue 0
+    row.Comment.ReplyTo |> Option.bind place |> Option.defaultValue own, own)
+
+/// The replies of a top-level comment that the filter shows, oldest first. A hidden top-level comment has none.
+let replies (topLevelId: string) (model: Model) =
+  let shown = shown model
+
+  if shown |> List.exists (fun row -> id row = topLevelId) then
+    shown |> List.filter (fun row -> row.Comment.ReplyTo = Some topLevelId)
+  else
+    []
+
+/// The top-level comment of a reply, with the approval that it has on the page.
+let topLevel (comment: Api.Comment) (model: Model) =
+  comment.TopLevel
+  |> Option.map (fun topLevel ->
+    match rowsOf model |> List.tryFind (fun row -> id row = topLevel.Id) with
+    | Some row -> { topLevel with Status = row.Comment.Status }
+    | None -> topLevel)
+
 let tryFind (commentId: string) (model: Model) =
   match model.Comments with
   | Loaded rows -> rows |> List.tryFind (fun row -> id row = commentId)
