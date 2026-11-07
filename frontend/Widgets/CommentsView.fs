@@ -10,7 +10,35 @@ open Oxpecker.Solid
 open Oxpecker.Solid.Aria
 open Thoth.Json
 
-let private perform (props: Contract.CommentsProps) (effect: Comments.Effect) (dispatch: Comments.Msg -> unit) =
+/// The CSS animation of `is-marked` has the same time.
+let private markTime = 2000
+
+let private scrollTo (section: HTMLElement) (scroll: Comments.Scroll) =
+  let comment (id: string) =
+    match document.getElementById (Comments.elementId id) with
+    | null -> None
+    | element -> Some element
+
+  // A model change inside a Solid batch gets to the page only after the batch, so the scroll waits for the next frame.
+  window.requestAnimationFrame (fun _ ->
+    match scroll with
+    | Comments.ToComment id ->
+      match comment id with
+      | Some element ->
+        element.scrollIntoView ()
+        element.classList.add "is-marked"
+        window.setTimeout ((fun () -> element.classList.remove "is-marked"), markTime) |> ignore
+      | None -> section.scrollIntoView ()
+    | Comments.ToThread id -> comment id |> Option.defaultValue section |> _.scrollIntoView()
+    | Comments.ToSection -> section.scrollIntoView ())
+  |> ignore
+
+let private perform
+  (props: Contract.CommentsProps)
+  (section: HTMLElement)
+  (effect: Comments.Effect)
+  (dispatch: Comments.Msg -> unit)
+  =
   match effect with
   | Comments.Load ->
     Comments.getCommentsForPost props.Api props.Slug
@@ -32,6 +60,7 @@ let private perform (props: Contract.CommentsProps) (effect: Comments.Effect) (d
     |> Promise.map (fun response -> dispatch (Comments.PreviewAnswered(request, response)))
     |> Promise.catch (fun _ -> dispatch (Comments.PreviewUnanswered request))
     |> Promise.start
+  | Comments.ScrollTo scroll -> scrollTo section scroll
 
 let private readValidations () =
   try
@@ -63,12 +92,6 @@ let private takeReturn () =
   returned
 
 let private text (event: Event) = (event.target :?> HTMLInputElement).value
-
-let private comments (model: Comments.Model) =
-  match model.List with
-  | Comments.Loaded comments -> Array.ofList comments
-  | Comments.Loading
-  | Comments.NotLoaded _ -> [||]
 
 let private listText (model: Comments.Model) =
   match model.List with
@@ -150,11 +173,50 @@ let private notePrefix =
   "To keep out spam, you'll verify your email, and comments may be reviewed before they appear. "
   + "Your name is shown with your comment; your email stays private. See the "
 
+let private authorBadge = " [author]"
+
+let private bylineName (byline: Comments.Byline) =
+  match byline with
+  | Comments.Reader name
+  | Comments.PostAuthor name -> name
+
+let private hasBadge (byline: Comments.Byline) =
+  match byline with
+  | Comments.PostAuthor _ -> true
+  | Comments.Reader _ -> false
+
 [<SolidComponent>]
-let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
+let private entry (author: string) (comment: TwoPoint.Api.Comments.Comment) =
+  let byline = Comments.byline author comment
+
+  Fragment() {
+    p (class' = "comment-meta") {
+      time (datetime = comment.CreatedDate) { Comments.shownDate comment.CreatedDate }
+      separator
+      bylineName byline
+
+      Show(when' = hasBadge byline) {
+        span (class' = "comment-badge") { authorBadge }
+      }
+    }
+
+    // The backend gives only HTML that it made from the Markdown of the comment.
+    div (class' = "comment-text", innerHTML = comment.Content)
+  }
+
+let private replyClass (comment: TwoPoint.Api.Comments.Comment) =
+  match comment.Writer with
+  | Author -> "comment is-author"
+  | Commenter -> "comment"
+
+[<SolidComponent>]
+let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comments.Return option) (link: Comments.Link option) =
   let pageUrl = window.location.origin + window.location.pathname
-  let init = Comments.init pageUrl (readValidations ()) returned
-  let model, dispatch = Mvu.run init Comments.update (perform props)
+  let init = Comments.init pageUrl (readValidations ()) returned link
+  let model, dispatch = Mvu.run init Comments.update (perform props section)
+  let list = createMemo (fun () -> model().List)
+  let expanded = createMemo (fun () -> model().Expanded)
+  let threads = createMemo (fun () -> Array.ofList (Comments.shownThreads (expanded ()) (list ())))
   let commentBox: HTMLElement option ref = ref None
   let previewHeight, setPreviewHeight = createSignal 0.0
 
@@ -166,18 +228,29 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
     p (class' = listClass (model ())) { listText (model ()) }
 
     ol (class' = "comments-list") {
-      For(each = comments (model ())) {
+      For(each = threads ()) {
         yield
-          fun comment _ ->
-            li (class' = "comment") {
-              p (class' = "comment-meta") {
-                time (datetime = comment.CreatedDate) { Comments.shownDate comment.CreatedDate }
-                separator
-                comment.Commenter
-              }
+          fun thread _ ->
+            li (class' = "comment-thread") {
+              div (class' = "comment", id = Comments.elementId thread.Comment.Id) { entry props.Author thread.Comment }
 
-              // The backend gives only HTML that it made from the Markdown of the comment.
-              div (class' = "comment-text", innerHTML = comment.Content)
+              Show(when' = (thread.HiddenEarlier > 0 || not thread.Replies.IsEmpty)) {
+                ol (class' = "comment-replies") {
+                  Show(when' = (thread.HiddenEarlier > 0)) {
+                    li (class' = "comment-earlier") {
+                      button (type' = "button", onClick = fun _ -> dispatch (Comments.EarlierShown thread.Comment.Id)) {
+                        Comments.earlierText thread.HiddenEarlier
+                      }
+                    }
+                  }
+
+                  For(each = Array.ofList thread.Replies) {
+                    yield
+                      fun reply _ ->
+                        li (class' = replyClass reply, id = Comments.elementId reply.Id) { entry props.Author reply }
+                  }
+                }
+              }
             }
       }
     }
@@ -322,5 +395,10 @@ let view (props: Contract.CommentsProps) (returned: Comments.Return option) =
 
 /// One argument, because Fable calls a curried function from a dynamic import as `start(a)(b)`.
 let start (args: {| Mount: HTMLElement; Props: Contract.CommentsProps |}) =
+  let link = Comments.parseLink window.location.hash (List.ofArray (queryPairs window.location.search))
   let returned = takeReturn ()
-  Mount.replace args.Mount (fun () -> view args.Props returned)
+  let section =
+    args.Mount.closest "details"
+    |> Option.map (fun panel -> panel :?> HTMLElement)
+    |> Option.defaultValue args.Mount
+  Mount.replace args.Mount (fun () -> view args.Props section returned link)

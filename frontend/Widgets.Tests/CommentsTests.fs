@@ -10,7 +10,7 @@ let private pageUrl = "https://twopoint.dev/posts/a-post/"
 
 let private known = Map [ "known@example.com", "validation-1" ]
 
-let private start = Comments.init pageUrl known None |> fst
+let private start = Comments.init pageUrl known None None |> fst
 
 let private from (model: Comments.Model) (messages: Comments.Msg list) =
   messages |> List.fold (fun (model, _) msg -> Comments.update msg model) (model, None)
@@ -26,7 +26,9 @@ let private comment id : Comment =
   { Id = id
     CreatedDate = "2026-10-17T09:30:00Z"
     Commenter = "Ada"
-    Content = "First." }
+    Content = "First."
+    ReplyTo = None
+    Writer = Commenter }
 
 let private postAnswer success message (posted: PostedComment option) : PostCommentAnswer =
   { Success = success
@@ -38,7 +40,9 @@ let private posted approval : PostedComment =
       { Id = "3"
         CreatedDate = "2026-10-18T10:00:00Z"
         Commenter = "Reader"
-        Content = "Nice post & thanks" }
+        Content = "Nice post & thanks"
+        ReplyTo = None
+        Writer = Commenter }
     Approval = approval }
 
 let private filled email =
@@ -68,12 +72,47 @@ let private returned: Comments.Return =
     Comment = "Nice post"
     ValidationId = "validation-2" }
 
+let private at id (day: int) (replyTo: string option) (writer: Writer) : Comment =
+  { Id = id
+    CreatedDate = $"2026-10-%02d{day}T09:30:00.0000000Z"
+    Commenter = (match writer with
+                 | Commenter -> $"Reader {id}"
+                 | Author -> "")
+    Content = $"<p>{id}</p>\n"
+    ReplyTo = replyTo
+    Writer = writer }
+
+let private topLevel id day = at id day None Commenter
+
+let private reply id day parent = at id day (Some parent) Commenter
+
+let private loaded (comments: Comment list) =
+  Comments.ListAnswered { Success = true; Message = None; Data = Some comments }
+
+let private shape (model: Comments.Model) =
+  Comments.shownThreads model.Expanded model.List
+  |> List.map (fun thread -> thread.Comment.Id, thread.HiddenEarlier, thread.Replies |> List.map _.Id)
+
+/// A thread with 4 replies and a thread with 3 replies. The list mixes the dates.
+let private longThreads =
+  [ reply "a3" 7 "a"
+    topLevel "b" 2
+    reply "b2" 6 "b"
+    reply "a1" 3 "a"
+    topLevel "a" 1
+    reply "b1" 4 "b"
+    reply "a2" 5 "a"
+    reply "a4" 9 "a"
+    reply "b3" 8 "b" ]
+
+let private linked (link: Comments.Link) = Comments.init pageUrl known None (Some link) |> fst
+
 [<Tests>]
 let tests =
   testList "Comments" [
     testList "init" [
       test "a new widget loads the comments, and shows no error and no result" {
-        let model, effect = Comments.init pageUrl known None
+        let model, effect = Comments.init pageUrl known None None
         Expect.equal effect (Some Comments.Load) "The widget loads the comments"
         Expect.equal model.List Comments.Loading "The list is loading"
         Expect.equal model.Status Comments.Editing "No result"
@@ -81,7 +120,7 @@ let tests =
       }
 
       test "the return from the validation email fills the form and adds the validation ID" {
-        let model, effect = Comments.init pageUrl known (Some returned)
+        let model, effect = Comments.init pageUrl known (Some returned) None
         Expect.equal effect (Some Comments.Load) "The widget loads the comments"
         Expect.equal (model.Email, model.Name, model.Comment) ("reader@example.com", "Reader", "Nice post") "The form has the comment"
         Expect.equal model.Validations (known.Add("reader@example.com", "validation-2")) "The validation ID is beside the others"
@@ -280,7 +319,9 @@ let tests =
               { Id = "3"
                 CreatedDate = "2026-10-18T10:00:00Z"
                 Commenter = "Reader"
-                Content = "Nice post & thanks" } ])
+                Content = "Nice post & thanks"
+                ReplyTo = None
+                Writer = Commenter } ])
           "The comment is last in the list"
 
         Expect.equal model.Comment "" "The form is empty"
@@ -444,6 +485,114 @@ let tests =
               TwoPoint.Site.Render.Stage.Production
               row.YouType)
             $"The HTML of '{row.YouType}'"
+      }
+    ]
+
+    testList "threads" [
+      test "the threads are in the order of their top-level comments, and the replies of a thread are oldest first" {
+        let model, effect = run [ loaded [ reply "a2" 5 "a"; topLevel "b" 2; reply "b1" 4 "b"; reply "a1" 3 "a"; topLevel "a" 1 ] ]
+        Expect.isNone effect "No request"
+        Expect.equal (shape model) [ "a", 0, [ "a1"; "a2" ]; "b", 0, [ "b1" ] ] "Oldest first"
+      }
+
+      test "the replies in one second are in time order, with a whole second first" {
+        let atTime id time = { reply id 1 "a" with CreatedDate = $"2026-10-01T09:31:{time}Z" }
+        let model, _ = run [ loaded [ topLevel "a" 1; atTime "r3" "00.997"; atTime "r2" "00.99"; atTime "r1" "00" ] ]
+        Expect.equal (shape model) [ "a", 0, [ "r1"; "r2"; "r3" ] ] "Oldest first by time"
+      }
+
+      test "a reply with no top-level comment in the list shows in no thread" {
+        let model, _ = run [ loaded [ topLevel "a" 1; reply "x1" 2 "gone" ] ]
+        Expect.equal (shape model) [ "a", 0, [] ] "No thread for the reply"
+      }
+
+      test "a thread with more than 3 replies shows the 2 newest and the count of the earlier replies" {
+        let model, _ = run [ loaded longThreads ]
+        Expect.equal (shape model) [ "a", 2, [ "a3"; "a4" ]; "b", 0, [ "b1"; "b2"; "b3" ] ] "Only the thread with 4 replies collapses"
+        Expect.equal (Comments.earlierText 2) "[show 2 earlier replies]" "The control names the count"
+      }
+
+      test "[show N earlier replies] shows each reply of its thread only, with no call" {
+        let collapsed, _ = run [ loaded (longThreads @ [ topLevel "c" 10; reply "c1" 11 "c"; reply "c2" 12 "c"; reply "c3" 13 "c"; reply "c4" 14 "c" ]) ]
+        let model, effect = from collapsed [ Comments.EarlierShown "a" ]
+        Expect.isNone effect "No request"
+
+        Expect.equal
+          (shape model)
+          [ "a", 0, [ "a1"; "a2"; "a3"; "a4" ]; "b", 0, [ "b1"; "b2"; "b3" ]; "c", 2, [ "c3"; "c4" ] ]
+          "The other thread stays collapsed"
+      }
+
+      test "an approved comment that the reader posts keeps the open threads" {
+        let model, _ =
+          run (
+            [ loaded longThreads; Comments.EarlierShown "a" ]
+            @ filled "known@example.com"
+            @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ]
+          )
+
+        Expect.equal (Comments.shownThreads model.Expanded model.List |> List.head |> _.HiddenEarlier) 0 "The thread stays open"
+      }
+
+      test "a reply from the author shows the author name of the post and the badge, and a reply from a reader shows the reader" {
+        let model, _ = run [ loaded [ topLevel "a" 1; at "a1" 2 (Some "a") Author; reply "a2" 3 "a" ] ]
+        let thread = Comments.shownThreads model.Expanded model.List |> List.exactlyOne
+
+        Expect.equal
+          (thread.Comment :: thread.Replies |> List.map (Comments.byline "Matthew Watt"))
+          [ Comments.Reader "Reader a"; Comments.PostAuthor "Matthew Watt"; Comments.Reader "Reader a2" ]
+          "The author name from the props"
+      }
+    ]
+
+    testList "link" [
+      test "a #comment-<id> fragment gives the link, with the thread query if the URL has it" {
+        Expect.equal
+          (Comments.parseLink "#comment-a1" [ "thread", " a " ])
+          (Some { Comment = "a1"; Thread = Some "a" })
+          "The comment and the thread"
+
+        Expect.equal (Comments.parseLink "#comment-a1" [ "thread", " " ]) (Some { Comment = "a1"; Thread = None }) "An empty thread"
+
+        for hash in [ ""; "#comments"; "#comment-"; "#top" ] do
+          Expect.isNone (Comments.parseLink hash [ "thread", "a" ]) $"No link for '{hash}'"
+      }
+
+      test "a URL with no link scrolls to nothing after the comments load" {
+        let model, effect = run [ loaded longThreads ]
+        Expect.isNone effect "No scroll"
+        Expect.isNone model.Link "No link"
+      }
+
+      test "the comment of the link in the list gets the scroll and the mark" {
+        let model, effect = from (linked { Comment = "a4"; Thread = Some "a" }) [ loaded longThreads ]
+        Expect.equal effect (Some(Comments.ScrollTo(Comments.ToComment "a4"))) "The scroll to the comment"
+        Expect.equal (shape model |> List.head) ("a", 2, [ "a3"; "a4" ]) "The thread stays collapsed"
+        Expect.isNone model.Link "The widget reads the link one time"
+      }
+
+      test "a comment of the link in the hidden earlier replies opens them" {
+        let model, effect = from (linked { Comment = "a1"; Thread = None }) [ loaded longThreads ]
+        Expect.equal effect (Some(Comments.ScrollTo(Comments.ToComment "a1"))) "The scroll to the comment"
+        Expect.equal (shape model |> List.head) ("a", 0, [ "a1"; "a2"; "a3"; "a4" ]) "The earlier replies show"
+      }
+
+      test "a comment of the link that is not in the list scrolls to the top-level comment of the thread query" {
+        let model, effect = from (linked { Comment = "gone"; Thread = Some "b" }) [ loaded longThreads ]
+        Expect.equal effect (Some(Comments.ScrollTo(Comments.ToThread "b"))) "The scroll to the thread"
+        Expect.equal (shape model |> List.head) ("a", 2, [ "a3"; "a4" ]) "No thread opens"
+      }
+
+      test "with no comment and no thread of the link in the list, the widget scrolls to the comments section" {
+        let links: Comments.Link list = [ { Comment = "gone"; Thread = Some "also-gone" }; { Comment = "gone"; Thread = None } ]
+
+        for link in links do
+          let _, effect = from (linked link) [ loaded longThreads ]
+          Expect.equal effect (Some(Comments.ScrollTo Comments.ToSection)) $"The scroll to the section for %A{link}"
+
+        for failed in [ Comments.ListAnswered { Success = false; Message = None; Data = None }; Comments.ListUnanswered ] do
+          let _, effect = from (linked { Comment = "a1"; Thread = Some "a" }) [ failed ]
+          Expect.equal effect (Some(Comments.ScrollTo Comments.ToSection)) "The scroll to the section when the list does not load"
       }
     ]
 

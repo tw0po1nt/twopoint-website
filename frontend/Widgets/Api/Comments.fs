@@ -2,11 +2,19 @@ namespace TwoPoint.Api.Comments
 
 open TwoPoint.Api
 
+/// A comment from the author has no commenter name.
+type Writer =
+  | Commenter
+  | Author
+
 type Comment =
   { Id : string
     CreatedDate : string
     Commenter : string
-    Content : string }
+    Content : string
+    /// The ID of the top-level comment of a reply.
+    ReplyTo : string option
+    Writer : Writer }
 
 type CommenterValidation =
   { EmailAddress : string
@@ -61,10 +69,33 @@ module Comments =
       | "approved" -> Approved
       | _ -> AwaitsApproval)
 
+  let private writer : Decoder<Writer> =
+    Decode.string
+    |> Decode.map (fun name ->
+      match name with
+      | "author" -> Author
+      | _ -> Commenter)
+
+  /// An answer from a backend before replies has no `replyTo` and no `writer`.
+  let private comment : Decoder<Comment> =
+    Decode.object (fun get ->
+      { Id = get.Required.Field "id" Decode.string
+        CreatedDate = get.Required.Field "createdDate" Decode.string
+        Commenter = get.Required.Field "commenter" Decode.string
+        Content = get.Required.Field "content" Decode.string
+        ReplyTo = get.Optional.Field "replyTo" Decode.string
+        Writer = get.Optional.Field "writer" writer |> Option.defaultValue Commenter })
+
+  let private comments : Decoder<ApiResponse<Comment list>> =
+    Decode.object (fun get ->
+      { Success = get.Required.Field "success" Decode.bool
+        Message = get.Optional.Field "message" Decode.string
+        Data = get.Optional.Field "data" (Decode.list comment) })
+
   let private postedComment : Decoder<PostedComment> =
     Decode.map2
       (fun comment approval -> { Comment = comment; Approval = approval })
-      (Decode.Auto.generateDecoder<Comment>(caseStrategy = CamelCase))
+      comment
       (Decode.field "approval" approval)
 
   let private postCommentAnswer : Decoder<PostCommentAnswer> =
@@ -75,7 +106,7 @@ module Comments =
       (Decode.optional "comment" postedComment)
 
   let getCommentsForPost uri slug : Promise<ApiResponse<Comment list>> =
-    request $"{uri}/api/blog/posts/{slug}/comments" [ Method HttpMethod.GET ]
+    answer comments $"{uri}/api/blog/posts/{slug}/comments" [ Method HttpMethod.GET ] invalid
 
   let validateCommenter uri (commenterValidation: CommenterValidation) : Promise<ApiResponse<unit>> =
     request $"{uri}/api/blog/commenters" [

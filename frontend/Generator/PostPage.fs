@@ -87,7 +87,7 @@ let private commentsPanel (config: StageConfig) (buildTime: DateTimeOffset) (pos
 
   panel {
     summary () { "$ comments --list" }
-    Mount.comments config post.Slug
+    Mount.comments config post.Slug post.FrontMatter.Author
   }
 
 let robots = Layout.Robots.Index
