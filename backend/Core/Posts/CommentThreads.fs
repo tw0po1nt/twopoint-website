@@ -35,6 +35,40 @@ module ReplyCheck =
         | CommentApproval.Approved -> Ok topLevel
 
 [<RequireQualifiedAccess>]
+type AuthorReplyRefusal =
+  | ReplyToRejected
+  | ReplyToMissing
+
+/// `Approvals` is each new comment that the reply approves, the top-level comment first.
+type AuthorReplyPlace =
+  { TopLevel : Comment
+    Approvals : Comment list }
+
+[<RequireQualifiedAccess>]
+module AuthorReplyRule =
+
+  let private isNew (comment : Comment) = comment.Status.Approval = CommentApproval.New
+
+  /// `topLevel` is the top-level comment of `replyTo` when `replyTo` is a reply. A comment on another post is missing.
+  let place
+    (post : Slug)
+    (replyTo : PostedComment option)
+    (topLevel : PostedComment option)
+    : Result<AuthorReplyPlace, AuthorReplyRefusal> =
+    match replyTo with
+    | None -> Error AuthorReplyRefusal.ReplyToMissing
+    | Some replyTo when replyTo.Post <> post -> Error AuthorReplyRefusal.ReplyToMissing
+    | Some { Comment = comment } when comment.Status.Approval = CommentApproval.Rejected ->
+      Error AuthorReplyRefusal.ReplyToRejected
+    | Some { Comment = comment } ->
+      match comment.Parent, topLevel with
+      | None, _ -> Ok { TopLevel = comment; Approvals = [ comment ] |> List.filter isNew }
+      | Some parent, Some topLevel when topLevel.Comment.Id = parent && topLevel.Post = post ->
+        let approvals = if isNew comment then [ topLevel.Comment; comment ] |> List.filter isNew else []
+        Ok { TopLevel = topLevel.Comment; Approvals = approvals }
+      | Some _, _ -> Error AuthorReplyRefusal.ReplyToMissing
+
+[<RequireQualifiedAccess>]
 module CommentVisibility =
 
   /// Readers see a reply only when the reply and its top-level comment are approved.

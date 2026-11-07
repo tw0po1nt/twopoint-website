@@ -114,6 +114,13 @@ count comes from the queue that the admin loads at the start. Each count opens i
 filter. The filter of the post list and of the Subscriptions page is part of the route and of the
 URL, for example `/posts?filter=drafts`. "All" has no query string.
 
+`Admin-Posts-Comments-Reply` (`POST internal/posts/{slug}/comments/{commentId}/replies`) writes a
+reply from the author. The rule is the pure function `AuthorReplyRule.place`. A reply to a rejected
+comment gets `409`. A reply on a reply row goes to the top-level comment of the thread. When the
+comment is new, the action approves it before the reply, and also its top-level comment if that
+comment is new. The reply is approved, has no commenter, and sends no Web Push. The queue and the
+comments of a post show the reply form under the row.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a

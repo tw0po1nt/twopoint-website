@@ -523,7 +523,7 @@ let private previewed (request: PreviewRequest) (response: ApiResponse<string>) 
         Kept = Some { Source = request.Source; Html = html } }
   | _ -> { editor with Tab = Preview PreviewState.Failed }
 
-let private edit (edit: Edit) (editor: Editor) : Editor * PreviewRequest option =
+let edit (edit: Edit) (editor: Editor) : Editor * PreviewRequest option =
   match edit with
   | TextChanged text -> { editor with Text = text }, None
   | TextLeft -> { editor with Touched = editor.Touched || editor.Text <> "" }, None

@@ -251,6 +251,29 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
+    let newDbComment =
+      DbComment.OfAuthorReply(
+        Guid.NewGuid().ToString(), // todo: model as ISystemDependencies
+        DateTime.UtcNow, // todo: model as ISystemDependencies
+        post,
+        content,
+        topLevel
+      )
+    let newDbStatus =
+      { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+        CommentId = newDbComment.Id
+        CreatedDate = newDbComment.CreatedDate
+        Approval = approval.ToString().ToLower() }
+
+    let! (dbComment: DbComment, dbWriter, dbCommentStatus) =
+      postDb.CreateComment newDbComment newDbStatus
+
+    return!
+      dbComment.ToComment(dbCommentStatus, dbWriter)
+      |> DependencyError.ofValidation source
+  }
+
   member _.GetPostedCommentById (commentId : CommentId) = cancellableTaskResult {
     let! dbComment = postDb.GetCommentById (commentId.ToString())
 

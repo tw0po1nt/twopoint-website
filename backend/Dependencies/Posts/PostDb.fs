@@ -291,6 +291,14 @@ type internal DbComment =
       ParentId = topLevel |> Option.map (_.Id >> string)
       Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString()) }
 
+  static member OfAuthorReply(id : string, createdDate : DateTime, post : Slug, content : NonEmptyString, topLevel : Comment) =
+    { Id = id
+      PostId = Slug.value post
+      CreatedDate = createdDate
+      Content = NonEmptyString.value content
+      ParentId = Some (string topLevel.Id)
+      Writer = DbCommentWriterKey.Author }
+
   member this.ToComment(status: DbCommentStatus, writer: DbCommentWriter) = validation {
     let! writer =
       match writer with

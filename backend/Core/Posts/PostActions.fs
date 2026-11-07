@@ -583,6 +583,100 @@ module PostComment =
     }
   
 // ====================================================================================================================
+// Reply as the author
+// ====================================================================================================================
+
+// Input
+
+/// `ReplyTo` is the comment of the row, a top-level comment or a reply.
+type AuthorReply =
+  { Post : Slug
+    ReplyTo : CommentId
+    Content : NonEmptyString }
+
+module AuthorReply =
+
+  type Dto =
+    { Post : string
+      ReplyTo : string
+      Content : string }
+
+  let create (dto : Dto) = validation {
+    let! post = Slug.create dto.Post
+    and! replyTo = CommentId.create dto.ReplyTo
+    and! content = NewComment.parseContent dto.Content
+    return ({ Post = post; ReplyTo = replyTo; Content = content } : AuthorReply)
+  }
+
+[<RequireQualifiedAccess>]
+module ReplyAsAuthor =
+
+  // Output
+
+  type Error = Refused of AuthorReplyRefusal
+  /// `Approved` is each comment that the reply approved, the top-level comment first.
+  type Event = Replied of reply : RenderedComment * approved : Comment list
+
+  // Logic
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide (reply : AuthorReply) (replyTo : PostedComment option) (topLevel : PostedComment option) =
+      AuthorReplyRule.place reply.Post replyTo topLevel |> Result.mapError Refused
+
+  // Action
+
+  type Action = AuthorReply.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member UpdateCommentApproval: comment: Comment -> approval: CommentApproval -> DependencyResult<Comment>
+    abstract member CreateAuthorReply:
+      post: Slug
+        -> topLevel: Comment
+        -> content: NonEmptyString
+        -> approval: CommentApproval
+        -> DependencyResult<Comment>
+    abstract member Stage: TwoPoint.Site.Render.Stage
+
+  let withDependencies (dependencies : Dependencies) : Action =
+
+    // The approvals go first, so that the reply is never under a hidden comment.
+    let handleReplyPlaced (reply : AuthorReply) (place : AuthorReplyPlace) : DependencyResult<Event> =
+      cancellableTaskResult {
+        let approved = ResizeArray<Comment>()
+
+        for comment in place.Approvals do
+          let! updated = dependencies.UpdateCommentApproval comment CommentApproval.Approved
+          approved.Add updated
+
+        let approved = List.ofSeq approved
+        let! created = dependencies.CreateAuthorReply reply.Post place.TopLevel reply.Content CommentApproval.Approved
+        return Event.Replied(RenderedComment.ofComment dependencies.Stage created, approved)
+      }
+
+    fun dto -> cancellableTaskResult {
+      let! reply = dto |> AuthorReply.create |> Result.mapError ActionError<Error>.Validation
+
+      let! replyTo =
+        dependencies.GetPostedCommentById reply.ReplyTo
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! topLevel =
+        match replyTo |> Option.bind (fun (replyTo : PostedComment) -> replyTo.Comment.Parent) with
+        | Some parent ->
+          dependencies.GetPostedCommentById parent
+          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+        | None -> CancellableTaskResult.singleton None
+
+      let! place = Logic.decide reply replyTo topLevel |> Result.mapError ActionError<Error>.Logic
+
+      return!
+        handleReplyPlaced reply place
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+    }
+
+// ====================================================================================================================
 // Update comment approval
 // ====================================================================================================================
 

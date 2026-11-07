@@ -42,6 +42,7 @@
     <Compile Include="Endpoints\Admin\AdminGetCommentsForPost.fs" />
     <Compile Include="Endpoints\Admin\GetModerationQueue.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommentApproval.fs" />
+    <Compile Include="Endpoints\Admin\ReplyAsAuthor.fs" />
     <Compile Include="Endpoints\Admin\UpdateCommenterStatus.fs" />
     <Compile Include="Endpoints\Admin\GetAllCommenters.fs" />
     <Compile Include="Endpoints\Admin\GetCommenter.fs" />

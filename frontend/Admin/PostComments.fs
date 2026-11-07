@@ -17,7 +17,8 @@ type Comments =
 type Model =
   { Slug: string
     Filter: Filter
-    Comments: Comments }
+    Comments: Comments
+    Reply: AuthorReply.Form option }
 
 type Msg =
   /// An answer for another post comes after the author left its page, and changes nothing.
@@ -26,13 +27,18 @@ type Msg =
   /// A delete comes here only after the confirmation.
   | Chosen of commentId: string * Queue.Action
   | Done of commentId: string * Queue.Action * Result<unit, Api.Failure>
+  | Reply of AuthorReply.Msg
 
-type Effect = Moderate of slug: string * Api.Comment * Queue.Action
+type Effect =
+  | Moderate of slug: string * Api.Comment * Queue.Action
+  | PreviewReply of commentId: string * TwoPoint.Site.Widgets.Comments.PreviewRequest
+  | PostReply of slug: string * commentId: string * content: string
 
 let init (slug: string) =
   { Slug = slug
     Filter = All
-    Comments = Waiting }
+    Comments = Waiting
+    Reply = None }
 
 let isLoaded (model: Model) =
   match model.Comments with
@@ -82,19 +88,66 @@ let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (
   | Some _
   | None -> model, None
 
+let private ready (comment: Api.Comment) = { Comment = comment; State = Progress.Ready }
+
+/// The reply comes last, because the list is oldest first.
+let private replied (answer: Api.AuthorReply) (rows: Row list) =
+  let approve row =
+    if List.contains (id row) answer.Approved then withApproval Api.CommentApproval.Approved row else row
+
+  (rows |> List.map approve) @ [ ready answer.Reply ]
+
+let private reply (msg: AuthorReply.Msg) (model: Model) : Model * Effect option =
+  match model.Comments, msg with
+  | Loaded rows, AuthorReply.Opened commentId ->
+    match rows |> List.tryFind (fun row -> id row = commentId) with
+    | Some row when not (AuthorReply.isOpenOn commentId model.Reply) ->
+      { model with Reply = AuthorReply.opened row.Comment }, None
+    | Some _
+    | None -> model, None
+  | Loaded rows, AuthorReply.Answered(commentId, Ok answer) when AuthorReply.isOpenOn commentId model.Reply ->
+    { model with
+        Comments = Loaded(replied answer rows)
+        Reply = None },
+    None
+  | _ ->
+    let form, effect = AuthorReply.update msg model.Reply
+
+    let effect =
+      effect
+      |> Option.map (fun effect ->
+        match effect with
+        | AuthorReply.Preview(commentId, request) -> PreviewReply(commentId, request)
+        | AuthorReply.Post(commentId, content) -> PostReply(model.Slug, commentId, content))
+
+    { model with Reply = form }, effect
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with
   | _, Answered(slug, _) when slug <> model.Slug -> model, None
   | _, Answered(_, Ok comments) ->
-    { model with Comments = Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Progress.Ready })) },
+    { model with
+        Comments = Loaded(comments |> List.map ready)
+        Reply = model.Reply |> Option.filter (fun form -> comments |> List.exists (fun comment -> comment.Id = form.CommentId)) },
     None
   | _, Answered(_, Error failure) -> { model with Comments = NotLoaded(Api.reason failure) }, None
   | _, Filtered filter -> { model with Filter = filter }, None
   | Loaded rows, Chosen(commentId, action) -> choose commentId action rows model
+  | Loaded rows, Done(commentId, Queue.Reject, Ok()) ->
+    { model with
+        Comments = Loaded(moderated commentId Queue.Reject rows)
+        Reply = model.Reply |> Option.filter (fun form -> form.CommentId <> commentId) },
+    None
+  | Loaded rows, Done(commentId, Queue.Delete, Ok()) ->
+    { model with
+        Comments = Loaded(moderated commentId Queue.Delete rows)
+        Reply = model.Reply |> Option.filter (fun form -> form.CommentId <> commentId) },
+    None
   | Loaded rows, Done(commentId, action, Ok()) -> { model with Comments = Loaded(moderated commentId action rows) }, None
   | Loaded rows, Done(commentId, action, Error failure) ->
     { model with Comments = Loaded(change commentId (fun row -> { row with State = Progress.NotDone(action, Api.reason failure) }) rows) },
     None
+  | _, Reply msg -> reply msg model
   | (Waiting | NotLoaded _), (Chosen _ | Done _) -> model, None
 
 let shown (model: Model) =

@@ -1,6 +1,12 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Shell
 
+/// The page of a reply form. Its answers go back to that page.
+[<RequireQualifiedAccess>]
+type ReplyPage =
+  | OnQueue
+  | OnPostComments
+
 /// Each API call of the admin. A call needs a token.
 type Call =
   | LoadDashboard
@@ -11,6 +17,8 @@ type Call =
   | Moderate of comment: Api.PostedComment * Queue.Action
   | LoadPostComments of slug: string
   | ModeratePostComment of slug: string * comment: Api.Comment * Queue.Action
+  | PreviewReply of ReplyPage * commentId: string * TwoPoint.Site.Widgets.Comments.PreviewRequest
+  | PostReply of ReplyPage * slug: string * commentId: string * content: string
   | LoadCommenters
   | LoadCommenter of commenterId: string
   | ChangeCommenter of commenterId: string * Commenter.Action
@@ -191,10 +199,12 @@ let private withBadge (before: Queue.Model) (after: Queue.Model) (model, effect)
 let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
   match msg with
   | PostComments.Done(commentId, action, Ok()) -> fst (Queue.update (Queue.Done(commentId, action, Ok())) queue)
+  | PostComments.Reply(AuthorReply.Answered(_, Ok answer)) -> Queue.approvedElsewhere answer.Approved queue
   | PostComments.Answered _
   | PostComments.Filtered _
   | PostComments.Chosen _
-  | PostComments.Done(_, _, Error _) -> queue
+  | PostComments.Done(_, _, Error _)
+  | PostComments.Reply _ -> queue
 
 /// The browser sends the Esc key to the page and to the open dialog. Only the top layer must act on it.
 let private layerOpenOverEditor (model: Model) =
@@ -434,14 +444,18 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Queue.Answered(Error Api.Refused)
     | Queue.Trusted(_, Error Api.Refused)
-    | Queue.Done(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Queue.Done(_, _, Error Api.Refused)
+    | Queue.Reply(AuthorReply.Answered(_, Error Api.Refused)) -> update (Session Session.AccountRefused) next
     | _ ->
       let effect =
         effect
         |> Option.map (fun effect ->
           match effect with
           | Queue.Trust comment -> Send [ TrustCommenter comment ]
-          | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ])
+          | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ]
+          | Queue.PreviewReply(commentId, request) -> Send [ PreviewReply(ReplyPage.OnQueue, commentId, request) ]
+          | Queue.PostReply(comment, content) ->
+            Send [ PostReply(ReplyPage.OnQueue, comment.PostSlug, comment.Comment.Id, content) ])
 
       withBadge model.Queue queue (next, effect)
   | PostComments(PostComments.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) ->
@@ -465,11 +479,18 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     match msg with
     | PostComments.Answered(_, Error Api.Refused)
-    | PostComments.Done(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | PostComments.Done(_, _, Error Api.Refused)
+    | PostComments.Reply(AuthorReply.Answered(_, Error Api.Refused)) -> update (Session Session.AccountRefused) next
     | _ ->
       let effect =
         effect
-        |> Option.map (fun (PostComments.Moderate(slug, comment, action)) -> Send [ ModeratePostComment(slug, comment, action) ])
+        |> Option.map (fun effect ->
+          match effect with
+          | PostComments.Moderate(slug, comment, action) -> Send [ ModeratePostComment(slug, comment, action) ]
+          | PostComments.PreviewReply(commentId, request) ->
+            Send [ PreviewReply(ReplyPage.OnPostComments, commentId, request) ]
+          | PostComments.PostReply(slug, commentId, content) ->
+            Send [ PostReply(ReplyPage.OnPostComments, slug, commentId, content) ])
 
       withBadge model.Queue next.Queue (next, effect)
   | Commenters msg ->

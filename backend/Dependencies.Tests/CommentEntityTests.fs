@@ -106,6 +106,29 @@ let tests =
       | topLevel, replier -> failtestf "Expected a comment and a commenter, got %A and %A" topLevel replier
     }
 
+    test "a new reply from the author is stored with the ID of its top-level comment and no commenter" {
+      match entityWith [ "CommenterId", commenter.ValidationId ] |> read (DbCommentWriter.Commenter commenter) with
+      | Ok topLevel ->
+        let reply =
+          DbComment.OfAuthorReply(
+            parentId,
+            date,
+            Slug.Unsafe.create "first-post",
+            NonEmptyString.Unsafe.create None "An answer",
+            topLevel
+          )
+
+        let entity = reply.ToEntity()
+        Expect.equal (entity.GetString "CommenterId") "" "Expected an empty CommenterId"
+
+        match entity |> read DbCommentWriter.Author with
+        | Ok comment ->
+          Expect.equal (parent comment) (Some commentId) "Expected the top-level comment as the parent"
+          Expect.equal comment.Writer CommentWriter.Author "Expected the author"
+        | Error errors -> failtestf "Expected a comment, got %A" errors
+      | Error errors -> failtestf "Expected a comment, got %A" errors
+    }
+
     test "an entity with an unknown Writer is refused" {
       let entity = entityWith [ "CommenterId", commenter.ValidationId; "Writer", "editor" ]
 

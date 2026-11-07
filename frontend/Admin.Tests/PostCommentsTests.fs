@@ -7,14 +7,16 @@ open Expecto
 let private comment id approval : Api.Comment =
   { Id = id
     CreatedDate = "2026-02-01T00:00:00Z"
-    Commenter =
-      { Id = "ada-id"
-        Email = "ada@example.com"
-        Name = "Ada"
-        Status = Api.New
-        CreatedDate = "2026-01-01T00:00:00Z" }
+    Writer =
+      Api.Writer.Commenter
+        { Id = "ada-id"
+          Email = "ada@example.com"
+          Name = "Ada"
+          Status = Api.New
+          CreatedDate = "2026-01-01T00:00:00Z" }
     Status = approval
-    Content = "A comment" }
+    Content = "A comment"
+    ReplyTo = None }
 
 let private waiting = comment "waiting" Api.CommentApproval.New
 let private approved = comment "approved" Api.CommentApproval.Approved
@@ -39,6 +41,72 @@ let private shown (model: Shell.Model) =
 
 let private approval (commentId: string) (model: Shell.Model) =
   PostComments.tryFind commentId (page model) |> Option.map _.Comment.Status
+
+let private reply msg model = send (PostComments.Reply msg) model
+
+let private typed (commentId: string) (text: string) model =
+  reply (AuthorReply.Edited(commentId, TwoPoint.Site.Widgets.Comments.TextChanged text)) model
+
+let private authorReply : Api.Comment =
+  { Id = "answer"
+    CreatedDate = "2026-03-01T00:00:00Z"
+    Writer = Api.Writer.Author
+    Status = Api.CommentApproval.Approved
+    Content = "An answer"
+    ReplyTo = Some "waiting" }
+
+let private replyTests =
+  testList "the reply as the author" [
+    test "an approved row offers the reply with no approval note" {
+      Expect.isTrue (AuthorReply.canReply Api.CommentApproval.Approved) "An approved row takes a reply"
+      Expect.equal (AuthorReply.actionLabel Api.CommentApproval.Approved) "Reply" "The label"
+      Expect.isNone (AuthorReply.approvalNote Api.CommentApproval.Approved) "No note"
+
+      let model, _ = reply (AuthorReply.Opened "approved") (loaded ())
+      Expect.isTrue (AuthorReply.isOpenOn "approved" (page model).Reply) "The form is open"
+    }
+
+    test "a rejected row offers no reply, and an open asks for nothing" {
+      Expect.isFalse (AuthorReply.canReply Api.CommentApproval.Rejected) "A rejected row takes no reply"
+      let model, effect = reply (AuthorReply.Opened "rejected") (loaded ())
+      Expect.isNone (page model).Reply "No form"
+      Expect.isNone effect "No call"
+    }
+
+    test "a reject of the row closes its form" {
+      let model, _ = reply (AuthorReply.Opened "approved") (loaded ())
+      let model, _ = send (PostComments.Chosen("approved", Queue.Reject)) model
+      let model, _ = send (PostComments.Done("approved", Queue.Reject, Ok())) model
+      Expect.isNone (page model).Reply "The form closes"
+    }
+
+    test "a posted reply on a new row approves the row, adds the reply at the end, and lowers the queue count" {
+      let model, _ = start "/posts/first/comments"
+      let queued: Api.PostedComment = { PostSlug = "first"; PostTitle = "First"; Comment = waiting }
+      let model, _ = Shell.update (Shell.Queue(Queue.Answered(Ok [ queued ]))) model
+      let model, _ = send (PostComments.Answered("first", Ok [ waiting; approved; rejected ])) model
+
+      let model, _ = reply (AuthorReply.Opened "waiting") model
+      let model, _ = typed "waiting" "An answer" model
+      let model, effect = reply AuthorReply.Submitted model
+      Expect.equal effect (Some(Shell.Send [ Shell.PostReply(Shell.ReplyPage.OnPostComments, "first", "waiting", "An answer") ])) "The reply call"
+
+      let model, effect = reply (AuthorReply.Answered("waiting", Ok { Reply = authorReply; Approved = [ "waiting" ] })) model
+      Expect.equal (approval "waiting" model) (Some Api.CommentApproval.Approved) "The row is approved"
+      Expect.equal (shown model) [ "waiting"; "approved"; "rejected"; "answer" ] "The reply comes last"
+      Expect.equal (Queue.count model.Queue) (Some 0) "The navigation count goes down"
+      Expect.equal effect (Some(Shell.SetBadge 0)) "The badge shows the new count"
+      Expect.isNone (page model).Reply "The form closes"
+    }
+
+    test "a reply from the author shows with the author as the writer" {
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ approved; authorReply ])) model
+      let row = PostComments.tryFind "answer" (page model) |> Option.get
+      Expect.equal row.Comment.Writer Api.Writer.Author "The author"
+      Expect.equal (PostComments.actions row.Comment.Status) [ Queue.Reject; Queue.Delete ] "The actions of an approved row"
+    }
+  ]
 
 [<Tests>]
 let tests =
@@ -198,4 +266,6 @@ let tests =
       let model, _ = send (PostComments.Answered("first", Error Api.Refused)) model
       Expect.equal model.Session.Status Session.Refused "The banner offers another account"
     }
+
+    replyTests
   ]
