@@ -139,7 +139,8 @@
   font-weight: 600;
 }
 
-.comment-earlier button {
+.comment-earlier button,
+.comment-thread-end > button {
   padding: 0;
   border: 0;
   background: none;
@@ -148,9 +149,28 @@
   color: var(--accent);
 }
 
-.comment-earlier button:focus-visible {
+.comment-earlier button:focus-visible,
+.comment-thread-end > button:focus-visible {
   outline: 1px dashed var(--accent);
   outline-offset: 2px;
+}
+
+/* The indent puts the text at the text of the replies. */
+.comment-thread > .comment-status,
+.comment-thread-end {
+  margin: 6px 0 0;
+  padding-left: calc(2.5ch + 1px);
+}
+
+.comment-reply-form {
+  padding: 10px 0 4px;
+  border-top: 1px dashed var(--line);
+}
+
+.comment-actions {
+  display: flex;
+  gap: 2ch;
+  margin: 0;
 }
 
 /* The widget removes the class after the 2s of the animation. */

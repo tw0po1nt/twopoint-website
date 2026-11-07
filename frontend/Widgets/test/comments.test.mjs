@@ -151,7 +151,7 @@ test('a refused comment shows the message of the API', async () => {
   assert.equal(status().textContent, 'The commenter is banned');
 });
 
-test('a known email address posts the comment with its stored validation ID and empties the form', async () => {
+test('a known email address posts the comment with its stored validation ID, and empties the text only', async () => {
   answer = () => json(200, { success: true, message: null, data: null });
   submit();
   await settle();
@@ -160,7 +160,7 @@ test('a known email address posts the comment with its stored validation ID and 
   assert.equal(posted.length, 2, 'A second post request');
   assert.deepEqual(JSON.parse(posted[1].init.body), { ValidationId: 'validation-1', Comment: 'Nice post & thanks' });
   assert.equal(status().textContent, "Thanks! Your comment will appear here once it's approved.");
-  assert.equal(field('email').value, '', 'The email input is empty');
+  assert.equal(field('email').value, 'known@example.com', 'The email input keeps the address for the next comment or reply');
   assert.equal(field('comment').value, '', 'The comment input is empty');
   assert.equal(mount.querySelectorAll('.comment').length, 2, 'The list stays');
 });
