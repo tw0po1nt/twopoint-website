@@ -48,44 +48,43 @@ const fire = async (worker, type, event) => {
   await Promise.all(waits);
 };
 
-const payload = (fields) => ({ data: { json: () => ({ case: 'awaits-moderation', commentId: 'c-1', slug: 'first-post', postTitle: 'First post', commenter: 'Ada', text: 'A comment.', newCount: 3, ...fields }) } });
+const payload = (fields) => ({ data: { json: () => ({ case: 'awaits-moderation', commentId: 'c-1', slug: 'first-post', title: 'New comment on First post', body: 'Ada: A comment.', newCount: 3, ...fields }) } });
 
-// The table of the ticket: the case gives the title, the body, the tag, and the target.
+// The case gives the target. The backend writes the title and the body.
 const cases = [
   {
     name: 'a comment that waits for moderation',
     fields: { case: 'awaits-moderation' },
-    title: 'New comment on First post',
     target: '/comments#c-1',
   },
   {
     name: 'a comment of a trusted commenter',
     fields: { case: 'approved' },
-    title: 'Comment posted on First post',
     target: '/posts/first-post/comments#c-1',
   },
 ];
 
-for (const { name, fields, title, target } of cases) {
+for (const { name, fields, target } of cases) {
   test(`${name} gives the title, the body, the tag, and the target`, async () => {
     const worker = start();
 
     await fire(worker, 'push', payload(fields));
 
     assert.equal(worker.shown.length, 1);
-    assert.equal(worker.shown[0].title, title);
+    assert.equal(worker.shown[0].title, 'New comment on First post');
     assert.equal(worker.shown[0].body, 'Ada: A comment.');
     assert.equal(worker.shown[0].tag, 'c-1');
     assert.equal(worker.shown[0].data.target, target);
   });
 }
 
-test('the body shows the first 120 characters of the text', async () => {
+test('a reply shows the title and the body from the backend', async () => {
   const worker = start();
 
-  await fire(worker, 'push', payload({ text: 'x'.repeat(300) }));
+  await fire(worker, 'push', payload({ title: 'Ben replied to Ada', body: 'Use List.map.' }));
 
-  assert.equal(worker.shown[0].body, `Ada: ${'x'.repeat(120)}`);
+  assert.equal(worker.shown[0].title, 'Ben replied to Ada');
+  assert.equal(worker.shown[0].body, 'Use List.map.');
 });
 
 test('a slug with a special character is safe in the target', async () => {

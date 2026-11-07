@@ -281,6 +281,16 @@ type internal DbComment =
     entity["Writer"] <- writer
     entity
 
+  static member OfCommenter
+    (id : string, createdDate : DateTime, post : Slug, commenter : Commenter, content : NonEmptyString, topLevel : Comment option)
+    =
+    { Id = id
+      PostId = Slug.value post
+      CreatedDate = createdDate
+      Content = NonEmptyString.value content
+      ParentId = topLevel |> Option.map (_.Id >> string)
+      Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString()) }
+
   member this.ToComment(status: DbCommentStatus, writer: DbCommentWriter) = validation {
     let! writer =
       match writer with
@@ -548,38 +558,24 @@ module internal PostDb =
       }
 
       member _.GetCommentById commentId = cancellableTaskResult {
-        // Get comment
         let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None
-        let! dbWriter =
-          dbComment
-          |> Option.traverseCancellableTaskResult writerOf
-          |> CancellableTaskResult.map Option.flatten
 
-        let! statuses =
-          dbComment
-          |> Option.traverseCancellableTaskResult (fun dbComment ->
-            eq "PartitionKey" commentId |> where commentStatusesTable DbCommentStatus.FromEntity
-          )
-          |> CancellableTaskResult.map (Option.defaultValue [])
-          
-        let statuses =
-          statuses
-          |> List.toArray
-          |> Array.sortByDescending (fun (status: DbCommentStatus) -> status.CreatedDate)
-          
-        let! dbCommentStatus =
-          statuses
-          |> Array.filter (fun st -> st.CommentId = commentId)
-          |> Array.tryHead
-          |> Result.requireSome (
-            PostDbError.validation $"No status found for comment with Id '{commentId}'"
-          )
-          
-        return option {
-          let! comment = dbComment
-          let! writer = dbWriter
-          return comment, writer, dbCommentStatus
-        }
+        match dbComment with
+        | None -> return None
+        | Some dbComment ->
+          let! dbWriter = writerOf dbComment
+          let! statuses = eq "PartitionKey" commentId |> where commentStatusesTable DbCommentStatus.FromEntity
+
+          let! dbCommentStatus =
+            statuses
+            |> List.filter (fun status -> status.CommentId = commentId)
+            |> List.sortByDescending _.CreatedDate
+            |> List.tryHead
+            |> Result.requireSome (
+              PostDbError.validation $"No status found for comment with Id '{commentId}'"
+            )
+
+          return dbWriter |> Option.map (fun writer -> dbComment, writer, dbCommentStatus)
       }
       
       member _.CreateComment comment status = cancellableTaskResult {

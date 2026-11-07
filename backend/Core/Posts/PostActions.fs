@@ -415,21 +415,25 @@ module ValidateCommenter =
 
 // Input
 
+/// `ReplyTo` is the ID of the top-level comment of a reply.
 type NewComment =
   { Post : Slug
     ValidationId : CommenterValidationId
-    Content : NonEmptyString }
+    Content : NonEmptyString
+    ReplyTo : CommentId option }
 
 module NewComment =
   
   type Post = Post of string
   type ValidationId = ValidationId of string
   type Comment = Comment of string
+  type ReplyTo = ReplyTo of string
   
   type Dto =
     { Post : Post
       ValidationId : ValidationId
-      Comment : Comment }
+      Comment : Comment
+      ReplyTo : ReplyTo option }
 
   /// The `maxlength` of the comment form. Both count the source as typed, in UTF-16 code units.
   let maxLength = 1000
@@ -449,7 +453,8 @@ module NewComment =
     let! post = Slug.create post
     let! validationId = CommenterValidationId.create validationId
     let! content = parseContent content
-    return { Post = post; ValidationId = validationId; Content = content }
+    and! replyTo = dto.ReplyTo |> Option.traverseResult (fun (ReplyTo replyTo) -> CommentId.create replyTo)
+    return { Post = post; ValidationId = validationId; Content = content; ReplyTo = replyTo }
   }
 
 
@@ -471,11 +476,13 @@ module PostComment =
   type Error =
     | NotFound of Data
     | PostUpcoming of Post
+    | ReplyRefused of ReplyRefusal
     | Banned of Commenter
   and Data =
     | Post of Slug
     | Commenter of CommenterValidationId
-  type Success = Posted of post: Post * comment: NewComment * commenter: Commenter * approval: CommentApproval
+  type Success =
+    | Posted of post: Post * comment: NewComment * topLevel: Comment option * commenter: Commenter * approval: CommentApproval
   type Decision = Decision<Success, Error>
   type Event = Posted of Post * RenderedComment
 
@@ -484,6 +491,7 @@ module PostComment =
   type Logic =
     DateTime
       -> Post option
+      -> NewCommentPlace
       -> Commenter option
       -> NewComment
       -> Decision
@@ -491,9 +499,16 @@ module PostComment =
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun utcNow existingPost existingCommenter newComment -> result {
+      fun utcNow existingPost place existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
-        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
+
+        let! topLevel =
+          match place with
+          | NewCommentPlace.TopLevel ->
+            post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post) |> Result.map (fun () -> None)
+          | NewCommentPlace.Reply replyTo ->
+            ReplyCheck.check utcNow post replyTo |> Result.map Some |> Result.mapError ReplyRefused
+
         let! commenter = existingCommenter |> Result.requireSome (newComment.ValidationId |> Data.Commenter |> Error.NotFound)
         let! approval =
           match commenter.Status with
@@ -501,7 +516,7 @@ module PostComment =
           | CommenterStatus.Trusted -> Ok CommentApproval.Approved
           | CommenterStatus.Banned -> Error (Banned commenter)
 
-        return Success.Posted (post, newComment, commenter, approval)
+        return Success.Posted (post, newComment, topLevel, commenter, approval)
       }
 
   // Action
@@ -513,11 +528,13 @@ module PostComment =
   type Dependencies =
     abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
     abstract member GetUtcNow: unit -> DateTime
+    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
     abstract member CreateComment:
       post: Post
         -> commenter: Commenter
         -> newComment: NewComment
+        -> topLevel: Comment option
         -> approval: CommentApproval
         -> DependencyResult<Comment>
     abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
@@ -525,9 +542,9 @@ module PostComment =
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<RenderedComment> =
+    let handleCommentPosted (Success.Posted (post, comment, topLevel, commenter, approval)) : DependencyResult<RenderedComment> =
       cancellableTaskResult {
-        let! (created : Comment) = dependencies.CreateComment post commenter comment approval
+        let! (created : Comment) = dependencies.CreateComment post commenter comment topLevel approval
 
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
         return RenderedComment.ofComment dependencies.Stage created
@@ -543,11 +560,17 @@ module PostComment =
         dependencies.GetPostBySlug newComment.Post
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
+      let! place =
+        (match newComment.ReplyTo with
+         | None -> CancellableTaskResult.singleton NewCommentPlace.TopLevel
+         | Some replyTo -> dependencies.GetPostedCommentById replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
       let! existingCommenter =
         dependencies.GetCommenterByValidationId newComment.ValidationId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost existingCommenter newComment
+      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost place existingCommenter newComment
 
       let commentPostedEvent existingPost comment = Event.Posted (existingPost, comment)
 

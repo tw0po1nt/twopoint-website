@@ -227,14 +227,16 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreateComment (post : Post) (commenter : Commenter) (newComment : NewComment) (approval : CommentApproval) = cancellableTaskResult {
+  member _.CreateComment (post : Post) (commenter : Commenter) (newComment : NewComment) (topLevel : Comment option) (approval : CommentApproval) = cancellableTaskResult {
     let newDbComment =
-      { DbComment.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
-        PostId = post.Id |> Slug.value
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
-        Content = newComment.Content |> NonEmptyString.value
-        ParentId = None
-        Writer = DbCommentWriterKey.Commenter (commenter.ValidationId.ToString()) }
+      DbComment.OfCommenter(
+        Guid.NewGuid().ToString(), // todo: model as ISystemDependencies
+        DateTime.UtcNow, // todo: model as ISystemDependencies
+        post.Id,
+        commenter,
+        newComment.Content,
+        topLevel
+      )
     let newDbStatus =
       { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
         CommentId = newDbComment.Id
