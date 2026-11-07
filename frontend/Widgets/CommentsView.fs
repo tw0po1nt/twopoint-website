@@ -15,7 +15,7 @@ let private markTime = 2000
 
 let private scrollTo (section: HTMLElement) (scroll: Comments.Scroll) =
   let comment (id: string) =
-    match document.getElementById $"comment-{id}" with
+    match document.getElementById (Comments.elementId id) with
     | null -> None
     | element -> Some element
 
@@ -232,14 +232,14 @@ let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comme
         yield
           fun thread _ ->
             li (class' = "comment-thread") {
-              div (class' = "comment", id = $"comment-{thread.Comment.Id}") { entry props.Author thread.Comment }
+              div (class' = "comment", id = Comments.elementId thread.Comment.Id) { entry props.Author thread.Comment }
 
-              Show(when' = (thread.Earlier > 0 || not thread.Replies.IsEmpty)) {
+              Show(when' = (thread.HiddenEarlier > 0 || not thread.Replies.IsEmpty)) {
                 ol (class' = "comment-replies") {
-                  Show(when' = (thread.Earlier > 0)) {
+                  Show(when' = (thread.HiddenEarlier > 0)) {
                     li (class' = "comment-earlier") {
                       button (type' = "button", onClick = fun _ -> dispatch (Comments.EarlierShown thread.Comment.Id)) {
-                        Comments.earlierText thread.Earlier
+                        Comments.earlierText thread.HiddenEarlier
                       }
                     }
                   }
@@ -247,7 +247,7 @@ let view (props: Contract.CommentsProps) (section: HTMLElement) (returned: Comme
                   For(each = Array.ofList thread.Replies) {
                     yield
                       fun reply _ ->
-                        li (class' = replyClass reply, id = $"comment-{reply.Id}") { entry props.Author reply }
+                        li (class' = replyClass reply, id = Comments.elementId reply.Id) { entry props.Author reply }
                   }
                 }
               }

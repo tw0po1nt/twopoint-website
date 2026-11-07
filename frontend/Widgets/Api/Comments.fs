@@ -2,7 +2,7 @@ namespace TwoPoint.Api.Comments
 
 open TwoPoint.Api
 
-/// The writer of a comment. A comment from the author has no commenter name.
+/// A comment from the author has no commenter name.
 type Writer =
   | Commenter
   | Author

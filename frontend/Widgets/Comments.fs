@@ -31,8 +31,7 @@ type Thread = { Comment: Comment; Replies: Comment list }
 
 type ShownThread =
   { Comment: Comment
-    /// The count of the hidden earlier replies.
-    Earlier: int
+    HiddenEarlier: int
     Replies: Comment list }
 
 type Byline =
@@ -152,18 +151,25 @@ let parse (query: (string * string) list) : Return option =
         ValidationId = validationId.Trim() }
   | _ -> None
 
-let parseLink (hash: string) (query: (string * string) list) : Link option =
-  let prefix = "#comment-"
+/// A `#comment-<id>` link names this element.
+let elementId (id: string) = $"comment-{id}"
+
+let linkedComment (hash: string) : string option =
+  let prefix = "#" + elementId ""
 
   if hash.StartsWith prefix && hash.Length > prefix.Length then
-    Some
-      { Comment = hash.Substring prefix.Length
-        Thread =
-          query
-          |> List.tryFind (fun (name, value) -> name = "thread" && value.Trim() <> "")
-          |> Option.map (snd >> _.Trim()) }
+    Some(hash.Substring prefix.Length)
   else
     None
+
+let parseLink (hash: string) (query: (string * string) list) : Link option =
+  linkedComment hash
+  |> Option.map (fun comment ->
+    { Comment = comment
+      Thread =
+        query
+        |> List.tryFind (fun (name, value) -> name = "thread" && value.Trim() <> "")
+        |> Option.map (snd >> _.Trim()) })
 
 let private empty (pageUrl: string) (validations: Map<string, string>) =
   { PageUrl = pageUrl
@@ -202,7 +208,7 @@ let init
 
 /// A reply with no top-level comment in the list has no thread.
 let threads (comments: Comment list) : Thread list =
-  let sorted = comments |> List.sortBy _.CreatedDate
+  let sorted = comments |> List.sortBy (_.CreatedDate >> DateTimeOffset.Parse)
   let replies = sorted |> List.filter _.ReplyTo.IsSome
 
   sorted
@@ -220,11 +226,11 @@ let private shownThread (expanded: Set<string>) (thread: Thread) : ShownThread =
 
   if count > collapseAbove && not (expanded.Contains thread.Comment.Id) then
     { Comment = thread.Comment
-      Earlier = count - newestShown
+      HiddenEarlier = count - newestShown
       Replies = List.skip (count - newestShown) thread.Replies }
   else
     { Comment = thread.Comment
-      Earlier = 0
+      HiddenEarlier = 0
       Replies = thread.Replies }
 
 let private shownIn (expanded: Set<string>) (comments: Comment list) =

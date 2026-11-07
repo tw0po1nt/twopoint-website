@@ -91,9 +91,9 @@ let private loaded (comments: Comment list) =
 
 let private shape (model: Comments.Model) =
   Comments.shownThreads model.Expanded model.List
-  |> List.map (fun thread -> thread.Comment.Id, thread.Earlier, thread.Replies |> List.map _.Id)
+  |> List.map (fun thread -> thread.Comment.Id, thread.HiddenEarlier, thread.Replies |> List.map _.Id)
 
-/// A thread with 4 replies and a thread with 3 replies, out of date order.
+/// A thread with 4 replies and a thread with 3 replies. The list mixes the dates.
 let private longThreads =
   [ reply "a3" 7 "a"
     topLevel "b" 2
@@ -495,6 +495,12 @@ let tests =
         Expect.equal (shape model) [ "a", 0, [ "a1"; "a2" ]; "b", 0, [ "b1" ] ] "Oldest first"
       }
 
+      test "the replies in one second are in time order, with a whole second first" {
+        let atTime id time = { reply id 1 "a" with CreatedDate = $"2026-10-01T09:31:{time}Z" }
+        let model, _ = run [ loaded [ topLevel "a" 1; atTime "r3" "00.997"; atTime "r2" "00.99"; atTime "r1" "00" ] ]
+        Expect.equal (shape model) [ "a", 0, [ "r1"; "r2"; "r3" ] ] "Oldest first by time"
+      }
+
       test "a reply with no top-level comment in the list shows in no thread" {
         let model, _ = run [ loaded [ topLevel "a" 1; reply "x1" 2 "gone" ] ]
         Expect.equal (shape model) [ "a", 0, [] ] "No thread for the reply"
@@ -525,7 +531,7 @@ let tests =
             @ [ Comments.Submitted; Comments.PostAnswered(postAnswer true None (Some(posted Approved))) ]
           )
 
-        Expect.equal (Comments.shownThreads model.Expanded model.List |> List.head |> _.Earlier) 0 "The thread stays open"
+        Expect.equal (Comments.shownThreads model.Expanded model.List |> List.head |> _.HiddenEarlier) 0 "The thread stays open"
       }
 
       test "a reply from the author shows the author name of the post and the badge, and a reply from a reader shows the reader" {
