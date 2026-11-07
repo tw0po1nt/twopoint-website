@@ -20,6 +20,7 @@
     <Compile Include="Endpoints\Blog\ValidateCommenter.fs" />
     <Compile Include="Endpoints\Blog\Subscribe.fs" />
     <Compile Include="Endpoints\Blog\Unsubscribe.fs" />
+    <Compile Include="Endpoints\Blog\ReplyEmailStop.fs" />
     <Compile Include="Endpoints\Admin\DeployStore.fs" />
     <Compile Include="Endpoints\Admin\GetAllPosts.fs" />
     <Compile Include="Endpoints\Admin\GetPost.fs" />

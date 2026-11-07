@@ -125,6 +125,31 @@ let tests =
       | Error errors -> failtestf "Expected a comment, got %A" errors
     }
 
+    test "a stop written to a stored comment adds the stop date and keeps the other properties" {
+      let consent = consentOn date
+      let stopped = { consent with StopDate = Some (date.AddDays 3.0) }
+      let entity = storedWith consent |> DbReplyEmailConsent.Update stopped
+
+      match entity |> read (DbCommentWriter.Commenter commenter) with
+      | Ok read ->
+        Expect.equal read.ReplyEmails (Some stopped) "Expected the consent with the stop date"
+        Expect.equal (NonEmptyString.value read.Content) "A comment" "Expected the same content"
+        Expect.equal (commenterId read) (Some commenter.ValidationId) "Expected the same commenter"
+      | Error errors -> failtestf "Expected a comment, got %A" errors
+    }
+
+    test "a stop row reads back as the stop of its token, post, and comment" {
+      let stop =
+        { ReplyEmailStop.Token = ReplyEmailStopToken.ofGuid (Guid stopToken)
+          Post = Slug.Unsafe.create "first-post"
+          Comment = CommentId.ofGuid (Guid commentId) }
+
+      Expect.equal
+        (DbReplyEmailStop.OfStop(stop).ToEntity() |> DbReplyEmailStop.FromEntity |> Result.bind _.ToStop())
+        (Ok stop)
+        "Expected the same stop"
+    }
+
     test "a consent date in local time is stored in UTC and reads back as the same instant" {
       let entity = storedWith (consentOn (date.ToLocalTime()))
 
