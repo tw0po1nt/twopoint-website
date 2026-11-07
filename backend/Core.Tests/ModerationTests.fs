@@ -378,9 +378,11 @@ let private previewCommentTests =
 type private FakeValidationDependencies(existing : Commenter option) =
   let created = ResizeArray<EmailAddress>()
   let sent = ResizeArray<Commenter>()
+  let redirects = ResizeArray<Uri>()
 
   member _.Created = List.ofSeq created
   member _.Sent = List.ofSeq sent
+  member _.Redirects = List.ofSeq redirects
 
   interface ValidateCommenter.Dependencies with
     member _.GetCommenterByEmailAddress _ = CancellableTaskResult.singleton existing
@@ -388,16 +390,19 @@ type private FakeValidationDependencies(existing : Commenter option) =
     member _.CreateCommenter emailAddress _ _ =
       created.Add emailAddress
       CancellableTaskResult.singleton (commenter CommenterStatus.New)
-    member _.SendCommenterValidationEmail commenter _ =
+    member _.SendCommenterValidationEmail commenter redirectUri =
       sent.Add commenter
+      redirects.Add redirectUri
       CancellableTaskResult.singleton "operation"
 
-let private validateCommenter (dependencies : FakeValidationDependencies) =
+let private validateCommenterTo (redirectUri : string) (dependencies : FakeValidationDependencies) =
   let dto =
     { CommenterValidation.Dto.EmailAddress = CommenterValidation.EmailAddress "commenter@example.com"
       CommenterValidation.Dto.Name = Some (CommenterValidation.Name "Commenter")
-      CommenterValidation.Dto.RedirectUri = CommenterValidation.RedirectUri "https://twopoint.dev/posts/older-post" }
+      CommenterValidation.Dto.RedirectUri = CommenterValidation.RedirectUri redirectUri }
   (ValidateCommenter.withDependencies dependencies dto CancellationToken.None).Result
+
+let private validateCommenter = validateCommenterTo "https://twopoint.dev/posts/older-post"
 
 let private validationTests =
   testList "ValidateCommenter" [
@@ -418,6 +423,26 @@ let private validationTests =
       | Ok (ValidateCommenter.Event.Validated _) ->
         Expect.equal dependencies.Sent [ commenter CommenterStatus.New ] "Expected one verification email"
       | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "the verify flow accepts the redirect URI of a reply, with the ID of its top-level comment, and passes it on unchanged" {
+      let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
+      let redirectUri =
+        "https://twopoint.dev/posts/older-post/?email=commenter%40example.com&name=Commenter&comment=Me%20too"
+        + "&replyTo=2c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f42#comments"
+
+      match validateCommenterTo redirectUri dependencies with
+      | Ok (ValidateCommenter.Event.Validated _) ->
+        Expect.equal (dependencies.Redirects |> List.map _.AbsoluteUri) [ redirectUri ] "Expected the redirect URI with the thread"
+      | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "the verify flow refuses a redirect URI on another host, also with the ID of a top-level comment" {
+      let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
+
+      match validateCommenterTo "https://example.com/posts/older-post/?replyTo=2c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f42" dependencies with
+      | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> Expect.isEmpty dependencies.Sent "Expected no verification email"
+      | other -> failtestf "Expected InvalidRedirect, got %A" other
     }
   ]
 

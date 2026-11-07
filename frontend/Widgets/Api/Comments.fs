@@ -21,9 +21,11 @@ type CommenterValidation =
     Name : string option
     RedirectUri : string }
 
+/// `ReplyTo` is the ID of the top-level comment of a reply.
 type NewComment =
   { ValidationId : string
-    Comment : string }
+    Comment : string
+    ReplyTo : string option }
 
 type Approval =
   | Approved
