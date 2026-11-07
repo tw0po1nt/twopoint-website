@@ -21,7 +21,9 @@ let private comment =
     PostId = "first-post"
     CreatedDate = date
     Content = "A comment"
-    CommenterId = commenter.ValidationId }
+    CommenterId = commenter.ValidationId
+    ParentId = None
+    Writer = DbCommentWriter.Commenter }
 
 let private orphan =
   { comment with
@@ -41,6 +43,24 @@ let tests =
       let rows =
         PostDb.withLatestStatus NullLogger.Instance [ "new" ] [| comment; orphan |] [ commenter ] [ statusOf comment; statusOf orphan ]
 
-      Expect.equal rows (Ok [ comment, commenter, statusOf comment ]) "Expected only the comment with a commenter"
+      Expect.equal rows (Ok [ comment, Some commenter, statusOf comment ]) "Expected only the comment with a commenter"
+    }
+
+    test "a comment of the author stays with no commenter" {
+      let reply =
+        { comment with
+            Id = "4d5e6f7a-8b9c-4d4e-9f5a-6b7c8d9e0f1a"
+            CreatedDate = date.AddMinutes 1.0
+            CommenterId = ""
+            ParentId = Some comment.Id
+            Writer = DbCommentWriter.Author }
+
+      let rows =
+        PostDb.withLatestStatus NullLogger.Instance [ "new" ] [| comment; reply |] [ commenter ] [ statusOf comment; statusOf reply ]
+
+      Expect.equal
+        rows
+        (Ok [ comment, Some commenter, statusOf comment; reply, None, statusOf reply ])
+        "Expected the comment and the reply of the author"
     }
   ]

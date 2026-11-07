@@ -23,11 +23,15 @@ let private posted (approval : CommentApproval) (title : string) (name : string)
       commentId
       createdDate
       {| Approval = approval.ToString(); CreatedDate = createdDate |}
-      {| ValidationId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
-         EmailAddress = "commenter@example.com"
-         Name = Some name
-         CreatedDate = "2026-01-01T00:00:00.0000000Z"
-         Status = "new" |}
+      None
+      (Commenter.create
+        "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+        "commenter@example.com"
+        (Some name)
+        "2026-01-01T00:00:00.0000000Z"
+        "new"
+       |> Fixtures.ok
+       |> CommentWriter.Commenter)
       content
     |> Fixtures.ok
 

@@ -177,6 +177,24 @@ type internal DbCommentStatus =
       this.Approval
       (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
 
+[<RequireQualifiedAccess>]
+type internal DbCommentWriter =
+  | Commenter
+  | Author
+
+module internal DbCommentWriter =
+  let ofEntityValue (value : string option) =
+    match value with
+    | None
+    | Some "commenter" -> Validation.ok DbCommentWriter.Commenter
+    | Some "author" -> Validation.ok DbCommentWriter.Author
+    | Some other -> Validation.error $"DbComment.Writer must be 'commenter' or 'author', but was '{other}'"
+
+  let toEntityValue writer =
+    match writer with
+    | DbCommentWriter.Commenter -> "commenter"
+    | DbCommentWriter.Author -> "author"
+
 /// <summary>
 /// Database representation of a comment
 /// </summary>
@@ -189,16 +207,22 @@ type internal DbCommentStatus =
 ///    "Timestamp": "&lt;date&gt;",
 ///    "CreatedDate": "&lt;date&gt;",
 ///    "Content": "&lt;string&gt;",
-///    "CommenterId": "&lt;commenter rowKey&gt;"
+///    "CommenterId": "&lt;commenter rowKey&gt;" | "",
+///    "ParentId": "&lt;comment rowKey&gt;" | null,
+///    "Writer": "&lt;commenter | author&gt;" | null
 ///}
 /// </c>
+/// A missing <c>ParentId</c> is a top-level comment, and a missing <c>Writer</c> is a commenter.
+/// <c>CommenterId</c> is empty when the writer is the author.
 /// </remarks>
 type internal DbComment =
   { Id : string
     PostId : string
     CreatedDate : DateTime
     Content : string
-    CommenterId : string }
+    CommenterId : string
+    ParentId : string option
+    Writer : DbCommentWriter }
   
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbComment
@@ -210,13 +234,17 @@ type internal DbComment =
       |> Validation.bind DateTime.TryValidateUtc
     let! content = "Content" |> entity.RequireString entityName
     let! commenterId = "CommenterId" |> entity.RequireString entityName
+    let parentId = "ParentId" |> entity.TryGetString
+    let! writer = "Writer" |> entity.TryGetString |> DbCommentWriter.ofEntityValue
 
     return
       { Id = id
         PostId = postId
         CreatedDate = createdDate
         Content = content
-        CommenterId = commenterId } 
+        CommenterId = commenterId
+        ParentId = parentId
+        Writer = writer }
   }
   
   member this.ToEntity() =
@@ -224,24 +252,34 @@ type internal DbComment =
     entity["CreatedDate"] <- this.CreatedDate.ToString("o", CultureInfo.InvariantCulture)
     entity["Content"] <- this.Content
     entity["CommenterId"] <- this.CommenterId
+    entity["ParentId"] <- this.ParentId |> Option.toObj
+    entity["Writer"] <- this.Writer |> DbCommentWriter.toEntityValue
     entity
-  
-  member this.ToComment(status: DbCommentStatus, commenter: DbCommenter) =
-    Comment.create
-      this.Id
-      (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
-      {| Approval = status.Approval
-         CreatedDate = status.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) |}
-      {| CreatedDate = commenter.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)
-         EmailAddress = commenter.EmailAddress
-         Name = commenter.Name
-         Status = commenter.Status
-         ValidationId = commenter.ValidationId |}
-      this.Content
+
+  /// The commenter is None when the writer is the author.
+  member this.ToComment(status: DbCommentStatus, commenter: DbCommenter option) = validation {
+    let! writer =
+      match this.Writer, commenter with
+      | DbCommentWriter.Author, _ -> Validation.ok CommentWriter.Author
+      | DbCommentWriter.Commenter, Some commenter ->
+        commenter.ToCommenter() |> Validation.map CommentWriter.Commenter
+      | DbCommentWriter.Commenter, None ->
+        Validation.error $"No commenter with Id '{this.CommenterId}' for comment '{this.Id}'"
+
+    return!
+      Comment.create
+        this.Id
+        (this.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))
+        {| Approval = status.Approval
+           CreatedDate = status.CreatedDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) |}
+        this.ParentId
+        writer
+        this.Content
+  }
 
   /// A comment whose post is not in the post table gets the slug as its title, so that the author can
   /// still moderate it.
-  member this.ToPostedComment(post: DbPost option, status: DbCommentStatus, commenter: DbCommenter) = validation {
+  member this.ToPostedComment(post: DbPost option, status: DbCommentStatus, commenter: DbCommenter option) = validation {
     let! slug = Slug.create this.PostId
     let! title =
       post
@@ -274,19 +312,19 @@ type internal IPostDb =
   abstract member GetCommentsForPost:
     approvals: string list
       -> post: DbPost
-      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+      -> CancellableTaskResult<(DbComment * DbCommenter option * DbCommentStatus) list, DependencyError>
   abstract member GetCommentsOnAllPosts:
     approvals: string list
-      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
+      -> CancellableTaskResult<(DbComment * DbCommenter option * DbCommentStatus) list, DependencyError>
   abstract member GetCommentsOfCommenter:
     approvals: string list
       -> commenter: DbCommenter
-      -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>
-  abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) option, DependencyError>
+      -> CancellableTaskResult<(DbComment * DbCommenter option * DbCommentStatus) list, DependencyError>
+  abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommenter option * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
     comment: DbComment
       -> status: DbCommentStatus
-      -> CancellableTaskResult<DbComment * DbCommenter * DbCommentStatus, DependencyError>
+      -> CancellableTaskResult<DbComment * DbCommenter option * DbCommentStatus, DependencyError>
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
   abstract member DeleteComment: commentId: string -> CancellableTaskResult<unit, DependencyError>
 
@@ -321,7 +359,15 @@ module internal PostDb =
 
     (Validation.ok [||], dbComments) ||> Array.fold (fun comments comment -> validation {
       let! comments = comments
-      match commenters |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId) with
+      let commenter =
+        match comment.Writer with
+        | DbCommentWriter.Author -> Some None
+        | DbCommentWriter.Commenter ->
+          commenters
+          |> Array.tryFind (fun ctr -> ctr.ValidationId = comment.CommenterId)
+          |> Option.map Some
+
+      match commenter with
       | None ->
         logger.LogWarning(
           "No commenter with Id '{commenterId}' for comment '{commentId}'. The comment is left out.",
@@ -383,6 +429,16 @@ module internal PostDb =
     let commentStatusesTable = "commentStatuses"
     let commentersTable = "commenters"
 
+    let getCommenterByValidationId validationId =
+      validationId |> trySingle commentersTable DbCommenter.FromEntity (Some validationId)
+
+    /// Some None for a comment of the author, and None for a comment whose commenter is missing.
+    let commenterOf (comment : DbComment) =
+      match comment.Writer with
+      | DbCommentWriter.Author -> CancellableTaskResult.singleton (Some None)
+      | DbCommentWriter.Commenter ->
+        getCommenterByValidationId comment.CommenterId |> CancellableTaskResult.map (Option.map Some)
+
     { new IPostDb with
       
       member _.GetAllPosts () =
@@ -416,8 +472,7 @@ module internal PostDb =
       member _.GetCommenterByEmailAddress emailAddress =
         eq "EmailAddress" emailAddress |> trySingleQuery commentersTable DbCommenter.FromEntity None
       
-      member _.GetCommenterByValidationId validationId =
-        validationId |> trySingle commentersTable DbCommenter.FromEntity (Some validationId)
+      member _.GetCommenterByValidationId validationId = getCommenterByValidationId validationId
 
       member _.CreateCommenter commenter =
         commenter.ToEntity() |> add commentersTable PostDbError.validation DbCommenter.FromEntity
@@ -439,6 +494,7 @@ module internal PostDb =
         // for every comment, get the commenter
         let getCommenters =
           dbComments
+          |> Array.filter (fun comment -> comment.Writer = DbCommentWriter.Commenter)
           |> Array.map _.CommenterId
           |> whereAnyKey commentersTable DbCommenter.FromEntity (fun commenterId ->
             eq "PartitionKey" commenterId + eq "RowKey" commenterId
@@ -476,12 +532,12 @@ module internal PostDb =
         return! withLatestStatus logger approvals dbComments [ commenter ] statuses
       }
 
-      member this.GetCommentById commentId = cancellableTaskResult {
+      member _.GetCommentById commentId = cancellableTaskResult {
         // Get comment
         let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None
         let! dbCommenter =
           dbComment
-          |> Option.traverseCancellableTaskResult (fun dbComment -> this.GetCommenterByValidationId dbComment.CommenterId)
+          |> Option.traverseCancellableTaskResult commenterOf
           |> CancellableTaskResult.map Option.flatten
 
         let! statuses =
@@ -511,10 +567,10 @@ module internal PostDb =
         }
       }
       
-      member this.CreateComment comment status = cancellableTaskResult {
+      member _.CreateComment comment status = cancellableTaskResult {
         let! dbComment = comment.ToEntity() |> add commentsTable PostDbError.validation DbComment.FromEntity
         let! dbCommentStatus = status.ToEntity() |> add commentStatusesTable PostDbError.validation DbCommentStatus.FromEntity
-        let! (dbCommenter: DbCommenter option) = this.GetCommenterByValidationId comment.CommenterId
+        let! dbCommenter = commenterOf dbComment
         let! dbCommenter = dbCommenter |> Result.requireSome (
           PostDbError.validation $"Failed to fetch commenter for newly created comment with Id '{dbComment.Id}'"
         )

@@ -26,7 +26,7 @@ type AdminCommenterDto =
 type AdminCommentDto =
   { Id : string
     CreatedDate : DateTime
-    Commenter : AdminCommenterDto
+    Commenter : AdminCommenterDto option
     Status : string
     Content : string }
 
@@ -45,7 +45,7 @@ module CommentTypesExt =
     member this.ToAdminDto() =
       { AdminCommentDto.Id = this.Comment.Id.ToString()
         CreatedDate = this.Comment.CreatedDate
-        Commenter = this.Comment.Commenter.ToDto()
+        Commenter = this.Comment |> Comment.commenter |> Option.map _.ToDto()
         Status = this.Comment.Status.Approval.ToString()
         Content = this.Html }
 

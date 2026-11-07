@@ -43,7 +43,7 @@ type PostDependencies(
 
   let allApprovals = CommentApproval.all |> List.map _.ToString()
 
-  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>) =
+  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommenter option * DbCommentStatus) list, DependencyError>) =
     cancellableTaskResult {
       let! dbPosts, dbComments = CancellableTaskResult.parallelZip (postDb.GetAllPosts()) readComments
       return!
@@ -233,7 +233,9 @@ type PostDependencies(
         PostId = post.Id |> Slug.value
         CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
         Content = newComment.Content |> NonEmptyString.value
-        CommenterId = commenter.ValidationId.ToString() }
+        CommenterId = commenter.ValidationId.ToString()
+        ParentId = None
+        Writer = DbCommentWriter.Commenter }
     let newDbStatus =
       { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
         CommentId = newDbComment.Id

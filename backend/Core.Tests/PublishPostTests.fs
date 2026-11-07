@@ -325,15 +325,12 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
               "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40"
               "2026-03-02T00:00:00.0000000Z"
               {| Approval = approval.ToString(); CreatedDate = "2026-03-02T00:00:00.0000000Z" |}
-              {| ValidationId = commenterId
-                 EmailAddress = "commenter@example.com"
-                 Name = Some "Commenter"
-                 CreatedDate = "2026-01-01T00:00:00.0000000Z"
-                 Status = "new" |}
+              None
+              (CommentWriter.Commenter commenter)
               "A comment"
             |> ok
 
-          CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
+          CancellableTaskResult.singleton { posted with Content = newComment.Content }
         member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton () }
 
   let dto =
