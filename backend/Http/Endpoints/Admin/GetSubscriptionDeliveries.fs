@@ -2,6 +2,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -63,7 +64,7 @@ type GetSubscriptionDeliveries (
         let response = req.CreateResponse HttpStatusCode.OK
 
         // Dependencies
-        let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, logger)
+        let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, SystemDependencies.live, logger)
         let getDeliveries = GetSubscriptionDeliveriesQuery.withDependencies {
           new GetSubscriptionDeliveriesQuery.Dependencies with
 

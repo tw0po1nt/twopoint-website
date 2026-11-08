@@ -5,6 +5,7 @@ open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -47,6 +48,7 @@ type DeleteComment(
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let deleteComment = DeleteComment.withDependencies {

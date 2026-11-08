@@ -6,6 +6,7 @@ open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -57,10 +58,11 @@ type ProcessNewCommentMessage(
         emailClient,
         config.Azure.EmailSender,
         tableServiceClient,
+        SystemDependencies.live,
         logger
       )
-      let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
-      let pushDependencies = PushDependencies(pushSetup, tableServiceClient, logger)
+      let deviceDependencies = DeviceDependencies(tableServiceClient, SystemDependencies.live, logger)
+      let pushDependencies = PushDependencies(pushSetup, tableServiceClient, SystemDependencies.live, logger)
 
       let notifyNewComment = NotifyNewComment.withDependencies { new NotifyNewComment.Dependencies with
         member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId

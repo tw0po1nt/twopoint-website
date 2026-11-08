@@ -4,6 +4,7 @@ open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -53,13 +54,14 @@ type ProcessNewPostDeliveryMessage(
       )
 
       // Dependencies
-      let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, logger)
+      let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, SystemDependencies.live, logger)
       let deliveryDependencies = DeliveryDependencies(
         emailClient,
         config.Azure.EmailSender,
         BlobContainerClient(welcomeConfig.NewsletterContainerUri, credential),
         welcomeConfig.UnsubscribeUri,
         tableServiceClient,
+        SystemDependencies.live,
         logger
       )
 

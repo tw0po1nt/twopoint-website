@@ -5,6 +5,7 @@ open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -86,6 +87,7 @@ type PostListDependencies(
     emailClient,
     config.Azure.EmailSender,
     tableServiceClient,
+    SystemDependencies.live,
     logger
   )
   let postStore = PostStore(postStoreClient, logger, texts)

@@ -122,6 +122,7 @@ let main args =
         WebPushSender(
           services.GetRequiredService<IHttpClientFactory>().CreateClient(),
           keys,
+          SystemDependencies.live,
           services.GetRequiredService<ILoggerFactory>().CreateLogger<WebPushSender>()
         )
       ))

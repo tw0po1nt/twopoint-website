@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Notifications.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http.Endpoints
 
 open Azure.Data.Tables
@@ -48,7 +49,7 @@ type RegisterPushDevice(
           | _ -> ""
 
         // Dependencies
-        let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
+        let deviceDependencies = DeviceDependencies(tableServiceClient, SystemDependencies.live, logger)
         let registerDevice = RegisterPushDevice.withDependencies {
           new RegisterPushDevice.Dependencies with
 

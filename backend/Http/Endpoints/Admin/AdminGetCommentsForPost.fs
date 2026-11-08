@@ -4,6 +4,7 @@ open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -126,6 +127,7 @@ type AdminGetCommentsForPost (
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let getCommentsForPost = TwoPoint.Core.Posts.Queries.GetCommentsForPost.withDependencies {

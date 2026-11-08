@@ -105,6 +105,7 @@ type PostComment (
       emailClient,
       config.Azure.EmailSender,
       tableServiceClient,
+      SystemDependencies.live,
       logger
     )
     let postComment = PostComment.withDependencies {

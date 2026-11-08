@@ -4,9 +4,11 @@ open TwoPoint.Core.Notifications
 open TwoPoint.Core.Notifications.Actions
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
+open TwoPoint.Dependencies.Comms
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Tests.Fakes
+open TwoPoint.Dependencies.Util
 
-open Azure.Data.Tables
 open Expecto
 open Microsoft.Extensions.Logging.Abstractions
 
@@ -42,11 +44,14 @@ let private configured (status : HttpStatusCode) =
     { VapidKeys.Subject = "mailto:matt@twopoint.dev"
       PublicKey = Array.concat [ [| 4uy |]; parameters.Q.X; parameters.Q.Y ]
       PrivateKey = parameters.D }
-  let sender = WebPushSender(new HttpClient(new Answering(status)), vapid, NullLogger.Instance)
+  let sender = WebPushSender(new HttpClient(new Answering(status)), vapid, SystemDependencies.live, NullLogger.Instance)
   WebPushConfigured sender
 
+let private now = DateTime(2026, 11, 8, 9, 30, 0, DateTimeKind.Utc)
+let private pushGuid = Guid "2c1b0a9f-8e7d-4c6b-9a5f-4e3d2c1b0a9f"
+
 let private dependencies setup =
-  PushDependencies(setup, TableServiceClient "UseDevelopmentStorage=true", NullLogger.Instance)
+  PushDependencies(setup, RecordingCommsDb(), FixedSystem([], now))
 
 let private send setup =
   ((dependencies setup).SendPush device (Text.Encoding.UTF8.GetBytes "{}") CancellationToken.None).Result
@@ -66,5 +71,22 @@ let tests =
       match send WebPushNotConfigured with
       | Error _ -> ()
       | other -> failtestf "Expected an error, got %A" other
+    }
+
+    test "the push row of a comment gets a new ID, the comment ID, the time of the clock, and the device" {
+      let commsDb = RecordingCommsDb()
+      let push = PushDependencies(WebPushNotConfigured, commsDb, FixedSystem([ pushGuid ], now))
+      let commentId = CommentId.ofGuid (Guid "8f6c1b2e-0d4a-4c3e-9b1a-2f5d6e7a8b9c")
+
+      let recorded = (push.RecordCommentPush device commentId CancellationToken.None).Result
+
+      Expect.isOk recorded "Expected the push row"
+      Expect.equal
+        commsDb.Pushes
+        [ { DbPush.Id = string pushGuid
+            OperationId = string commentId
+            CreatedDate = now
+            Recipient = string device.Id } ]
+        "Expected the push row"
     }
   ]
