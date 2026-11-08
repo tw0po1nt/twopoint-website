@@ -52,7 +52,7 @@ type DeleteCommenter(
           new DeleteCommenter.Dependencies with
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-          member _.GetCommentsOfCommenter commenter = postDependencies.GetCommentsOfCommenter commenter
+          member _.GetPostedCommentsOfCommenter commenter = postDependencies.GetPostedCommentsOfCommenter commenter
           member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
           member _.DeleteComment comment = postDependencies.DeleteComment comment
           member _.DeleteCommenter commenter = postDependencies.DeleteCommenter commenter

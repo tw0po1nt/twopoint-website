@@ -192,8 +192,11 @@ type PostDependencies(
   }
 
   /// Each reply under one of the top-level comments, with each approval.
-  member _.GetRepliesOf (topLevels : Comment list) = cancellableTaskResult {
-    let! dbComments = topLevels |> List.map (_.Id >> string) |> postDb.GetRepliesOf allApprovals
+  member _.GetRepliesOf (topLevels : PostedComment list) = cancellableTaskResult {
+    let! dbComments =
+      topLevels
+      |> List.map (fun (topLevel : PostedComment) -> Slug.value topLevel.Post, string topLevel.Comment.Id)
+      |> postDb.GetRepliesOf allApprovals
 
     return!
       dbComments

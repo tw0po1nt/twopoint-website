@@ -448,9 +448,10 @@ type internal IPostDb =
     approvals: string list
       -> post: DbPost
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
+  /// `topLevels` is the post slug and the ID of each top-level comment. A reply is on the post of its top-level comment.
   abstract member GetRepliesOf:
     approvals: string list
-      -> topLevelIds: string seq
+      -> topLevels: (string * string) seq
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
   abstract member GetCommentsOnAllPosts:
     approvals: string list
@@ -548,6 +549,9 @@ module internal PostDb =
 
     let whereAnyKey table onEntity toFilter keys =
       Db.whereAnyKey tableServiceClient logger db table onEntity toFilter keys
+
+    let whereAny table onEntity filters =
+      Db.whereAny tableServiceClient logger db table onEntity filters
 
     let add table onError onEntity entity =
       Db.add tableServiceClient logger db table onError onEntity entity
@@ -656,8 +660,9 @@ module internal PostDb =
         return! withWriters approvals (dbComments |> List.toArray)
       }
 
-      member _.GetRepliesOf approvals topLevelIds = cancellableTaskResult {
-        let! dbComments = topLevelIds |> whereAnyKey commentsTable DbComment.FromEntity (eq "ParentId")
+      member _.GetRepliesOf approvals topLevels = cancellableTaskResult {
+        let! dbComments =
+          topLevels |> Db.filtersOfKeysInPartitions (eq "ParentId") |> whereAny commentsTable DbComment.FromEntity
         return! withWriters approvals (dbComments |> List.toArray)
       }
 

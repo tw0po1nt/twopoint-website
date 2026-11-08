@@ -176,13 +176,24 @@ module Db =
     |> Seq.map (Array.fold (fun filter key -> filter * toFilter key) Empty)
     |> Seq.toList
 
-  let whereAnyKey tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) toFilter keys =
-    (cancellableTaskResult { return [] }, filtersOfKeys toFilter keys)
+  /// The query text of the library puts parentheses on the left side of `and` only, so `PartitionKey` is on the right.
+  let filtersOfKeysInPartitions (toFilter: string -> Filter) (keys: (string * string) seq) : Filter list =
+    keys
+    |> Seq.groupBy fst
+    |> Seq.collect (fun (partition, keys) ->
+      keys |> Seq.map snd |> filtersOfKeys toFilter |> List.map (fun filter -> filter + eq "PartitionKey" partition))
+    |> Seq.toList
+
+  let whereAny tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) (filters: Filter list) =
+    (cancellableTaskResult { return [] }, filters)
     ||> List.fold (fun entities filter -> cancellableTaskResult {
       let! entities = entities
       let! more = where tableServiceClient logger db table onEntity filter
       return entities @ more
     })
+
+  let whereAnyKey tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) toFilter keys =
+    filtersOfKeys toFilter keys |> whereAny tableServiceClient logger db table onEntity
 
   /// <summary>
   /// Add an entity to an Azure Table

@@ -620,20 +620,18 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
   interface DeleteCommenter.Dependencies with
     member _.GetCommenterByValidationId validationId =
       commenters |> Seq.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
-    member _.GetCommentsOfCommenter commenter =
+    member _.GetPostedCommentsOfCommenter commenter =
       let read =
         comments
         |> Seq.filter (fun comment ->
           Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId))
+        |> Seq.map (postedOn olderPost)
         |> List.ofSeq
       comments.AddRange postedAfterFirstRead
       postedAfterFirstRead.Clear()
       CancellableTaskResult.singleton read
     member _.GetRepliesOf topLevels =
-      comments
-      |> Seq.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
-      |> List.ofSeq
-      |> CancellableTaskResult.singleton
+      repliesIn (comments |> Seq.map (postedOn olderPost)) topLevels |> CancellableTaskResult.singleton
     member _.DeleteComment comment =
       comments.RemoveAll(fun stored -> stored.Id = comment.Id) |> ignore
       CancellableTaskResult.singleton ()

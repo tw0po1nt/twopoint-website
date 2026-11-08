@@ -35,3 +35,29 @@ let tests =
       Expect.isEmpty (Db.filtersOfKeys (eq "PartitionKey") []) "Expected no filter"
     }
   ]
+
+[<Tests>]
+let partitionTests =
+  testList "Db.filtersOfKeysInPartitions" [
+    test "the replies of top-level comments on two posts have one query for each post, in the partition of the post" {
+      let topLevels = [ "post-a", "1"; "post-b", "2"; "post-a", "3" ]
+
+      Expect.equal
+        (Db.filtersOfKeysInPartitions (eq "ParentId") topLevels |> List.map FilterConverter.toQuery)
+        [ "((ParentId eq '1') or ParentId eq '3') and PartitionKey eq 'post-a'"
+          "(ParentId eq '2') and PartitionKey eq 'post-b'" ]
+        "Expected the IDs of each post in parentheses, and the PartitionKey of the post"
+    }
+
+    test "a filter in one partition has at most 100 keys, and each filter has the PartitionKey" {
+      let filters = Db.filtersOfKeysInPartitions (eq "ParentId") (keys 150 |> List.map (fun key -> "post-a", key))
+
+      Expect.equal (filters |> List.length) 2 "Expected 2 filters for 150 keys"
+      for filter in filters do
+        Expect.stringEnds (FilterConverter.toQuery filter) ") and PartitionKey eq 'post-a'" "Expected the PartitionKey"
+    }
+
+    test "no key gives no filter" {
+      Expect.isEmpty (Db.filtersOfKeysInPartitions (eq "ParentId") []) "Expected no filter"
+    }
+  ]

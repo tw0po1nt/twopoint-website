@@ -52,7 +52,7 @@ type DeleteComment(
         let deleteComment = DeleteComment.withDependencies {
           new DeleteComment.Dependencies with
           
-          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
           member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
           member _.DeleteComment comment = postDependencies.DeleteComment comment
         }
