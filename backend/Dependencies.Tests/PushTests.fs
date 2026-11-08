@@ -25,7 +25,6 @@ type private Answering(status : HttpStatusCode) =
 
 let private device =
   let at = DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
-  let ok result = result |> Result.defaultWith (fun error -> failwithf "%A" error)
   let endpoint = PushEndpoint.create "https://push.example.net/send/abc" |> ok
   { RegisteredDevice.UserId = UserExternalId.create "6f1c1b5e-3d2a-4a43-9c6b-0d7a5b0e9a11" |> ok
     Id = DeviceId.ofEndpoint endpoint
@@ -47,7 +46,6 @@ let private configured (status : HttpStatusCode) =
   let sender = WebPushSender(new HttpClient(new Answering(status)), vapid, SystemDependencies.live, NullLogger.Instance)
   WebPushConfigured sender
 
-let private now = DateTime(2026, 11, 8, 9, 30, 0, DateTimeKind.Utc)
 let private pushGuid = Guid "2c1b0a9f-8e7d-4c6b-9a5f-4e3d2c1b0a9f"
 
 let private dependencies setup =

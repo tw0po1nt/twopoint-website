@@ -1,11 +1,11 @@
 namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Dependencies.Comms
-open TwoPoint.Dependencies.Util
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Comms
+open TwoPoint.Dependencies.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables

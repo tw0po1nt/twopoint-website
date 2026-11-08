@@ -36,10 +36,7 @@ type private UnsetEmailClient() =
   override _.SendAsync(_ : WaitUntil, _ : string, _ : string, _ : string, _ : string, _ : string, _ : CancellationToken) =
     Task.FromResult(UnsetOperation() :> EmailSendOperation)
 
-let private now = DateTime(2026, 11, 8, 9, 30, 0, DateTimeKind.Utc)
 let private operationGuid = Guid "5e4d3c2b-1a0f-4e9d-8c7b-6a5f4e3d2c1b"
-
-let private ok result = result |> Result.defaultWith (fun error -> failwithf "%A" error)
 
 [<Tests>]
 let tests =

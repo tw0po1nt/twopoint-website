@@ -14,13 +14,10 @@ open Microsoft.Extensions.Logging.Abstractions
 open System
 open System.Threading
 
-let private now = DateTime(2026, 11, 8, 9, 30, 0, DateTimeKind.Utc)
 let private earlier = DateTime(2026, 11, 1, 8, 0, 0, DateTimeKind.Utc)
 
 let private commentGuid = Guid "4f8a2c1e-6b3d-4e5f-9a7b-1c2d3e4f5a6b"
 let private statusGuid = Guid "7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a"
-
-let private ok result = result |> Result.defaultWith (fun error -> failwithf "%A" error)
 
 let private dbCommenter =
   { DbCommenter.ValidationId = "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d"

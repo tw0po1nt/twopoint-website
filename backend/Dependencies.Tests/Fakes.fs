@@ -7,7 +7,11 @@ open FsToolkit.ErrorHandling
 
 open System
 
-/// Gives the IDs in the order of `ids`, and gives `now` at each read of the clock.
+let now = DateTime(2026, 11, 8, 9, 30, 0, DateTimeKind.Utc)
+
+let ok result = result |> Result.defaultWith (fun error -> failwithf "%A" error)
+
+/// Throws when the test asks for more IDs than `ids` contains.
 type FixedSystem(ids : Guid list, now : DateTime) =
   let mutable rest = ids
 

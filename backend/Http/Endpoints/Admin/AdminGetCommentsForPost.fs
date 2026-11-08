@@ -1,10 +1,10 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
 open TwoPoint.Dependencies.Posts
 open TwoPoint.Dependencies.Util
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables

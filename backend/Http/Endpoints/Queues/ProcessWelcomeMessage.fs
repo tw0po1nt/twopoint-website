@@ -1,12 +1,12 @@
 namespace TwoPoint.Http.Endpoints.Queues
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
-open TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
 open TwoPoint.Dependencies.Util
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
+open TwoPoint.Http.Endpoints.Admin
 
 open Azure.Communication.Email
 open Azure.Core
