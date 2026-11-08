@@ -29,6 +29,17 @@ let post slug (createdDate : string) =
 let olderPost = post "older-post" "2026-01-01T00:00:00.0000000Z"
 let latestPost = post "latest-post" "2026-02-01T00:00:00.0000000Z"
 
+let postedOn (post : Post) (comment : Comment) =
+  { PostedComment.Post = post.Id; PostTitle = post.Info.Title; Comment = comment }
+
+/// The store reads the replies of a top-level comment only in the partition of its post.
+let repliesIn (stored : PostedComment seq) (topLevels : PostedComment list) =
+  stored
+  |> Seq.filter (fun reply ->
+    topLevels |> List.exists (fun topLevel -> reply.Post = topLevel.Post && reply.Comment.Parent = Some topLevel.Comment.Id))
+  |> Seq.map _.Comment
+  |> List.ofSeq
+
 let noDeploys =
   { Changes = Map.empty
     Rebuild = None

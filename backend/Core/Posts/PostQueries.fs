@@ -465,7 +465,6 @@ module GetCommenter =
       commenter: Commenter
         -> DependencyResult<PostedComment list>
     abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
-    /// Each reply under one of the top-level comments. The read of the replies of a post is in the partition of the post.
     abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member Stage: TwoPoint.Site.Render.Stage
 

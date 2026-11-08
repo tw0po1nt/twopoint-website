@@ -905,7 +905,6 @@ module DeleteComment =
 
   type Dependencies =
     abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
-    /// Each reply under one of the top-level comments. The read of the replies of a post is in the partition of the post.
     abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
 
@@ -1137,8 +1136,7 @@ module DeleteCommenter =
 
   type Dependencies =
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
-    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<PostedComment list>
-    /// Each reply under one of the top-level comments. The read of the replies of a post is in the partition of the post.
+    abstract member GetPostedCommentsOfCommenter: commenter: Commenter -> DependencyResult<PostedComment list>
     abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
     abstract member DeleteCommenter: commenter: Commenter -> DependencyResult<unit>
@@ -1160,7 +1158,7 @@ module DeleteCommenter =
         do! deleteComments removal.Comments
         do! dependencies.DeleteCommenter commenter
         // The first read and `Others` do not include a comment that someone posts during the delete.
-        let! postedDuringDelete = dependencies.GetCommentsOfCommenter commenter
+        let! postedDuringDelete = dependencies.GetPostedCommentsOfCommenter commenter
         let own = firstRead @ postedDuringDelete |> List.distinctBy _.Comment.Id
         let! replies = repliesOf own
         do! deleteComments (CommentDeleteRule.commenter (own |> List.map _.Comment) replies |> CommentRemoval.exceptDeleted removal)
@@ -1180,7 +1178,7 @@ module DeleteCommenter =
       let! comments =
         match existingCommenter with
         | Some commenter ->
-          dependencies.GetCommentsOfCommenter commenter
+          dependencies.GetPostedCommentsOfCommenter commenter
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
         | None -> CancellableTaskResult.singleton []
 

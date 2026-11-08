@@ -176,9 +176,7 @@ module Db =
     |> Seq.map (Array.fold (fun filter key -> filter * toFilter key) Empty)
     |> Seq.toList
 
-  /// The filters of each key in its partition. A key is a pair of a partition key and a key in that partition. Each
-  /// filter has the `PartitionKey` of one partition, so no query reads the full table. The query text of the library
-  /// puts parentheses on the left side of `and` only, so the `PartitionKey` filter is on the right side.
+  /// The query text of the library puts parentheses on the left side of `and` only, so `PartitionKey` is on the right.
   let filtersOfKeysInPartitions (toFilter: string -> Filter) (keys: (string * string) seq) : Filter list =
     keys
     |> Seq.groupBy fst
@@ -186,7 +184,6 @@ module Db =
       keys |> Seq.map snd |> filtersOfKeys toFilter |> List.map (fun filter -> filter + eq "PartitionKey" partition))
     |> Seq.toList
 
-  /// Each entity that one of the filters selects, one query for each filter.
   let whereAny tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) (filters: Filter list) =
     (cancellableTaskResult { return [] }, filters)
     ||> List.fold (fun entities filter -> cancellableTaskResult {
