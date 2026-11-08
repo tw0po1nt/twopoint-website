@@ -563,16 +563,18 @@ type private FakeCommentStore(commenters : Commenter list, comments : PostedComm
     postedAfterRepliesRead <- None
     CancellableTaskResult.singleton replies
 
-  member _.DeleteComment (comment : Comment) =
-    deleted.Add comment.Id
-    comments <- comments |> List.filter (fun stored -> stored.Comment.Id <> comment.Id)
+  /// A delete finds the comment only in the partition of its post.
+  member _.DeleteComment (post : TwoPoint.Core.Posts.Slug) (comment : Comment) =
+    if comments |> List.exists (fun stored -> stored.Post = post && stored.Comment.Id = comment.Id) then
+      deleted.Add comment.Id
+      comments <- comments |> List.filter (fun stored -> stored.Comment.Id <> comment.Id)
     CancellableTaskResult.singleton ()
 
   interface DeleteComment.Dependencies with
     member _.GetPostedComment post id =
       comments |> List.tryFind (fun stored -> stored.Post = post && stored.Comment.Id = id) |> CancellableTaskResult.singleton
     member this.GetRepliesOf topLevels = this.RepliesOf topLevels
-    member this.DeleteComment comment = this.DeleteComment comment
+    member this.DeleteComment post comment = this.DeleteComment post comment
 
   interface DeleteCommenter.Dependencies with
     member _.GetCommenterByValidationId validationId =
@@ -580,7 +582,7 @@ type private FakeCommentStore(commenters : Commenter list, comments : PostedComm
     member _.GetPostedCommentsOfCommenter commenter =
       comments |> List.filter (_.Comment >> writtenBy commenter) |> CancellableTaskResult.singleton
     member this.GetRepliesOf topLevels = this.RepliesOf topLevels
-    member this.DeleteComment comment = this.DeleteComment comment
+    member this.DeleteComment post comment = this.DeleteComment post comment
     member _.DeleteCommenter commenter =
       commenters <- commenters |> List.filter (fun stored -> stored.ValidationId <> commenter.ValidationId)
       CancellableTaskResult.singleton ()
@@ -628,6 +630,24 @@ let private deleteTests =
         "Expected the thread of Ada and the reply of Ada in the thread of Ben"
       Expect.equal (ids removal.Comments |> List.last) (string adaThread.Id) "Expected the top-level comment after the replies"
       Expect.equal removal.Others 2 "Expected the replies from Ben and from the author"
+    }
+
+    test "a commenter delete on two posts gives each comment with its post, each reply before the top-level comments" {
+      let own = threadsOnTwoPosts |> List.filter (_.Comment >> writtenBy ada)
+      let removal = CommentDeleteRule.commenterOnPosts own (threadsOnTwoPosts |> List.map _.Comment)
+      let onPost (post : Post) (comments : Comment list) = comments |> List.map (fun comment -> post.Id, string comment.Id)
+
+      Expect.equal
+        (removal.Comments |> List.map (fun (post, comment) -> post, string comment.Id) |> Set.ofList)
+        (onPost olderPost [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; adaInBenThread ]
+         @ onPost latestPost [ adaOnLatest; benInAdaOnLatest ]
+         |> Set.ofList)
+        "Expected each comment with the post of its thread"
+      Expect.equal
+        (removal.Comments |> List.map snd |> List.skipWhile _.Parent.IsSome |> List.forall _.Parent.IsNone)
+        true
+        "Expected each reply before the top-level comments"
+      Expect.equal removal.Others 3 "Expected the replies from Ben and from the author on both posts"
     }
 
     test "the delete of a top-level comment removes its thread, and keeps the other threads" {

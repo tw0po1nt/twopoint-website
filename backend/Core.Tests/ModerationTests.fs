@@ -632,8 +632,8 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
       CancellableTaskResult.singleton read
     member _.GetRepliesOf topLevels =
       repliesIn (comments |> Seq.map (postedOn olderPost)) topLevels |> CancellableTaskResult.singleton
-    member _.DeleteComment comment =
-      comments.RemoveAll(fun stored -> stored.Id = comment.Id) |> ignore
+    member _.DeleteComment post comment =
+      comments.RemoveAll(fun stored -> post = olderPost.Id && stored.Id = comment.Id) |> ignore
       CancellableTaskResult.singleton ()
     member _.DeleteCommenter commenter =
       commenters.RemoveAll(fun stored -> stored.ValidationId = commenter.ValidationId) |> ignore

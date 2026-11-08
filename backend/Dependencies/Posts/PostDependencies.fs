@@ -350,6 +350,6 @@ type PostDependencies(
     return { comment with Status = status }
   }
 
-  member _.DeleteComment (comment : Comment) = comment.Id.ToString() |> postDb.DeleteComment
+  member _.DeleteComment (post : Slug) (comment : Comment) = postDb.DeleteComment (Slug.value post) (comment.Id.ToString())
 
   member _.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris

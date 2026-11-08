@@ -54,7 +54,7 @@ type DeleteComment(
           
           member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
           member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
-          member _.DeleteComment comment = postDependencies.DeleteComment comment
+          member _.DeleteComment post comment = postDependencies.DeleteComment post comment
         }
 
         let deletion =

@@ -470,7 +470,8 @@ type internal IPostDb =
       -> status: DbCommentStatus
       -> CancellableTaskResult<DbComment * DbCommentWriter * DbCommentStatus, DependencyError>
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
-  abstract member DeleteComment: commentId: string -> CancellableTaskResult<unit, DependencyError>
+  /// A point delete: `postId` is the partition of the comment.
+  abstract member DeleteComment: postId: string -> commentId: string -> CancellableTaskResult<unit, DependencyError>
   abstract member CreateReplyEmailStop: stop: DbReplyEmailStop -> CancellableTaskResult<DbReplyEmailStop, DependencyError>
   abstract member GetReplyEmailStop: token: string -> CancellableTaskResult<DbReplyEmailStop option, DependencyError>
   abstract member UpdateReplyEmailConsent:
@@ -725,9 +726,9 @@ module internal PostDb =
       member _.UpdateCommentStatus status =
         status.ToEntity() |> add commentStatusesTable PostDbError.validation DbCommentStatus.FromEntity
       
-      member _.DeleteComment commentId = cancellableTaskResult {
+      member _.DeleteComment postId commentId = cancellableTaskResult {
         do! eq "PartitionKey" commentId |> delete commentStatusesTable PostDbError.validation
-        do! eq "RowKey" commentId |> delete commentsTable PostDbError.validation
+        do! deleteByKeys commentsTable PostDbError.validation postId commentId
       }
 
       member _.CreateReplyEmailStop stop =

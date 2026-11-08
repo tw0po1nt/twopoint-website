@@ -105,6 +105,20 @@ module CommentRemoval =
     let deletedIds = deleted.Comments |> List.map _.Id |> Set.ofList
     removal.Comments |> List.filter (fun comment -> not (deletedIds.Contains comment.Id))
 
+/// The comments that a delete of a commenter removes, each with its post, each reply before the top-level comments.
+/// The post is the partition of the comment, so each delete is a point delete.
+type CommenterRemoval =
+  { Comments : (Slug * Comment) list
+    Others : int }
+
+[<RequireQualifiedAccess>]
+module CommenterRemoval =
+
+  /// The order of `removal` stays, so each reply comes before its top-level comment.
+  let exceptDeleted (deleted : CommenterRemoval) (removal : CommenterRemoval) : (Slug * Comment) list =
+    let deletedIds = deleted.Comments |> List.map (snd >> _.Id) |> Set.ofList
+    removal.Comments |> List.filter (fun (_, comment) -> not (deletedIds.Contains comment.Id))
+
 [<RequireQualifiedAccess>]
 module CommentDeleteRule =
 
@@ -134,6 +148,19 @@ module CommentDeleteRule =
       |> List.distinctBy _.Id
 
     { Comments = repliesFirst (others @ own); Others = others.Length }
+
+  /// `commenter` for the comments of the commenter on each post. A reply is on the post of its top-level comment.
+  let commenterOnPosts (own : PostedComment list) (known : Comment list) : CommenterRemoval =
+    let removals =
+      own
+      |> List.groupBy _.Post
+      |> List.map (fun (post, posted) -> post, commenter (posted |> List.map _.Comment) known)
+
+    { Comments =
+        removals
+        |> List.collect (fun (post, removal) -> removal.Comments |> List.map (fun comment -> post, comment))
+        |> List.sortBy (fun (_, comment) -> comment.Parent.IsNone)
+      Others = removals |> List.sumBy (snd >> _.Others) }
 
 /// A comment as the public comments answer gives it. It has no email address.
 type PublicComment =
