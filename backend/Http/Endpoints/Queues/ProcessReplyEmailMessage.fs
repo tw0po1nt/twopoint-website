@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Queues
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -52,6 +53,7 @@ type ProcessReplyEmailMessage(
         emailClient,
         config.Azure.EmailSender,
         tableServiceClient,
+        SystemDependencies.live,
         logger
       )
       let postStore = PostStore(postStoreClient, logger, texts)

@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Blog
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Queries
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -40,6 +41,7 @@ type GetCommentsForPost (
       emailClient,
       config.Azure.EmailSender,
       tableServiceClient,
+      SystemDependencies.live,
       logger
     )
 

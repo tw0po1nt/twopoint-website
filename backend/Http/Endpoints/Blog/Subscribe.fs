@@ -1,11 +1,12 @@
 namespace TwoPoint.Http.Endpoints.Blog
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Util
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Data.Tables
 open Azure.Messaging.ServiceBus
@@ -60,6 +61,7 @@ type Subscribe (
     // Dependencies
     let subscriptionDependencies = SubscriptionDependencies(
       tableServiceClient,
+      SystemDependencies.live,
       logger
     )
 

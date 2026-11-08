@@ -6,6 +6,7 @@ open TwoPoint.Core.Posts.Queries
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -46,6 +47,7 @@ module internal ReplyEmailStopDependencies =
         emailClient,
         config.Azure.EmailSender,
         tableServiceClient,
+        SystemDependencies.live,
         logger
       )
 

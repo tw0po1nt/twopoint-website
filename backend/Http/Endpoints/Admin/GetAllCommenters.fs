@@ -2,6 +2,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -48,6 +49,7 @@ type GetAllCommenters (
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let getAllCommenters = GetAllCommentersQuery.withDependencies {

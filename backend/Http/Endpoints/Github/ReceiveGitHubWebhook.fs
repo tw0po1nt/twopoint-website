@@ -101,8 +101,8 @@ type ReceiveGitHubWebhook(
         do! req.Body.CopyToAsync(buffer, ct)
 
         let db = DeployDb(tableServiceClient, logger)
-        let devices = DeviceDependencies(tableServiceClient, logger)
-        let push = PushDependencies(pushSetup, tableServiceClient, logger)
+        let devices = DeviceDependencies(tableServiceClient, SystemDependencies.live, logger)
+        let push = PushDependencies(pushSetup, tableServiceClient, SystemDependencies.live, logger)
 
         let receive = ReceiveWorkflowRun.withDependencies { new ReceiveWorkflowRun.Dependencies with
           member _.GetSiteRepos () = settings.Repos

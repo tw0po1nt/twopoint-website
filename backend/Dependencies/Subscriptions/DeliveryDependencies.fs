@@ -25,11 +25,12 @@ type DeliveryDependencies(
   newsletters : BlobContainerClient,
   unsubscribeUri : Uri,
   tableServiceClient : TableServiceClient,
+  system : ISystemDependencies,
   logger : ILogger
 ) =
 
   let postDb = PostDb.live tableServiceClient logger
-  let commsService = CommsService.live emailClient tableServiceClient logger emailSender
+  let commsService = CommsService.live emailClient tableServiceClient system logger emailSender
 
   let unsubscribeUrlFor (subscription : Subscription) =
     let builder = UriBuilder unsubscribeUri

@@ -59,10 +59,13 @@ module internal CommsService =
         return email.OperationId
     }
 
-  let live (emailClient: EmailClient) tableServiceClient logger (sender: TwoPoint.Core.Shared.EmailAddress) =
-    
-    let commsDb = CommsDb.live tableServiceClient logger
-    
+  let withDb
+    (emailClient : EmailClient)
+    (commsDb : ICommsDb)
+    (system : ISystemDependencies)
+    (logger : ILogger)
+    (sender : TwoPoint.Core.Shared.EmailAddress)
+    =
     { new ICommsService with
       
       member _.SendEmail message =
@@ -83,18 +86,21 @@ module internal CommsService =
           
           let operationId, operationIdSource =
             match emailSendOperation.Id with
-            | "NOT_SET" -> Guid.NewGuid().ToString(), "twopoint" // todo: model as ISystemDependencies
+            | "NOT_SET" -> system.NewGuid().ToString(), "twopoint"
             | otherwise -> otherwise, "azure"
-          
+
           // Track the operation
           let email =
             { DbEmail.OperationId = operationId
               OperationIdSource = operationIdSource
-              CreatedDate =  DateTime.UtcNow // todo: model as ISystemDependencies
+              CreatedDate = system.GetUtcNow()
               Recipient = recipient
               Status = "sent"
               StatusReason = None }
-            
+
           return! track logger commsDb.CreateEmail email |> CancellableTask.map Ok
         }
     }
+
+  let live (emailClient : EmailClient) tableServiceClient (system : ISystemDependencies) logger sender =
+    withDb emailClient (CommsDb.live tableServiceClient logger) system logger sender

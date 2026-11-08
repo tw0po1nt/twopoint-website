@@ -6,15 +6,15 @@ open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 
 open Azure.Data.Tables
 open FsToolkit.ErrorHandling
 open Microsoft.Extensions.Logging
-
-open System
       
 type SubscriptionDependencies(
   tableServiceClient : TableServiceClient,
+  system : ISystemDependencies,
   logger : ILogger
 ) =
  
@@ -53,7 +53,7 @@ type SubscriptionDependencies(
 
   member _.CreateSubscription (newSubscription : NewSubscription) createdDateUtc = cancellableTaskResult {
     let newSubscription =
-      { DbSubscription.SubscriptionId = Guid.NewGuid().ToString()
+      { DbSubscription.SubscriptionId = system.NewGuid().ToString()
         CreatedDate = createdDateUtc 
         EmailAddress = newSubscription.EmailAddress |> EmailAddress.value
         Name = newSubscription.Name |> Option.map NonEmptyString.value
@@ -96,7 +96,7 @@ type SubscriptionDependencies(
   member _.CreateDelivery (subscription : Subscription) deliveryType (post : Post) operationId createdDateUtc = cancellableTaskResult {
     let newDelivery =
       { DbSubscriptionDelivery.SubscriptionId = subscription.Id.ToString()
-        DeliveryId = Guid.NewGuid().ToString()
+        DeliveryId = system.NewGuid().ToString()
         CreatedDate = createdDateUtc
         Type = DbSubscriptionDelivery.TypeToString deliveryType
         Post = post.Id |> Slug.value

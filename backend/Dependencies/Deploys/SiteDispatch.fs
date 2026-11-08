@@ -50,7 +50,13 @@ type Run =
   { [<JsonPropertyName "run_number">]
     RunNumber : int64 }
 
-type GitHubDispatch(httpClient : HttpClient, signer : CryptographyClient, app : GitHubApp, logger : ILogger) =
+type GitHubDispatch(
+  httpClient : HttpClient,
+  signer : CryptographyClient,
+  app : GitHubApp,
+  system : ISystemDependencies,
+  logger : ILogger
+) =
 
   let api = Uri "https://api.github.com/"
 
@@ -77,7 +83,7 @@ type GitHubDispatch(httpClient : HttpClient, signer : CryptographyClient, app : 
 
   let appJwt () = cancellableTask {
     let! ct = CancellableTask.getCancellationToken()
-    let unsigned = GitHubAppJwt.unsigned app.ClientId DateTimeOffset.UtcNow
+    let unsigned = GitHubAppJwt.unsigned app.ClientId (DateTimeOffset(system.GetUtcNow()))
     let! signed = signer.SignDataAsync(SignatureAlgorithm.RS256, Encoding.ASCII.GetBytes unsigned, ct)
     return GitHubAppJwt.complete unsigned signed.Signature
   }

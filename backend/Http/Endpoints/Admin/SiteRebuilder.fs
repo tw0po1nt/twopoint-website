@@ -4,6 +4,7 @@ open TwoPoint.Core.Deploys
 open TwoPoint.Core.Deploys.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Deploys
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 
 open Azure.Core
@@ -50,7 +51,7 @@ type SiteRebuilder(
       | Some app ->
         let signer = CryptographyClient(app.SigningKeyUri, credential)
         let app = { GitHubApp.ClientId = app.ClientId; SigningKey = app.SigningKeyUri }
-        Ok (deploy, GitHubDispatch(httpClientFactory.CreateClient(), signer, app, logger).Dispatch)
+        Ok (deploy, GitHubDispatch(httpClientFactory.CreateClient(), signer, app, SystemDependencies.live, logger).Dispatch)
 
   let dependencyError (problem : SiteConfigProblem) : DependencyError =
     { Dependency = Dependency.GitHub; Type = Unknown (exn (SiteConfigProblem.text problem)) }

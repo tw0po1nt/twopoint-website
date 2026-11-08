@@ -3,15 +3,15 @@ namespace TwoPoint.Dependencies.Notifications
 open TwoPoint.Core.Notifications
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Util
 
 open Azure.Data.Tables
 open FsToolkit.ErrorHandling
 open Microsoft.Extensions.Logging
 
-open System
-
 type DeviceDependencies(
   tableServiceClient : TableServiceClient,
+  system : ISystemDependencies,
   logger : ILogger
 ) =
 
@@ -45,4 +45,4 @@ type DeviceDependencies(
   member _.DeleteDevice (device : RegisteredDevice) =
     deviceDb.DeleteDevice (DbRegisteredDevice.FromDevice device)
 
-  member _.GetUtcNow () = DateTime.UtcNow
+  member _.GetUtcNow () = system.GetUtcNow()

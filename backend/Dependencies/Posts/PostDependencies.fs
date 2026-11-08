@@ -1,10 +1,11 @@
 namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Dependencies.Comms
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Comms
+open TwoPoint.Dependencies.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -19,11 +20,11 @@ open System.Web
 type EmailAddress = TwoPoint.Core.Shared.EmailAddress
 type EmailMessage = TwoPoint.Dependencies.Comms.EmailMessage
 
-type PostDependencies(
+type PostDependencies internal (
   validRedirectUris : Uri list,
-  emailClient : EmailClient,
-  emailSender : EmailAddress,
-  tableServiceClient : TableServiceClient,
+  postDb : IPostDb,
+  commsService : ICommsService,
+  system : ISystemDependencies,
   logger : ILogger
 ) =
 
@@ -41,10 +42,9 @@ type PostDependencies(
         None)
     |> PostCommentStats.OfComments
 
-  let postDb = PostDb.live tableServiceClient logger
-  let commsService = CommsService.live emailClient tableServiceClient logger emailSender
-
   let source = Dependency.Database
+
+  let newId () = system.NewGuid().ToString()
 
   let allApprovals = CommentApproval.all |> List.map _.ToString()
 
@@ -141,10 +141,10 @@ type PostDependencies(
 
   member _.CreateCommenter emailAddress name status = cancellableTaskResult {
     let newCommenter =
-      { ValidationId = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { ValidationId = newId ()
         DbCommenter.EmailAddress = emailAddress |> EmailAddress.value
         Name = name |> Option.map NonEmptyString.value
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
+        CreatedDate = system.GetUtcNow()
         Status = status.ToString().ToLower() } 
 
     let! (dbCommenter: DbCommenter) = postDb.CreateCommenter newCommenter
@@ -244,7 +244,7 @@ type PostDependencies(
     let newDbComment =
       DbComment.OfCommenter(
         string id,
-        DateTime.UtcNow, // todo: model as ISystemDependencies
+        system.GetUtcNow(),
         post.Id,
         commenter,
         newComment.Content,
@@ -252,7 +252,7 @@ type PostDependencies(
         replyEmails
       )
     let newDbStatus =
-      { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { DbCommentStatus.Id = newId ()
         CommentId = newDbComment.Id
         CreatedDate = newDbComment.CreatedDate
         Approval = approval.ToString().ToLower() }
@@ -298,17 +298,16 @@ type PostDependencies(
   }
 
   member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
-    // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/397): get the IDs and the time from an interface.
     let newDbComment =
       DbComment.OfAuthorReply(
-        Guid.NewGuid().ToString(),
-        DateTime.UtcNow,
+        newId (),
+        system.GetUtcNow(),
         post,
         content,
         topLevel
       )
     let newDbStatus =
-      { DbCommentStatus.Id = Guid.NewGuid().ToString()
+      { DbCommentStatus.Id = newId ()
         CommentId = newDbComment.Id
         CreatedDate = newDbComment.CreatedDate
         Approval = approval.ToString().ToLower() }
@@ -340,9 +339,9 @@ type PostDependencies(
 
   member _.UpdateCommentApproval (comment : Comment) approval = cancellableTaskResult {
     let newStatus =
-      { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { DbCommentStatus.Id = newId ()
         CommentId = comment.Id.ToString()
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
+        CreatedDate = system.GetUtcNow()
         Approval = approval.ToString().ToLower() }
 
     let! (dbCommentStatus: DbCommentStatus) = postDb.UpdateCommentStatus newStatus
@@ -353,3 +352,19 @@ type PostDependencies(
   member _.DeleteComment (post : Slug) (comment : Comment) = postDb.DeleteComment (Slug.value post) (comment.Id.ToString())
 
   member _.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris
+
+  new(
+    validRedirectUris : Uri list,
+    emailClient : EmailClient,
+    emailSender : EmailAddress,
+    tableServiceClient : TableServiceClient,
+    system : ISystemDependencies,
+    logger : ILogger
+  ) =
+    PostDependencies(
+      validRedirectUris,
+      PostDb.live tableServiceClient logger,
+      CommsService.live emailClient tableServiceClient system logger emailSender,
+      system,
+      logger
+    )

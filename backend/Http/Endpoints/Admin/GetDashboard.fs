@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -65,7 +66,7 @@ type GetDashboard (
         let response = req.CreateResponse HttpStatusCode.OK
 
         // Dependencies
-        let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, logger)
+        let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, SystemDependencies.live, logger)
         let getDashboard =
           GetDashboardQuery.withDependencies
             (PostListDependencies(config, emailClient, tableServiceClient, postStoreClient, texts, logger))

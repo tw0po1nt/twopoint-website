@@ -2,6 +2,7 @@ module TwoPoint.Dependencies.Tests.WebPushTests
 
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Util
 
 open Expecto
 open Microsoft.Extensions.Logging.Abstractions
@@ -74,7 +75,7 @@ let private subscription : PushSubscription =
 let private send (status : HttpStatusCode) =
   let _, vapid = p256Vapid ()
   let service = new FakePushService(status)
-  let sender = WebPushSender(new HttpClient(service), vapid, NullLogger.Instance)
+  let sender = WebPushSender(new HttpClient(service), vapid, SystemDependencies.live, NullLogger.Instance)
   let result = (sender.Send subscription (text "{}") (TimeSpan.FromHours 1.) CancellationToken.None).Result
   service, result
 
