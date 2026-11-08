@@ -2,9 +2,15 @@
   "name": "twopoint-admin",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
+    "prebuild": "node ../check-node.mjs",
     "build": "dotnet fable Admin.fsproj --outDir build/fable --extension .jsx --exclude Oxpecker.Solid.FablePlugin --silent && node build.mjs",
+    "prewatch": "node ../check-node.mjs",
     "watch": "dotnet fable watch Admin.fsproj --outDir build/fable --extension .jsx --exclude Oxpecker.Solid.FablePlugin --sourceMaps --silent --runWatch node build.mjs --dev",
+    "pretest": "node ../check-node.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {

@@ -14,6 +14,12 @@ series with `series: <slug>`. A copy of the 10 posts and the 2 series records at
 Git is the test fixture in `frontend/Generator.Tests/posts/`. `dotnet test` reads the fixture and
 never reads the post store.
 
+`frontend/Widgets/` and `frontend/Admin/` each pin a Node major version in `.node-version`. On an
+older Node, `engines` in `package.json` and `engine-strict` in `.npmrc` stop `npm ci`. The scripts
+`prebuild`, `prewatch`, and `pretest` run `frontend/check-node.mjs`, which stops `npm run build`,
+`npm run watch`, and `npm test`. Run `nvm use` in the package to select the pinned Node. A change
+of the pin needs the same change to `engines.node`, or the check fails.
+
 To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
 compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in
 `frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
