@@ -484,7 +484,6 @@ module GetCommenter =
           let own = comments |> List.map (fun (posted : PostedComment) -> posted.Comment)
           let ownIds = own |> List.map _.Id |> Set.ofList
 
-          // A reply is on the post of its top-level comment.
           let otherTopLevels =
             comments
             |> List.choose (fun (posted : PostedComment) -> posted.Comment.Parent |> Option.map (fun parent -> posted.Post, parent))

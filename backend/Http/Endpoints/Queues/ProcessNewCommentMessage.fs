@@ -41,7 +41,7 @@ type ProcessNewCommentMessage(
         NewCommentQueue.Name
       )
     | commentJson when isNull commentJson.Post ->
-      // A message from before `Post` has no partition for the read. Throw so that it goes to the dead-letter queue.
+      // A message from before `Post` has no partition for the read.
       logger.LogError("Unable to process '{queue}' message of comment '{commentId}': no post", NewCommentQueue.Name, commentJson.CommentId)
       failwith $"The '{NewCommentQueue.Name}' message of comment '{commentJson.CommentId}' has no post"
     | commentJson ->

@@ -914,12 +914,10 @@ module DeleteComment =
   type Dependencies =
     abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
-    /// `post` is the partition of the comment.
     abstract member DeleteComment: post: Slug -> comment: Comment -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    // A reply is on the post of its top-level comment, so each comment of a thread is on one post.
     let deleteComments (post : Slug) (comments : Comment list) : DependencyResult<unit> =
       cancellableTaskResult {
         for comment in comments do
@@ -1148,16 +1146,15 @@ module DeleteCommenter =
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
     abstract member GetPostedCommentsOfCommenter: commenter: Commenter -> DependencyResult<PostedComment list>
     abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
-    /// `post` is the partition of the comment.
     abstract member DeleteComment: post: Slug -> comment: Comment -> DependencyResult<unit>
     abstract member DeleteCommenter: commenter: Commenter -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let deleteComments (comments : (Slug * Comment) list) : DependencyResult<unit> =
+    let deleteComments (comments : PostedComment list) : DependencyResult<unit> =
       cancellableTaskResult {
-        for post, comment in comments do
-          do! dependencies.DeleteComment post comment
+        for posted in comments do
+          do! dependencies.DeleteComment posted.Post posted.Comment
       }
 
     let repliesOf (comments : PostedComment list) =

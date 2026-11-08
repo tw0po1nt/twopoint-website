@@ -460,7 +460,7 @@ type internal IPostDb =
     approvals: string list
       -> commenter: DbCommenter
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
-  /// A point read: `postId` is the partition of the comment.
+  /// `postId` is the partition of the comment.
   abstract member GetComment:
     postId: string
       -> commentId: string
@@ -470,7 +470,7 @@ type internal IPostDb =
       -> status: DbCommentStatus
       -> CancellableTaskResult<DbComment * DbCommentWriter * DbCommentStatus, DependencyError>
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
-  /// A point delete: `postId` is the partition of the comment.
+  /// `postId` is the partition of the comment.
   abstract member DeleteComment: postId: string -> commentId: string -> CancellableTaskResult<unit, DependencyError>
   abstract member CreateReplyEmailStop: stop: DbReplyEmailStop -> CancellableTaskResult<DbReplyEmailStop, DependencyError>
   abstract member GetReplyEmailStop: token: string -> CancellableTaskResult<DbReplyEmailStop option, DependencyError>

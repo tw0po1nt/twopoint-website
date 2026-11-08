@@ -10,8 +10,6 @@ module WelcomeQueue =
   [<Literal>]
   let Name = "subscription_welcome"
 
-/// `Post` is the partition of the comment. `Queues-ProcessNewCommentMessage` refuses a message with no `Post`, so it goes to the
-/// dead-letter queue.
 type NewCommentMessage =
   { Post : string
     CommentId : string }

@@ -638,13 +638,13 @@ let private deleteTests =
       let onPost (post : Post) (comments : Comment list) = comments |> List.map (fun comment -> post.Id, string comment.Id)
 
       Expect.equal
-        (removal.Comments |> List.map (fun (post, comment) -> post, string comment.Id) |> Set.ofList)
+        (removal.Comments |> List.map (fun posted -> posted.Post, string posted.Comment.Id) |> Set.ofList)
         (onPost olderPost [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; adaInBenThread ]
          @ onPost latestPost [ adaOnLatest; benInAdaOnLatest ]
          |> Set.ofList)
         "Expected each comment with the post of its thread"
       Expect.equal
-        (removal.Comments |> List.map snd |> List.skipWhile _.Parent.IsSome |> List.forall _.Parent.IsNone)
+        (removal.Comments |> List.map _.Comment |> List.skipWhile _.Parent.IsSome |> List.forall _.Parent.IsNone)
         true
         "Expected each reply before the top-level comments"
       Expect.equal removal.Others 3 "Expected the replies from Ben and from the author on both posts"
