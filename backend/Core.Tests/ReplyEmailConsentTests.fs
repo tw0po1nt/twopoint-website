@@ -87,6 +87,7 @@ type private FakePostComment(existing : Commenter, failing : Write option) =
     member _.CreateReplyEmailStop stop =
       write Write.Stop () |> CancellableTaskResult.map (fun () -> stops.Add stop)
     member _.QueueNewCommentNotice _ = write Write.Notice ()
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private post (replyTo : string option) (replyEmails : bool) (dependencies : FakePostComment) =

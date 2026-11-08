@@ -9,6 +9,7 @@ open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
+open Azure.Messaging.ServiceBus
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -41,6 +42,7 @@ type ReplyAsAuthor(
   config: Config,
   emailClient: EmailClient,
   logger: ILogger<ReplyAsAuthor>,
+  serviceBus: ServiceBusClient,
   tableServiceClient: TableServiceClient
 ) =
 
@@ -79,6 +81,7 @@ type ReplyAsAuthor(
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
           member _.CreateAuthorReply post topLevel content approval =
             postDependencies.CreateAuthorReply post topLevel content approval
+          member _.QueueReplyEmail post reply = ReplyEmailQueueClient.enqueue serviceBus logger op post reply
           member _.Stage = config.Stage
         }
 

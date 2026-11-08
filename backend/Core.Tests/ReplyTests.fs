@@ -74,6 +74,7 @@ type private FakePostReply(post : Post, existing : Commenter, stored : PostedCom
     member _.QueueNewCommentNotice commentId =
       queued.Add commentId
       CancellableTaskResult.singleton ()
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private postReplyWith (content : string) (replyTo : string) (dependencies : FakePostReply) =
@@ -174,6 +175,7 @@ type private FakeThreads(post : Post, initial : Comment list) =
       let updated = { comment with Status = { comment.Status with Approval = approval } }
       comments <- comments |> List.map (fun existing -> if existing.Id = comment.Id then updated else existing)
       CancellableTaskResult.singleton updated
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
 
   interface GetCommentsForPost.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
@@ -183,7 +185,8 @@ type private FakeThreads(post : Post, initial : Comment list) =
 
 let private setApproval (threads : FakeThreads) (id : string) (approval : CommentApproval) =
   let dto =
-    { CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId id
+    { CommentApprovalUpdate.Dto.Post = CommentApprovalUpdate.Post (olderPost.Id.ToString())
+      CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId id
       CommentApprovalUpdate.Dto.Approval = CommentApprovalUpdate.Approval (approval.ToString()) }
   (UpdateCommentApproval.withDependencies threads dto CancellationToken.None).Result |> ok |> ignore
 
@@ -266,6 +269,7 @@ type private FakeAuthorReply(stored : PostedComment list) =
         (content.ToString())
       |> ok
       |> CancellableTaskResult.singleton
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private replyAsAuthor (replyTo : string) (dependencies : FakeAuthorReply) =

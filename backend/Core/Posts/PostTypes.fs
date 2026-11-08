@@ -65,6 +65,9 @@ module Commenter =
         Status = status }
   }
 
+  let displayName (commenter : Commenter) =
+    commenter.Name |> Option.map NonEmptyString.value |> Option.defaultValue "Anonymous"
+
 
 type CommentId =
   private | CommentId of Guid

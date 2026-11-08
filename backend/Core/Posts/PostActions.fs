@@ -576,6 +576,7 @@ module PostComment =
     abstract member NewReplyEmailStopToken: unit -> ReplyEmailStopToken
     abstract member CreateReplyEmailStop: stop: ReplyEmailStop -> DependencyResult<unit>
     abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
+    abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Action =
@@ -593,6 +594,7 @@ module PostComment =
         let! (created : Comment) = dependencies.CreateComment id post commenter comment topLevel approval replyEmails
 
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post.Id None created
 
         return RenderedComment.ofComment dependencies.Stage created
       }
@@ -685,6 +687,7 @@ module ReplyAsAuthor =
         -> content: NonEmptyString
         -> approval: CommentApproval
         -> DependencyResult<Comment>
+    abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Action =
@@ -697,9 +700,11 @@ module ReplyAsAuthor =
         for comment in place.Approvals do
           let! updated = dependencies.UpdateCommentApproval comment CommentApproval.Approved
           approved.Add updated
+          do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail reply.Post (Some comment.Status.Approval) updated
 
         let approved = List.ofSeq approved
         let! created = dependencies.CreateAuthorReply reply.Post place.TopLevel reply.Content CommentApproval.Approved
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail reply.Post None created
         return Event.Replied(RenderedComment.ofComment dependencies.Stage created, approved)
       }
 
@@ -731,25 +736,31 @@ module ReplyAsAuthor =
 // Input
 
 type CommentApprovalUpdate =
-  { CommentId : CommentId
+  { Post : Slug
+    CommentId : CommentId
     Approval : CommentApproval }
 
 module CommentApprovalUpdate =
 
+  type Post = Post of string
   type CommentId = CommentId of string
   type Approval = Approval of string
 
   type Dto =
-    { CommentId : CommentId 
+    { Post : Post
+      CommentId : CommentId 
       Approval : Approval }
 
   let create (dto : Dto) = validation {
+    let (Post post) = dto.Post
     let (CommentId commentId) = dto.CommentId
     let (Approval approval) = dto.Approval
-    let! commentId = CommentId.create commentId
-    let! approval = CommentApproval.create approval
+    let! post = Slug.create post
+    and! commentId = CommentId.create commentId
+    and! approval = CommentApproval.create approval
     return
-      { CommentApprovalUpdate.CommentId = commentId
+      { CommentApprovalUpdate.Post = post
+        CommentId = commentId
         Approval = approval }
   }
 
@@ -809,11 +820,16 @@ module UpdateCommentApproval =
       comment: Comment
         -> approval: CommentApproval
         -> DependencyResult<Comment>
+    abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentApprovalUpdated (Success.Updated (comment, approval)) : DependencyResult<Comment> =
-      dependencies.UpdateCommentApproval comment approval
+    let handleCommentApprovalUpdated (post : Slug) (Success.Updated (comment, approval)) : DependencyResult<Comment> =
+      cancellableTaskResult {
+        let! updated = dependencies.UpdateCommentApproval comment approval
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post (Some comment.Status.Approval) updated
+        return updated
+      }
 
     fun approvalUpdate -> cancellableTaskResult {
       let! (approvalUpdate : CommentApprovalUpdate) =
@@ -829,7 +845,7 @@ module UpdateCommentApproval =
 
       return!
         decision
-        |> Result.traverseCancellableTask handleCommentApprovalUpdated
+        |> Result.traverseCancellableTask (handleCommentApprovalUpdated approvalUpdate.Post)
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Updated)
           (ActionError.Logic >> ActionResult.failure)

@@ -17,6 +17,15 @@ module NewCommentQueue =
   [<Literal>]
   let Name = "new_comment"
 
+type ReplyEmailMessage =
+  { Post : string
+    ReplyId : string }
+
+/// The Service Bus queue that contains a message for each first approval of a reply
+module ReplyEmailQueue =
+  [<Literal>]
+  let Name = "reply_email"
+
 type NewPostDeliveryJson =
   { SubscriptionId : string
     Post : string

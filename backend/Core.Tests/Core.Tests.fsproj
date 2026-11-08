@@ -28,6 +28,7 @@
     <Compile Include="ReplyTests.fs" />
     <Compile Include="ReplyEmailConsentTests.fs" />
     <Compile Include="ReplyEmailStopTests.fs" />
+    <Compile Include="ReplyEmailTests.fs" />
     <Compile Include="PostDraftTests.fs" />
     <Compile Include="PostTermsTests.fs" />
     <Compile Include="PostPreviewTests.fs" />
