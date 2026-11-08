@@ -22,7 +22,8 @@ of the pin needs the same change to `engines.node`, or the check fails.
 
 To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
 compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in
-`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
+`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. It also checks the Node
+pin of each Fable package. Then run
 `dotnet run --project frontend/Generator -- pull --account <name>`. The command downloads each blob
 in `published` and `series` into `frontend/content/posts/`, which Git ignores. It uses
 `DefaultAzureCredential`, so on the local stage it uses your `az login`. The account name is in the

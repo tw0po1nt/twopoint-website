@@ -1,6 +1,3 @@
-// The pre-scripts of each Fable package run this file before build, watch, and test.
-// The pin is the Node major in `.node-version` of the package, and `engines.node` in
-// `package.json` must be `>=<pin>`, so that `engine-strict` in `.npmrc` stops `npm ci` too.
 // This file must run on an old Node, so it uses no new syntax and no package.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
