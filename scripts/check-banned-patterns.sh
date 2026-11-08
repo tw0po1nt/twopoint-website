@@ -3,8 +3,8 @@
 # `.banned-patterns` at the repo root.
 #
 # Each list line has an extended regular expression, a tab, and the message to
-# report. The check reads Markdown files and F# source files. In F#, it reads
-# comments and string literals. Add a case arm under the LANGUAGE marker below
+# report. The check reads Markdown files, F# source files, and JavaScript source
+# files. In F# and JavaScript, it reads comments and string literals. Add a case arm under the LANGUAGE marker below
 # when this repo adopts another source language.
 # It strips fenced code blocks and inline code spans first, so a rule can name
 # the text it forbids by writing that text in backticks. A file that git
@@ -98,6 +98,68 @@ strip_fsharp='
   }
 '
 
+# JavaScript: keep the text of `//` and `/* */` comments, of string literals,
+# and of template literals. A block comment and a template literal can span
+# lines, so the state continues from one line to the next. A `${ }` in a
+# template literal is code, and it can contain a template literal. A `/` after
+# an operator, an opening bracket, or a keyword such as `return` starts a
+# regular expression literal, and the check skips it.
+strip_js='
+  BEGIN { q = sprintf("%c", 39); dq = sprintf("%c", 34); bt = sprintf("%c", 96); sp = 0; mode[0] = "code"; prev = "" }
+  {
+    line = $0; n = length(line); out = ""; i = 1
+    while (i <= n) {
+      c = substr(line, i, 1); c2 = substr(line, i, 2)
+      if (cmt) {
+        if (c2 == "*/") { cmt = 0; out = out " "; i += 2; continue }
+        out = out c; i++; continue
+      }
+      if (str != "") {
+        if (c == "\\") { out = out " "; i += 2; continue }
+        if (c == str) { str = ""; out = out " "; prev = "x"; i++; continue }
+        out = out c; i++; continue
+      }
+      if (mode[sp] == "tpl") {
+        if (c == "\\") { out = out " "; i += 2; continue }
+        if (c == bt) { sp--; out = out " "; prev = "x"; i++; continue }
+        if (c2 == "${") { mode[++sp] = "code"; braces[sp] = 0; out = out " "; prev = "("; i += 2; continue }
+        out = out c; i++; continue
+      }
+      if (c2 == "//") { out = out " " substr(line, i + 2); break }
+      if (c2 == "/*") { cmt = 1; i += 2; continue }
+      if (c == q || c == dq) { str = c; i++; continue }
+      if (c == bt) { mode[++sp] = "tpl"; i++; continue }
+      if (c == "/" && (prev == "" || index("(,=:[!&|?{};+-*%<>~^", prev) > 0)) {
+        i++; cls = 0
+        while (i <= n) {
+          c = substr(line, i, 1)
+          if (c == "\\") { i += 2; continue }
+          if (c == "[") cls = 1
+          else if (c == "]") cls = 0
+          else if (c == "/" && !cls) { i++; break }
+          i++
+        }
+        prev = "x"; continue
+      }
+      if (sp > 0 && c == "{") braces[sp]++
+      if (sp > 0 && c == "}") {
+        if (braces[sp] == 0) { sp--; prev = "x"; i++; continue }
+        braces[sp]--
+      }
+      if (c !~ /[[:space:]]/) prev = c
+      if (c ~ /[A-Za-z0-9_$]/) {
+        j = i; while (j <= n && substr(line, j, 1) ~ /[A-Za-z0-9_$]/) j++
+        word = substr(line, i, j - i)
+        prev = (word ~ /^(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/) ? "(" : "x"
+        i = j; continue
+      }
+      i++
+    }
+    gsub(/`[^`]*`/, "", out)
+    print out
+  }
+'
+
 found=0
 
 # Prints each hit in the stripped text of one source. $1 is the label for a hit.
@@ -123,11 +185,12 @@ else
     case "$file" in
       *.md) stripped="$(awk "$strip_markdown" "$file")" ;;
       *.fs | *.fsi | *.fsx) stripped="$(awk "$strip_fsharp" "$file")" ;;
+      *.js | *.mjs | *.cjs) stripped="$(awk "$strip_js" "$file")" ;;
       *) continue ;;
     esac
 
     report_hits "$file" "$stripped"
-  done < <(git ls-files --cached --others --exclude-standard -- '*.md' '*.fs' '*.fsi' '*.fsx')
+  done < <(git ls-files --cached --others --exclude-standard -- '*.md' '*.fs' '*.fsi' '*.fsx' '*.js' '*.mjs' '*.cjs')
 fi
 
 if [ "$found" -eq 1 ]; then

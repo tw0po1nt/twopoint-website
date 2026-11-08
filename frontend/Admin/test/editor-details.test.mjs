@@ -148,7 +148,7 @@ test('a series sets the category to Series and locks the category picker', async
   assert.equal(save.body.details.category, 'Series');
 });
 
-test('the removal of the series leaves the post with no category and unlocks the picker', async () => {
+test('the removal of the series leaves the post with no category and enables the picker', async () => {
   const select = field('details-series');
   select.value = '';
   select.dispatchEvent(new Event('change', { bubbles: true }));

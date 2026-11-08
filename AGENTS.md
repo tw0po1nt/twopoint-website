@@ -234,9 +234,9 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips the posts
-  of the test fixture in `frontend/Generator.Tests/posts/`. The hook also
-  checks the text of `git commit` and of `gh` issue and PR commands.
+  reads Markdown files, and the comments and strings of F# and JavaScript files. The check skips
+  the posts of the test fixture in `frontend/Generator.Tests/posts/`. The hook also checks the text
+  of `git commit` and of `gh` issue and PR commands.
   `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - UI copy: `docs/standards/ui-copy.md`. UI copy is each string that a person sees in the admin,
   on the site, in an email, or in a push notification. It follows that document, and the STE

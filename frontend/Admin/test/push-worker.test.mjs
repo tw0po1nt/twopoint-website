@@ -33,7 +33,7 @@ const start = ({ pages = [] } = {}) => {
   return { listeners, subscribed, messages };
 };
 
-// The worker runs in another realm, so the test compares plain values.
+// The worker runs in another JavaScript global scope, so the test compares plain values.
 const types = (worker) => worker.messages.map(([page, message]) => [page, message.type]);
 
 const fire = async (worker, type, event) => {

@@ -170,7 +170,7 @@ test('the actions menu has Add image, and it opens the file picker for images an
   await reply(200, { success: true, message: null, data: { name: 'dddddddddddddddd.gif', url: `${base}/dddddddddddddddd.gif` } });
 });
 
-test('a retry puts the image where the placeholder moved to, not where the paste happened', async () => {
+test('a retry puts the image at the new position of the placeholder', async () => {
   view().dispatch({ selection: { anchor: 0 } });
   await paste(new File(['png'], 'bird.png', { type: 'image/png' }));
   view().dispatch({ changes: { from: 0, insert: 'Intro. ' } });

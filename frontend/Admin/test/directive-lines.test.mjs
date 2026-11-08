@@ -27,6 +27,6 @@ test('text that only looks like a directive is not a directive line', () => {
   assert.deepEqual(directives('A sentence with ::youtube{id="x"} inside.\n\n::: not a directive\n\n::name without braces\n'), []);
 });
 
-test('a directive line inside a code fence is code, not a directive line', () => {
+test('a directive line inside a code fence is code and gives no directive', () => {
   assert.deepEqual(directives('```\n::youtube{id="x"}\n```\n'), []);
 });
