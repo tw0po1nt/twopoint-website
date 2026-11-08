@@ -157,6 +157,19 @@ second stop answers `stopped` and writes nothing. The rule is the pure module
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a
 deploy to create the queue.
 
+Each first approval of a reply puts the slug and the reply ID on the Service Bus queue
+`reply_email`: a reply that a trusted commenter or the author posts, and a change of a reply from
+new to approved. A change from rejected to approved puts nothing on the queue. The rule is the pure
+function `ReplyEmailRule.isFirstApproval`. The function `Queues-ProcessReplyEmailMessage` applies
+the gate `ReplyEmailRule.check` again, also for a ban of the recipient, and sends the reply email
+through ACS. The pure function `ReplyEmailContent.compose` makes the subject, the HTML, and the
+plain text. The function writes `ReplyEmailSentDate` on the reply after ACS accepts the email, and
+it skips a reply that has that date, so a retry sends no second email. A message that fails each
+retry goes to the dead-letter queue. The setting `ReplyEmail:SiteUri` is the root URL of the site
+that each email links to. On the local stage it is `http://localhost:4321/`. Run
+`scripts/setup-reply-email-queue.sh` before a deploy. It creates the queue and sets
+`ReplyEmail:SiteUri` on the Function App.
+
 The backend reads the post store for the post list. The setting `Azure:PostStoreUri` names the
 account. On the local stage it is the Azurite URL. `scripts/setup-post-store-access.sh` gives the
 backend identity read and write on the four containers and sets the setting on the Function App.

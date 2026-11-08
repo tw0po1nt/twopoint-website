@@ -313,12 +313,13 @@ type internal DbReplyEmailConsent =
 ///    "Writer": "&lt;commenter | author&gt;" | null,
 ///    "ReplyEmailsConsentDate": "&lt;date&gt;" | null,
 ///    "ReplyEmailsStopToken": "&lt;guid&gt;" | null,
-///    "ReplyEmailsStopDate": "&lt;date&gt;" | null
+///    "ReplyEmailsStopDate": "&lt;date&gt;" | null,
+///    "ReplyEmailSentDate": "&lt;date&gt;" | null
 ///}
 /// </c>
 /// A missing <c>ParentId</c> is a top-level comment, and a missing <c>Writer</c> is a commenter.
 /// <c>CommenterId</c> is empty when the writer is the author. A missing <c>ReplyEmailsConsentDate</c> is a comment
-/// with no reply-email consent.
+/// with no reply-email consent. <c>ReplyEmailSentDate</c> is the send record of the reply email of a reply.
 /// </remarks>
 type internal DbComment =
   { Id : string
@@ -469,6 +470,10 @@ type internal IPostDb =
   abstract member GetReplyEmailStop: token: string -> CancellableTaskResult<DbReplyEmailStop option, DependencyError>
   abstract member UpdateReplyEmailConsent:
     postId: string -> commentId: string -> consent: ReplyEmailConsent -> CancellableTaskResult<unit, DependencyError>
+  abstract member GetReplyEmailSentDate:
+    postId: string -> commentId: string -> CancellableTaskResult<DateTime option, DependencyError>
+  abstract member RecordReplyEmailSent:
+    postId: string -> commentId: string -> sentDate: DateTime -> CancellableTaskResult<unit, DependencyError>
 
 
 module internal PostDbError =
@@ -564,6 +569,10 @@ module internal PostDb =
     let commentStatusesTable = "commentStatuses"
     let commentersTable = "commenters"
     let replyEmailStopsTable = "replyEmailStops"
+    let replyEmailSentDateProperty = "ReplyEmailSentDate"
+
+    let replyEmailSentDate (entity : TableEntity) =
+      replyEmailSentDateProperty |> entity.TryGetString |> Option.traverseValidation DateTime.TryValidateUtc
 
     let getCommenterByValidationId validationId =
       validationId |> trySingle commentersTable DbCommenter.FromEntity (Some validationId)
@@ -722,6 +731,19 @@ module internal PostDb =
         TableEntity(postId, commentId)
         |> update commentsTable PostDbError.validation DbComment.FromEntity
         <| DbReplyEmailConsent.Update consent
+        |> CancellableTaskResult.ignore
+
+      member _.GetReplyEmailSentDate postId commentId =
+        commentId
+        |> trySingle commentsTable replyEmailSentDate (Some postId)
+        |> CancellableTaskResult.map Option.flatten
+
+      member _.RecordReplyEmailSent postId commentId sentDate =
+        let withSentDate (entity : TableEntity) =
+          entity[replyEmailSentDateProperty] <- sentDate.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)
+          entity
+
+        update commentsTable PostDbError.validation DbComment.FromEntity (TableEntity(postId, commentId)) withSentDate
         |> CancellableTaskResult.ignore
     }
   

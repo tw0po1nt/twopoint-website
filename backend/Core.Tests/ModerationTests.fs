@@ -50,10 +50,12 @@ type private FakeApprovalDependencies(existing : Comment option) =
     member _.UpdateCommentApproval comment approval =
       updates.Add approval
       CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
 
 let private update (dependencies : FakeApprovalDependencies) (approval : CommentApproval) =
   let dto =
-    { CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId firstId
+    { CommentApprovalUpdate.Dto.Post = CommentApprovalUpdate.Post (olderPost.Id.ToString())
+      CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId firstId
       CommentApprovalUpdate.Dto.Approval = CommentApprovalUpdate.Approval (approval.ToString()) }
   (UpdateCommentApproval.withDependencies dependencies dto CancellationToken.None).Result
 
@@ -251,6 +253,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
         CancellableTaskResult.error { Dependency = Dependency.ServiceBus; Type = Unknown (exn "The queue is down") }
       else
         CancellableTaskResult.singleton ()
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
 
 let private postCommentWith (content : string) (dependencies : FakePostCommentDependencies) =
   let dto =

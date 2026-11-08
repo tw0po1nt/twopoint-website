@@ -120,6 +120,7 @@ type PostComment (
       member this.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid (Guid.NewGuid())
       member this.CreateReplyEmailStop stop = postDependencies.CreateReplyEmailStop stop
       member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId
+      member this.QueueReplyEmail post reply = ReplyEmailSender.queue serviceBus logger (nameof PostComment) post reply
       member this.Stage = config.Stage
     }
 

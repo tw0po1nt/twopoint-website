@@ -7,9 +7,11 @@ open TwoPoint.Core.Util
 open FsToolkit.ErrorHandling
 open IcedTasks
 
+/// `Content` is the HTML part. A message with no `PlainText` has only the HTML part.
 type EmailMessage =
   { Subject : NonEmptyString
     Content : NonEmptyString
+    PlainText : NonEmptyString option
     Recipient : EmailAddress }
   
 module EmailMessage =
@@ -18,7 +20,14 @@ module EmailMessage =
     let! subject = subject |> NonEmptyString.create (Some (nameof subject))
     let! content = content |> NonEmptyString.create (Some (nameof content))
     let! recipient = recipient |> EmailAddress.create
-    return { Subject = subject; Content = content; Recipient = recipient }
+    return { Subject = subject; Content = content; PlainText = None; Recipient = recipient }
+  }
+
+  let createWithPlainText subject content plainText (recipient : EmailAddress) = validation {
+    let! subject = subject |> NonEmptyString.create (Some (nameof subject))
+    and! content = content |> NonEmptyString.create (Some (nameof content))
+    and! plainText = plainText |> NonEmptyString.create (Some (nameof plainText))
+    return { Subject = subject; Content = content; PlainText = Some plainText; Recipient = recipient }
   }
   
 type ICommsService =
@@ -53,6 +62,7 @@ module internal CommsService =
             recipientAddress = recipient,
             subject = message.Subject.ToString(),
             htmlContent = message.Content.ToString(),
+            plainTextContent = (message.PlainText |> Option.map NonEmptyString.value |> Option.toObj),
             cancellationToken = ct
           )
           

@@ -14,6 +14,7 @@
     <Compile Include="Endpoints\Auth.fs" />
     <Compile Include="Endpoints\CoreExtensions.fs" />
     <Compile Include="Endpoints\JsonExtensions.fs" />
+    <Compile Include="Endpoints\ReplyEmailSender.fs" />
     <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
     <Compile Include="Endpoints\Blog\PostComment.fs" />
     <Compile Include="Endpoints\Blog\PreviewComment.fs" />
@@ -64,6 +65,7 @@
     <Compile Include="Endpoints\Admin\DeleteSubscription.fs" />
     <Compile Include="Endpoints\Github\ReceiveGitHubWebhook.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewCommentMessage.fs" />
+    <Compile Include="Endpoints\Queues\ProcessReplyEmailMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessWelcomeMessage.fs" />
     <Compile Include="Endpoints\Queues\ProcessNewPostDeliveryMessage.fs" />
     <Compile Include="Endpoints\Health.fs" />

@@ -336,7 +336,8 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
           CancellableTaskResult.singleton { posted with Content = newComment.Content }
         member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
         member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
-        member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton () }
+        member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton ()
+        member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton () }
 
   let dto =
     { NewComment.Dto.Post = NewComment.Post "my-draft"
