@@ -61,7 +61,7 @@ type UpdateCommentApproval(
           
           member _.GetCommentById commentId = postDependencies.GetCommentById commentId
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
-          member _.QueueReplyEmail post reply = ReplyEmailSender.queue serviceBus logger op post reply
+          member _.QueueReplyEmail post reply = ReplyEmailQueueClient.enqueue serviceBus logger op post reply
         }
 
         let approvalUpdate =

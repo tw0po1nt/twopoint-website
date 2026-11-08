@@ -14,7 +14,7 @@
     <Compile Include="Endpoints\Auth.fs" />
     <Compile Include="Endpoints\CoreExtensions.fs" />
     <Compile Include="Endpoints\JsonExtensions.fs" />
-    <Compile Include="Endpoints\ReplyEmailSender.fs" />
+    <Compile Include="Endpoints\ReplyEmailQueueClient.fs" />
     <Compile Include="Endpoints\Blog\GetCommentsForPost.fs" />
     <Compile Include="Endpoints\Blog\PostComment.fs" />
     <Compile Include="Endpoints\Blog\PreviewComment.fs" />

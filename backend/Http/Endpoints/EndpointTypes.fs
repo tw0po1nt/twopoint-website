@@ -17,7 +17,6 @@ module NewCommentQueue =
   [<Literal>]
   let Name = "new_comment"
 
-/// `Post` is the slug of the post, and `ReplyId` is the ID of the reply.
 type ReplyEmailMessage =
   { Post : string
     ReplyId : string }

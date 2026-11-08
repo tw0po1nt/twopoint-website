@@ -38,12 +38,27 @@ module internal CommsService =
   
   open Azure
   open Azure.Communication.Email
-  
+  open Microsoft.Extensions.Logging
+
   open System
-  
+
   let private runComms logger op fn =
     runDependencyWithLogging Dependency.Communications logger op fn
-  
+
+  /// ACS has the email at this step, so a failed tracking row must not fail the send and cause a second email.
+  let track
+    (logger : ILogger)
+    (createEmail : DbEmail -> CancellableTaskResult<DbEmail, DependencyError>)
+    (email : DbEmail)
+    : CancellableTask<OperationId> =
+    cancellableTask {
+      match! createEmail email with
+      | Ok (dbEmail : DbEmail) -> return dbEmail.OperationId
+      | Error error ->
+        logger.LogWarning("ACS took the email {operationId}, but its tracking row failed: {error}", email.OperationId, error)
+        return email.OperationId
+    }
+
   let live (emailClient: EmailClient) tableServiceClient logger (sender: TwoPoint.Core.Shared.EmailAddress) =
     
     let commsDb = CommsDb.live tableServiceClient logger
@@ -80,7 +95,6 @@ module internal CommsService =
               Status = "sent"
               StatusReason = None }
             
-          let! (dbEmail: DbEmail) = commsDb.CreateEmail email
-          return dbEmail.OperationId
+          return! track logger commsDb.CreateEmail email |> CancellableTask.map Ok
         }
     }

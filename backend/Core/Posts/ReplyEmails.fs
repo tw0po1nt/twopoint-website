@@ -10,7 +10,6 @@ open System
 open System.Net
 open System.Text.RegularExpressions
 
-/// A reply has at most one reply email.
 [<RequireQualifiedAccess>]
 type ReplyEmailRecord =
   | NotSent
@@ -30,7 +29,6 @@ type ReplyEmailSkip =
   | OwnReply
   | PostNotPublished
 
-/// A reply that passes the gate, with the commenter of its top-level comment.
 type ReplyEmailSend =
   { Post : Slug
     PostTitle : NonEmptyString
@@ -42,8 +40,7 @@ type ReplyEmailSend =
 [<RequireQualifiedAccess>]
 module ReplyEmailRule =
 
-  /// `before` is None for a comment that its writer posts as approved. A change from rejected to approved is not a
-  /// first approval, because the reply can have had an approval before the reject.
+  /// `before` is None for a comment that its writer posts as approved.
   let isFirstApproval (before : CommentApproval option) (comment : Comment) =
     match comment.Parent, before, comment.Status.Approval with
     | Some _, (None | Some CommentApproval.New), CommentApproval.Approved -> true
@@ -89,10 +86,9 @@ module ReplyEmailRule =
       | None -> Error ReplyEmailSkip.TopLevelMissing
 
 [<RequireQualifiedAccess>]
-module ReplyEmailQueue =
+module QueueReplyEmail =
 
-  /// A failed queue loses the email and keeps the approval.
-  let queueAtFirstApproval
+  let atFirstApproval
     (queue : Slug -> CommentId -> DependencyResult<unit>)
     (post : Slug)
     (before : CommentApproval option)
@@ -122,7 +118,7 @@ module ReplyEmailContent =
 
   let private replierName (authorName : string) (reply : Comment) =
     match reply.Writer with
-    | CommentWriter.Commenter commenter -> commenter.Name |> Option.map NonEmptyString.value |> Option.defaultValue "Anonymous"
+    | CommentWriter.Commenter commenter -> Commenter.displayName commenter
     | CommentWriter.Author -> authorName
 
   let private recipientName (recipient : Commenter) =
@@ -151,7 +147,7 @@ module ReplyEmailContent =
 
   let private encode (text : string) = WebUtility.HtmlEncode text
 
-  /// `authorName` is the author of the post. `sentDate` gives the year of the copyright line.
+  /// `sentDate` gives the year of the copyright line.
   let compose
     (stage : TwoPoint.Site.Render.Stage)
     (site : Uri)

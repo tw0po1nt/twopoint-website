@@ -81,7 +81,7 @@ type ReplyAsAuthor(
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
           member _.CreateAuthorReply post topLevel content approval =
             postDependencies.CreateAuthorReply post topLevel content approval
-          member _.QueueReplyEmail post reply = ReplyEmailSender.queue serviceBus logger op post reply
+          member _.QueueReplyEmail post reply = ReplyEmailQueueClient.enqueue serviceBus logger op post reply
           member _.Stage = config.Stage
         }
 

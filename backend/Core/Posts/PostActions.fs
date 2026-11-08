@@ -594,7 +594,7 @@ module PostComment =
         let! (created : Comment) = dependencies.CreateComment id post commenter comment topLevel approval replyEmails
 
         let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
-        do! ReplyEmailQueue.queueAtFirstApproval dependencies.QueueReplyEmail post.Id None created
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post.Id None created
 
         return RenderedComment.ofComment dependencies.Stage created
       }
@@ -700,11 +700,11 @@ module ReplyAsAuthor =
         for comment in place.Approvals do
           let! updated = dependencies.UpdateCommentApproval comment CommentApproval.Approved
           approved.Add updated
-          do! ReplyEmailQueue.queueAtFirstApproval dependencies.QueueReplyEmail reply.Post (Some comment.Status.Approval) updated
+          do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail reply.Post (Some comment.Status.Approval) updated
 
         let approved = List.ofSeq approved
         let! created = dependencies.CreateAuthorReply reply.Post place.TopLevel reply.Content CommentApproval.Approved
-        do! ReplyEmailQueue.queueAtFirstApproval dependencies.QueueReplyEmail reply.Post None created
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail reply.Post None created
         return Event.Replied(RenderedComment.ofComment dependencies.Stage created, approved)
       }
 
@@ -827,7 +827,7 @@ module UpdateCommentApproval =
     let handleCommentApprovalUpdated (post : Slug) (Success.Updated (comment, approval)) : DependencyResult<Comment> =
       cancellableTaskResult {
         let! updated = dependencies.UpdateCommentApproval comment approval
-        do! ReplyEmailQueue.queueAtFirstApproval dependencies.QueueReplyEmail post (Some comment.Status.Approval) updated
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post (Some comment.Status.Approval) updated
         return updated
       }
 

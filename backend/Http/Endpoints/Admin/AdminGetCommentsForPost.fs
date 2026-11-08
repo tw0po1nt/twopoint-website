@@ -53,7 +53,7 @@ module CommentTypesExt =
     member this.ToDto() =
       { AdminCommenterDto.Id = this.ValidationId.ToString()
         Email = this.EmailAddress.ToString()
-        Name = this.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+        Name = Commenter.displayName this
         Status = this.Status.ToString()
         CreatedDate = this.CreatedDate }
 

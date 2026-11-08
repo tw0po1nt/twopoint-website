@@ -12,9 +12,9 @@ open Microsoft.Extensions.Logging
 open System.Text.Json
 
 [<RequireQualifiedAccess>]
-module ReplyEmailSender =
+module ReplyEmailQueueClient =
 
-  let queue (serviceBus : ServiceBusClient) (logger : ILogger) (op : string) (post : Slug) (reply : CommentId) =
+  let enqueue (serviceBus : ServiceBusClient) (logger : ILogger) (op : string) (post : Slug) (reply : CommentId) =
     runDependencyWithLogging Dependency.ServiceBus logger $"{op}.QueueReplyEmail"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()

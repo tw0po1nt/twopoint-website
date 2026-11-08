@@ -149,7 +149,7 @@ module PublicComment =
       Commenter =
         match comment.Writer with
         | CommentWriter.Commenter commenter ->
-          commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+          Commenter.displayName commenter
         | CommentWriter.Author -> ""
       Content = rendered.Html
       ReplyTo = comment.Parent |> Option.map _.ToString()
