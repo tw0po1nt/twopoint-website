@@ -561,7 +561,7 @@ module PostComment =
   type Dependencies =
     abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
     abstract member GetUtcNow: unit -> DateTime
-    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
     abstract member NewCommentId: unit -> CommentId
     abstract member CreateComment:
@@ -575,7 +575,7 @@ module PostComment =
         -> DependencyResult<Comment>
     abstract member NewReplyEmailStopToken: unit -> ReplyEmailStopToken
     abstract member CreateReplyEmailStop: stop: ReplyEmailStop -> DependencyResult<unit>
-    abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
+    abstract member QueueNewCommentNotice: post: Slug -> commentId: CommentId -> DependencyResult<unit>
     abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
@@ -593,7 +593,7 @@ module PostComment =
 
         let! (created : Comment) = dependencies.CreateComment id post commenter comment topLevel approval replyEmails
 
-        let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
+        let! _ = dependencies.QueueNewCommentNotice post.Id created.Id |> CancellableTask.map ignore
         do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post.Id None created
 
         return RenderedComment.ofComment dependencies.Stage created
@@ -612,7 +612,7 @@ module PostComment =
       let! place =
         (match newComment.Target with
          | NewCommentTarget.TopLevel _ -> CancellableTaskResult.singleton NewCommentPlace.TopLevel
-         | NewCommentTarget.Reply replyTo -> dependencies.GetPostedCommentById replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
+         | NewCommentTarget.Reply replyTo -> dependencies.GetPostedComment newComment.Post replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! existingCommenter =
@@ -679,7 +679,7 @@ module ReplyAsAuthor =
   type Action = AuthorReply.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member UpdateCommentApproval: comment: Comment -> approval: CommentApproval -> DependencyResult<Comment>
     abstract member CreateAuthorReply:
       post: Slug
@@ -712,13 +712,13 @@ module ReplyAsAuthor =
       let! reply = dto |> AuthorReply.create |> Result.mapError ActionError<Error>.Validation
 
       let! replyTo =
-        dependencies.GetPostedCommentById reply.ReplyTo
+        dependencies.GetPostedComment reply.Post reply.ReplyTo
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! topLevel =
         match replyTo |> Option.bind (fun (replyTo : PostedComment) -> replyTo.Comment.Parent) with
         | Some parent ->
-          dependencies.GetPostedCommentById parent
+          dependencies.GetPostedComment reply.Post parent
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
         | None -> CancellableTaskResult.singleton None
 
@@ -813,8 +813,9 @@ module UpdateCommentApproval =
       -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetCommentById:
-      commentId: CommentId
+    abstract member GetComment:
+      post: Slug
+        -> commentId: CommentId
         -> DependencyResult<Comment option>
     abstract member UpdateCommentApproval:
       comment: Comment
@@ -838,7 +839,7 @@ module UpdateCommentApproval =
         |> Result.mapError ActionError<Error>.Validation
 
       let! existingComment =
-        dependencies.GetCommentById approvalUpdate.CommentId
+        dependencies.GetComment approvalUpdate.Post approvalUpdate.CommentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let decision = Logic.decide existingComment approvalUpdate
@@ -857,18 +858,25 @@ module UpdateCommentApproval =
 
 // Input
 
-type CommentDeletion = { CommentId : CommentId }
+type CommentDeletion =
+  { Post : Slug
+    CommentId : CommentId }
 
 module CommentDeletion =
- 
+
+  type Post = Post of string
   type CommentId = CommentId of string
 
-  type Dto = { CommentId : CommentId }
-  
+  type Dto =
+    { Post : Post
+      CommentId : CommentId }
+
   let create (dto : Dto) = validation {
+    let (Post post) = dto.Post
     let (CommentId commentId) = dto.CommentId
-    let! commentId = CommentId.create commentId
-    return { CommentDeletion.CommentId = commentId }
+    let! post = Slug.create post
+    and! commentId = CommentId.create commentId
+    return { CommentDeletion.Post = post; CommentId = commentId }
   }
 
 [<RequireQualifiedAccess>]
@@ -904,7 +912,7 @@ module DeleteComment =
   type Action = CommentDeletion.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
 
@@ -935,7 +943,7 @@ module DeleteComment =
         |> Result.mapError ActionError<Error>.Validation
 
       let! existingComment =
-        dependencies.GetPostedCommentById commentDeletion.CommentId
+        dependencies.GetPostedComment commentDeletion.Post commentDeletion.CommentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! replies =

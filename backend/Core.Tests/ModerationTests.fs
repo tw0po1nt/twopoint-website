@@ -46,7 +46,7 @@ type private FakeApprovalDependencies(existing : Comment option) =
   member _.Updates = List.ofSeq updates
 
   interface UpdateCommentApproval.Dependencies with
-    member _.GetCommentById _ = CancellableTaskResult.singleton existing
+    member _.GetComment _ _ = CancellableTaskResult.singleton existing
     member _.UpdateCommentApproval comment approval =
       updates.Add approval
       CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
@@ -226,7 +226,7 @@ let private commenter (status : CommenterStatus) =
 
 type private FakePostCommentDependencies(existing : Commenter, queueFails : bool) =
   let created = ResizeArray<CommentApproval>()
-  let queued = ResizeArray<CommentId>()
+  let queued = ResizeArray<TwoPoint.Core.Posts.Slug * CommentId>()
 
   new (existing : Commenter) = FakePostCommentDependencies(existing, false)
 
@@ -236,7 +236,7 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
     member _.GetUtcNow () = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
-    member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
+    member _.GetPostedComment _ _ = CancellableTaskResult.singleton None
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
     member _.NewCommentId () = CommentId.ofGuid (Guid firstId)
     member _.CreateComment _ _ commenter newComment _ approval _ =
@@ -246,8 +246,8 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
     member _.Stage = TwoPoint.Site.Render.Stage.Production
     member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
     member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
-    member _.QueueNewCommentNotice commentId =
-      queued.Add commentId
+    member _.QueueNewCommentNotice post commentId =
+      queued.Add (post, commentId)
 
       if queueFails then
         CancellableTaskResult.error { Dependency = Dependency.ServiceBus; Type = Unknown (exn "The queue is down") }
@@ -295,7 +295,7 @@ let private postCommentTests =
 
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
-        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected the posted comment on the queue"
+        Expect.equal dependencies.Queued [ olderPost.Id, posted.Comment.Id ] "Expected the posted comment and its post on the queue"
       | other -> failtestf "Expected Posted, got %A" other
     }
 
@@ -305,7 +305,7 @@ let private postCommentTests =
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
         Expect.equal dependencies.Created [ CommentApproval.New ] "Expected the comment in the store"
-        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected one try to queue"
+        Expect.equal dependencies.Queued [ olderPost.Id, posted.Comment.Id ] "Expected one try to queue"
       | other -> failtestf "Expected Posted, got %A" other
     }
 
@@ -717,7 +717,7 @@ type private FakeCommenterDependencies(existing : Commenter option, comments : P
   interface GetCommenter.Dependencies with
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
     member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
-    member _.GetCommentById _ = CancellableTaskResult.singleton None
+    member _.GetComment _ _ = CancellableTaskResult.singleton None
     member _.GetRepliesOf _ = CancellableTaskResult.singleton []
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 

@@ -460,7 +460,11 @@ type internal IPostDb =
     approvals: string list
       -> commenter: DbCommenter
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
-  abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) option, DependencyError>
+  /// A point read: `postId` is the partition of the comment.
+  abstract member GetComment:
+    postId: string
+      -> commentId: string
+      -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
     comment: DbComment
       -> status: DbCommentStatus
@@ -687,8 +691,8 @@ module internal PostDb =
         return! withLatestStatus logger approvals dbComments [ commenter ] statuses
       }
 
-      member _.GetCommentById commentId = cancellableTaskResult {
-        let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None
+      member _.GetComment postId commentId = cancellableTaskResult {
+        let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity (Some postId)
 
         match dbComment with
         | None -> return None

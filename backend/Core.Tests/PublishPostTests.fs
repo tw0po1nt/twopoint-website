@@ -317,7 +317,7 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
             |> ok)
           |> CancellableTaskResult.singleton
         member _.GetUtcNow () = clock
-        member _.GetPostedCommentById _ = CancellableTaskResult.singleton None
+        member _.GetPostedComment _ _ = CancellableTaskResult.singleton None
         member _.Stage = TwoPoint.Site.Render.Stage.Production
         member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
         member _.NewCommentId () = CommentId.ofGuid (Guid "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40")
@@ -336,7 +336,7 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
           CancellableTaskResult.singleton { posted with Content = newComment.Content }
         member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
         member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
-        member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton ()
+        member _.QueueNewCommentNotice _ _ = CancellableTaskResult.singleton ()
         member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton () }
 
   let dto =

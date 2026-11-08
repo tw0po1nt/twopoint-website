@@ -105,7 +105,9 @@ module NewCommentPayload =
 [<RequireQualifiedAccess>]
 module NotifyNewComment =
 
-  type Dto = { CommentId : string }
+  type Dto =
+    { Post : string
+      CommentId : string }
 
   type Error = unit
 
@@ -116,7 +118,7 @@ module NotifyNewComment =
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetPostedComment: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member CountNewComments: unit -> DependencyResult<int>
     abstract member GetDevicesOfAuthor: unit -> DependencyResult<RegisteredDevice list>
     abstract member SendPush: RegisteredDevice -> payload: byte array -> DependencyResult<PushOutcome>
@@ -125,12 +127,16 @@ module NotifyNewComment =
 
   let withDependencies (dependencies : Dependencies) : Action =
     fun dto -> cancellableTaskResult {
-      let! commentId =
-        CommentId.create dto.CommentId
+      let! post, commentId =
+        validation {
+          let! post = Slug.create dto.Post
+          and! commentId = CommentId.create dto.CommentId
+          return post, commentId
+        }
         |> Result.mapError ActionError<Error>.Validation
 
       let! posted =
-        dependencies.GetPostedComment commentId
+        dependencies.GetPostedComment post commentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       match posted with
@@ -142,7 +148,7 @@ module NotifyNewComment =
 
         let! topLevel =
           posted.Comment.Parent
-          |> Option.traverseCancellableTaskResult dependencies.GetPostedComment
+          |> Option.traverseCancellableTaskResult (dependencies.GetPostedComment posted.Post)
           |> CancellableTaskResult.map (Option.flatten >> Option.map (fun (topLevel : PostedComment) -> topLevel.Comment))
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 

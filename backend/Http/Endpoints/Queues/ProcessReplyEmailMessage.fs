@@ -57,7 +57,7 @@ type ProcessReplyEmailMessage(
       let postStore = PostStore(postStoreClient, logger, texts)
 
       let sendReplyEmail = SendReplyEmail.withDependencies { new SendReplyEmail.Dependencies with
-        member _.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
+        member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
         member _.GetReplyEmailRecord post reply = postDependencies.GetReplyEmailRecord post reply
         member _.GetPublishedBlob slug = postStore.GetPublishedBlob slug
         member _.SendReplyEmail recipient content = postDependencies.SendReplyEmail recipient content

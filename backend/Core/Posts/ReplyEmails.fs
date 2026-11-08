@@ -341,7 +341,7 @@ module SendReplyEmail =
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetReplyEmailRecord: post: Slug -> reply: CommentId -> DependencyResult<ReplyEmailRecord>
     abstract member GetPublishedBlob: slug: Slug -> DependencyResult<StoredBlob option>
     abstract member SendReplyEmail: recipient: EmailAddress -> content: ReplyEmailContent -> DependencyResult<unit>
@@ -374,20 +374,20 @@ module SendReplyEmail =
       }
 
     fun dto -> cancellableTaskResult {
-      let! replyId =
+      let! post, replyId =
         validation {
-          let! _ = Slug.create dto.Post
+          let! post = Slug.create dto.Post
           and! replyId = CommentId.create dto.ReplyId
-          return replyId
+          return post, replyId
         }
         |> Result.mapError ActionError<Error>.Validation
 
       let! (reply : PostedComment option), (topLevel : PostedComment option), record =
         cancellableTaskResult {
-          match! dependencies.GetPostedCommentById replyId with
+          match! dependencies.GetPostedComment post replyId with
           | None -> return None, None, ReplyEmailRecord.NotSent
           | Some (posted : PostedComment) ->
-            let! topLevel = posted.Comment.Parent |> Option.traverseCancellableTaskResult dependencies.GetPostedCommentById
+            let! topLevel = posted.Comment.Parent |> Option.traverseCancellableTaskResult (dependencies.GetPostedComment posted.Post)
             let! record = dependencies.GetReplyEmailRecord posted.Post posted.Comment.Id
             return Some posted, Option.flatten topLevel, record
         }

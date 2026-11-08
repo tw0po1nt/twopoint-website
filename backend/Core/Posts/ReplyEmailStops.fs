@@ -56,7 +56,7 @@ module GetReplyEmailStop =
 
   type Dependencies =
     abstract member GetReplyEmailStop: token: ReplyEmailStopToken -> DependencyResult<ReplyEmailStop option>
-    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
 
   /// The text of the token comes from the stop link, so a token that is not a GUID finds nothing.
   let findComment
@@ -69,7 +69,7 @@ module GetReplyEmailStop =
       | Ok token ->
         match! dependencies.GetReplyEmailStop token with
         | Some (stop : ReplyEmailStop) ->
-          let! comment = dependencies.GetPostedCommentById stop.Comment
+          let! comment = dependencies.GetPostedComment stop.Post stop.Comment
           return comment |> Option.map (fun posted -> token, posted)
         | None -> return None
     }

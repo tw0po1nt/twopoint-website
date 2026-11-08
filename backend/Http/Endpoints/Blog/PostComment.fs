@@ -78,12 +78,12 @@ type PostComment (
   tableServiceClient: TableServiceClient
 ) =
 
-  let queueNewCommentNotice (commentId : CommentId) =
+  let queueNewCommentNotice (post : Slug) (commentId : CommentId) =
     runDependencyWithLogging Dependency.ServiceBus logger $"{nameof PostComment}.QueueNewCommentNotice"
     <| cancellableTaskResult {
       let! ct = CancellableTask.getCancellationToken()
       use sender = serviceBus.CreateSender NewCommentQueue.Name
-      let json = JsonSerializer.Serialize { NewCommentMessage.CommentId = commentId.ToString() }
+      let json = JsonSerializer.Serialize { NewCommentMessage.Post = Slug.value post; CommentId = commentId.ToString() }
       do! sender.SendMessageAsync(ServiceBusMessage json, ct)
     }
 
@@ -112,14 +112,14 @@ type PostComment (
       
       member this.GetPostBySlug slug = postDependencies.GetPostBySlug slug
       member this.GetUtcNow () = DateTime.UtcNow
-      member this.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
+      member this.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
       member this.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
       member this.NewCommentId () = CommentId.ofGuid (Guid.NewGuid())
       member this.CreateComment id post commenter newComment topLevel approval replyEmails =
         postDependencies.CreateComment id post commenter newComment topLevel approval replyEmails
       member this.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid (Guid.NewGuid())
       member this.CreateReplyEmailStop stop = postDependencies.CreateReplyEmailStop stop
-      member this.QueueNewCommentNotice commentId = queueNewCommentNotice commentId
+      member this.QueueNewCommentNotice post commentId = queueNewCommentNotice post commentId
       member this.QueueReplyEmail post reply = ReplyEmailQueueClient.enqueue serviceBus logger (nameof PostComment) post reply
       member this.Stage = config.Stage
     }
