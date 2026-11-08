@@ -719,6 +719,10 @@ let private replyForm
       yield fun note _ -> p (class' = "muted small") { note }
     }
 
+    For(each = Array.ofList (Option.toList (AuthorReply.emailNote comment))) {
+      yield fun note _ -> p (class' = "muted small") { note }
+    }
+
     Show(when' = (failure ()).IsSome) {
       Parts.Alert(tone = Parts.Bad).Has(p () { failure () |> Option.defaultValue "" })
     }

@@ -3,21 +3,22 @@ import { test } from 'node:test';
 
 import { answer, apiAnswer, load, press, queue, settle } from './load.mjs';
 
-const topLevel = (status) => ({
+const topLevel = (status, getsReplyEmails = false) => ({
   id: 'c-0',
   commenter: { id: 'grace-id', email: 'grace@example.com', name: 'Grace', status: 'trusted', createdDate: '2026-01-01T00:00:00Z' },
   writer: 'commenter',
   status,
   excerpt: 'Why does List.map keep the order?',
   content: '<p>Why does <code>List.map</code> keep the order?</p>',
+  getsReplyEmails,
 });
 
-const reply = (id, status) => ({
+const reply = (id, status, getsReplyEmails = false) => ({
   ...queue[0],
-  comment: { ...queue[0].comment, id, content: '<p>It keeps it.</p>', replyTo: 'c-0', topLevel: topLevel(status) },
+  comment: { ...queue[0].comment, id, content: '<p>It keeps it.</p>', replyTo: 'c-0', topLevel: topLevel(status, getsReplyEmails) },
 });
 
-const comments = [reply('c-7', 'approved'), queue[1], reply('c-8', 'rejected')];
+const comments = [reply('c-7', 'approved', true), queue[1], reply('c-8', 'rejected')];
 
 const respond = (url) => {
   if (url.endsWith('/api/internal/comments')) {
@@ -57,4 +58,15 @@ test('a reply under a rejected top-level comment says that readers will not see 
   assert.doesNotMatch(context('c-7').textContent, /Readers won't see/);
   assert.ok(!buttons('c-8').includes('Reply and approve'));
   assert.ok(buttons('c-7').includes('Reply and approve'));
+});
+
+test('the reply form tells the author that the commenter of the top-level comment gets an email, only with the flag', async () => {
+  press('Reply and approve', row('c-7'));
+  await settle();
+  assert.match(row('c-7').querySelector('.reply-form').textContent, /Grace gets an email with this reply\./);
+
+  press('Reply and approve', row('c-2'));
+  await settle();
+  assert.equal(row('c-7').querySelector('.reply-form'), null, 'One form at a time');
+  assert.doesNotMatch(row('c-2').querySelector('.reply-form').textContent, /gets an email/);
 });

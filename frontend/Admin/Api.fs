@@ -132,10 +132,11 @@ type TopLevel =
     Writer: Writer
     Status: CommentApproval
     Excerpt: string
-    Content: string }
+    Content: string
+    GetsReplyEmails: bool }
 
 /// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyCount` is the number of replies that a delete of
-/// the comment removes with it.
+/// the comment removes with it. `GetsReplyEmails` is always false on a reply: read the one of `TopLevel`.
 type Comment =
   { Id: string
     CreatedDate: string
@@ -144,7 +145,8 @@ type Comment =
     Content: string
     ReplyTo: string option
     TopLevel: TopLevel option
-    ReplyCount: int }
+    ReplyCount: int
+    GetsReplyEmails: bool }
 
 /// `Approved` is the ID of each comment that the reply approved.
 type AuthorReply = { Reply: Comment; Approved: string list }
@@ -447,7 +449,8 @@ let private topLevel: Decoder<TopLevel> =
       Writer = get.Required.Raw writer
       Status = get.Required.Field "status" commentApproval
       Excerpt = get.Required.Field "excerpt" Decode.string
-      Content = get.Required.Field "content" Decode.string })
+      Content = get.Required.Field "content" Decode.string
+      GetsReplyEmails = get.Required.Field "getsReplyEmails" Decode.bool })
 
 let private comment: Decoder<Comment> =
   Decode.object (fun get ->
@@ -458,7 +461,8 @@ let private comment: Decoder<Comment> =
       Content = get.Required.Field "content" Decode.string
       ReplyTo = get.Optional.Field "replyTo" Decode.string
       TopLevel = get.Optional.Field "topLevel" topLevel
-      ReplyCount = get.Required.Field "replyCount" Decode.int })
+      ReplyCount = get.Required.Field "replyCount" Decode.int
+      GetsReplyEmails = get.Required.Field "getsReplyEmails" Decode.bool })
 
 let private deliveryTypeName (deliveryType: DeliveryType) =
   match deliveryType with

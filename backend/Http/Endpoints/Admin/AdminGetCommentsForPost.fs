@@ -30,7 +30,8 @@ type AdminTopLevelDto =
     Writer : string
     Status : string
     Excerpt : string
-    Content : string }
+    Content : string
+    GetsReplyEmails : bool }
 
 type AdminCommentDto =
   { Id : string
@@ -44,7 +45,8 @@ type AdminCommentDto =
     Writer : string
     TopLevel : AdminTopLevelDto option
     /// The number of replies that a delete of the comment removes with it.
-    ReplyCount : int }
+    ReplyCount : int
+    GetsReplyEmails : bool }
 
 [<AutoOpen>]
 module CommentTypesExt =
@@ -72,7 +74,8 @@ module CommentTypesExt =
         ReplyTo = this.Comment.Parent |> Option.map string
         Writer = writerName this.Comment.Writer
         TopLevel = None
-        ReplyCount = 0 }
+        ReplyCount = 0
+        GetsReplyEmails = ReplyEmailRule.getsReplyEmails this.Comment }
 
   type TopLevelComment with
     member this.ToDto() =
@@ -83,7 +86,8 @@ module CommentTypesExt =
         Writer = writerName comment.Writer
         Status = comment.Status.Approval.ToString()
         Excerpt = this.Excerpt
-        Content = this.Comment.Html }
+        Content = this.Comment.Html
+        GetsReplyEmails = ReplyEmailRule.getsReplyEmails comment }
 
   type AdminComment with
     member this.ToDto() =

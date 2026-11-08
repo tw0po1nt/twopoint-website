@@ -26,7 +26,8 @@ let private posted id (commenter: Api.Commenter) approval : Api.PostedComment =
         Content = "A comment"
         ReplyTo = None
         TopLevel = None
-        ReplyCount = 0 } }
+        ReplyCount = 0
+        GetsReplyEmails = false } }
 
 let private waiting = posted "waiting" ada Api.CommentApproval.New
 let private approved = posted "approved" ada Api.CommentApproval.Approved
@@ -257,7 +258,8 @@ let private replyTo (topLevelId: string) approval (comment: Api.PostedComment) =
             Writer = Api.Writer.Commenter grace
             Status = approval
             Excerpt = "Why does List.map keep the order?"
-            Content = "<p>Why does <code>List.map</code> keep the order?</p>" } }
+            Content = "<p>Why does <code>List.map</code> keep the order?</p>"
+            GetsReplyEmails = false } }
 
 let private withReplies (comments: Api.PostedComment list) =
   let model, _ = start "/commenters/ada"

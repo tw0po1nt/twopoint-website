@@ -12,8 +12,9 @@ const comment = (id, status, replyTo = null, replyCount = 0) => ({
   status,
   content: `<p>Comment ${id}</p>`,
   replyTo,
-  topLevel: replyTo && { id: replyTo, commenter: ada, writer: 'commenter', status: 'approved', excerpt: 'Comment', content: '<p>Comment</p>' },
+  topLevel: replyTo && { id: replyTo, commenter: ada, writer: 'commenter', status: 'approved', excerpt: 'Comment', content: '<p>Comment</p>', getsReplyEmails: false },
   replyCount,
+  getsReplyEmails: false,
 });
 
 const comments = [
