@@ -542,15 +542,21 @@ type private FakeCommentStore(commenters : Commenter list, comments : Comment li
   let mutable commenters = commenters
   let mutable comments = comments
   let deleted = ResizeArray<CommentId>()
+  let mutable postedAfterRepliesRead : Comment option = None
 
   member _.Comments = comments
   member _.Commenters = commenters
   member _.Deleted = List.ofSeq deleted
 
+  /// The store adds `reply` after the next read of the replies, as a reader who posts during a delete.
+  member _.PostAfterRepliesRead (reply : Comment) = postedAfterRepliesRead <- Some reply
+
   member _.RepliesOf (topLevels : Comment list) =
-    comments
-    |> List.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
-    |> CancellableTaskResult.singleton
+    let replies =
+      comments |> List.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+    postedAfterRepliesRead |> Option.iter (fun reply -> comments <- comments @ [ reply ])
+    postedAfterRepliesRead <- None
+    CancellableTaskResult.singleton replies
 
   member _.DeleteComment (comment : Comment) =
     deleted.Add comment.Id
@@ -645,6 +651,31 @@ let private deleteTests =
         Expect.equal others 2 "Expected the replies from Ben and from the author"
         Expect.equal (ids store.Comments) (ids [ benThread; benInBenThread ]) "Expected the thread of Ben without the reply of Ada"
         Expect.equal store.Commenters [ ben ] "Expected only Ben"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a top-level comment removes a reply that a reader posts during the delete" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+      let lateReply = threadComment 8 (Some 1) (CommentWriter.Commenter ben)
+      store.PostAfterRepliesRead lateReply
+
+      match deleteCommentOf store adaThread with
+      | Ok (DeleteComment.Event.Deleted (_, others)) ->
+        Expect.equal others 3 "Expected the number of replies of the first read"
+        Expect.equal (ids store.Comments) (ids [ benThread; adaInBenThread; benInBenThread ]) "Expected only the thread of Ben"
+        Expect.contains store.Deleted lateReply.Id "Expected the late reply in the deletes"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a commenter removes a reply from another writer that a reader posts in their thread during the delete" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+      let lateReply = threadComment 8 (Some 1) (CommentWriter.Commenter ben)
+      store.PostAfterRepliesRead lateReply
+
+      match deleteCommenterOf store ada with
+      | Ok (DeleteCommenter.Event.Deleted (_, others)) ->
+        Expect.equal others 2 "Expected the replies from Ben and from the author of the first read"
+        Expect.equal (ids store.Comments) (ids [ benThread; benInBenThread ]) "Expected the thread of Ben without the reply of Ada"
       | other -> failtestf "Expected Deleted, got %A" other
     }
 

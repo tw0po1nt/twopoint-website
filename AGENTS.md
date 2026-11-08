@@ -138,9 +138,11 @@ this reply."
 `CommentDeleteRule`. A delete of a top-level comment removes its thread, also a reply from the
 author. A delete of a commenter removes each comment of the commenter and each thread that a comment
 of the commenter starts. A reply of the commenter in another thread goes alone. The replies go
-before the top-level comment, so a second try after a failure finds each thread that stays. Each
-admin comment gives `replyCount`, and the commenter page gives `otherReplies`. The confirm dialog
-of each delete shows that number.
+before the top-level comment, so a second try after a failure finds each thread that stays. After
+the top-level comment goes, each delete reads its replies again and deletes each reply that a
+reader posts during the delete. A second try after a failure does not find that reply. Each admin
+comment gives `replyCount`, and the commenter page gives `otherReplies`. The confirm dialog of each
+delete shows that number.
 
 The page form of the Comments widget has the checkbox "email me when someone replies". The reply
 form has no checkbox. A checked `replyEmails` on `POST blog/posts/{slug}/comments` stores the
