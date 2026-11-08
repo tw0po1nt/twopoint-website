@@ -14,9 +14,16 @@ series with `series: <slug>`. A copy of the 10 posts and the 2 series records at
 Git is the test fixture in `frontend/Generator.Tests/posts/`. `dotnet test` reads the fixture and
 never reads the post store.
 
+`frontend/Widgets/` and `frontend/Admin/` each pin a Node major version in `.node-version`. On an
+older Node, `engines` in `package.json` and `engine-strict` in `.npmrc` stop `npm ci`. The scripts
+`prebuild`, `prewatch`, and `pretest` run `frontend/check-node.mjs`, which stops `npm run build`,
+`npm run watch`, and `npm test`. Run `nvm use` in the package to select the pinned Node. A change
+of the pin needs the same change to `engines.node`, or the check fails.
+
 To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
 compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in
-`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
+`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. It also checks the Node
+pin of each Fable package. Then run
 `dotnet run --project frontend/Generator -- pull --account <name>`. The command downloads each blob
 in `published` and `series` into `frontend/content/posts/`, which Git ignores. It uses
 `DefaultAzureCredential`, so on the local stage it uses your `az login`. The account name is in the
@@ -227,9 +234,9 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips the posts
-  of the test fixture in `frontend/Generator.Tests/posts/`. The hook also
-  checks the text of `git commit` and of `gh` issue and PR commands.
+  reads Markdown files, and the comments and strings of F# and JavaScript files. The check skips
+  the posts of the test fixture in `frontend/Generator.Tests/posts/`. The hook also checks the text
+  of `git commit` and of `gh` issue and PR commands.
   `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - UI copy: `docs/standards/ui-copy.md`. UI copy is each string that a person sees in the admin,
   on the site, in an email, or in a push notification. It follows that document, and the STE

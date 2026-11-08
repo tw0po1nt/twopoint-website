@@ -2,7 +2,7 @@
 # PreToolUse check: deny the call when its pending prose matches a pattern that
 # `.banned-patterns` forbids. Two kinds of call contain prose:
 #
-#   - A Write or an Edit on a Markdown or F# file.
+#   - A Write or an Edit on a Markdown, F#, or JavaScript file.
 #   - A Bash command that publishes prose: `git commit`, a `gh` issue or pull
 #     request create, edit, or comment, and a `gh api` call that sends a body.
 #     The check reads the command text and each body file that the command
@@ -13,8 +13,8 @@
 # the agent learns at the moment of writing rather than in CI.
 # scripts/check-banned-patterns.sh stays the complete check for files, because
 # this hook cannot see a file that a Bash command writes. An Edit contains a
-# fragment, so the F# stripper reads the fragment as if it starts outside a
-# comment or a string. Extend the `case` below with a source-language extension
+# fragment, so the F# and JavaScript strippers read the fragment as if it starts
+# outside a comment or a string. Extend the `case` below with a source-language extension
 # the same way that script's LANGUAGE marker describes.
 set -euo pipefail
 
@@ -47,6 +47,7 @@ else
     */node_modules/* | */target/* | */bin/* | */obj/* | *.banned-patterns) exit 0 ;;
     *.md | *.markdown) kind="markdown" ;;
     *.fs | *.fsi | *.fsx) kind="fsharp" ;;
+    *.js | *.mjs | *.cjs) kind="js" ;;
     *) exit 0 ;;
   esac
 
@@ -120,7 +121,64 @@ strip_fsharp='
   }
 '
 
+strip_js='
+  BEGIN { q = sprintf("%c", 39); dq = sprintf("%c", 34); bt = sprintf("%c", 96); sp = 0; mode[0] = "code"; prev = "" }
+  {
+    line = $0; n = length(line); out = ""; i = 1
+    while (i <= n) {
+      c = substr(line, i, 1); c2 = substr(line, i, 2)
+      if (cmt) {
+        if (c2 == "*/") { cmt = 0; out = out " "; i += 2; continue }
+        out = out c; i++; continue
+      }
+      if (str != "") {
+        if (c == "\\") { out = out " "; i += 2; continue }
+        if (c == str) { str = ""; out = out " "; prev = "x"; i++; continue }
+        out = out c; i++; continue
+      }
+      if (mode[sp] == "tpl") {
+        if (c == "\\") { out = out " "; i += 2; continue }
+        if (c == bt) { sp--; out = out " "; prev = "x"; i++; continue }
+        if (c2 == "${") { mode[++sp] = "code"; braces[sp] = 0; out = out " "; prev = "("; i += 2; continue }
+        out = out c; i++; continue
+      }
+      if (c2 == "//") { out = out " " substr(line, i + 2); break }
+      if (c2 == "/*") { cmt = 1; i += 2; continue }
+      if (c == q || c == dq) { str = c; i++; continue }
+      if (c == bt) { mode[++sp] = "tpl"; i++; continue }
+      if (c == "/" && (prev == "" || index("(,=:[!&|?{};+-*%<>~^", prev) > 0)) {
+        i++; cls = 0
+        while (i <= n) {
+          c = substr(line, i, 1)
+          if (c == "\\") { i += 2; continue }
+          if (c == "[") cls = 1
+          else if (c == "]") cls = 0
+          else if (c == "/" && !cls) { i++; break }
+          i++
+        }
+        prev = "x"; continue
+      }
+      if (sp > 0 && c == "{") braces[sp]++
+      if (sp > 0 && c == "}") {
+        if (braces[sp] == 0) { sp--; prev = "x"; i++; continue }
+        braces[sp]--
+      }
+      if (c !~ /[[:space:]]/) prev = c
+      if (c ~ /[A-Za-z0-9_$]/) {
+        j = i; while (j <= n && substr(line, j, 1) ~ /[A-Za-z0-9_$]/) j++
+        word = substr(line, i, j - i)
+        prev = (word ~ /^(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/) ? "(" : "x"
+        i = j; continue
+      }
+      i++
+    }
+    gsub(/`[^`]*`/, "", out)
+    print out
+  }
+'
+
 case "$kind" in
+  js) stripped="$(printf '%s\n' "$pending" | awk "$strip_js")" ;;
   fsharp) stripped="$(printf '%s\n' "$pending" | awk "$strip_fsharp")" ;;
   *) stripped="$(printf '%s\n' "$pending" | awk "$strip_markdown")" ;;
 esac

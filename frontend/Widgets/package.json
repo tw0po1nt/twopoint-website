@@ -2,9 +2,15 @@
   "name": "twopoint-widgets",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
+    "prebuild": "node ../check-node.mjs",
     "build": "dotnet fable Widgets.fsproj --outDir build/fable --extension .jsx --exclude Oxpecker.Solid.FablePlugin --silent && node build.mjs",
+    "prewatch": "node ../check-node.mjs",
     "watch": "dotnet fable watch Widgets.fsproj --outDir build/fable --extension .jsx --exclude Oxpecker.Solid.FablePlugin --sourceMaps --silent --runWatch node build.mjs --dev",
+    "pretest": "node ../check-node.mjs",
     "test": "node --test"
   },
   "devDependencies": {

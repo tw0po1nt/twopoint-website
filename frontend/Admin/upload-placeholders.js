@@ -97,7 +97,7 @@ const place = (event, view) => {
   }
 };
 
-// A paste with text is a paste of text, for example a copy from a spreadsheet that also carries an image.
+// A paste with text is a paste of text, for example a copy from a spreadsheet that also contains an image.
 export const fileHandlers = (onFiles) =>
   EditorView.domEventHandlers({
     paste(event, view) {
