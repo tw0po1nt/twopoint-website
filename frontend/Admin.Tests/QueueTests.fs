@@ -21,7 +21,8 @@ let private queued id (name: string) status : Api.PostedComment =
         Content = "A comment"
         ReplyTo = None
         TopLevel = None
-        ReplyCount = 0 } }
+        ReplyCount = 0
+        GetsReplyEmails = false } }
 
 let private first = queued "first" "Ada" Api.New
 let private second = queued "second" "Grace" Api.Trusted
@@ -69,7 +70,8 @@ let private answer (commentId: string) (approved: string list) : Api.AuthorReply
         Content = "An answer"
         ReplyTo = Some commentId
         TopLevel = None
-        ReplyCount = 0 }
+        ReplyCount = 0
+        GetsReplyEmails = false }
     Approved = approved }
 
 let private replyTests =
@@ -81,6 +83,22 @@ let private replyTests =
         (AuthorReply.approvalNote Api.CommentApproval.New)
         (Some "Posting your reply also approves this comment.")
         "The note of a new row"
+    }
+
+    test "the reply form under a top-level row tells the author about the reply email only when the row has the flag" {
+      let model = loadedWith [ { first with Comment.GetsReplyEmails = true }; second ]
+
+      let opened, _ = reply (AuthorReply.Opened "first") model
+      Expect.equal (opened.Queue.Reply |> Option.bind _.EmailNote) (Some "Ada gets an email with this reply.") "The line names the commenter"
+
+      let opened, _ = reply (AuthorReply.Opened "second") model
+      Expect.isNone (opened.Queue.Reply |> Option.bind _.EmailNote) "No line with no flag"
+    }
+
+    test "a reply row with the flag of a reply and no top-level comment gives no line" {
+      let model = loadedWith [ { replyOf first with Comment.GetsReplyEmails = true } ]
+      let opened, _ = reply (AuthorReply.Opened "first") model
+      Expect.isNone (opened.Queue.Reply |> Option.bind _.EmailNote) "No line"
     }
 
     test "the reply opens a form under its row, and a second reply moves the form to that row" {
@@ -173,7 +191,8 @@ let private topLevel approval : Api.TopLevel =
           CreatedDate = "2026-01-01T00:00:00Z" }
     Status = approval
     Excerpt = "Why does List.map keep the order?"
-    Content = "<p>Why does <code>List.map</code> keep the order?</p>" }
+    Content = "<p>Why does <code>List.map</code> keep the order?</p>"
+    GetsReplyEmails = false }
 
 let private under approval (comment: Api.PostedComment) =
   { comment with
@@ -214,6 +233,18 @@ let private contextTests =
         "The note under a rejected comment"
       Expect.isNone (rowTopLevel "third" model |> Option.bind ReplyContext.rejectedNote) "No note under an approved comment"
       Expect.isNone (ReplyContext.rejectedNote (topLevel Api.CommentApproval.New)) "No note under a new comment"
+    }
+
+    test "the reply form under a reply row tells the author about the reply email only when the top-level comment has the flag" {
+      let flagged = under Api.CommentApproval.Approved first
+      let flagged = { flagged with Comment.TopLevel = flagged.Comment.TopLevel |> Option.map (fun topLevel -> { topLevel with GetsReplyEmails = true }) }
+      let model = loadedWith [ flagged; under Api.CommentApproval.Approved third ]
+
+      let opened, _ = reply (AuthorReply.Opened "first") model
+      Expect.equal (opened.Queue.Reply |> Option.bind _.EmailNote) (Some "Grace gets an email with this reply.") "The line names the commenter of the top-level comment"
+
+      let opened, _ = reply (AuthorReply.Opened "third") model
+      Expect.isNone (opened.Queue.Reply |> Option.bind _.EmailNote) "No line with no flag"
     }
 
     test "a reply under a rejected top-level comment offers no reply, and an open asks for nothing" {

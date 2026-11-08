@@ -10,6 +10,7 @@ const comment = (id, name, status, content) => ({
   status,
   content,
   replyCount: 0,
+  getsReplyEmails: false,
 });
 
 const comments = [
@@ -27,6 +28,7 @@ const authorReply = {
   replyTo: 'c-4',
   writer: 'author',
   replyCount: 0,
+  getsReplyEmails: false,
 };
 
 const previews = [];

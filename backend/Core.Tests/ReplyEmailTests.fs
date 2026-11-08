@@ -534,10 +534,32 @@ let private composeTests =
     }
   ]
 
+let private flagTests =
+  testList "the flag of the admin" [
+    test "the commenter of a top-level comment with a consent, no stop, and no ban gets reply emails" {
+      Expect.isTrue (ReplyEmailRule.getsReplyEmails topLevel) "Expected the flag"
+      Expect.isTrue (ReplyEmailRule.getsReplyEmails (topLevelWith ada CommentApproval.New (Some consent))) "Expected the flag on a new comment"
+    }
+
+    let bannedAda = commenterOf adaId "Ada" CommenterStatus.Banned
+
+    let noFlags =
+      [ "no consent", topLevelWith ada CommentApproval.Approved None
+        "a stop", topLevelWith ada CommentApproval.Approved (Some { consent with StopDate = Some now })
+        "a ban", topLevelWith bannedAda CommentApproval.Approved (Some consent)
+        "a reply", commentOf replyId (Some topLevelId) (CommentWriter.Commenter ada) CommentApproval.Approved (Some consent) "A reply" ]
+
+    for name, comment in noFlags do
+      test $"a comment with {name} gives no flag" {
+        Expect.isFalse (ReplyEmailRule.getsReplyEmails comment) "Expected no flag"
+      }
+  ]
+
 [<Tests>]
 let tests =
   testList "Reply emails" [
     gateTests
+    flagTests
     queueTests
     sendTests
     composeTests

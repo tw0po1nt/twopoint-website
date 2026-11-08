@@ -12,12 +12,13 @@ const topLevel = (status) => ({
   status,
   excerpt: 'Why does List.map keep the order?',
   content: '<p>Why does <code>List.map</code> keep the order?</p>',
+  getsReplyEmails: false,
 });
 
 const posted = (id, comment) => ({
   postSlug: 'first',
   postTitle: 'First',
-  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, writer: 'commenter', status: 'approved', content: '<p>It keeps it.</p>', replyCount: 0, ...comment },
+  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, writer: 'commenter', status: 'approved', content: '<p>It keeps it.</p>', replyCount: 0, getsReplyEmails: false, ...comment },
 });
 
 const page = {

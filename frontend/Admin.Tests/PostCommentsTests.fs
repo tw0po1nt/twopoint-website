@@ -18,7 +18,8 @@ let private comment id approval : Api.Comment =
     Content = "A comment"
     ReplyTo = None
     TopLevel = None
-    ReplyCount = 0 }
+    ReplyCount = 0
+    GetsReplyEmails = false }
 
 let private waiting = comment "waiting" Api.CommentApproval.New
 let private approved = comment "approved" Api.CommentApproval.Approved
@@ -57,10 +58,22 @@ let private authorReply : Api.Comment =
     Content = "An answer"
     ReplyTo = Some "waiting"
     TopLevel = None
-    ReplyCount = 0 }
+    ReplyCount = 0
+    GetsReplyEmails = false }
 
 let private replyTests =
   testList "the reply as the author" [
+    test "the reply form tells the author about the reply email only when the top-level comment has the flag" {
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ waiting; { approved with GetsReplyEmails = true } ])) model
+
+      let opened, _ = reply (AuthorReply.Opened "approved") model
+      Expect.equal ((page opened).Reply |> Option.bind _.EmailNote) (Some "Ada gets an email with this reply.") "The line names the commenter"
+
+      let opened, _ = reply (AuthorReply.Opened "waiting") model
+      Expect.isNone ((page opened).Reply |> Option.bind _.EmailNote) "No line with no flag"
+    }
+
     test "an approved row offers the reply with no approval note" {
       Expect.isTrue (AuthorReply.canReply None Api.CommentApproval.Approved) "An approved row takes a reply"
       Expect.equal (AuthorReply.actionLabel Api.CommentApproval.Approved) "Reply" "The label"
@@ -145,7 +158,8 @@ let private replyTo (topLevelId: string) (id: string) approval : Api.Comment =
             Writer = waiting.Writer
             Status = Api.CommentApproval.Approved
             Excerpt = "A comment"
-            Content = "<p>A comment</p>" } }
+            Content = "<p>A comment</p>"
+            GetsReplyEmails = false } }
 
 let private threaded () =
   let model, _ = start "/posts/first/comments"

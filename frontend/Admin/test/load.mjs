@@ -32,6 +32,7 @@ const queued = (id, postSlug, postTitle, name, status, content) => ({
     status: 'new',
     content,
     replyCount: 0,
+    getsReplyEmails: false,
   },
 });
 

@@ -30,6 +30,7 @@ const queued = (id) => ({
     status: 'new',
     content: 'A comment.',
     replyCount: 0,
+    getsReplyEmails: false,
   },
 });
 

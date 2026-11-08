@@ -719,6 +719,10 @@ let private replyForm
       yield fun note _ -> p (class' = "muted small") { note }
     }
 
+    Show(when' = (read _.EmailNote None ()).IsSome) {
+      p (class' = "muted small") { read _.EmailNote None () |> Option.defaultValue "" }
+    }
+
     Show(when' = (failure ()).IsSome) {
       Parts.Alert(tone = Parts.Bad).Has(p () { failure () |> Option.defaultValue "" })
     }

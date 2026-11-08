@@ -8,10 +8,12 @@ type Posting =
   | Posting
   | NotPosted of reason: string
 
+/// `EmailNote` tells the author that the reply goes to the inbox of the commenter of the top-level comment.
 type Form =
   { CommentId: string
     Editor: Comments.Editor
-    Posting: Posting }
+    Posting: Posting
+    EmailNote: string option }
 
 type Msg =
   | Opened of commentId: string
@@ -46,12 +48,28 @@ let approvalNote (approval: Api.CommentApproval) =
   | Api.CommentApproval.Approved
   | Api.CommentApproval.Rejected -> None
 
+/// The writer of the top-level comment of the thread and its flag. A reply whose top-level comment is gone has none.
+let private topLevelWriter (comment: Api.Comment) =
+  match comment.ReplyTo, comment.TopLevel with
+  | None, _ -> Some(comment.Writer, comment.GetsReplyEmails)
+  | Some _, Some topLevel -> Some(topLevel.Writer, topLevel.GetsReplyEmails)
+  | Some _, None -> None
+
+/// The backend sends a reply email to the commenter of the top-level comment when its flag is true.
+let emailNote (comment: Api.Comment) =
+  match topLevelWriter comment with
+  | Some(Api.Writer.Commenter commenter, true) -> Some $"{commenter.Name} gets an email with this reply."
+  | Some(Api.Writer.Commenter _, false)
+  | Some(Api.Writer.Author, _)
+  | None -> None
+
 let opened (topLevel: Api.CommentApproval option) (comment: Api.Comment) =
   if canReply topLevel comment.Status then
     Some
       { CommentId = comment.Id
         Editor = Comments.emptyEditor
-        Posting = Editing }
+        Posting = Editing
+        EmailNote = emailNote comment }
   else
     None
 

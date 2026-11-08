@@ -50,6 +50,16 @@ module ReplyEmailRule =
 
   let private isApproved (comment : Comment) = comment.Status.Approval = CommentApproval.Approved
 
+  /// True when the commenter of the top-level comment `topLevel` gets reply emails now: a consent, no stop, and no
+  /// ban. The admin tells the author when a reply goes to the inbox of the commenter.
+  let getsReplyEmails (topLevel : Comment) =
+    match topLevel.Parent, topLevel.ReplyEmails, Comment.commenter topLevel with
+    | None, Some { StopDate = None }, Some commenter -> commenter.Status <> CommenterStatus.Banned
+    | Some _, _, _
+    | None, None, _
+    | None, Some { StopDate = Some _ }, _
+    | None, Some _, None -> false
+
   let private isWrittenBy (recipient : Commenter) (comment : Comment) =
     Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = recipient.ValidationId)
 

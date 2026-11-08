@@ -128,6 +128,12 @@ pure function `AdminComment.ofComments`. A reply row in the queue and on the com
 each thread, with the replies indented under the top-level comment. Each comment count includes
 the replies.
 
+Each top-level comment in these answers gives `getsReplyEmails`. The flag is true when the
+commenter gets reply emails now: a consent, no stop, and no ban. The rule is the pure function
+`ReplyEmailRule.getsReplyEmails`. The top-level comment of a reply gives the flag too. When the
+flag of the top-level comment is true, the author reply form shows "<name> gets an email with
+this reply."
+
 `Admin-Posts-Comments-Delete` and `Admin-Commenters-Delete` follow the pure function
 `CommentDeleteRule`. A delete of a top-level comment removes its thread, also a reply from the
 author. A delete of a commenter removes each comment of the commenter and each thread that a comment

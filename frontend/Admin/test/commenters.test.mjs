@@ -17,7 +17,7 @@ const commenters = [ada, commenter('Grace', 'trusted', '2026-01-02T00:00:00Z'), 
 const posted = (id, approval, content) => ({
   postSlug: 'first',
   postTitle: 'First',
-  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, status: approval, content, replyCount: 0 },
+  comment: { id, createdDate: '2026-02-04T00:00:00Z', commenter: ada, status: approval, content, replyCount: 0, getsReplyEmails: false },
 });
 
 const page = { commenter: ada, comments: [posted('c-1', 'new', 'The first comment.'), posted('c-6', 'approved', rendered('An old comment.'))], otherReplies: 2 };
