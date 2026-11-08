@@ -924,7 +924,7 @@ module DeleteComment =
         do! deleteComments removal.Comments
         // A reply that a reader posted during the delete is not in the first read. Its count is not in `Others`.
         let! postedDuringDelete = repliesOf [ comment ]
-        do! deleteComments (CommentDeleteRule.thread postedDuringDelete comment |> CommentRemoval.notIn removal)
+        do! deleteComments (CommentDeleteRule.thread postedDuringDelete comment |> CommentRemoval.exceptDeleted removal)
         return comment.Id, removal.Others
       }
 
@@ -1153,17 +1153,15 @@ module DeleteCommenter =
       comments |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
 
     // The commenter goes after its comments, so that a second try after a failed delete finds the comments that are left.
-    // `comments` is each comment of the commenter in the first read.
-    let handleCommenterDeleted (comments : Comment list) (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
+    let handleCommenterDeleted (firstRead : Comment list) (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
       cancellableTaskResult {
         do! deleteComments removal.Comments
         do! dependencies.DeleteCommenter commenter
-        // A comment that the commenter posted during the delete is not in the first read. A reply that a reader posted
-        // in a thread of the commenter during the delete is not in the first read either. Its count is not in `Others`.
+        // The first read and `Others` do not include a comment that someone posts during the delete.
         let! postedDuringDelete = dependencies.GetCommentsOfCommenter commenter
-        let own = comments @ postedDuringDelete |> List.distinctBy _.Id
+        let own = firstRead @ postedDuringDelete |> List.distinctBy _.Id
         let! replies = repliesOf own
-        do! deleteComments (CommentDeleteRule.commenter own replies |> CommentRemoval.notIn removal)
+        do! deleteComments (CommentDeleteRule.commenter own replies |> CommentRemoval.exceptDeleted removal)
         return commenter, removal.Others
       }
 

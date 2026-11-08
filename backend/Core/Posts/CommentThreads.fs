@@ -100,8 +100,8 @@ type CommentRemoval =
 [<RequireQualifiedAccess>]
 module CommentRemoval =
 
-  /// Each comment of `removal` that is not in `deleted`, in the order of `removal`.
-  let notIn (deleted : CommentRemoval) (removal : CommentRemoval) : Comment list =
+  /// The order of `removal` stays, so each reply comes before its top-level comment.
+  let exceptDeleted (deleted : CommentRemoval) (removal : CommentRemoval) : Comment list =
     let deletedIds = deleted.Comments |> List.map _.Id |> Set.ofList
     removal.Comments |> List.filter (fun comment -> not (deletedIds.Contains comment.Id))
 
