@@ -18,6 +18,10 @@ type UnsubscribeProps =
   { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
     Api: string }
 
+type StopReplyEmailsProps =
+  { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
+    Api: string }
+
 type PdfProps =
   { /// The https URL of the PDF file.
     File: string }
@@ -27,16 +31,18 @@ type Widget =
   | Subscribe of SubscribeProps
   | Comments of CommentsProps
   | Unsubscribe of UnsubscribeProps
+  | StopReplyEmails of StopReplyEmailsProps
   | Pdf of PdfProps
 
 /// The name of each case of `Widget`.
-let names = [ "subscribe"; "comments"; "unsubscribe"; "pdf" ]
+let names = [ "subscribe"; "comments"; "unsubscribe"; "stop-reply-emails"; "pdf" ]
 
 let name (widget: Widget) =
   match widget with
   | Widget.Subscribe _ -> "subscribe"
   | Widget.Comments _ -> "comments"
   | Widget.Unsubscribe _ -> "unsubscribe"
+  | Widget.StopReplyEmails _ -> "stop-reply-emails"
   | Widget.Pdf _ -> "pdf"
 
 let toAttributes (widget: Widget) : (string * string) list =
@@ -48,6 +54,7 @@ let toAttributes (widget: Widget) : (string * string) list =
       "data-slug", props.Slug
       "data-author", props.Author
     | Widget.Unsubscribe props -> "data-api", props.Api
+    | Widget.StopReplyEmails props -> "data-api", props.Api
     | Widget.Pdf props -> "data-file", props.File ]
 
 let private find (attributes: (string * string) list) (key: string) =
@@ -107,6 +114,10 @@ let parse (attributes: (string * string) list) : Result<Widget, string> =
     required attributes "unsubscribe" "data-api"
     |> Result.bind (api "unsubscribe")
     |> Result.map (fun api -> Widget.Unsubscribe { Api = api })
+  | Some "stop-reply-emails" ->
+    required attributes "stop-reply-emails" "data-api"
+    |> Result.bind (api "stop-reply-emails")
+    |> Result.map (fun api -> Widget.StopReplyEmails { Api = api })
   | Some "pdf" ->
     required attributes "pdf" "data-file"
     |> Result.bind (pdfFile "pdf")

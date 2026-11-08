@@ -471,7 +471,8 @@
   color: var(--muted);
 }
 
-.unsubscribe {
+.unsubscribe,
+.stop-reply-emails {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -480,27 +481,52 @@
 .unsubscribe-status,
 .unsubscribe-note,
 .unsubscribe-fallback,
-.unsubscribe-help {
+.unsubscribe-help,
+.stop-reply-emails-status,
+.stop-reply-emails-error,
+.stop-reply-emails-fallback,
+.stop-reply-emails-help {
   margin: 0;
   font: 14px/1.5 var(--mono);
 }
 
-.unsubscribe-status.is-failed {
+.unsubscribe-status.is-failed,
+.stop-reply-emails-status.is-failed,
+.stop-reply-emails-error {
   color: var(--accent);
 }
 
-.unsubscribe-status.is-done {
+.unsubscribe-status.is-done,
+.stop-reply-emails-status.is-done {
   color: var(--accent-2);
 }
 
 .unsubscribe-note,
 .unsubscribe-fallback,
-.unsubscribe-help {
+.unsubscribe-help,
+.stop-reply-emails-fallback,
+.stop-reply-emails-help {
   color: var(--muted);
 }
 
-.unsubscribe-help {
+.unsubscribe-help,
+.stop-reply-emails-help {
   margin-top: 24px;
+}
+
+.stop-reply-emails button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 14px var(--mono);
+  color: var(--accent);
+}
+
+.stop-reply-emails button:disabled {
+  cursor: default;
+  color: var(--muted);
 }
 
 .pdf,

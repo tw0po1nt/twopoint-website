@@ -159,6 +159,13 @@ type internal DbReplyEmailStop =
       PostId = Slug.value stop.Post
       CommentId = stop.Comment.ToString() }
 
+  member this.ToStop() = validation {
+    let! token = ReplyEmailStopToken.create this.Token
+    and! post = Slug.create this.PostId
+    and! comment = CommentId.create this.CommentId
+    return { ReplyEmailStop.Token = token; Post = post; Comment = comment }
+  }
+
 /// <summary>
 /// Database representation of a comment status
 /// </summary>
@@ -279,6 +286,10 @@ type internal DbReplyEmailConsent =
     entity["ReplyEmailsConsentDate"] <- consent |> Option.map (_.ConsentDate >> utc) |> Option.toObj
     entity["ReplyEmailsStopToken"] <- consent |> Option.map _.StopToken |> Option.toObj
     entity["ReplyEmailsStopDate"] <- consent |> Option.bind _.StopDate |> Option.map utc |> Option.toObj
+
+  static member Update (consent : ReplyEmailConsent) (entity : TableEntity) =
+    DbReplyEmailConsent.WriteTo entity (Some (DbReplyEmailConsent.OfConsent consent))
+    entity
 
   member this.ToConsent() =
     ReplyEmailStopToken.create this.StopToken
@@ -455,6 +466,9 @@ type internal IPostDb =
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
   abstract member DeleteComment: commentId: string -> CancellableTaskResult<unit, DependencyError>
   abstract member CreateReplyEmailStop: stop: DbReplyEmailStop -> CancellableTaskResult<DbReplyEmailStop, DependencyError>
+  abstract member GetReplyEmailStop: token: string -> CancellableTaskResult<DbReplyEmailStop option, DependencyError>
+  abstract member UpdateReplyEmailConsent:
+    postId: string -> commentId: string -> consent: ReplyEmailConsent -> CancellableTaskResult<unit, DependencyError>
 
 
 module internal PostDbError =
@@ -700,5 +714,14 @@ module internal PostDb =
 
       member _.CreateReplyEmailStop stop =
         stop.ToEntity() |> add replyEmailStopsTable PostDbError.validation DbReplyEmailStop.FromEntity
+
+      member _.GetReplyEmailStop token =
+        token |> trySingle replyEmailStopsTable DbReplyEmailStop.FromEntity (Some token)
+
+      member _.UpdateReplyEmailConsent postId commentId consent =
+        TableEntity(postId, commentId)
+        |> update commentsTable PostDbError.validation DbComment.FromEntity
+        <| DbReplyEmailConsent.Update consent
+        |> CancellableTaskResult.ignore
     }
   

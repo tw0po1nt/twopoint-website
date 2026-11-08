@@ -20,6 +20,7 @@
     <Compile Include="PostPage.fs" />
     <Compile Include="SubscribePage.fs" />
     <Compile Include="UnsubscribePage.fs" />
+    <Compile Include="StopReplyEmailsPage.fs" />
     <Compile Include="AboutPage.fs" />
     <Compile Include="PrivacyPage.fs" />
     <Compile Include="NotFoundPage.fs" />

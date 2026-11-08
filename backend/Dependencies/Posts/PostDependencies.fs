@@ -265,6 +265,18 @@ type PostDependencies(
   member _.CreateReplyEmailStop (stop : ReplyEmailStop) =
     postDb.CreateReplyEmailStop (DbReplyEmailStop.OfStop stop) |> CancellableTaskResult.ignore
 
+  member _.GetReplyEmailStop (token : ReplyEmailStopToken) = cancellableTaskResult {
+    let! (stop : DbReplyEmailStop option) = postDb.GetReplyEmailStop (token.ToString())
+
+    return!
+      stop
+      |> Option.traverseValidation _.ToStop()
+      |> DependencyError.ofValidation source
+  }
+
+  member _.UpdateReplyEmailConsent (post : Slug) (comment : CommentId) (consent : ReplyEmailConsent) =
+    postDb.UpdateReplyEmailConsent (Slug.value post) (comment.ToString()) consent
+
   member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
     // TODO(https://github.com/tw0po1nt/twopoint-website-staging/issues/397): get the IDs and the time from an interface.
     let newDbComment =
