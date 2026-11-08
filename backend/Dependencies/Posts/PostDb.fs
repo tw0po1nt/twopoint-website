@@ -460,13 +460,18 @@ type internal IPostDb =
     approvals: string list
       -> commenter: DbCommenter
       -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>
-  abstract member GetCommentById: commentId: string -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) option, DependencyError>
+  /// `postId` is the partition of the comment.
+  abstract member GetComment:
+    postId: string
+      -> commentId: string
+      -> CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) option, DependencyError>
   abstract member CreateComment:
     comment: DbComment
       -> status: DbCommentStatus
       -> CancellableTaskResult<DbComment * DbCommentWriter * DbCommentStatus, DependencyError>
   abstract member UpdateCommentStatus: status: DbCommentStatus -> CancellableTaskResult<DbCommentStatus, DependencyError>
-  abstract member DeleteComment: commentId: string -> CancellableTaskResult<unit, DependencyError>
+  /// `postId` is the partition of the comment.
+  abstract member DeleteComment: postId: string -> commentId: string -> CancellableTaskResult<unit, DependencyError>
   abstract member CreateReplyEmailStop: stop: DbReplyEmailStop -> CancellableTaskResult<DbReplyEmailStop, DependencyError>
   abstract member GetReplyEmailStop: token: string -> CancellableTaskResult<DbReplyEmailStop option, DependencyError>
   abstract member UpdateReplyEmailConsent:
@@ -687,8 +692,8 @@ module internal PostDb =
         return! withLatestStatus logger approvals dbComments [ commenter ] statuses
       }
 
-      member _.GetCommentById commentId = cancellableTaskResult {
-        let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity None
+      member _.GetComment postId commentId = cancellableTaskResult {
+        let! dbComment = commentId |> trySingle commentsTable DbComment.FromEntity (Some postId)
 
         match dbComment with
         | None -> return None
@@ -721,9 +726,9 @@ module internal PostDb =
       member _.UpdateCommentStatus status =
         status.ToEntity() |> add commentStatusesTable PostDbError.validation DbCommentStatus.FromEntity
       
-      member _.DeleteComment commentId = cancellableTaskResult {
+      member _.DeleteComment postId commentId = cancellableTaskResult {
         do! eq "PartitionKey" commentId |> delete commentStatusesTable PostDbError.validation
-        do! eq "RowKey" commentId |> delete commentsTable PostDbError.validation
+        do! deleteByKeys commentsTable PostDbError.validation postId commentId
       }
 
       member _.CreateReplyEmailStop stop =

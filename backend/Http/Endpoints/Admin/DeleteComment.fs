@@ -52,12 +52,14 @@ type DeleteComment(
         let deleteComment = DeleteComment.withDependencies {
           new DeleteComment.Dependencies with
           
-          member _.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
+          member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
           member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
-          member _.DeleteComment comment = postDependencies.DeleteComment comment
+          member _.DeleteComment post comment = postDependencies.DeleteComment post comment
         }
 
-        let deletion = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
+        let deletion =
+          { CommentDeletion.Dto.Post = CommentDeletion.Post slug
+            CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
 
         let! deletionResult = ct |> deleteComment deletion
 

@@ -51,7 +51,7 @@ module internal ReplyEmailStopDependencies =
 
     { new StopReplyEmails.Dependencies with
         member _.GetReplyEmailStop token = postDependencies.GetReplyEmailStop token
-        member _.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
+        member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
         member _.GetUtcNow () = DateTime.UtcNow
         member _.UpdateReplyEmailConsent post comment consent = postDependencies.UpdateReplyEmailConsent post comment consent }
 

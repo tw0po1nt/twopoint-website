@@ -147,7 +147,7 @@ type private FakeComments(commenter : Commenter, stored : PostedComment list, qu
     effects.Add(Stored(comment.Id, approval))
     CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
 
-  let find id = stored |> List.tryFind (fun (posted : PostedComment) -> posted.Comment.Id = id)
+  let find post id = stored |> List.tryFind (fun (posted : PostedComment) -> posted.Post = post && posted.Comment.Id = id)
 
   new(commenter, stored) = FakeComments(commenter, stored, false)
 
@@ -157,7 +157,7 @@ type private FakeComments(commenter : Commenter, stored : PostedComment list, qu
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
     member _.GetUtcNow () = now
-    member _.GetPostedCommentById id = find id |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id = find post id |> CancellableTaskResult.singleton
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
     member _.NewCommentId () = CommentId.ofGuid (Guid replyId)
     member _.CreateComment id _ commenter newComment topLevel approval replyEmails =
@@ -166,12 +166,12 @@ type private FakeComments(commenter : Commenter, stored : PostedComment list, qu
       |> CancellableTaskResult.singleton
     member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid stopToken
     member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
-    member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton ()
+    member _.QueueNewCommentNotice _ _ = CancellableTaskResult.singleton ()
     member _.QueueReplyEmail post reply = queue post reply
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
   interface ReplyAsAuthor.Dependencies with
-    member _.GetPostedCommentById id = find id |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id = find post id |> CancellableTaskResult.singleton
     member _.UpdateCommentApproval comment approval = approve comment approval
     member _.CreateAuthorReply _ topLevel content approval =
       effects.Add(Stored(CommentId.create authorReplyId |> ok, approval))
@@ -181,7 +181,7 @@ type private FakeComments(commenter : Commenter, stored : PostedComment list, qu
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
   interface UpdateCommentApproval.Dependencies with
-    member _.GetCommentById id = find id |> Option.map _.Comment |> CancellableTaskResult.singleton
+    member _.GetComment post id = find post id |> Option.map _.Comment |> CancellableTaskResult.singleton
     member _.UpdateCommentApproval comment approval = approve comment approval
     member _.QueueReplyEmail post reply = queue post reply
 
@@ -294,8 +294,8 @@ type private FakeSend(stored : PostedComment list, blob : string option, sendFai
   member _.Records = List.ofSeq records
 
   interface SendReplyEmail.Dependencies with
-    member _.GetPostedCommentById id =
-      stored |> List.tryFind (fun posted -> posted.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id =
+      stored |> List.tryFind (fun posted -> posted.Post = post && posted.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetReplyEmailRecord _ _ = CancellableTaskResult.singleton record
     member _.GetPublishedBlob _ =
       blob |> Option.map (fun text -> { StoredBlob.Text = text; ETag = "etag"; Mark = NotMigrated }) |> CancellableTaskResult.singleton

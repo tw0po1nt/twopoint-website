@@ -64,7 +64,7 @@ type private FakePostComment(existing : Commenter, failing : Write option) =
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
     member _.GetUtcNow () = now
-    member _.GetPostedCommentById _ =
+    member _.GetPostedComment _ _ =
       CancellableTaskResult.singleton (Some { Post = olderPost.Id; PostTitle = olderPost.Info.Title; Comment = topLevel })
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
     member _.NewCommentId () = CommentId.ofGuid (Guid newId)
@@ -86,7 +86,7 @@ type private FakePostComment(existing : Commenter, failing : Write option) =
     member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid token
     member _.CreateReplyEmailStop stop =
       write Write.Stop () |> CancellableTaskResult.map (fun () -> stops.Add stop)
-    member _.QueueNewCommentNotice _ = write Write.Notice ()
+    member _.QueueNewCommentNotice _ _ = write Write.Notice ()
     member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 

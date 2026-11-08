@@ -49,8 +49,8 @@ type private FakePostReply(post : Post, existing : Commenter, stored : PostedCom
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
     member _.GetUtcNow () = now
-    member _.GetPostedCommentById id =
-      stored |> List.tryFind (fun comment -> comment.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id =
+      stored |> List.tryFind (fun comment -> comment.Post = post && comment.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
     member _.NewCommentId () = CommentId.ofGuid (Guid otherReplyId)
     member _.CreateComment _ _ commenter newComment topLevel approval _ =
@@ -68,7 +68,7 @@ type private FakePostReply(post : Post, existing : Commenter, stored : PostedCom
       |> CancellableTaskResult.singleton
     member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
     member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
-    member _.QueueNewCommentNotice commentId =
+    member _.QueueNewCommentNotice _ commentId =
       queued.Add commentId
       CancellableTaskResult.singleton ()
     member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
@@ -166,7 +166,8 @@ type private FakeThreads(post : Post, initial : Comment list) =
   member _.Comments = comments
 
   interface UpdateCommentApproval.Dependencies with
-    member _.GetCommentById id = comments |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetComment slug id =
+      comments |> List.tryFind (fun comment -> slug = post.Id && comment.Id = id) |> CancellableTaskResult.singleton
     member _.UpdateCommentApproval comment approval =
       updates.Add(comment.Id, approval)
       let updated = { comment with Status = { comment.Status with Approval = approval } }
@@ -248,8 +249,8 @@ type private FakeAuthorReply(stored : PostedComment list) =
   member _.Effects = List.ofSeq effects
 
   interface ReplyAsAuthor.Dependencies with
-    member _.GetPostedCommentById id =
-      stored |> List.tryFind (fun comment -> comment.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id =
+      stored |> List.tryFind (fun comment -> comment.Post = post && comment.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.UpdateCommentApproval comment approval =
       effects.Add(Approved comment.Id)
       CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
@@ -399,9 +400,12 @@ type private FakeCommenterPage(comments : PostedComment list, others : PostedCom
   interface GetCommenter.Dependencies with
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some (commenter "Ben" CommenterStatus.Trusted))
     member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
-    member _.GetCommentById id =
+    member _.GetComment post id =
       reads.Add id
-      others |> List.map _.Comment |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
+      others
+      |> List.tryFind (fun other -> other.Post = post && other.Comment.Id = id)
+      |> Option.map _.Comment
+      |> CancellableTaskResult.singleton
     member _.GetRepliesOf topLevels = repliesIn others topLevels |> CancellableTaskResult.singleton
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
@@ -559,16 +563,18 @@ type private FakeCommentStore(commenters : Commenter list, comments : PostedComm
     postedAfterRepliesRead <- None
     CancellableTaskResult.singleton replies
 
-  member _.DeleteComment (comment : Comment) =
-    deleted.Add comment.Id
-    comments <- comments |> List.filter (fun stored -> stored.Comment.Id <> comment.Id)
+  /// A delete finds the comment only in the partition of its post.
+  member _.DeleteComment (post : TwoPoint.Core.Posts.Slug) (comment : Comment) =
+    if comments |> List.exists (fun stored -> stored.Post = post && stored.Comment.Id = comment.Id) then
+      deleted.Add comment.Id
+      comments <- comments |> List.filter (fun stored -> stored.Comment.Id <> comment.Id)
     CancellableTaskResult.singleton ()
 
   interface DeleteComment.Dependencies with
-    member _.GetPostedCommentById id =
-      comments |> List.tryFind (fun stored -> stored.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id =
+      comments |> List.tryFind (fun stored -> stored.Post = post && stored.Comment.Id = id) |> CancellableTaskResult.singleton
     member this.GetRepliesOf topLevels = this.RepliesOf topLevels
-    member this.DeleteComment comment = this.DeleteComment comment
+    member this.DeleteComment post comment = this.DeleteComment post comment
 
   interface DeleteCommenter.Dependencies with
     member _.GetCommenterByValidationId validationId =
@@ -576,14 +582,18 @@ type private FakeCommentStore(commenters : Commenter list, comments : PostedComm
     member _.GetPostedCommentsOfCommenter commenter =
       comments |> List.filter (_.Comment >> writtenBy commenter) |> CancellableTaskResult.singleton
     member this.GetRepliesOf topLevels = this.RepliesOf topLevels
-    member this.DeleteComment comment = this.DeleteComment comment
+    member this.DeleteComment post comment = this.DeleteComment post comment
     member _.DeleteCommenter commenter =
       commenters <- commenters |> List.filter (fun stored -> stored.ValidationId <> commenter.ValidationId)
       CancellableTaskResult.singleton ()
 
-let private deleteCommentOf (store : FakeCommentStore) (comment : Comment) =
-  let dto = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId (string comment.Id) }
+let private deleteCommentOn (store : FakeCommentStore) (post : Post) (comment : Comment) =
+  let dto =
+    { CommentDeletion.Dto.Post = CommentDeletion.Post (post.Id.ToString())
+      CommentDeletion.Dto.CommentId = CommentDeletion.CommentId (string comment.Id) }
   (DeleteComment.withDependencies store dto CancellationToken.None).Result
+
+let private deleteCommentOf (store : FakeCommentStore) (comment : Comment) = deleteCommentOn store olderPost comment
 
 let private deleteCommenterOf (store : FakeCommentStore) (commenter : Commenter) =
   let dto = { CommenterDeletion.Dto.ValidationId = CommenterDeletion.ValidationId (string commenter.ValidationId) }
@@ -620,6 +630,24 @@ let private deleteTests =
         "Expected the thread of Ada and the reply of Ada in the thread of Ben"
       Expect.equal (ids removal.Comments |> List.last) (string adaThread.Id) "Expected the top-level comment after the replies"
       Expect.equal removal.Others 2 "Expected the replies from Ben and from the author"
+    }
+
+    test "a commenter delete on two posts gives each comment with its post, each reply before the top-level comments" {
+      let own = threadsOnTwoPosts |> List.filter (_.Comment >> writtenBy ada)
+      let removal = CommentDeleteRule.commenterOnPosts own (threadsOnTwoPosts |> List.map _.Comment)
+      let onPost (post : Post) (comments : Comment list) = comments |> List.map (fun comment -> post.Id, string comment.Id)
+
+      Expect.equal
+        (removal.Comments |> List.map (fun posted -> posted.Post, string posted.Comment.Id) |> Set.ofList)
+        (onPost olderPost [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; adaInBenThread ]
+         @ onPost latestPost [ adaOnLatest; benInAdaOnLatest ]
+         |> Set.ofList)
+        "Expected each comment with the post of its thread"
+      Expect.equal
+        (removal.Comments |> List.map _.Comment |> List.skipWhile _.Parent.IsSome |> List.forall _.Parent.IsNone)
+        true
+        "Expected each reply before the top-level comments"
+      Expect.equal removal.Others 3 "Expected the replies from Ben and from the author on both posts"
     }
 
     test "the delete of a top-level comment removes its thread, and keeps the other threads" {
@@ -684,11 +712,20 @@ let private deleteTests =
     test "the delete of a top-level comment on another post removes the replies on that post" {
       let store = FakeCommentStore([ ada; ben ], threadsOnTwoPosts)
 
-      match deleteCommentOf store adaOnLatest with
+      match deleteCommentOn store latestPost adaOnLatest with
       | Ok (DeleteComment.Event.Deleted (_, others)) ->
         Expect.equal others 1 "Expected the reply from Ben"
         Expect.equal (ids store.Comments) (ids bothThreads) "Expected only the threads on the older post"
       | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a comment with the slug of another post finds no comment and deletes nothing" {
+      let store = FakeCommentStore([ ada; ben ], threadsOnTwoPosts)
+
+      match deleteCommentOn store olderPost adaOnLatest with
+      | Error (ActionError.Logic (DeleteComment.Error.CommentNotFound _)) ->
+        Expect.equal (ids store.Comments) (threadsOnTwoPosts |> List.map _.Comment |> ids) "Expected each comment to stay"
+      | other -> failtestf "Expected CommentNotFound, got %A" other
     }
 
     test "the delete of a commenter with threads on two posts removes the replies on each post" {

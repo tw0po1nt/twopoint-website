@@ -58,8 +58,8 @@ type private FakeStops(stops : ReplyEmailStop list, comments : PostedComment lis
   interface StopReplyEmails.Dependencies with
     member _.GetReplyEmailStop token =
       stops |> List.tryFind (fun stop -> stop.Token = token) |> CancellableTaskResult.singleton
-    member _.GetPostedCommentById id =
-      comments |> List.tryFind (fun posted -> posted.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetPostedComment post id =
+      comments |> List.tryFind (fun posted -> posted.Post = post && posted.Comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetUtcNow () = now
     member _.UpdateReplyEmailConsent post comment consent =
       Expect.equal post olderPost.Id "Expected the post of the comment"

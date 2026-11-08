@@ -71,7 +71,7 @@ type GetCommenter (
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
           member _.GetCommentsOfCommenter commenter = postDependencies.GetPostedCommentsOfCommenter commenter
-          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.GetComment post commentId = postDependencies.GetComment post commentId
           member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
           member _.Stage = config.Stage
         }

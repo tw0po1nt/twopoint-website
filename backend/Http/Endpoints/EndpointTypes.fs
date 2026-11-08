@@ -11,7 +11,8 @@ module WelcomeQueue =
   let Name = "subscription_welcome"
 
 type NewCommentMessage =
-  { CommentId : string }
+  { Post : string
+    CommentId : string }
 
 module NewCommentQueue =
   [<Literal>]

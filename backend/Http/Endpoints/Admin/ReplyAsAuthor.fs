@@ -77,7 +77,7 @@ type ReplyAsAuthor(
         let replyAsAuthor = ReplyAsAuthor.withDependencies {
           new ReplyAsAuthor.Dependencies with
 
-          member _.GetPostedCommentById commentId = postDependencies.GetPostedCommentById commentId
+          member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
           member _.CreateAuthorReply post topLevel content approval =
             postDependencies.CreateAuthorReply post topLevel content approval

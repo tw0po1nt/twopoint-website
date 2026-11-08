@@ -59,7 +59,7 @@ type UpdateCommentApproval(
         let updateCommentApproval = UpdateCommentApproval.withDependencies {
           new UpdateCommentApproval.Dependencies with
           
-          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.GetComment post commentId = postDependencies.GetComment post commentId
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
           member _.QueueReplyEmail post reply = ReplyEmailQueueClient.enqueue serviceBus logger op post reply
         }

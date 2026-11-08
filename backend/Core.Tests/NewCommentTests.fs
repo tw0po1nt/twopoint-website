@@ -71,8 +71,9 @@ type private Fake(comment : PostedComment option, others : PostedComment list, d
   new (comment, devices, answers) = Fake(comment, [], devices, answers)
 
   interface NotifyNewComment.Dependencies with
-    member _.GetPostedComment id =
+    member _.GetPostedComment post id =
       if string id = commentId then comment else others |> List.tryFind (fun other -> other.Comment.Id = id)
+      |> Option.filter (fun posted -> posted.Post = post)
       |> CancellableTaskResult.singleton
     member _.CountNewComments () = CancellableTaskResult.singleton 3
     member _.GetDevicesOfAuthor () = CancellableTaskResult.singleton devices
@@ -90,9 +91,11 @@ type private Fake(comment : PostedComment option, others : PostedComment list, d
       deleted.Add device
       CancellableTaskResult.singleton ()
 
-let private notify (fake : Fake) =
-  let dto : NotifyNewComment.Dto = { CommentId = commentId }
+let private notifyOn (post : string) (fake : Fake) =
+  let dto : NotifyNewComment.Dto = { Post = post; CommentId = commentId }
   (NotifyNewComment.withDependencies fake dto CancellationToken.None).Result
+
+let private notify = notifyOn "a-post"
 
 let private waiting = posted CommentApproval.New "A post" "Ada" "The text."
 
@@ -168,6 +171,14 @@ let private handlerTests =
       let fake = Fake(None, [ first ], Map.empty)
 
       match notify fake with
+      | Ok (NotifyNewComment.Event.Skipped _) -> Expect.isEmpty fake.Sent "Expected no push"
+      | other -> failtestf "Expected Skipped, got %A" other
+    }
+
+    test "the read of the comment is in the partition of the post of the message" {
+      let fake = Fake(Some waiting, [ first ], Map.empty)
+
+      match notifyOn "another-post" fake with
       | Ok (NotifyNewComment.Event.Skipped _) -> Expect.isEmpty fake.Sent "Expected no push"
       | other -> failtestf "Expected Skipped, got %A" other
     }

@@ -223,8 +223,8 @@ type PostDependencies(
 
   member _.DeleteCommenter (commenter : Commenter) = commenter.ValidationId.ToString() |> postDb.DeleteCommenter
 
-  member _.GetCommentById commentId = cancellableTaskResult {
-    let! dbComment = postDb.GetCommentById (commentId.ToString())
+  member _.GetComment (post : Slug) (commentId : CommentId) = cancellableTaskResult {
+    let! dbComment = postDb.GetComment (Slug.value post) (commentId.ToString())
 
     return!
       dbComment
@@ -321,8 +321,8 @@ type PostDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.GetPostedCommentById (commentId : CommentId) = cancellableTaskResult {
-    let! dbComment = postDb.GetCommentById (commentId.ToString())
+  member _.GetPostedComment (post : Slug) (commentId : CommentId) = cancellableTaskResult {
+    let! dbComment = postDb.GetComment (Slug.value post) (commentId.ToString())
 
     match dbComment with
     | None -> return None
@@ -350,6 +350,6 @@ type PostDependencies(
     return { comment with Status = status }
   }
 
-  member _.DeleteComment (comment : Comment) = comment.Id.ToString() |> postDb.DeleteComment
+  member _.DeleteComment (post : Slug) (comment : Comment) = postDb.DeleteComment (Slug.value post) (comment.Id.ToString())
 
   member _.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris
