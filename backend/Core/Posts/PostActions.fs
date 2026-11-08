@@ -877,7 +877,7 @@ module DeleteComment =
   // Output
 
   type Error = CommentNotFound of CommentId
-  type Success = Deleted of comment: Comment * removal: CommentRemoval
+  type Success = Deleted of comment: PostedComment * removal: CommentRemoval
   type Decision = Decision<Success, Error>
   /// `others` is the number of replies that went with the comment.
   type Event = Deleted of CommentId * others: int
@@ -885,7 +885,7 @@ module DeleteComment =
   // Logic
 
   type Logic =
-    Comment option
+    PostedComment option
       -> Comment list
       -> CommentDeletion
       -> Decision
@@ -895,8 +895,8 @@ module DeleteComment =
     /// `replies` is each reply under the comment.
     let decide : Logic =
       fun existingComment replies deletion -> result {
-        let! comment = existingComment |> Result.requireSome (Error.CommentNotFound deletion.CommentId)
-        return Success.Deleted (comment, CommentDeleteRule.thread replies comment)
+        let! posted = existingComment |> Result.requireSome (Error.CommentNotFound deletion.CommentId)
+        return Success.Deleted (posted, CommentDeleteRule.thread replies posted.Comment)
       }
 
   // Action
@@ -904,8 +904,9 @@ module DeleteComment =
   type Action = CommentDeletion.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
-    abstract member GetRepliesOf: topLevels: Comment list -> DependencyResult<Comment list>
+    abstract member GetPostedCommentById: commentId: CommentId -> DependencyResult<PostedComment option>
+    /// Each reply under one of the top-level comments. The read of the replies of a post is in the partition of the post.
+    abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
@@ -916,16 +917,16 @@ module DeleteComment =
           do! dependencies.DeleteComment comment
       }
 
-    let repliesOf (comments : Comment list) =
-      comments |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
+    let repliesOf (comments : PostedComment list) =
+      comments |> List.filter (fun posted -> posted.Comment.Parent.IsNone) |> dependencies.GetRepliesOf
 
-    let handleCommentDeleted (Success.Deleted (comment, removal)) : DependencyResult<CommentId * int> =
+    let handleCommentDeleted (Success.Deleted (posted, removal)) : DependencyResult<CommentId * int> =
       cancellableTaskResult {
         do! deleteComments removal.Comments
         // A reply that a reader posted during the delete is not in the first read. Its count is not in `Others`.
-        let! postedDuringDelete = repliesOf [ comment ]
-        do! deleteComments (CommentDeleteRule.thread postedDuringDelete comment |> CommentRemoval.exceptDeleted removal)
-        return comment.Id, removal.Others
+        let! postedDuringDelete = repliesOf [ posted ]
+        do! deleteComments (CommentDeleteRule.thread postedDuringDelete posted.Comment |> CommentRemoval.exceptDeleted removal)
+        return posted.Comment.Id, removal.Others
       }
 
     fun commentDeletion -> cancellableTaskResult {
@@ -935,7 +936,7 @@ module DeleteComment =
         |> Result.mapError ActionError<Error>.Validation
 
       let! existingComment =
-        dependencies.GetCommentById commentDeletion.CommentId
+        dependencies.GetPostedCommentById commentDeletion.CommentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let! replies =
@@ -1136,8 +1137,9 @@ module DeleteCommenter =
 
   type Dependencies =
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
-    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<Comment list>
-    abstract member GetRepliesOf: topLevels: Comment list -> DependencyResult<Comment list>
+    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<PostedComment list>
+    /// Each reply under one of the top-level comments. The read of the replies of a post is in the partition of the post.
+    abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
     abstract member DeleteCommenter: commenter: Commenter -> DependencyResult<unit>
 
@@ -1149,19 +1151,19 @@ module DeleteCommenter =
           do! dependencies.DeleteComment comment
       }
 
-    let repliesOf (comments : Comment list) =
-      comments |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
+    let repliesOf (comments : PostedComment list) =
+      comments |> List.filter (fun posted -> posted.Comment.Parent.IsNone) |> dependencies.GetRepliesOf
 
     // The commenter goes after its comments, so that a second try after a failed delete finds the comments that are left.
-    let handleCommenterDeleted (firstRead : Comment list) (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
+    let handleCommenterDeleted (firstRead : PostedComment list) (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
       cancellableTaskResult {
         do! deleteComments removal.Comments
         do! dependencies.DeleteCommenter commenter
         // The first read and `Others` do not include a comment that someone posts during the delete.
         let! postedDuringDelete = dependencies.GetCommentsOfCommenter commenter
-        let own = firstRead @ postedDuringDelete |> List.distinctBy _.Id
+        let own = firstRead @ postedDuringDelete |> List.distinctBy _.Comment.Id
         let! replies = repliesOf own
-        do! deleteComments (CommentDeleteRule.commenter own replies |> CommentRemoval.exceptDeleted removal)
+        do! deleteComments (CommentDeleteRule.commenter (own |> List.map _.Comment) replies |> CommentRemoval.exceptDeleted removal)
         return commenter, removal.Others
       }
 
@@ -1186,7 +1188,7 @@ module DeleteCommenter =
         repliesOf comments
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide existingCommenter comments replies commenterDeletion
+      let decision = Logic.decide existingCommenter (comments |> List.map _.Comment) replies commenterDeletion
 
       return!
         decision

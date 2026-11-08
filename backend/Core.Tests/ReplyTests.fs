@@ -407,7 +407,8 @@ type private FakeCommenterPage(comments : PostedComment list, others : Comment l
       others |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
     member _.GetRepliesOf topLevels =
       others
-      |> List.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+      |> List.filter (fun comment ->
+        topLevels |> List.exists (fun topLevel -> topLevel.Post = olderPost.Id && comment.Parent = Some topLevel.Comment.Id))
       |> CancellableTaskResult.singleton
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
@@ -538,6 +539,7 @@ let private bothThreads =
 let private writtenBy (commenter : Commenter) (comment : Comment) =
   Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId)
 
+/// Each comment of the store is on `olderPost`.
 type private FakeCommentStore(commenters : Commenter list, comments : Comment list) =
   let mutable commenters = commenters
   let mutable comments = comments
@@ -551,9 +553,11 @@ type private FakeCommentStore(commenters : Commenter list, comments : Comment li
   /// The store adds `reply` after the next read of the replies, as a reader who posts during a delete.
   member _.PostAfterRepliesRead (reply : Comment) = postedAfterRepliesRead <- Some reply
 
-  member _.RepliesOf (topLevels : Comment list) =
+  member _.RepliesOf (topLevels : PostedComment list) =
     let replies =
-      comments |> List.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+      comments
+      |> List.filter (fun comment ->
+        topLevels |> List.exists (fun topLevel -> topLevel.Post = olderPost.Id && comment.Parent = Some topLevel.Comment.Id))
     postedAfterRepliesRead |> Option.iter (fun reply -> comments <- comments @ [ reply ])
     postedAfterRepliesRead <- None
     CancellableTaskResult.singleton replies
@@ -564,7 +568,11 @@ type private FakeCommentStore(commenters : Commenter list, comments : Comment li
     CancellableTaskResult.singleton ()
 
   interface DeleteComment.Dependencies with
-    member _.GetCommentById id = comments |> List.tryFind (fun comment -> comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetPostedCommentById id =
+      comments
+      |> List.tryFind (fun comment -> comment.Id = id)
+      |> Option.map (postedOn olderPost)
+      |> CancellableTaskResult.singleton
     member this.GetRepliesOf topLevels = this.RepliesOf topLevels
     member this.DeleteComment comment = this.DeleteComment comment
 
@@ -572,7 +580,7 @@ type private FakeCommentStore(commenters : Commenter list, comments : Comment li
     member _.GetCommenterByValidationId validationId =
       commenters |> List.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
     member _.GetCommentsOfCommenter commenter =
-      comments |> List.filter (writtenBy commenter) |> CancellableTaskResult.singleton
+      comments |> List.filter (writtenBy commenter) |> List.map (postedOn olderPost) |> CancellableTaskResult.singleton
     member this.GetRepliesOf topLevels = this.RepliesOf topLevels
     member this.DeleteComment comment = this.DeleteComment comment
     member _.DeleteCommenter commenter =

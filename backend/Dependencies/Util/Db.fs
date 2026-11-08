@@ -176,13 +176,27 @@ module Db =
     |> Seq.map (Array.fold (fun filter key -> filter * toFilter key) Empty)
     |> Seq.toList
 
-  let whereAnyKey tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) toFilter keys =
-    (cancellableTaskResult { return [] }, filtersOfKeys toFilter keys)
+  /// The filters of each key in its partition. A key is a pair of a partition key and a key in that partition. Each
+  /// filter has the `PartitionKey` of one partition, so no query reads the full table. The query text of the library
+  /// puts parentheses on the left side of `and` only, so the `PartitionKey` filter is on the right side.
+  let filtersOfKeysInPartitions (toFilter: string -> Filter) (keys: (string * string) seq) : Filter list =
+    keys
+    |> Seq.groupBy fst
+    |> Seq.collect (fun (partition, keys) ->
+      keys |> Seq.map snd |> filtersOfKeys toFilter |> List.map (fun filter -> filter + eq "PartitionKey" partition))
+    |> Seq.toList
+
+  /// Each entity that one of the filters selects, one query for each filter.
+  let whereAny tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) (filters: Filter list) =
+    (cancellableTaskResult { return [] }, filters)
     ||> List.fold (fun entities filter -> cancellableTaskResult {
       let! entities = entities
       let! more = where tableServiceClient logger db table onEntity filter
       return entities @ more
     })
+
+  let whereAnyKey tableServiceClient logger db table (onEntity: TableEntity -> Validation<'a, 'e>) toFilter keys =
+    filtersOfKeys toFilter keys |> whereAny tableServiceClient logger db table onEntity
 
   /// <summary>
   /// Add an entity to an Azure Table

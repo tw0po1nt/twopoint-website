@@ -625,13 +625,15 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
         comments
         |> Seq.filter (fun comment ->
           Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId))
+        |> Seq.map (fun comment -> { PostedComment.Post = olderPost.Id; PostTitle = olderPost.Info.Title; Comment = comment })
         |> List.ofSeq
       comments.AddRange postedAfterFirstRead
       postedAfterFirstRead.Clear()
       CancellableTaskResult.singleton read
     member _.GetRepliesOf topLevels =
       comments
-      |> Seq.filter (fun comment -> topLevels |> List.exists (fun topLevel -> comment.Parent = Some topLevel.Id))
+      |> Seq.filter (fun comment ->
+        topLevels |> List.exists (fun topLevel -> topLevel.Post = olderPost.Id && comment.Parent = Some topLevel.Comment.Id))
       |> List.ofSeq
       |> CancellableTaskResult.singleton
     member _.DeleteComment comment =

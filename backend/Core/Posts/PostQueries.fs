@@ -465,7 +465,8 @@ module GetCommenter =
       commenter: Commenter
         -> DependencyResult<PostedComment list>
     abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
-    abstract member GetRepliesOf: topLevels: Comment list -> DependencyResult<Comment list>
+    /// Each reply under one of the top-level comments. The read of the replies of a post is in the partition of the post.
+    abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Query =
@@ -492,7 +493,7 @@ module GetCommenter =
               return found @ Option.toList topLevel
             })
 
-          let! replies = own |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
+          let! replies = comments |> List.filter (fun posted -> posted.Comment.Parent.IsNone) |> dependencies.GetRepliesOf
           let known = own @ topLevels @ replies |> List.distinctBy _.Id
 
           return
