@@ -45,7 +45,7 @@ let private statusText (model: StopReplyEmails.Model) =
   | StopReplyEmails.Active(_, postTitle)
   | StopReplyEmails.Stopping(_, postTitle)
   | StopReplyEmails.StopFailed(_, postTitle, _) -> $"Stop reply emails for your comment on {postTitle}?"
-  | StopReplyEmails.Stopped -> "You get no more reply emails for this comment."
+  | StopReplyEmails.Stopped -> "You won't get any more reply emails for this comment."
 
 let private asks (model: StopReplyEmails.Model) =
   match model with
@@ -61,13 +61,25 @@ let private asks (model: StopReplyEmails.Model) =
 let private isStopping (model: StopReplyEmails.Model) =
   match model with
   | StopReplyEmails.Stopping _ -> true
-  | _ -> false
+  | StopReplyEmails.MissingToken
+  | StopReplyEmails.Reading _
+  | StopReplyEmails.Unreadable _
+  | StopReplyEmails.Active _
+  | StopReplyEmails.StopFailed _
+  | StopReplyEmails.Stopped
+  | StopReplyEmails.Unknown -> false
 
 let private errorText (model: StopReplyEmails.Model) =
   match model with
-  | StopReplyEmails.StopFailed(_, _, StopReplyEmails.Refused) -> "Couldn't stop the reply emails. Try again."
-  | StopReplyEmails.StopFailed(_, _, StopReplyEmails.Unreachable) -> "Couldn't reach the server. Try again."
-  | _ -> ""
+  | StopReplyEmails.StopFailed(_, _, StopReplyEmails.Refused) -> Some "Couldn't stop the reply emails. Try again."
+  | StopReplyEmails.StopFailed(_, _, StopReplyEmails.Unreachable) -> Some "Couldn't reach the server. Try again."
+  | StopReplyEmails.MissingToken
+  | StopReplyEmails.Reading _
+  | StopReplyEmails.Unreadable _
+  | StopReplyEmails.Active _
+  | StopReplyEmails.Stopping _
+  | StopReplyEmails.Stopped
+  | StopReplyEmails.Unknown -> None
 
 [<SolidComponent>]
 let view (api: string) =
@@ -83,7 +95,7 @@ let view (api: string) =
       }
     }
 
-    Show(when' = (errorText (model ()) <> "")) {
-      p (class' = "stop-reply-emails-error", role = "alert") { errorText (model ()) }
+    Show(when' = (errorText (model ())).IsSome) {
+      p (class' = "stop-reply-emails-error", role = "alert") { errorText (model ()) |> Option.defaultValue "" }
     }
   }

@@ -60,7 +60,6 @@ const iife = async (name, entry, { sourcemap = false } = {}) => {
   return { file: path.relative(outDir, file), bytes: output.bytes, inputs: Object.keys(output.inputs), written: Object.keys(result.metafile.outputs) };
 };
 
-// The widget name of an entry is its file name in kebab case, for example `StopReplyEmails.jsx` is `stop-reply-emails`.
 const widgetName = (file) =>
   path
     .basename(file, '.jsx')

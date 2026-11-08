@@ -70,7 +70,7 @@ test('an active token asks with the post title, and only the button sends the st
   assert.equal(calls[1].url, `${stateUrl}/stop`);
   assert.equal(calls[1].init.method, 'POST');
   assert.equal(status().className, 'stop-reply-emails-status is-done');
-  assert.equal(status().textContent, 'You get no more reply emails for this comment.');
+  assert.equal(status().textContent, "You won't get any more reply emails for this comment.");
   assert.equal(button(), null, 'No button after the stop');
 });
 
@@ -78,7 +78,7 @@ test('a stopped token shows the stop, with no button', async () => {
   answers = [state({ state: 'stopped', postTitle: 'A post' })];
   await open(`?token=${token}`);
   assert.equal(calls.length, 1, 'One read');
-  assert.equal(status().textContent, 'You get no more reply emails for this comment.');
+  assert.equal(status().textContent, "You won't get any more reply emails for this comment.");
   assert.equal(button(), null, 'No button');
 });
 

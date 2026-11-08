@@ -2,6 +2,7 @@ module TwoPoint.Http.Tests.ReplyEmailStopMappingTests
 
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
+open TwoPoint.Core.Util
 open TwoPoint.Http.Endpoints.Blog
 
 open Expecto
@@ -25,7 +26,8 @@ let tests =
     }
 
     test "a failure gets 500 with its message and no data" {
-      let response, status = ReplyEmailStopMapping.answer (Error "The table is down")
+      let error = QueryError.Dependency { Dependency = Dependency.Database; Type = DependencyErrorType.Validation "The table is down" }
+      let response, status = ReplyEmailStopMapping.answer (Error error)
       Expect.equal status HttpStatusCode.InternalServerError "Expected 500"
       Expect.equal response.Message (Some "The table is down") "Expected the message"
       Expect.isNone response.Data "Expected no data"

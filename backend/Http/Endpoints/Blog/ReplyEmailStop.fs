@@ -4,6 +4,7 @@ open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Posts.Queries
 open TwoPoint.Core.Shared
+open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
@@ -31,11 +32,10 @@ module ReplyEmailStopMapping =
     | ReplyEmailStopState.Stopped title -> { State = "stopped"; PostTitle = Some (NonEmptyString.value title) }
     | ReplyEmailStopState.Unknown -> { State = "unknown"; PostTitle = None }
 
-  /// An unknown token is a state of the page, so it gets `200` too.
-  let answer (result : Result<ReplyEmailStopState, string>) : ApiResponse<ReplyEmailStopJson> * HttpStatusCode =
+  let answer (result : QueryResult<ReplyEmailStopState>) : ApiResponse<ReplyEmailStopJson> * HttpStatusCode =
     match result with
     | Ok state -> { Success = true; Message = None; Data = Some (toJson state) }, HttpStatusCode.OK
-    | Error message -> { Success = false; Message = Some message; Data = None }, HttpStatusCode.InternalServerError
+    | Error error -> { Success = false; Message = Some (error.ToString()); Data = None }, HttpStatusCode.InternalServerError
 
 module internal ReplyEmailStopDependencies =
 
@@ -55,7 +55,7 @@ module internal ReplyEmailStopDependencies =
         member _.GetUtcNow () = DateTime.UtcNow
         member _.UpdateReplyEmailConsent post comment consent = postDependencies.UpdateReplyEmailConsent post comment consent }
 
-  let write (req : HttpRequestData) (ct : CancellationToken) (result : Result<ReplyEmailStopState, string>) = task {
+  let write (req : HttpRequestData) (ct : CancellationToken) (result : QueryResult<ReplyEmailStopState>) = task {
     let apiResponse, statusCode = ReplyEmailStopMapping.answer result
     let response = req.CreateResponse statusCode
     do! response.WriteAsJsonAsync(apiResponse, ct)
@@ -81,7 +81,7 @@ type GetReplyEmailStop (
       GetReplyEmailStop.withDependencies (ReplyEmailStopDependencies.create config emailClient tableServiceClient logger)
 
     let! result = ct |> getStop token
-    return! result |> Result.mapError string |> ReplyEmailStopDependencies.write req ct
+    return! result |> ReplyEmailStopDependencies.write req ct
   }
 
 type StopReplyEmails (
@@ -103,5 +103,5 @@ type StopReplyEmails (
       StopReplyEmails.withDependencies (ReplyEmailStopDependencies.create config emailClient tableServiceClient logger)
 
     let! result = ct |> stop token
-    return! result |> Result.mapError _.Message |> ReplyEmailStopDependencies.write req ct
+    return! result |> Result.mapError QueryError.Dependency |> ReplyEmailStopDependencies.write req ct
   }

@@ -287,7 +287,6 @@ type internal DbReplyEmailConsent =
     entity["ReplyEmailsStopToken"] <- consent |> Option.map _.StopToken |> Option.toObj
     entity["ReplyEmailsStopDate"] <- consent |> Option.bind _.StopDate |> Option.map utc |> Option.toObj
 
-  /// Changes only the consent properties of a stored comment entity.
   static member Update (consent : ReplyEmailConsent) (entity : TableEntity) =
     DbReplyEmailConsent.WriteTo entity (Some (DbReplyEmailConsent.OfConsent consent))
     entity

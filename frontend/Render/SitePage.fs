@@ -19,7 +19,6 @@ type SitePage =
   | Home
   | Subscribe
   | Unsubscribe
-  /// The stop page of the reply emails of one comment.
   | StopReplyEmails
   | About
   | Privacy
