@@ -98,6 +98,14 @@ type CommentRemoval =
     Others : int }
 
 [<RequireQualifiedAccess>]
+module CommentRemoval =
+
+  /// Each comment of `removal` that is not in `deleted`, in the order of `removal`.
+  let notIn (deleted : CommentRemoval) (removal : CommentRemoval) : Comment list =
+    let deletedIds = deleted.Comments |> List.map _.Id |> Set.ofList
+    removal.Comments |> List.filter (fun comment -> not (deletedIds.Contains comment.Id))
+
+[<RequireQualifiedAccess>]
 module CommentDeleteRule =
 
   let private repliesFirst (comments : Comment list) =

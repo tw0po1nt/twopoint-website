@@ -910,10 +910,21 @@ module DeleteComment =
 
   let withDependencies (dependencies : Dependencies) : Action =
 
+    let deleteComments (comments : Comment list) : DependencyResult<unit> =
+      cancellableTaskResult {
+        for comment in comments do
+          do! dependencies.DeleteComment comment
+      }
+
+    let repliesOf (comments : Comment list) =
+      comments |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
+
     let handleCommentDeleted (Success.Deleted (comment, removal)) : DependencyResult<CommentId * int> =
       cancellableTaskResult {
-        for removed in removal.Comments do
-          do! dependencies.DeleteComment removed
+        do! deleteComments removal.Comments
+        // A reply that a reader posted during the delete is not in the first read. Its count is not in `Others`.
+        let! postedDuringDelete = repliesOf [ comment ]
+        do! deleteComments (CommentDeleteRule.thread postedDuringDelete comment |> CommentRemoval.notIn removal)
         return comment.Id, removal.Others
       }
 
@@ -929,9 +940,8 @@ module DeleteComment =
 
       let! replies =
         existingComment
-        |> Option.filter (fun comment -> comment.Parent.IsNone)
         |> Option.toList
-        |> dependencies.GetRepliesOf
+        |> repliesOf
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let decision = Logic.decide existingComment replies commentDeletion
@@ -1143,14 +1153,17 @@ module DeleteCommenter =
       comments |> List.filter (fun comment -> comment.Parent.IsNone) |> dependencies.GetRepliesOf
 
     // The commenter goes after its comments, so that a second try after a failed delete finds the comments that are left.
-    let handleCommenterDeleted (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
+    // `comments` is each comment of the commenter in the first read.
+    let handleCommenterDeleted (comments : Comment list) (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
       cancellableTaskResult {
         do! deleteComments removal.Comments
         do! dependencies.DeleteCommenter commenter
-        // A comment that the commenter posted during the delete is not in the first read.
+        // A comment that the commenter posted during the delete is not in the first read. A reply that a reader posted
+        // in a thread of the commenter during the delete is not in the first read either. Its count is not in `Others`.
         let! postedDuringDelete = dependencies.GetCommentsOfCommenter commenter
-        let! replies = repliesOf postedDuringDelete
-        do! deleteComments (CommentDeleteRule.commenter postedDuringDelete replies).Comments
+        let own = comments @ postedDuringDelete |> List.distinctBy _.Id
+        let! replies = repliesOf own
+        do! deleteComments (CommentDeleteRule.commenter own replies |> CommentRemoval.notIn removal)
         return commenter, removal.Others
       }
 
@@ -1179,7 +1192,7 @@ module DeleteCommenter =
 
       return!
         decision
-        |> Result.traverseCancellableTask handleCommenterDeleted
+        |> Result.traverseCancellableTask (handleCommenterDeleted comments)
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Deleted)
           (Logic >> ActionResult.failure)
