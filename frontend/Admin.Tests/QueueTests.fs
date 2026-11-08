@@ -52,6 +52,9 @@ let private commenterStatus commentId (model: Shell.Model) =
     | Api.Writer.Commenter commenter -> Some commenter.Status
     | Api.Writer.Author -> None)
 
+let private emailNote commentId (model: Shell.Model) =
+  Queue.tryFind commentId model.Queue |> Option.bind (fun row -> AuthorReply.emailNote row.Comment.Comment)
+
 let private replyOf (comment: Api.PostedComment) =
   { comment with
       Comment.ReplyTo = Some "top-level" }
@@ -87,18 +90,13 @@ let private replyTests =
 
     test "the reply form under a top-level row tells the author about the reply email only when the row has the flag" {
       let model = loadedWith [ { first with Comment.GetsReplyEmails = true }; second ]
-
-      let opened, _ = reply (AuthorReply.Opened "first") model
-      Expect.equal (opened.Queue.Reply |> Option.bind _.EmailNote) (Some "Ada gets an email with this reply.") "The line names the commenter"
-
-      let opened, _ = reply (AuthorReply.Opened "second") model
-      Expect.isNone (opened.Queue.Reply |> Option.bind _.EmailNote) "No line with no flag"
+      Expect.equal (emailNote "first" model) (Some "Ada gets an email with this reply.") "The line names the commenter"
+      Expect.isNone (emailNote "second" model) "No line with no flag"
     }
 
     test "a reply row with the flag of a reply and no top-level comment gives no line" {
       let model = loadedWith [ { replyOf first with Comment.GetsReplyEmails = true } ]
-      let opened, _ = reply (AuthorReply.Opened "first") model
-      Expect.isNone (opened.Queue.Reply |> Option.bind _.EmailNote) "No line"
+      Expect.isNone (emailNote "first" model) "No line"
     }
 
     test "the reply opens a form under its row, and a second reply moves the form to that row" {
@@ -239,12 +237,8 @@ let private contextTests =
       let flagged = under Api.CommentApproval.Approved first
       let flagged = { flagged with Comment.TopLevel = flagged.Comment.TopLevel |> Option.map (fun topLevel -> { topLevel with GetsReplyEmails = true }) }
       let model = loadedWith [ flagged; under Api.CommentApproval.Approved third ]
-
-      let opened, _ = reply (AuthorReply.Opened "first") model
-      Expect.equal (opened.Queue.Reply |> Option.bind _.EmailNote) (Some "Grace gets an email with this reply.") "The line names the commenter of the top-level comment"
-
-      let opened, _ = reply (AuthorReply.Opened "third") model
-      Expect.isNone (opened.Queue.Reply |> Option.bind _.EmailNote) "No line with no flag"
+      Expect.equal (emailNote "first" model) (Some "Grace gets an email with this reply.") "The line names the commenter of the top-level comment"
+      Expect.isNone (emailNote "third" model) "No line with no flag"
     }
 
     test "a reply under a rejected top-level comment offers no reply, and an open asks for nothing" {

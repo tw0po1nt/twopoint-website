@@ -50,15 +50,19 @@ module ReplyEmailRule =
 
   let private isApproved (comment : Comment) = comment.Status.Approval = CommentApproval.Approved
 
-  /// True when the commenter of the top-level comment `topLevel` gets reply emails now: a consent, no stop, and no
-  /// ban. The admin tells the author when a reply goes to the inbox of the commenter.
+  let private recipientOf (topLevel : Comment) : Result<Commenter * ReplyEmailConsent, ReplyEmailSkip> =
+    match topLevel.ReplyEmails, Comment.commenter topLevel with
+    | None, _
+    | _, None -> Error ReplyEmailSkip.NoConsent
+    | Some { StopDate = Some _ }, Some _ -> Error ReplyEmailSkip.Stopped
+    | Some _, Some recipient when recipient.Status = CommenterStatus.Banned -> Error ReplyEmailSkip.RecipientBanned
+    | Some consent, Some recipient -> Ok (recipient, consent)
+
+  /// Give the top-level comment of the thread. A reply always gives false.
   let getsReplyEmails (topLevel : Comment) =
-    match topLevel.Parent, topLevel.ReplyEmails, Comment.commenter topLevel with
-    | None, Some { StopDate = None }, Some commenter -> commenter.Status <> CommenterStatus.Banned
-    | Some _, _, _
-    | None, None, _
-    | None, Some { StopDate = Some _ }, _
-    | None, Some _, None -> false
+    match topLevel.Parent with
+    | Some _ -> false
+    | None -> recipientOf topLevel |> Result.isOk
 
   let private isWrittenBy (recipient : Commenter) (comment : Comment) =
     Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = recipient.ValidationId)
@@ -77,14 +81,11 @@ module ReplyEmailRule =
     | Some posted ->
       match topLevel with
       | Some topLevel when topLevel.Post = posted.Post && Some topLevel.Comment.Id = posted.Comment.Parent ->
-        match topLevel.Comment.ReplyEmails, Comment.commenter topLevel.Comment with
-        | _ when not (isApproved topLevel.Comment) -> Error ReplyEmailSkip.TopLevelNotApproved
-        | None, _
-        | _, None -> Error ReplyEmailSkip.NoConsent
-        | Some { StopDate = Some _ }, Some _ -> Error ReplyEmailSkip.Stopped
-        | Some _, Some recipient when recipient.Status = CommenterStatus.Banned -> Error ReplyEmailSkip.RecipientBanned
-        | Some _, Some recipient when isWrittenBy recipient posted.Comment -> Error ReplyEmailSkip.OwnReply
-        | Some consent, Some recipient ->
+        match isApproved topLevel.Comment, recipientOf topLevel.Comment with
+        | false, _ -> Error ReplyEmailSkip.TopLevelNotApproved
+        | true, Error skip -> Error skip
+        | true, Ok (recipient, _) when isWrittenBy recipient posted.Comment -> Error ReplyEmailSkip.OwnReply
+        | true, Ok (recipient, consent) ->
           Ok
             { Post = posted.Post
               PostTitle = posted.PostTitle

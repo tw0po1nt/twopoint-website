@@ -45,6 +45,9 @@ let private shown (model: Shell.Model) =
 let private approval (commentId: string) (model: Shell.Model) =
   PostComments.tryFind commentId (page model) |> Option.map _.Comment.Status
 
+let private emailNote (commentId: string) (model: Shell.Model) =
+  PostComments.tryFind commentId (page model) |> Option.bind (fun row -> AuthorReply.emailNote row.Comment)
+
 let private reply msg model = send (PostComments.Reply msg) model
 
 let private typed (commentId: string) (text: string) model =
@@ -66,12 +69,8 @@ let private replyTests =
     test "the reply form tells the author about the reply email only when the top-level comment has the flag" {
       let model, _ = start "/posts/first/comments"
       let model, _ = send (PostComments.Answered("first", Ok [ waiting; { approved with GetsReplyEmails = true } ])) model
-
-      let opened, _ = reply (AuthorReply.Opened "approved") model
-      Expect.equal ((page opened).Reply |> Option.bind _.EmailNote) (Some "Ada gets an email with this reply.") "The line names the commenter"
-
-      let opened, _ = reply (AuthorReply.Opened "waiting") model
-      Expect.isNone ((page opened).Reply |> Option.bind _.EmailNote) "No line with no flag"
+      Expect.equal (emailNote "approved" model) (Some "Ada gets an email with this reply.") "The line names the commenter"
+      Expect.isNone (emailNote "waiting" model) "No line with no flag"
     }
 
     test "an approved row offers the reply with no approval note" {

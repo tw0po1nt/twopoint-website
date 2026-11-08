@@ -127,7 +127,6 @@ type Writer =
   | Author
 
 /// The top-level comment of a reply. `Excerpt` is the start of its plain text, and `Content` is its full HTML.
-/// `GetsReplyEmails` is true when its commenter gets reply emails now.
 type TopLevel =
   { Id: string
     Writer: Writer
@@ -137,8 +136,7 @@ type TopLevel =
     GetsReplyEmails: bool }
 
 /// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyCount` is the number of replies that a delete of
-/// the comment removes with it. `GetsReplyEmails` is true for a top-level comment whose commenter gets reply emails
-/// now.
+/// the comment removes with it. `GetsReplyEmails` is always false on a reply: read the one of `TopLevel`.
 type Comment =
   { Id: string
     CreatedDate: string

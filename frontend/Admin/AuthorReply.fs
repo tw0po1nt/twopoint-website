@@ -8,12 +8,10 @@ type Posting =
   | Posting
   | NotPosted of reason: string
 
-/// `EmailNote` tells the author that the reply goes to the inbox of the commenter of the top-level comment.
 type Form =
   { CommentId: string
     Editor: Comments.Editor
-    Posting: Posting
-    EmailNote: string option }
+    Posting: Posting }
 
 type Msg =
   | Opened of commentId: string
@@ -68,8 +66,7 @@ let opened (topLevel: Api.CommentApproval option) (comment: Api.Comment) =
     Some
       { CommentId = comment.Id
         Editor = Comments.emptyEditor
-        Posting = Editing
-        EmailNote = emailNote comment }
+        Posting = Editing }
   else
     None
 

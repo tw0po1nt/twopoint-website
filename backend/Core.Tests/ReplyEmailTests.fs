@@ -535,7 +535,7 @@ let private composeTests =
   ]
 
 let private flagTests =
-  testList "the flag of the admin" [
+  testList "whether the commenter gets reply emails" [
     test "the commenter of a top-level comment with a consent, no stop, and no ban gets reply emails" {
       Expect.isTrue (ReplyEmailRule.getsReplyEmails topLevel) "Expected the flag"
       Expect.isTrue (ReplyEmailRule.getsReplyEmails (topLevelWith ada CommentApproval.New (Some consent))) "Expected the flag on a new comment"

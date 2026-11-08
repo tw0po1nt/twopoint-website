@@ -31,7 +31,6 @@ type AdminTopLevelDto =
     Status : string
     Excerpt : string
     Content : string
-    /// True when its commenter gets reply emails now: a consent, no stop, and no ban.
     GetsReplyEmails : bool }
 
 type AdminCommentDto =
@@ -47,7 +46,6 @@ type AdminCommentDto =
     TopLevel : AdminTopLevelDto option
     /// The number of replies that a delete of the comment removes with it.
     ReplyCount : int
-    /// True for a top-level comment whose commenter gets reply emails now: a consent, no stop, and no ban.
     GetsReplyEmails : bool }
 
 [<AutoOpen>]

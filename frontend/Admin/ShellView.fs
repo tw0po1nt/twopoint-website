@@ -719,8 +719,8 @@ let private replyForm
       yield fun note _ -> p (class' = "muted small") { note }
     }
 
-    Show(when' = (read _.EmailNote None ()).IsSome) {
-      p (class' = "muted small") { read _.EmailNote None () |> Option.defaultValue "" }
+    For(each = Array.ofList (Option.toList (AuthorReply.emailNote comment))) {
+      yield fun note _ -> p (class' = "muted small") { note }
     }
 
     Show(when' = (failure ()).IsSome) {
