@@ -355,23 +355,56 @@ let private detailsChanged (msg: Details.Msg) (document: Document) =
 let private changeDetails (change: Details.Model -> Details.Model) (document: Document) =
   { document with Details = change document.Details }
 
+let private startSlugChange (eTag: string) (document: Document) =
+  Loaded(changeDetails Details.slugChangeStarted document),
+  Some(
+    ChangeSlug
+      { Slug = document.Slug
+        ETag = eTag
+        NewSlug = Details.typedSlug document.Details }
+  )
+
 let private requestSlugChange (document: Document) =
   match document.State, document.ETag, document.Save with
-  | _ when Details.isChangingSlug document.Details -> Loaded document, None
-  | Api.Draft, Some eTag, Saved when Details.slugChangeable document.Slug document.Details ->
-    Loaded(changeDetails Details.slugChangeStarted document),
-    Some(
-      ChangeSlug
-        { Slug = document.Slug
-          ETag = eTag
-          NewSlug = Details.typedSlug document.Details }
-    )
-  | Api.Draft, _, Saved -> Loaded document, None
-  | Api.Draft, _, _ ->
-    Loaded(changeDetails (Details.slugChangeRefused "Save the post before changing the slug.") document),
-    None
+  | _ when Details.isChangingSlug document.Details || Publish.isOpen document.Publish -> Loaded document, None
+  | Api.Draft, _, _ when not (Details.slugChangeable document.Slug document.Details) -> Loaded document, None
+  | Api.Draft, Some eTag, Saved -> startSlugChange eTag document
+  | Api.Draft, None, Saved -> Loaded document, None
+  | Api.Draft, _, (Unsaved | SaveFailed _) -> startSave (changeDetails Details.slugChangeWaitsForSave document)
+  | Api.Draft, _, Saving _ -> Loaded(changeDetails Details.slugChangeWaitsForSave document), None
+  | Api.Draft, _, Stale ->
+    Loaded(changeDetails (Details.slugChangeRefused (Api.reason Api.Stale)) document), None
   | (Api.Published | Api.Upcoming), _, _ ->
     Loaded(changeDetails (Details.slugChangeRefused "You can't change the slug of a published post.") document), None
+
+let private resumeSlugChange (model: Model, effect: Effect option) =
+  match model with
+  | Loaded document when Details.isSlugWaitingForSave document.Details ->
+    match document.Save, document.ETag with
+    | Saving _, _ -> model, effect
+    | (Saved | Unsaved), Some eTag -> startSlugChange eTag document
+    | (Saved | Unsaved), None
+    | (SaveFailed _ | Stale), _ -> Loaded(changeDetails Details.slugChangeCanceled document), effect
+  | Loaded _
+  | Loading _
+  | NotLoaded _ -> model, effect
+
+let canChangeSlug (document: Document) =
+  document.State = Api.Draft
+  && document.Save <> Stale
+  && not (Details.isChangingSlug document.Details)
+  && Details.slugChangeable document.Slug document.Details
+
+let slugSuggestion (document: Document) =
+  match document.State, Slug.ofTitle document.Fields.Title with
+  | Api.Draft, Some suggested when
+    not (Details.isChangingSlug document.Details)
+    && suggested <> document.Slug
+    && suggested <> Details.typedSlug document.Details
+    ->
+    Some suggested
+  | Api.Draft, _
+  | (Api.Published | Api.Upcoming), _ -> None
 
 let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document: Document) =
   match result with
@@ -388,7 +421,7 @@ let private slugChanged (result: Result<Api.ChangedSlug, Api.Failure>) (document
     else
       Loaded document, None
   | Error Api.Stale ->
-    Loaded { changeDetails Details.slugChangeStale document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
+    Loaded { changeDetails Details.slugChangeCanceled document with Save = Stale; SaveAgain = false; LeaveTo = None }, None
   | Error failure -> Loaded(changeDetails (Details.slugChangeRefused (Api.reason failure)) document), None
 let private togglePreview (document: Document) =
   match document.Preview with
@@ -464,7 +497,7 @@ let private resumePublish (model: Model, effect: Effect option) =
       Loaded(withPublish (Publish.CheckFailed(firstChoice document, $"Couldn't save the post. {reason}")) document), None
     | Publish.Saving, Stale ->
       Loaded(
-        withPublish (Publish.CheckFailed(firstChoice document, "This post changed in another tab. Reload the page to get the latest version.")) document
+        withPublish (Publish.CheckFailed(firstChoice document, Api.reason Api.Stale)) document
       ),
       None
     | Publish.Saving, (Unsaved | Saving _)
@@ -968,7 +1001,7 @@ let update (msg: Msg) (model: Model) : Model * Effect option =
   | Loaded document, BodyChanged body -> edit (fun fields -> { fields with Body = body }) document
   | Loaded document, SaveRequested -> saveNow document
   | Loaded document, SaveAnswered(slug, version, result) when slug = document.Slug ->
-    answered version result document |> resumePublish
+    answered version result document |> resumePublish |> resumeSlugChange
   | Loaded document, PointerMoved -> Loaded { document with Typing = false }, None
   | Loaded document, DetailsMsg msg -> detailsChanged msg document
   | Loaded document, SlugChangeRequested -> requestSlugChange document

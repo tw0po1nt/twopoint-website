@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Notifications.Queries
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http.Endpoints
 
 open Azure.Data.Tables
@@ -36,7 +37,7 @@ type GetPushDevices(
         let response = req.CreateResponse HttpStatusCode.OK
 
         // Dependencies
-        let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
+        let deviceDependencies = DeviceDependencies(tableServiceClient, SystemDependencies.live, logger)
         let listDevices = ListPushDevices.withDependencies {
           new ListPushDevices.Dependencies with
 

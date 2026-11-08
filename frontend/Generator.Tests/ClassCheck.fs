@@ -8,10 +8,12 @@ open System.Text.RegularExpressions
 let widgetClasses =
   set [ "subscribe"; "subscribe-field"; "subscribe-error"; "subscribe-status"; "is-failed"; "is-subscribed"; "subscribe-note"
         "comments"; "comments-count"; "comments-list"; "comment"; "comment-meta"; "comment-text"; "comment-form"
-        "comment-field"; "comment-error"; "comment-status"; "is-done"; "comment-note"
+        "comment-field"; "comment-check"; "comment-error"; "comment-status"; "is-done"; "comment-note"
         "comment-editor"; "comment-tabs"; "comment-tab"; "is-hidden"; "comment-preview"; "is-muted"; "comment-help"
-        "comment-help-sheet"
+        "comment-help-sheet"; "comment-thread"; "comment-replies"; "comment-earlier"; "comment-badge"; "is-author"; "is-marked"
+        "comment-thread-end"; "comment-reply-form"; "comment-actions"
         "unsubscribe"; "unsubscribe-status"; "unsubscribe-note"
+        "stop-reply-emails"; "stop-reply-emails-status"; "stop-reply-emails-error"
         "pdf-viewer"; "pdf-frame"; "pdf-page"; "pdf-nav"; "pdf-count"; "pdf-status"
         "textLayer"; "markedContent"; "annotationLayer"; "linkAnnotation" ]
 

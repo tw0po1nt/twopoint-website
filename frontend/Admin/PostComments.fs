@@ -17,7 +17,8 @@ type Comments =
 type Model =
   { Slug: string
     Filter: Filter
-    Comments: Comments }
+    Comments: Comments
+    Reply: AuthorReply.Form option }
 
 type Msg =
   /// An answer for another post comes after the author left its page, and changes nothing.
@@ -26,13 +27,18 @@ type Msg =
   /// A delete comes here only after the confirmation.
   | Chosen of commentId: string * Queue.Action
   | Done of commentId: string * Queue.Action * Result<unit, Api.Failure>
+  | Reply of AuthorReply.Msg
 
-type Effect = Moderate of slug: string * Api.Comment * Queue.Action
+type Effect =
+  | Moderate of slug: string * Api.Comment * Queue.Action
+  | PreviewReply of commentId: string * TwoPoint.Site.Widgets.Comments.PreviewRequest
+  | PostReply of slug: string * commentId: string * content: string
 
 let init (slug: string) =
   { Slug = slug
     Filter = All
-    Comments = Waiting }
+    Comments = Waiting
+    Reply = None }
 
 let isLoaded (model: Model) =
   match model.Comments with
@@ -72,7 +78,10 @@ let private moderated (commentId: string) (action: Queue.Action) (rows: Row list
   | Queue.Approve
   | Queue.ApproveAndTrust -> change commentId (withApproval Api.CommentApproval.Approved) rows
   | Queue.Reject -> change commentId (withApproval Api.CommentApproval.Rejected) rows
-  | Queue.Delete -> rows |> List.filter (fun row -> id row <> commentId)
+  | Queue.Delete ->
+    rows
+    |> ReplyContext.rowsAfterDelete _.Comment (fun comment row -> { row with Comment = comment }) commentId
+    |> Option.defaultValue rows
 
 let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (model: Model) =
   match rows |> List.tryFind (fun row -> id row = commentId) with
@@ -82,19 +91,80 @@ let private choose (commentId: string) (action: Queue.Action) (rows: Row list) (
   | Some _
   | None -> model, None
 
+let private ready (comment: Api.Comment) = { Comment = comment; State = Progress.Ready }
+
+/// The approval of the top-level comment of a reply. A top-level comment has none.
+let private topLevelIn (rows: Row list) (comment: Api.Comment) =
+  comment.ReplyTo
+  |> Option.bind (fun topLevel -> rows |> List.tryFind (fun row -> id row = topLevel))
+  |> Option.map (fun row -> row.Comment.Status)
+
+/// Closes the reply form when its comment left the list or can no longer take a reply.
+let private keepReply (rows: Row list) (form: AuthorReply.Form option) =
+  form
+  |> AuthorReply.keepIf (fun commentId ->
+    rows
+    |> List.exists (fun row -> id row = commentId && AuthorReply.canReply (topLevelIn rows row.Comment) row.Comment.Status))
+
+/// The reply comes last, because the list is oldest first.
+let private replied (answer: Api.AuthorReply) (rows: Row list) =
+  let approve row =
+    if List.contains (id row) answer.Approved then withApproval Api.CommentApproval.Approved row else row
+
+  let counted row =
+    { row with Comment = ReplyContext.afterReply answer.Reply row.Comment }
+
+  (rows |> List.map (approve >> counted)) @ [ ready answer.Reply ]
+
+let private reply (msg: AuthorReply.Msg) (model: Model) : Model * Effect option =
+  match model.Comments, msg with
+  | Loaded rows, AuthorReply.Opened commentId ->
+    match rows |> List.tryFind (fun row -> id row = commentId) with
+    | Some row when not (AuthorReply.isOpenOn commentId model.Reply) ->
+      { model with Reply = AuthorReply.opened (topLevelIn rows row.Comment) row.Comment }, None
+    | Some _
+    | None -> model, None
+  | Loaded rows, AuthorReply.Answered(commentId, Ok answer) when AuthorReply.isOpenOn commentId model.Reply ->
+    { model with
+        Comments = Loaded(replied answer rows)
+        Reply = None },
+    None
+  | _ ->
+    let form, effect = AuthorReply.update msg model.Reply
+
+    let effect =
+      effect
+      |> Option.map (fun effect ->
+        match effect with
+        | AuthorReply.Preview(commentId, request) -> PreviewReply(commentId, request)
+        | AuthorReply.Post(commentId, content) -> PostReply(model.Slug, commentId, content))
+
+    { model with Reply = form }, effect
+
 let update (msg: Msg) (model: Model) : Model * Effect option =
   match model.Comments, msg with
   | _, Answered(slug, _) when slug <> model.Slug -> model, None
   | _, Answered(_, Ok comments) ->
-    { model with Comments = Loaded(comments |> List.map (fun comment -> { Comment = comment; State = Progress.Ready })) },
+    let rows = comments |> List.map ready
+
+    { model with
+        Comments = Loaded rows
+        Reply = keepReply rows model.Reply },
     None
   | _, Answered(_, Error failure) -> { model with Comments = NotLoaded(Api.reason failure) }, None
   | _, Filtered filter -> { model with Filter = filter }, None
   | Loaded rows, Chosen(commentId, action) -> choose commentId action rows model
-  | Loaded rows, Done(commentId, action, Ok()) -> { model with Comments = Loaded(moderated commentId action rows) }, None
+  | Loaded rows, Done(commentId, action, Ok()) ->
+    let rows = moderated commentId action rows
+
+    { model with
+        Comments = Loaded rows
+        Reply = keepReply rows model.Reply },
+    None
   | Loaded rows, Done(commentId, action, Error failure) ->
     { model with Comments = Loaded(change commentId (fun row -> { row with State = Progress.NotDone(action, Api.reason failure) }) rows) },
     None
+  | _, Reply msg -> reply msg model
   | (Waiting | NotLoaded _), (Chosen _ | Done _) -> model, None
 
 let shown (model: Model) =
@@ -103,9 +173,51 @@ let shown (model: Model) =
   | Loaded rows, Only approval -> rows |> List.filter (fun row -> row.Comment.Status = approval)
   | (Waiting | NotLoaded _), _ -> []
 
+let private rowsOf (model: Model) =
+  match model.Comments with
+  | Loaded rows -> rows
+  | Waiting
+  | NotLoaded _ -> []
+
+/// A reply whose top-level comment the filter hides keeps the place of that thread.
+let heads (model: Model) =
+  let rows = rowsOf model
+  let shown = shown model
+  let shownIds = shown |> List.map id |> Set.ofList
+  let place (commentId: string) = rows |> List.tryFindIndex (fun row -> id row = commentId)
+
+  shown
+  |> List.filter (fun row -> row.Comment.ReplyTo |> Option.forall (shownIds.Contains >> not))
+  |> List.sortBy (fun row ->
+    let own = place (id row) |> Option.defaultValue 0
+    row.Comment.ReplyTo |> Option.bind place |> Option.defaultValue own, own)
+
+/// The replies of a top-level comment that the filter shows, oldest first. A hidden top-level comment has none.
+let replies (topLevelId: string) (model: Model) =
+  let shown = shown model
+
+  if shown |> List.exists (fun row -> id row = topLevelId) then
+    shown |> List.filter (fun row -> row.Comment.ReplyTo = Some topLevelId)
+  else
+    []
+
+/// The top-level comment of a reply, with the approval that it has on the page.
+let topLevel (comment: Api.Comment) (model: Model) =
+  comment.TopLevel
+  |> Option.map (fun topLevel ->
+    match rowsOf model |> List.tryFind (fun row -> id row = topLevel.Id) with
+    | Some row -> { topLevel with Status = row.Comment.Status }
+    | None -> topLevel)
+
 let tryFind (commentId: string) (model: Model) =
   match model.Comments with
   | Loaded rows -> rows |> List.tryFind (fun row -> id row = commentId)
+  | Waiting
+  | NotLoaded _ -> None
+
+let topLevelApproval (comment: Api.Comment) (model: Model) =
+  match model.Comments with
+  | Loaded rows -> topLevelIn rows comment
   | Waiting
   | NotLoaded _ -> None
 

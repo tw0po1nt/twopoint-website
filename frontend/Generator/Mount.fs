@@ -16,15 +16,20 @@ let view (widget: Contract.Widget) (fallback: HtmlElement) =
 
 let private apiOrigin (config: StageConfig) = config.ApiUrl.GetLeftPart UriPartial.Authority
 
-let comments (config: StageConfig) (slug: string) =
+let comments (config: StageConfig) (slug: string) (author: string) =
   view
-    (Contract.Widget.Comments { Api = apiOrigin config; Slug = slug })
+    (Contract.Widget.Comments { Api = apiOrigin config; Slug = slug; Author = author })
     (p (class' = "comments-fallback") { "The comments need JavaScript." })
 
 let unsubscribe (config: StageConfig) =
   view
     (Contract.Widget.Unsubscribe { Api = apiOrigin config })
     (p (class' = "unsubscribe-fallback") { "The unsubscribe link needs JavaScript." })
+
+let stopReplyEmails (config: StageConfig) =
+  view
+    (Contract.Widget.StopReplyEmails { Api = apiOrigin config })
+    (p (class' = "stop-reply-emails-fallback") { "The stop link needs JavaScript." })
 
 let subscribe (config: StageConfig) =
   view

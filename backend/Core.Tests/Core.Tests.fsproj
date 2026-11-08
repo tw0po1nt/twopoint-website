@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="SlugTitles.fs" />
     <Compile Include="Fixtures.fs" />
     <Compile Include="AccessTests.fs" />
     <Compile Include="NewsletterTests.fs" />
@@ -24,6 +25,10 @@
     <Compile Include="DashboardTests.fs" />
     <Compile Include="DeviceTests.fs" />
     <Compile Include="NewCommentTests.fs" />
+    <Compile Include="ReplyTests.fs" />
+    <Compile Include="ReplyEmailConsentTests.fs" />
+    <Compile Include="ReplyEmailStopTests.fs" />
+    <Compile Include="ReplyEmailTests.fs" />
     <Compile Include="PostDraftTests.fs" />
     <Compile Include="PostTermsTests.fs" />
     <Compile Include="PostPreviewTests.fs" />

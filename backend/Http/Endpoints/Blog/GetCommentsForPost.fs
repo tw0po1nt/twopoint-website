@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Blog
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Queries
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -15,23 +16,6 @@ open Microsoft.Extensions.Logging
 open System
 open System.Net
 open System.Threading
-
-type CommentDto =
-  { Id : string
-    CreatedDate : DateTime
-    Commenter : string
-    Content : string }
-
-[<AutoOpen>]
-module PostTypesExt =
-
-  type RenderedComment with
-    member this.ToDto() =
-      { CommentDto.Id = this.Comment.Id.ToString()
-        CreatedDate = this.Comment.CreatedDate
-        Commenter = this.Comment.Commenter.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
-        Content = this.Html }
-
 
 type GetCommentsForPost (
   config: Config,
@@ -57,10 +41,11 @@ type GetCommentsForPost (
       emailClient,
       config.Azure.EmailSender,
       tableServiceClient,
+      SystemDependencies.live,
       logger
     )
 
-    let getCommentsForPost = GetCommentsForPost.withDependencies {
+    let getPublicComments = GetPublicComments.withDependencies {
       new GetCommentsForPost.Dependencies with
 
       member _.GetPostBySlug slug = postDependencies.GetPostBySlug slug
@@ -68,13 +53,12 @@ type GetCommentsForPost (
       member _.Stage = config.Stage
     }
 
-    let onlyApproved = [CommentApproval.Approved.ToString()]
-    let! commentsResult = (slug, ct) ||> getCommentsForPost onlyApproved
+    let! commentsResult = ct |> getPublicComments slug
 
     let apiResponse, statusCode =
       match commentsResult with
       | Ok (Some comments) ->
-        { Success = true; Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
+        { Success = true; Message = None; Data = Some comments }, HttpStatusCode.OK
       | Ok None ->
         { Success = false; Message = Some $"Post ''{slug}'' not found"; Data = None }, HttpStatusCode.NotFound
       | Error queryError when queryError.IsValidation ->

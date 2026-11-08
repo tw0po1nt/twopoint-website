@@ -91,7 +91,7 @@ When a commenter posts a top-level comment, they can check "email me when someon
 61. As a commenter, I want the footer to tell me why the email came, so that I remember that I asked for it.
 62. As a commenter, I want a stop link in each reply email, so that I can stop the reply emails of that comment.
 63. As a commenter, I want the stop page to ask me to confirm with `[stop reply emails]`, so that a mail scanner that opens the link does not stop my emails.
-64. As a commenter, I want the stop page to say "You get no more reply emails for this comment." after the stop, and again at each later open, so that I know the stop worked.
+64. As a commenter, I want the stop page to say "You won't get any more reply emails for this comment." after the stop, and again at each later open, so that I know the stop worked.
 65. As a commenter, I want the stop to apply only to that one comment, so that my other comments keep their choice.
 66. As a commenter, I want the stop page to tell me when a link does not work, with an email address for help, so that I can still stop the emails.
 67. As a commenter, I want the privacy policy to name the reply email, so that I know what the blog does with my email address.
@@ -197,7 +197,7 @@ When a commenter posts a top-level comment, they can check "email me when someon
 
 - At each open, the widget reads the state with one GET.
 - For an active token, it shows "Stop reply emails for your comment on <post title>?" and `[stop reply emails]`. Only the button sends the POST.
-- For a stopped token, it shows "You get no more reply emails for this comment."
+- For a stopped token, it shows "You won't get any more reply emails for this comment."
 - For an unknown or missing token, it shows that the link does not work.
 - The page shows the mailto help line, as the unsubscribe page does.
 

@@ -142,7 +142,7 @@ let update (others: string list) (msg: Msg) (form: Form) : Form * Effect option 
   | TitleTyped title ->
     let slug =
       match form.SlugSource with
-      | FromTitle -> Slug.term title
+      | FromTitle -> Slug.ofTitle title |> Option.defaultValue ""
       | Typed -> form.Slug
 
     { form with Title = title; Slug = slug }, None

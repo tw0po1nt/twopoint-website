@@ -8,14 +8,16 @@ open Microsoft.FSharp.Reflection
 let private subscribe = Contract.Widget.Subscribe { Api = "http://localhost:7071" }
 
 let private comments =
-  Contract.Widget.Comments { Api = "https://api.example"; Slug = "fable-reminders-part-1" }
+  Contract.Widget.Comments { Api = "https://api.example"; Slug = "fable-reminders-part-1"; Author = "Matthew Watt" }
 
 let private unsubscribe = Contract.Widget.Unsubscribe { Api = "https://api.example" }
+
+let private stopReplyEmails = Contract.Widget.StopReplyEmails { Api = "https://api.example" }
 
 let private pdf = Contract.Widget.Pdf { File = "https://files.example/talks/slides.pdf" }
 
 /// One value of each case of `Contract.Widget`.
-let private widgets = [ subscribe; comments; unsubscribe; pdf ]
+let private widgets = [ subscribe; comments; unsubscribe; stopReplyEmails; pdf ]
 
 [<Tests>]
 let tests =
@@ -33,13 +35,21 @@ let tests =
 
       Expect.equal
         (Contract.toAttributes comments)
-        [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "fable-reminders-part-1" ]
-        "The Comments mount has its name, the API origin, and the slug"
+        [ "data-widget", "comments"
+          "data-api", "https://api.example"
+          "data-slug", "fable-reminders-part-1"
+          "data-author", "Matthew Watt" ]
+        "The Comments mount has its name, the API origin, the slug, and the author name"
 
       Expect.equal
         (Contract.toAttributes unsubscribe)
         [ "data-widget", "unsubscribe"; "data-api", "https://api.example" ]
         "The Unsubscribe mount has its name and the API origin"
+
+      Expect.equal
+        (Contract.toAttributes stopReplyEmails)
+        [ "data-widget", "stop-reply-emails"; "data-api", "https://api.example" ]
+        "The StopReplyEmails mount has its name and the API origin"
 
       Expect.equal
         (Contract.toAttributes pdf)
@@ -64,7 +74,7 @@ let tests =
 
       Expect.equal
         (Contract.parse [ "data-widget", "search" ])
-        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe, pdf.")
+        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe, stop-reply-emails, pdf.")
         "An unknown name"
     }
 
@@ -83,7 +93,7 @@ let tests =
           $"'{value}' is not valid"
     }
   
-    test "a Comments mount with no API origin or no slug gives an error" {
+    test "a Comments mount with no API origin, no slug, or no author gives an error" {
       Expect.equal
         (Contract.parse [ "data-widget", "comments"; "data-slug", "a-post" ])
         (Error "The comments mount has no 'data-api' attribute.")
@@ -93,6 +103,19 @@ let tests =
         (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example" ])
         (Error "The comments mount has no 'data-slug' attribute.")
         "No data-slug"
+
+      Expect.equal
+        (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "a-post" ])
+        (Error "The comments mount has no 'data-author' attribute.")
+        "No data-author"
+    }
+
+    test "a Comments mount with an empty author gives an error" {
+      for value in [ ""; "  " ] do
+        Expect.equal
+          (Contract.parse [ "data-widget", "comments"; "data-api", "https://api.example"; "data-slug", "a-post"; "data-author", value ])
+          (Error "The 'data-author' of the comments mount is empty. Give the author name of the post.")
+          $"'{value}' is not valid"
     }
 
     test "a Comments mount with a bad API origin gives the error of the API origin" {
@@ -119,6 +142,18 @@ let tests =
       Expect.equal
         (Contract.parse [ "data-widget", "unsubscribe"; "data-api", "https://api.example/" ])
         (Error "The 'data-api' of the unsubscribe mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
+        "A '/' at the end"
+    }
+
+    test "a StopReplyEmails mount with no API origin or a bad one gives an error" {
+      Expect.equal
+        (Contract.parse [ "data-widget", "stop-reply-emails" ])
+        (Error "The stop-reply-emails mount has no 'data-api' attribute.")
+        "No data-api"
+
+      Expect.equal
+        (Contract.parse [ "data-widget", "stop-reply-emails"; "data-api", "https://api.example/" ])
+        (Error "The 'data-api' of the stop-reply-emails mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
         "A '/' at the end"
     }
 

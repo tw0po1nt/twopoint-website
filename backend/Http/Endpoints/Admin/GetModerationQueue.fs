@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -24,11 +25,11 @@ type PostedCommentDto =
 [<AutoOpen>]
 module PostedCommentExt =
 
-  type RenderedPostedComment with
+  type AdminPostedComment with
     member this.ToDto() =
       { PostedCommentDto.PostSlug = this.Post.ToString()
         PostTitle = this.PostTitle.ToString()
-        Comment = this.Comment.ToAdminDto() }
+        Comment = this.Comment.ToDto() }
 
 module GetModerationQueueQuery = TwoPoint.Core.Posts.Queries.GetModerationQueue
 
@@ -63,6 +64,7 @@ type GetModerationQueue (
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let getModerationQueue = GetModerationQueueQuery.withDependencies {

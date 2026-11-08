@@ -7,14 +7,19 @@ open Expecto
 let private comment id approval : Api.Comment =
   { Id = id
     CreatedDate = "2026-02-01T00:00:00Z"
-    Commenter =
-      { Id = "ada-id"
-        Email = "ada@example.com"
-        Name = "Ada"
-        Status = Api.New
-        CreatedDate = "2026-01-01T00:00:00Z" }
+    Writer =
+      Api.Writer.Commenter
+        { Id = "ada-id"
+          Email = "ada@example.com"
+          Name = "Ada"
+          Status = Api.New
+          CreatedDate = "2026-01-01T00:00:00Z" }
     Status = approval
-    Content = "A comment" }
+    Content = "A comment"
+    ReplyTo = None
+    TopLevel = None
+    ReplyCount = 0
+    GetsReplyEmails = false }
 
 let private waiting = comment "waiting" Api.CommentApproval.New
 let private approved = comment "approved" Api.CommentApproval.Approved
@@ -40,9 +45,262 @@ let private shown (model: Shell.Model) =
 let private approval (commentId: string) (model: Shell.Model) =
   PostComments.tryFind commentId (page model) |> Option.map _.Comment.Status
 
+let private emailNote (commentId: string) (model: Shell.Model) =
+  PostComments.tryFind commentId (page model) |> Option.bind (fun row -> AuthorReply.emailNote row.Comment)
+
+let private reply msg model = send (PostComments.Reply msg) model
+
+let private typed (commentId: string) (text: string) model =
+  reply (AuthorReply.Edited(commentId, TwoPoint.Site.Widgets.Comments.TextChanged text)) model
+
+let private authorReply : Api.Comment =
+  { Id = "answer"
+    CreatedDate = "2026-03-01T00:00:00Z"
+    Writer = Api.Writer.Author
+    Status = Api.CommentApproval.Approved
+    Content = "An answer"
+    ReplyTo = Some "waiting"
+    TopLevel = None
+    ReplyCount = 0
+    GetsReplyEmails = false }
+
+let private replyTests =
+  testList "the reply as the author" [
+    test "the reply form tells the author about the reply email only when the top-level comment has the flag" {
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ waiting; { approved with GetsReplyEmails = true } ])) model
+      Expect.equal (emailNote "approved" model) (Some "Ada gets an email with this reply.") "The line names the commenter"
+      Expect.isNone (emailNote "waiting" model) "No line with no flag"
+    }
+
+    test "an approved row offers the reply with no approval note" {
+      Expect.isTrue (AuthorReply.canReply None Api.CommentApproval.Approved) "An approved row takes a reply"
+      Expect.equal (AuthorReply.actionLabel Api.CommentApproval.Approved) "Reply" "The label"
+      Expect.isNone (AuthorReply.approvalNote Api.CommentApproval.Approved) "No note"
+
+      let model, _ = reply (AuthorReply.Opened "approved") (loaded ())
+      Expect.isTrue (AuthorReply.isOpenOn "approved" (page model).Reply) "The form is open"
+    }
+
+    test "a rejected row offers no reply, and an open asks for nothing" {
+      Expect.isFalse (AuthorReply.canReply None Api.CommentApproval.Rejected) "A rejected row takes no reply"
+      let model, effect = reply (AuthorReply.Opened "rejected") (loaded ())
+      Expect.isNone (page model).Reply "No form"
+      Expect.isNone effect "No call"
+    }
+
+    test "a reply under a rejected top-level comment offers no reply, and an open asks for nothing" {
+      let underRejected = { comment "under-rejected" Api.CommentApproval.Approved with ReplyTo = Some "rejected" }
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ rejected; underRejected ])) model
+      Expect.equal (PostComments.topLevelApproval underRejected (page model)) (Some Api.CommentApproval.Rejected) "The top-level approval"
+      Expect.isFalse (AuthorReply.canReply (Some Api.CommentApproval.Rejected) Api.CommentApproval.Approved) "No reply"
+
+      let model, effect = reply (AuthorReply.Opened "under-rejected") model
+      Expect.isNone (page model).Reply "No form"
+      Expect.isNone effect "No call"
+    }
+
+    test "a reject of the top-level comment closes the form of a reply under it" {
+      let underApproved = { comment "under-approved" Api.CommentApproval.Approved with ReplyTo = Some "approved" }
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ approved; underApproved ])) model
+      let model, _ = reply (AuthorReply.Opened "under-approved") model
+      Expect.isTrue (AuthorReply.isOpenOn "under-approved" (page model).Reply) "The form is open"
+
+      let model, _ = send (PostComments.Chosen("approved", Queue.Reject)) model
+      let model, _ = send (PostComments.Done("approved", Queue.Reject, Ok())) model
+      Expect.isNone (page model).Reply "The form closes"
+    }
+
+    test "a reject of the row closes its form" {
+      let model, _ = reply (AuthorReply.Opened "approved") (loaded ())
+      let model, _ = send (PostComments.Chosen("approved", Queue.Reject)) model
+      let model, _ = send (PostComments.Done("approved", Queue.Reject, Ok())) model
+      Expect.isNone (page model).Reply "The form closes"
+    }
+
+    test "a posted reply on a new row approves the row, adds the reply at the end, and lowers the queue count" {
+      let model, _ = start "/posts/first/comments"
+      let queued: Api.PostedComment = { PostSlug = "first"; PostTitle = "First"; Comment = waiting }
+      let model, _ = Shell.update (Shell.Queue(Queue.Answered(Ok [ queued ]))) model
+      let model, _ = send (PostComments.Answered("first", Ok [ waiting; approved; rejected ])) model
+
+      let model, _ = reply (AuthorReply.Opened "waiting") model
+      let model, _ = typed "waiting" "An answer" model
+      let model, effect = reply AuthorReply.Submitted model
+      Expect.equal effect (Some(Shell.Send [ Shell.PostReply(Shell.ReplyPage.OnPostComments, "first", "waiting", "An answer") ])) "The reply call"
+
+      let model, effect = reply (AuthorReply.Answered("waiting", Ok { Reply = authorReply; Approved = [ "waiting" ] })) model
+      Expect.equal (approval "waiting" model) (Some Api.CommentApproval.Approved) "The row is approved"
+      Expect.equal (shown model) [ "waiting"; "approved"; "rejected"; "answer" ] "The reply comes last"
+      Expect.equal (Queue.count model.Queue) (Some 0) "The navigation count goes down"
+      Expect.equal effect (Some(Shell.SetBadge 0)) "The badge shows the new count"
+      Expect.isNone (page model).Reply "The form closes"
+    }
+
+    test "a reply from the author shows with the author as the writer" {
+      let model, _ = start "/posts/first/comments"
+      let model, _ = send (PostComments.Answered("first", Ok [ approved; authorReply ])) model
+      let row = PostComments.tryFind "answer" (page model) |> Option.get
+      Expect.equal row.Comment.Writer Api.Writer.Author "The author"
+      Expect.equal (PostComments.actions row.Comment.Status) [ Queue.Reject; Queue.Delete ] "The actions of an approved row"
+    }
+  ]
+
+let private replyTo (topLevelId: string) (id: string) approval : Api.Comment =
+  { comment id approval with
+      ReplyTo = Some topLevelId
+      TopLevel =
+        Some
+          { Id = topLevelId
+            Writer = waiting.Writer
+            Status = Api.CommentApproval.Approved
+            Excerpt = "A comment"
+            Content = "<p>A comment</p>"
+            GetsReplyEmails = false } }
+
+let private threaded () =
+  let model, _ = start "/posts/first/comments"
+
+  let model, _ =
+    send
+      (PostComments.Answered(
+        "first",
+        Ok
+          [ { approved with ReplyCount = 2 }
+            replyTo "approved" "first-reply" Api.CommentApproval.Approved
+            { waiting with ReplyCount = 1 }
+            replyTo "approved" "second-reply" Api.CommentApproval.New
+            replyTo "waiting" "third-reply" Api.CommentApproval.Rejected ]
+      ))
+      model
+
+  model
+
+let private heads (model: Shell.Model) =
+  PostComments.heads (page model) |> List.map _.Comment.Id
+
+let private replies (topLevelId: string) (model: Shell.Model) =
+  PostComments.replies topLevelId (page model) |> List.map (fun row -> row.Comment.Id, row.Comment.Status)
+
+let private threadTests =
+  testList "the threads" [
+    test "each thread shows its top-level comment, then its replies oldest first, each with its status" {
+      let model = threaded ()
+      Expect.equal (heads model) [ "approved"; "waiting" ] "The top-level comments, oldest first"
+
+      Expect.equal
+        (replies "approved" model)
+        [ "first-reply", Api.CommentApproval.Approved; "second-reply", Api.CommentApproval.New ]
+        "The replies of the first thread, oldest first"
+
+      Expect.equal (replies "waiting" model) [ "third-reply", Api.CommentApproval.Rejected ] "The reply of the second thread"
+    }
+
+    test "a filter that hides the top-level comment shows the reply in the place of its thread, with the name of the top-level comment" {
+      let model, _ = send (PostComments.Filtered(PostComments.Only Api.CommentApproval.New)) (threaded ())
+      Expect.equal (heads model) [ "second-reply"; "waiting" ] "The new reply in the place of its thread"
+      Expect.isEmpty (replies "waiting" model) "The rejected reply is hidden"
+
+      let reply = PostComments.tryFind "second-reply" (page model) |> Option.get
+      Expect.equal (PostComments.topLevel reply.Comment (page model) |> Option.map ReplyContext.replyLine) (Some "Reply to Ada") "The reply line"
+    }
+
+    test "a filter that shows the top-level comment keeps the shown replies under it" {
+      let model, _ = send (PostComments.Filtered(PostComments.Only Api.CommentApproval.Approved)) (threaded ())
+      Expect.equal (heads model) [ "approved" ] "The approved top-level comment"
+      Expect.equal (replies "approved" model) [ "first-reply", Api.CommentApproval.Approved ] "The approved reply under it"
+    }
+
+    test "a posted reply from the author goes at the end of its thread" {
+      let model, _ = reply (AuthorReply.Opened "approved") (threaded ())
+      let model, _ = typed "approved" "An answer" model
+      let model, _ = reply AuthorReply.Submitted model
+      let answer = { authorReply with ReplyTo = Some "approved" }
+      let model, _ = reply (AuthorReply.Answered("approved", Ok { Reply = answer; Approved = [] })) model
+      Expect.equal (heads model) [ "approved"; "waiting" ] "The threads stay"
+      Expect.equal (replies "approved" model |> List.map fst) [ "first-reply"; "second-reply"; "answer" ] "The answer comes last"
+    }
+
+    test "the top-level comment of a reply has the approval that it has on the page" {
+      let model = threaded ()
+      let model, _ = send (PostComments.Chosen("approved", Queue.Reject)) model
+      let model, _ = send (PostComments.Done("approved", Queue.Reject, Ok())) model
+      let reply = PostComments.tryFind "first-reply" (page model) |> Option.get
+
+      Expect.equal
+        (PostComments.topLevel reply.Comment (page model) |> Option.map _.Status)
+        (Some Api.CommentApproval.Rejected)
+        "The reject on the page"
+    }
+  ]
+
+/// The reply count and the text of the delete dialog of the comment.
+let private deleteDialog (commentId: string) (model: Shell.Model) =
+  let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog commentId)) model
+  Shell.deleteReplyCount model, Shell.deleteReplyCount model |> Option.map Queue.deleteText
+
+let private deleted (commentId: string) (model: Shell.Model) =
+  let model, _ = Shell.update (Shell.Opened(Shell.DeleteDialog commentId)) model
+  let model, _ = Shell.update (Shell.deleteChosen model).Value model
+  fst (send (PostComments.Done(commentId, Queue.Delete, Ok())) model)
+
+let private deleteTests =
+  testList "the delete of a thread" [
+    test "the delete dialog of a top-level comment gives the number of replies that go with it" {
+      Expect.equal
+        (deleteDialog "approved" (threaded ()))
+        (Some 2,
+         Some
+           "This deletes the comment, its 2 replies, and their history. To hide the thread from readers but keep it, reject the comment instead. This can't be undone.")
+        "Two replies"
+
+      Expect.equal
+        (deleteDialog "waiting" (threaded ()) |> snd)
+        (Some
+          "This deletes the comment, its reply, and their history. To hide the thread from readers but keep it, reject the comment instead. This can't be undone.")
+        "One reply"
+    }
+
+    test "the delete dialog of a reply names no other comment" {
+      Expect.equal
+        (deleteDialog "first-reply" (threaded ()))
+        (Some 0,
+         Some "This deletes the comment and its history. To hide it from readers but keep it, reject it instead. This can't be undone.")
+        "No reply"
+    }
+
+    test "the delete of a top-level comment removes its replies from the page" {
+      let model = deleted "approved" (threaded ())
+      Expect.equal (heads model) [ "waiting" ] "The other thread stays"
+      Expect.isNone (PostComments.tryFind "first-reply" (page model)) "The first reply goes"
+      Expect.isNone (PostComments.tryFind "second-reply" (page model)) "The second reply goes"
+      Expect.equal (replies "waiting" model) [ "third-reply", Api.CommentApproval.Rejected ] "The reply of the other thread stays"
+    }
+
+    test "the delete of a reply lowers the count of its thread" {
+      let model = deleted "first-reply" (threaded ())
+      Expect.equal (replies "approved" model |> List.map fst) [ "second-reply" ] "The other reply stays"
+      Expect.equal (deleteDialog "approved" model |> fst) (Some 1) "One reply left"
+    }
+
+    test "a posted reply from the author raises the count of its thread" {
+      let model, _ = reply (AuthorReply.Opened "approved") (threaded ())
+      let model, _ = typed "approved" "An answer" model
+      let model, _ = reply AuthorReply.Submitted model
+      let answer = { authorReply with ReplyTo = Some "approved" }
+      let model, _ = reply (AuthorReply.Answered("approved", Ok { Reply = answer; Approved = [] })) model
+      Expect.equal (deleteDialog "approved" model |> fst) (Some 3) "Three replies"
+    }
+  ]
+
 [<Tests>]
 let tests =
   testList "PostComments" [
+    threadTests
+    deleteTests
+
     test "a start on the page of a post loads its comments with the first API calls" {
       let model, effect = start "/posts/first/comments"
       Expect.equal
@@ -198,4 +456,6 @@ let tests =
       let model, _ = send (PostComments.Answered("first", Error Api.Refused)) model
       Expect.equal model.Session.Status Session.Refused "The banner offers another account"
     }
+
+    replyTests
   ]

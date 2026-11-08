@@ -415,26 +415,44 @@ module ValidateCommenter =
 
 // Input
 
+[<RequireQualifiedAccess>]
+type ReplyEmailsChoice =
+  | Asked
+  | NotAsked
+
+[<RequireQualifiedAccess>]
+type NewCommentTarget =
+  | TopLevel of ReplyEmailsChoice
+  | Reply of topLevel : CommentId
+
 type NewComment =
   { Post : Slug
     ValidationId : CommenterValidationId
-    Content : NonEmptyString }
+    Content : NonEmptyString
+    Target : NewCommentTarget }
 
 module NewComment =
   
   type Post = Post of string
   type ValidationId = ValidationId of string
   type Comment = Comment of string
+  type ReplyTo = ReplyTo of string
+  type ReplyEmails = ReplyEmails of bool
   
+  /// `ReplyTo` is the ID of the top-level comment of a reply.
   type Dto =
     { Post : Post
       ValidationId : ValidationId
-      Comment : Comment }
+      Comment : Comment
+      ReplyTo : ReplyTo option
+      ReplyEmails : ReplyEmails }
 
   /// The `maxlength` of the comment form. Both count the source as typed, in UTF-16 code units.
   let maxLength = 1000
 
   let blankMessage = "content must contain a character other than a space or a new line"
+
+  let replyEmailsOnReplyMessage = "replyEmails must be false for a reply, because a reply has no checkbox"
 
   let parseContent (content : string) =
     content
@@ -449,7 +467,13 @@ module NewComment =
     let! post = Slug.create post
     let! validationId = CommenterValidationId.create validationId
     let! content = parseContent content
-    return { Post = post; ValidationId = validationId; Content = content }
+    and! target =
+      match dto.ReplyTo, dto.ReplyEmails with
+      | None, ReplyEmails true -> Ok (NewCommentTarget.TopLevel ReplyEmailsChoice.Asked)
+      | None, ReplyEmails false -> Ok (NewCommentTarget.TopLevel ReplyEmailsChoice.NotAsked)
+      | Some (ReplyTo replyTo), ReplyEmails false -> CommentId.create replyTo |> Result.map NewCommentTarget.Reply
+      | Some _, ReplyEmails true -> Error [ replyEmailsOnReplyMessage ]
+    return { Post = post; ValidationId = validationId; Content = content; Target = target }
   }
 
 
@@ -471,11 +495,19 @@ module PostComment =
   type Error =
     | NotFound of Data
     | PostUpcoming of Post
+    | ReplyRefused of ReplyRefusal
     | Banned of Commenter
   and Data =
     | Post of Slug
     | Commenter of CommenterValidationId
-  type Success = Posted of post: Post * comment: NewComment * commenter: Commenter * approval: CommentApproval
+  type Success =
+    | Posted of
+      post: Post *
+      comment: NewComment *
+      topLevel: Comment option *
+      commenter: Commenter *
+      approval: CommentApproval *
+      replyEmails: ReplyEmailConsent option
   type Decision = Decision<Success, Error>
   type Event = Posted of Post * RenderedComment
 
@@ -483,7 +515,9 @@ module PostComment =
 
   type Logic =
     DateTime
+      -> ReplyEmailStopToken
       -> Post option
+      -> NewCommentPlace
       -> Commenter option
       -> NewComment
       -> Decision
@@ -491,9 +525,16 @@ module PostComment =
   [<RequireQualifiedAccess>]
   module Logic =
     let decide : Logic =
-      fun utcNow existingPost existingCommenter newComment -> result {
+      fun utcNow stopToken existingPost place existingCommenter newComment -> result {
         let! post = existingPost |> Result.requireSome (newComment.Post |> Data.Post |> Error.NotFound)
-        do! post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post)
+
+        let! topLevel =
+          match place with
+          | NewCommentPlace.TopLevel ->
+            post.Info.CreatedDate <= utcNow |> Result.requireTrue (PostUpcoming post) |> Result.map (fun () -> None)
+          | NewCommentPlace.Reply replyTo ->
+            ReplyCheck.check utcNow post replyTo |> Result.map Some |> Result.mapError ReplyRefused
+
         let! commenter = existingCommenter |> Result.requireSome (newComment.ValidationId |> Data.Commenter |> Error.NotFound)
         let! approval =
           match commenter.Status with
@@ -501,7 +542,14 @@ module PostComment =
           | CommenterStatus.Trusted -> Ok CommentApproval.Approved
           | CommenterStatus.Banned -> Error (Banned commenter)
 
-        return Success.Posted (post, newComment, commenter, approval)
+        let replyEmails =
+          match newComment.Target with
+          | NewCommentTarget.TopLevel ReplyEmailsChoice.Asked ->
+            Some { ConsentDate = utcNow; StopToken = stopToken; StopDate = None }
+          | NewCommentTarget.TopLevel ReplyEmailsChoice.NotAsked
+          | NewCommentTarget.Reply _ -> None
+
+        return Success.Posted (post, newComment, topLevel, commenter, approval, replyEmails)
       }
 
   // Action
@@ -513,23 +561,41 @@ module PostComment =
   type Dependencies =
     abstract member GetPostBySlug: slug: Slug -> DependencyResult<Post option>
     abstract member GetUtcNow: unit -> DateTime
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
+    abstract member NewCommentId: unit -> CommentId
     abstract member CreateComment:
-      post: Post
+      id: CommentId
+        -> post: Post
         -> commenter: Commenter
         -> newComment: NewComment
+        -> topLevel: Comment option
         -> approval: CommentApproval
+        -> replyEmails: ReplyEmailConsent option
         -> DependencyResult<Comment>
-    abstract member QueueNewCommentNotice: commentId: CommentId -> DependencyResult<unit>
+    abstract member NewReplyEmailStopToken: unit -> ReplyEmailStopToken
+    abstract member CreateReplyEmailStop: stop: ReplyEmailStop -> DependencyResult<unit>
+    abstract member QueueNewCommentNotice: post: Slug -> commentId: CommentId -> DependencyResult<unit>
+    abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
     abstract member Stage: TwoPoint.Site.Render.Stage
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentPosted (Success.Posted (post, comment, commenter, approval)) : DependencyResult<RenderedComment> =
+    let handleCommentPosted (Success.Posted (post, comment, topLevel, commenter, approval, replyEmails)) : DependencyResult<RenderedComment> =
       cancellableTaskResult {
-        let! (created : Comment) = dependencies.CreateComment post commenter comment approval
+        let id = dependencies.NewCommentId()
 
-        let! _ = dependencies.QueueNewCommentNotice created.Id |> CancellableTask.map ignore
+        do!
+          replyEmails
+          |> Option.traverseCancellableTaskResult (fun consent ->
+            dependencies.CreateReplyEmailStop { Token = consent.StopToken; Post = post.Id; Comment = id })
+          |> CancellableTaskResult.ignore
+
+        let! (created : Comment) = dependencies.CreateComment id post commenter comment topLevel approval replyEmails
+
+        let! _ = dependencies.QueueNewCommentNotice post.Id created.Id |> CancellableTask.map ignore
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post.Id None created
+
         return RenderedComment.ofComment dependencies.Stage created
       }
 
@@ -543,11 +609,18 @@ module PostComment =
         dependencies.GetPostBySlug newComment.Post
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
+      let! place =
+        (match newComment.Target with
+         | NewCommentTarget.TopLevel _ -> CancellableTaskResult.singleton NewCommentPlace.TopLevel
+         | NewCommentTarget.Reply replyTo -> dependencies.GetPostedComment newComment.Post replyTo |> CancellableTaskResult.map NewCommentPlace.Reply)
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
       let! existingCommenter =
         dependencies.GetCommenterByValidationId newComment.ValidationId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide (dependencies.GetUtcNow()) existingPost existingCommenter newComment
+      let decision =
+        Logic.decide (dependencies.GetUtcNow()) (dependencies.NewReplyEmailStopToken()) existingPost place existingCommenter newComment
 
       let commentPostedEvent existingPost comment = Event.Posted (existingPost, comment)
 
@@ -560,31 +633,134 @@ module PostComment =
     }
   
 // ====================================================================================================================
+// Reply as the author
+// ====================================================================================================================
+
+// Input
+
+/// `ReplyTo` is the comment of the row, a top-level comment or a reply.
+type AuthorReply =
+  { Post : Slug
+    ReplyTo : CommentId
+    Content : NonEmptyString }
+
+module AuthorReply =
+
+  type Dto =
+    { Post : string
+      ReplyTo : string
+      Content : string }
+
+  let create (dto : Dto) = validation {
+    let! post = Slug.create dto.Post
+    and! replyTo = CommentId.create dto.ReplyTo
+    and! content = NewComment.parseContent dto.Content
+    return ({ Post = post; ReplyTo = replyTo; Content = content } : AuthorReply)
+  }
+
+[<RequireQualifiedAccess>]
+module ReplyAsAuthor =
+
+  // Output
+
+  type Error = Refused of AuthorReplyRefusal
+  /// `Approved` is each comment that the reply approved, the top-level comment first.
+  type Event = Replied of reply : RenderedComment * approved : Comment list
+
+  // Logic
+
+  [<RequireQualifiedAccess>]
+  module Logic =
+    let decide (reply : AuthorReply) (replyTo : PostedComment option) (topLevel : PostedComment option) =
+      AuthorReplyRule.place reply.Post replyTo topLevel |> Result.mapError Refused
+
+  // Action
+
+  type Action = AuthorReply.Dto -> CancellableTask<ActionResult<Event, Error>>
+
+  type Dependencies =
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member UpdateCommentApproval: comment: Comment -> approval: CommentApproval -> DependencyResult<Comment>
+    abstract member CreateAuthorReply:
+      post: Slug
+        -> topLevel: Comment
+        -> content: NonEmptyString
+        -> approval: CommentApproval
+        -> DependencyResult<Comment>
+    abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
+    abstract member Stage: TwoPoint.Site.Render.Stage
+
+  let withDependencies (dependencies : Dependencies) : Action =
+
+    // The approvals go first, so that the reply is never under a hidden comment.
+    let handleReplyPlaced (reply : AuthorReply) (place : AuthorReplyPlace) : DependencyResult<Event> =
+      cancellableTaskResult {
+        let approved = ResizeArray<Comment>()
+
+        for comment in place.Approvals do
+          let! updated = dependencies.UpdateCommentApproval comment CommentApproval.Approved
+          approved.Add updated
+          do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail reply.Post (Some comment.Status.Approval) updated
+
+        let approved = List.ofSeq approved
+        let! created = dependencies.CreateAuthorReply reply.Post place.TopLevel reply.Content CommentApproval.Approved
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail reply.Post None created
+        return Event.Replied(RenderedComment.ofComment dependencies.Stage created, approved)
+      }
+
+    fun dto -> cancellableTaskResult {
+      let! reply = dto |> AuthorReply.create |> Result.mapError ActionError<Error>.Validation
+
+      let! replyTo =
+        dependencies.GetPostedComment reply.Post reply.ReplyTo
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let! topLevel =
+        match replyTo |> Option.bind (fun (replyTo : PostedComment) -> replyTo.Comment.Parent) with
+        | Some parent ->
+          dependencies.GetPostedComment reply.Post parent
+          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+        | None -> CancellableTaskResult.singleton None
+
+      let! place = Logic.decide reply replyTo topLevel |> Result.mapError ActionError<Error>.Logic
+
+      return!
+        handleReplyPlaced reply place
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+    }
+
+// ====================================================================================================================
 // Update comment approval
 // ====================================================================================================================
 
 // Input
 
 type CommentApprovalUpdate =
-  { CommentId : CommentId
+  { Post : Slug
+    CommentId : CommentId
     Approval : CommentApproval }
 
 module CommentApprovalUpdate =
 
+  type Post = Post of string
   type CommentId = CommentId of string
   type Approval = Approval of string
 
   type Dto =
-    { CommentId : CommentId 
+    { Post : Post
+      CommentId : CommentId 
       Approval : Approval }
 
   let create (dto : Dto) = validation {
+    let (Post post) = dto.Post
     let (CommentId commentId) = dto.CommentId
     let (Approval approval) = dto.Approval
-    let! commentId = CommentId.create commentId
-    let! approval = CommentApproval.create approval
+    let! post = Slug.create post
+    and! commentId = CommentId.create commentId
+    and! approval = CommentApproval.create approval
     return
-      { CommentApprovalUpdate.CommentId = commentId
+      { CommentApprovalUpdate.Post = post
+        CommentId = commentId
         Approval = approval }
   }
 
@@ -637,18 +813,24 @@ module UpdateCommentApproval =
       -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetCommentById:
-      commentId: CommentId
+    abstract member GetComment:
+      post: Slug
+        -> commentId: CommentId
         -> DependencyResult<Comment option>
     abstract member UpdateCommentApproval:
       comment: Comment
         -> approval: CommentApproval
         -> DependencyResult<Comment>
+    abstract member QueueReplyEmail: post: Slug -> reply: CommentId -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentApprovalUpdated (Success.Updated (comment, approval)) : DependencyResult<Comment> =
-      dependencies.UpdateCommentApproval comment approval
+    let handleCommentApprovalUpdated (post : Slug) (Success.Updated (comment, approval)) : DependencyResult<Comment> =
+      cancellableTaskResult {
+        let! updated = dependencies.UpdateCommentApproval comment approval
+        do! QueueReplyEmail.atFirstApproval dependencies.QueueReplyEmail post (Some comment.Status.Approval) updated
+        return updated
+      }
 
     fun approvalUpdate -> cancellableTaskResult {
       let! (approvalUpdate : CommentApprovalUpdate) =
@@ -657,14 +839,14 @@ module UpdateCommentApproval =
         |> Result.mapError ActionError<Error>.Validation
 
       let! existingComment =
-        dependencies.GetCommentById approvalUpdate.CommentId
+        dependencies.GetComment approvalUpdate.Post approvalUpdate.CommentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       let decision = Logic.decide existingComment approvalUpdate
 
       return!
         decision
-        |> Result.traverseCancellableTask handleCommentApprovalUpdated
+        |> Result.traverseCancellableTask (handleCommentApprovalUpdated approvalUpdate.Post)
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Updated)
           (ActionError.Logic >> ActionResult.failure)
@@ -676,18 +858,25 @@ module UpdateCommentApproval =
 
 // Input
 
-type CommentDeletion = { CommentId : CommentId }
+type CommentDeletion =
+  { Post : Slug
+    CommentId : CommentId }
 
 module CommentDeletion =
- 
+
+  type Post = Post of string
   type CommentId = CommentId of string
 
-  type Dto = { CommentId : CommentId }
-  
+  type Dto =
+    { Post : Post
+      CommentId : CommentId }
+
   let create (dto : Dto) = validation {
+    let (Post post) = dto.Post
     let (CommentId commentId) = dto.CommentId
-    let! commentId = CommentId.create commentId
-    return { CommentDeletion.CommentId = commentId }
+    let! post = Slug.create post
+    and! commentId = CommentId.create commentId
+    return { CommentDeletion.Post = post; CommentId = commentId }
   }
 
 [<RequireQualifiedAccess>]
@@ -696,23 +885,26 @@ module DeleteComment =
   // Output
 
   type Error = CommentNotFound of CommentId
-  type Success = Deleted of comment: Comment
+  type Success = Deleted of comment: PostedComment * removal: CommentRemoval
   type Decision = Decision<Success, Error>
-  type Event = Deleted of CommentId
-  
+  /// `others` is the number of replies that went with the comment.
+  type Event = Deleted of CommentId * others: int
+
   // Logic
 
   type Logic =
-    Comment option
+    PostedComment option
+      -> Comment list
       -> CommentDeletion
       -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
+    /// `replies` is each reply under the comment.
     let decide : Logic =
-      fun existingComment deletion -> result {
-        let! comment = existingComment |> Result.requireSome (Error.CommentNotFound deletion.CommentId)
-        return Success.Deleted comment
+      fun existingComment replies deletion -> result {
+        let! posted = existingComment |> Result.requireSome (Error.CommentNotFound deletion.CommentId)
+        return Success.Deleted (posted, CommentDeleteRule.thread replies posted.Comment)
       }
 
   // Action
@@ -720,15 +912,28 @@ module DeleteComment =
   type Action = CommentDeletion.Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetCommentById: commentId: CommentId -> DependencyResult<Comment option>
-    abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
+    abstract member DeleteComment: post: Slug -> comment: Comment -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let handleCommentDeleted (Success.Deleted comment) : DependencyResult<CommentId> =
+    let deleteComments (post : Slug) (comments : Comment list) : DependencyResult<unit> =
       cancellableTaskResult {
-        do! dependencies.DeleteComment comment
-        return comment.Id
+        for comment in comments do
+          do! dependencies.DeleteComment post comment
+      }
+
+    let repliesOf (comments : PostedComment list) =
+      comments |> List.filter (fun posted -> posted.Comment.Parent.IsNone) |> dependencies.GetRepliesOf
+
+    let handleCommentDeleted (Success.Deleted (posted, removal)) : DependencyResult<CommentId * int> =
+      cancellableTaskResult {
+        do! deleteComments posted.Post removal.Comments
+        // A reply that a reader posted during the delete is not in the first read. Its count is not in `Others`.
+        let! postedDuringDelete = repliesOf [ posted ]
+        do! deleteComments posted.Post (CommentDeleteRule.thread postedDuringDelete posted.Comment |> CommentRemoval.exceptDeleted removal)
+        return posted.Comment.Id, removal.Others
       }
 
     fun commentDeletion -> cancellableTaskResult {
@@ -738,10 +943,16 @@ module DeleteComment =
         |> Result.mapError ActionError<Error>.Validation
 
       let! existingComment =
-        dependencies.GetCommentById commentDeletion.CommentId
+        dependencies.GetPostedComment commentDeletion.Post commentDeletion.CommentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide existingComment commentDeletion
+      let! replies =
+        existingComment
+        |> Option.toList
+        |> repliesOf
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let decision = Logic.decide existingComment replies commentDeletion
 
       return!
         decision
@@ -904,24 +1115,27 @@ module DeleteCommenter =
   // Output
 
   type Error = CommenterNotFound of CommenterValidationId
-  type Success = Deleted of commenter: Commenter * comments: Comment list
+  type Success = Deleted of commenter: Commenter * removal: CommenterRemoval
   type Decision = Decision<Success, Error>
-  type Event = Deleted of Commenter
+  /// `others` is the number of replies from other writers that went with the commenter.
+  type Event = Deleted of Commenter * others: int
 
   // Logic
 
   type Logic =
     Commenter option
+      -> PostedComment list
       -> Comment list
       -> CommenterDeletion
       -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
+    /// `replies` is each reply under a top-level comment of the commenter.
     let decide : Logic =
-      fun existingCommenter comments deletion -> result {
+      fun existingCommenter comments replies deletion -> result {
         let! commenter = existingCommenter |> Result.requireSome (CommenterNotFound deletion.ValidationId)
-        return Success.Deleted (commenter, comments)
+        return Success.Deleted (commenter, CommentDeleteRule.commenterOnPosts comments replies)
       }
 
   // Action
@@ -930,27 +1144,33 @@ module DeleteCommenter =
 
   type Dependencies =
     abstract member GetCommenterByValidationId: validationId: CommenterValidationId -> DependencyResult<Commenter option>
-    abstract member GetCommentsOfCommenter: commenter: Commenter -> DependencyResult<Comment list>
-    abstract member DeleteComment: comment: Comment -> DependencyResult<unit>
+    abstract member GetPostedCommentsOfCommenter: commenter: Commenter -> DependencyResult<PostedComment list>
+    abstract member GetRepliesOf: topLevels: PostedComment list -> DependencyResult<Comment list>
+    abstract member DeleteComment: post: Slug -> comment: Comment -> DependencyResult<unit>
     abstract member DeleteCommenter: commenter: Commenter -> DependencyResult<unit>
 
   let withDependencies (dependencies : Dependencies) : Action =
 
-    let deleteComments (comments : Comment list) : DependencyResult<unit> =
+    let deleteComments (comments : PostedComment list) : DependencyResult<unit> =
       cancellableTaskResult {
-        for comment in comments do
-          do! dependencies.DeleteComment comment
+        for posted in comments do
+          do! dependencies.DeleteComment posted.Post posted.Comment
       }
 
+    let repliesOf (comments : PostedComment list) =
+      comments |> List.filter (fun posted -> posted.Comment.Parent.IsNone) |> dependencies.GetRepliesOf
+
     // The commenter goes after its comments, so that a second try after a failed delete finds the comments that are left.
-    let handleCommenterDeleted (Success.Deleted (commenter, comments)) : DependencyResult<Commenter> =
+    let handleCommenterDeleted (firstRead : PostedComment list) (Success.Deleted (commenter, removal)) : DependencyResult<Commenter * int> =
       cancellableTaskResult {
-        do! deleteComments comments
+        do! deleteComments removal.Comments
         do! dependencies.DeleteCommenter commenter
-        // A comment that the commenter posted during the delete is not in the first read.
-        let! postedDuringDelete = dependencies.GetCommentsOfCommenter commenter
-        do! deleteComments postedDuringDelete
-        return commenter
+        // The first read and `Others` do not include a comment that someone posts during the delete.
+        let! postedDuringDelete = dependencies.GetPostedCommentsOfCommenter commenter
+        let own = firstRead @ postedDuringDelete |> List.distinctBy _.Comment.Id
+        let! replies = repliesOf own
+        do! deleteComments (CommentDeleteRule.commenterOnPosts own replies |> CommenterRemoval.exceptDeleted removal)
+        return commenter, removal.Others
       }
 
     fun commenterDeletion -> cancellableTaskResult {
@@ -966,15 +1186,19 @@ module DeleteCommenter =
       let! comments =
         match existingCommenter with
         | Some commenter ->
-          dependencies.GetCommentsOfCommenter commenter
+          dependencies.GetPostedCommentsOfCommenter commenter
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
         | None -> CancellableTaskResult.singleton []
 
-      let decision = Logic.decide existingCommenter comments commenterDeletion
+      let! replies =
+        repliesOf comments
+        |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+      let decision = Logic.decide existingCommenter comments replies commenterDeletion
 
       return!
         decision
-        |> Result.traverseCancellableTask handleCommenterDeleted
+        |> Result.traverseCancellableTask (handleCommenterDeleted comments)
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Deleted)
           (Logic >> ActionResult.failure)

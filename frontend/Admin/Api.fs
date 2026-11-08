@@ -120,21 +120,47 @@ type CommentApproval =
   | Approved
   | Rejected
 
+/// The author has no commenter record.
+[<RequireQualifiedAccess>]
+type Writer =
+  | Commenter of Commenter
+  | Author
+
+/// The top-level comment of a reply. `Excerpt` is the start of its plain text, and `Content` is its full HTML.
+type TopLevel =
+  { Id: string
+    Writer: Writer
+    Status: CommentApproval
+    Excerpt: string
+    Content: string
+    GetsReplyEmails: bool }
+
+/// `ReplyTo` is the ID of the top-level comment of a reply. `ReplyCount` is the number of replies that a delete of
+/// the comment removes with it. `GetsReplyEmails` is always false on a reply: read the one of `TopLevel`.
 type Comment =
   { Id: string
     CreatedDate: string
-    Commenter: Commenter
+    Writer: Writer
     Status: CommentApproval
-    Content: string }
+    Content: string
+    ReplyTo: string option
+    TopLevel: TopLevel option
+    ReplyCount: int
+    GetsReplyEmails: bool }
+
+/// `Approved` is the ID of each comment that the reply approved.
+type AuthorReply = { Reply: Comment; Approved: string list }
 
 type PostedComment =
   { PostSlug: string
     PostTitle: string
     Comment: Comment }
 
+/// `OtherReplies` is the number of replies from other writers that a delete of the commenter removes.
 type CommenterComments =
   { Commenter: Commenter
-    Comments: PostedComment list }
+    Comments: PostedComment list
+    OtherReplies: int }
 
 type Approval =
   | Approved
@@ -399,6 +425,45 @@ let private commentApproval: Decoder<CommentApproval> =
     | "rejected" -> Decode.succeed CommentApproval.Rejected
     | _ -> Decode.fail $"The comment approval '{name}' is not known.")
 
+let private commenter: Decoder<Commenter> =
+  Decode.object (fun get ->
+    { Id = get.Required.Field "id" Decode.string
+      Email = get.Required.Field "email" Decode.string
+      Name = get.Required.Field "name" Decode.string
+      Status = get.Required.Field "status" commenterStatus
+      CreatedDate = get.Required.Field "createdDate" Decode.string })
+
+/// An answer with no `writer` is from a commenter.
+let private writer: Decoder<Writer> =
+  Decode.optional "writer" Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | Some "author" -> Decode.succeed Writer.Author
+    | None
+    | Some "commenter" -> Decode.field "commenter" commenter |> Decode.map Writer.Commenter
+    | Some name -> Decode.fail $"The writer '{name}' is not known.")
+
+let private topLevel: Decoder<TopLevel> =
+  Decode.object (fun get ->
+    { Id = get.Required.Field "id" Decode.string
+      Writer = get.Required.Raw writer
+      Status = get.Required.Field "status" commentApproval
+      Excerpt = get.Required.Field "excerpt" Decode.string
+      Content = get.Required.Field "content" Decode.string
+      GetsReplyEmails = get.Required.Field "getsReplyEmails" Decode.bool })
+
+let private comment: Decoder<Comment> =
+  Decode.object (fun get ->
+    { Id = get.Required.Field "id" Decode.string
+      CreatedDate = get.Required.Field "createdDate" Decode.string
+      Writer = get.Required.Raw writer
+      Status = get.Required.Field "status" commentApproval
+      Content = get.Required.Field "content" Decode.string
+      ReplyTo = get.Optional.Field "replyTo" Decode.string
+      TopLevel = get.Optional.Field "topLevel" topLevel
+      ReplyCount = get.Required.Field "replyCount" Decode.int
+      GetsReplyEmails = get.Required.Field "getsReplyEmails" Decode.bool })
+
 let private deliveryTypeName (deliveryType: DeliveryType) =
   match deliveryType with
   | DeliveryType.Welcome -> "welcome"
@@ -509,6 +574,7 @@ let private coders =
   |> Extra.withCustom (fun (_: RunState) -> failwith "The admin sends no run state.") runState
   |> Extra.withCustom (commenterStatusName >> Encode.string) commenterStatus
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
+  |> Extra.withCustom (fun (_: Comment) -> failwith "The admin sends no comment.") comment
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
   |> Extra.withCustom (severityName >> Encode.string) severity
   |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
@@ -644,6 +710,21 @@ let changeApproval
 
 let deleteComment (api: string) (token: string) (slug: string) (comment: Comment) : JS.Promise<Result<unit, Failure>> =
   act HttpMethod.DELETE api token (commentPath slug comment) None
+
+let replyAsAuthor
+  (api: string)
+  (token: string)
+  (slug: string)
+  (commentId: string)
+  (content: string)
+  : JS.Promise<Result<AuthorReply, Failure>> =
+  let body = Encode.object [ "content", Encode.string content ] |> Encode.toString 0
+  sendWith HttpMethod.POST api token (internalPath [ "posts"; slug; "comments"; commentId; "replies" ]) (Some(Json body)) []
+
+/// The comment form of the site uses the same preview.
+let previewComment (api: string) (token: string) (content: string) : JS.Promise<Result<string, Failure>> =
+  let body = Encode.object [ "content", Encode.string content ] |> Encode.toString 0
+  sendWith HttpMethod.POST api token "blog/comments/preview" (Some(Json body)) []
 
 let private commenterPath (commenterId: string) = internalPath [ "commenters"; commenterId ]
 

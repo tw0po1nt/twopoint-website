@@ -3,15 +3,11 @@ module TwoPoint.Dependencies.Tests.SubscriptionEmailsTests
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Shared
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Tests.Fakes
 
 open Expecto
 
 open System.Text.RegularExpressions
-
-let private ok result =
-  match result with
-  | Ok value -> value
-  | Error error -> failwithf "Expected Ok, got Error %A" error
 
 let private text value = NonEmptyString.create None value |> ok |> Some
 

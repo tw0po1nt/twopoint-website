@@ -46,7 +46,7 @@ runs:
       working-directory: frontend/Widgets
       run: npm run build
 
-    - name: Test the widget bundles
+    - name: Test the widgets and the Node pin
       shell: bash
       working-directory: frontend/Widgets
       run: npm test

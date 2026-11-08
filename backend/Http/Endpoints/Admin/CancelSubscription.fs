@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Subscriptions
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -42,7 +43,7 @@ type CancelSubscription (
         let response = req.CreateResponse HttpStatusCode.OK
 
         // Dependencies
-        let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, logger)
+        let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, SystemDependencies.live, logger)
         let cancelSubscription = CancelSubscriptionAction.withDependencies {
           new CancelSubscriptionAction.Dependencies with
 

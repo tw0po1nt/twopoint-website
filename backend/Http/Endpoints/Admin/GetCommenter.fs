@@ -2,6 +2,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 
 open TwoPoint.Core.Posts
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -17,7 +18,9 @@ open System.Threading
 
 type CommenterCommentsDto =
   { Commenter : AdminCommenterDto
-    Comments : PostedCommentDto list }
+    Comments : PostedCommentDto list
+    /// The number of replies from other writers that a delete of the commenter removes.
+    OtherReplies : int }
 
 [<AutoOpen>]
 module CommenterCommentsExt =
@@ -25,7 +28,8 @@ module CommenterCommentsExt =
   type CommenterComments with
     member this.ToDto() =
       { CommenterCommentsDto.Commenter = this.Commenter.ToDto()
-        Comments = this.Comments |> List.map _.ToDto() }
+        Comments = this.Comments |> List.map _.ToDto()
+        OtherReplies = this.OtherReplies }
 
 module GetCommenterQuery = TwoPoint.Core.Posts.Queries.GetCommenter
 
@@ -61,6 +65,7 @@ type GetCommenter (
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let getCommenter = GetCommenterQuery.withDependencies {
@@ -68,6 +73,8 @@ type GetCommenter (
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
           member _.GetCommentsOfCommenter commenter = postDependencies.GetPostedCommentsOfCommenter commenter
+          member _.GetComment post commentId = postDependencies.GetComment post commentId
+          member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
           member _.Stage = config.Stage
         }
 

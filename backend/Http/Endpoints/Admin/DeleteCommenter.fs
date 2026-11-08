@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -46,20 +47,27 @@ type DeleteCommenter(
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let deleteCommenter = DeleteCommenter.withDependencies {
           new DeleteCommenter.Dependencies with
 
           member _.GetCommenterByValidationId validationId = postDependencies.GetCommenterByValidationId validationId
-          member _.GetCommentsOfCommenter commenter = postDependencies.GetCommentsOfCommenter commenter
-          member _.DeleteComment comment = postDependencies.DeleteComment comment
+          member _.GetPostedCommentsOfCommenter commenter = postDependencies.GetPostedCommentsOfCommenter commenter
+          member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
+          member _.DeleteComment post comment = postDependencies.DeleteComment post comment
           member _.DeleteCommenter commenter = postDependencies.DeleteCommenter commenter
         }
 
         let deletion = { CommenterDeletion.Dto.ValidationId = CommenterDeletion.ValidationId validationId }
 
         let! deletionResult = ct |> deleteCommenter deletion
+
+        match deletionResult with
+        | Ok (DeleteCommenter.Event.Deleted (_, others)) ->
+          logger.LogInformation("Deleted commenter '{validationId}' with {others} replies from other writers", validationId, others)
+        | Error _ -> ()
         let apiResponse, statusCode =
           deletionResult
           |> ActionResult.toApiResponse

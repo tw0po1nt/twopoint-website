@@ -29,6 +29,8 @@ const queued = (id) => ({
     commenter: { id: 'ada-id', email: 'ada@example.com', name: 'Ada', status: 'new', createdDate: '2026-01-01T00:00:00Z' },
     status: 'new',
     content: 'A comment.',
+    replyCount: 0,
+    getsReplyEmails: false,
   },
 });
 

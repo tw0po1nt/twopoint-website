@@ -9,17 +9,25 @@ open Fable.Core
 open Oxpecker.Solid
 open Oxpecker.Solid.Aria
 
+let private replyMsg (page: Shell.ReplyPage) (msg: AuthorReply.Msg) =
+  match page with
+  | Shell.ReplyPage.OnQueue -> Shell.Queue(Queue.Reply msg)
+  | Shell.ReplyPage.OnPostComments -> Shell.PostComments(PostComments.Reply msg)
+
 let private fail (call: Shell.Call) =
   match call with
   | Shell.LoadDashboard -> Shell.Dashboard(Dashboard.Answered(Error Api.Unanswered))
   | Shell.LoadPosts -> Shell.Posts(Posts.Answered(Error Api.Unanswered))
   | Shell.PollPosts generation -> Shell.Posts(Posts.Polled(generation, Error Api.Unanswered))
   | Shell.LoadQueue -> Shell.Queue(Queue.Answered(Error Api.Unanswered))
-  | Shell.TrustCommenter comment -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
+  | Shell.TrustCommenter(comment, _) -> Shell.Queue(Queue.Trusted(comment.Comment.Id, Error Api.Unanswered))
   | Shell.Moderate(comment, action) -> Shell.Queue(Queue.Done(comment.Comment.Id, action, Error Api.Unanswered))
   | Shell.LoadPostComments slug -> Shell.PostComments(PostComments.Answered(slug, Error Api.Unanswered))
   | Shell.ModeratePostComment(_, comment, action) ->
     Shell.PostComments(PostComments.Done(comment.Id, action, Error Api.Unanswered))
+  | Shell.PreviewReply(page, commentId, request) ->
+    replyMsg page (AuthorReply.Edited(commentId, Comments.PreviewUnanswered request))
+  | Shell.PostReply(page, _, commentId, _) -> replyMsg page (AuthorReply.Answered(commentId, Error Api.Unanswered))
   | Shell.LoadCommenters -> Shell.Commenters(Commenters.Answered(Error Api.Unanswered))
   | Shell.LoadCommenter commenterId -> Shell.Commenter(Commenter.Answered(commenterId, Error Api.Unanswered))
   | Shell.ChangeCommenter(commenterId, action) ->
@@ -92,8 +100,8 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.LoadQueue ->
     Api.getModerationQueue (Config.api ()) token
     |> Promise.map (Queue.Answered >> Shell.Queue)
-  | Shell.TrustCommenter comment ->
-    Api.changeCommenterStatus (Config.api ()) token comment.Comment.Commenter.Id Api.Trusted
+  | Shell.TrustCommenter(comment, commenter) ->
+    Api.changeCommenterStatus (Config.api ()) token commenter.Id Api.Trusted
     |> Promise.map (fun result -> Shell.Queue(Queue.Trusted(comment.Comment.Id, result)))
   | Shell.Moderate(comment, action) ->
     moderate token comment.PostSlug comment.Comment action
@@ -104,6 +112,18 @@ let private answer (push: Push) (call: Shell.Call) (token: string) : JS.Promise<
   | Shell.ModeratePostComment(slug, comment, action) ->
     moderate token slug comment action
     |> Promise.map (fun result -> Shell.PostComments(PostComments.Done(comment.Id, action, result)))
+  | Shell.PreviewReply(page, commentId, request) ->
+    Api.previewComment (Config.api ()) token request.Source
+    |> Promise.map (fun result ->
+      let edit =
+        match result with
+        | Ok html -> Comments.PreviewAnswered(request, ({ Success = true; Message = None; Data = Some html }: TwoPoint.Api.ApiResponse<string>))
+        | Error _ -> Comments.PreviewUnanswered request
+
+      replyMsg page (AuthorReply.Edited(commentId, edit)))
+  | Shell.PostReply(page, slug, commentId, content) ->
+    Api.replyAsAuthor (Config.api ()) token slug commentId content
+    |> Promise.map (fun result -> replyMsg page (AuthorReply.Answered(commentId, result)))
   | Shell.LoadCommenters ->
     Api.getCommenters (Config.api ()) token
     |> Promise.map (Commenters.Answered >> Shell.Commenters)
@@ -630,14 +650,112 @@ let private actionButton
         .Has(Fragment() { "Delete" })
     }
 
+let private followText (element: HTMLTextAreaElement) (value: unit -> string) =
+  createEffect (fun () ->
+    let text = value ()
+
+    if element.value <> text then
+      element.value <- text)
+
+let private isPreviewTab (editor: Comments.Editor) =
+  match editor.Tab with
+  | Comments.Write -> false
+  | Comments.Preview _ -> true
+
+let private previewText (editor: Comments.Editor) =
+  match editor.Tab with
+  | Comments.Preview Comments.PreviewState.Empty -> "Nothing to preview yet."
+  | Comments.Preview Comments.PreviewState.Loading -> "Loading the preview…"
+  | Comments.Preview Comments.PreviewState.Failed -> "Couldn't load the preview. You can still post your reply."
+  | Comments.Preview(Comments.PreviewState.Shown _)
+  | Comments.Write -> ""
+
+let private previewHtml (editor: Comments.Editor) =
+  match editor.Tab with
+  | Comments.Preview(Comments.PreviewState.Shown html) -> html
+  | Comments.Preview _
+  | Comments.Write -> ""
+
+/// The page builds the row again only when the row changes, so the form reads the reply through `form`.
+[<SolidComponent>]
+let private replyForm
+  (send: AuthorReply.Msg -> unit)
+  (comment: Api.Comment)
+  (form: unit -> AuthorReply.Form option)
+  =
+  let read (get: AuthorReply.Form -> 'T) (fallback: 'T) () =
+    form () |> Option.map get |> Option.defaultValue fallback
+
+  let editor = read _.Editor Comments.emptyEditor
+  let posting = read (fun form -> form.Posting = AuthorReply.Posting) false
+  let failure = read AuthorReply.failure None
+  let edit change = send (AuthorReply.Edited(comment.Id, change))
+
+  let choose preview =
+    edit (if preview then Comments.PreviewSelected else Comments.WriteSelected)
+
+  div (class' = "reply-form") {
+    Parts.tabs "Reply" [ false, "Write"; true, "Preview" ] (fun () -> isPreviewTab (editor ())) choose
+
+    textarea(
+      id = $"reply-{comment.Id}",
+      class' = (if isPreviewTab (editor ()) then "textarea is-hidden" else "textarea"),
+      rows = 4,
+      maxlength = Comments.maxLength,
+      ariaLabel = "Reply",
+      disabled = posting (),
+      onInput = fun event -> edit (Comments.TextChanged (event.target :?> HTMLTextAreaElement).value)
+    )
+      .ref (fun element -> followText element (fun () -> (editor ()).Text))
+
+    Show(when' = isPreviewTab (editor ())) {
+      div(class' = "reply-preview").attr ("aria-live", "polite") {
+        Show(when' = (previewText (editor ()) <> "")) { p (class' = "muted small") { previewText (editor ()) } }
+        div (class' = "queue-text", innerHTML = previewHtml (editor ()))
+      }
+    }
+
+    For(each = Array.ofList (Option.toList (AuthorReply.approvalNote comment.Status))) {
+      yield fun note _ -> p (class' = "muted small") { note }
+    }
+
+    For(each = Array.ofList (Option.toList (AuthorReply.emailNote comment))) {
+      yield fun note _ -> p (class' = "muted small") { note }
+    }
+
+    Show(when' = (failure ()).IsSome) {
+      Parts.Alert(tone = Parts.Bad).Has(p () { failure () |> Option.defaultValue "" })
+    }
+
+    div (class' = "actions") {
+      Parts
+        .Button(
+          kind = Parts.Accent,
+          size = Parts.Small,
+          disabled = not (read AuthorReply.canPost false ()),
+          onClick = fun _ -> send AuthorReply.Submitted
+        )
+        .Has(Fragment() { "Post reply" })
+
+      Parts
+        .Button(size = Parts.Small, disabled = posting (), onClick = fun _ -> send AuthorReply.Canceled)
+        .Has(Fragment() { "Cancel" })
+    }
+  }
+
 [<SolidComponent>]
 let private rowEnd
   (dispatch: Shell.Msg -> unit)
-  (commentId: string)
+  (comment: Api.Comment)
   (choose: Queue.Action -> unit)
   (state: Queue.RowState)
   (actions: Queue.Action list)
+  (send: AuthorReply.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (topLevel: unit -> Api.CommentApproval option)
   =
+  let isOpen () = AuthorReply.isOpenOn comment.Id (reply ())
+
   Fragment() {
     Show(when' = (Queue.failure state).IsSome) {
       Parts.Alert(tone = Parts.Bad).Has(p () { Queue.failure state |> Option.defaultValue "" })
@@ -645,9 +763,21 @@ let private rowEnd
 
     div (class' = "actions") {
       For(each = Array.ofList actions) {
-        yield fun action _ -> actionButton dispatch commentId choose (Progress.isSending state) action
+        yield fun action _ -> actionButton dispatch comment.Id choose (Progress.isSending state) action
+      }
+
+      Show(when' = (AuthorReply.canReply (topLevel ()) comment.Status && not (isOpen ()))) {
+        Parts
+          .Button(
+            size = Parts.Small,
+            disabled = Progress.isSending state,
+            onClick = fun _ -> send (AuthorReply.Opened comment.Id)
+          )
+          .Has(Fragment() { AuthorReply.actionLabel comment.Status })
       }
     }
+
+    Show(when' = isOpen ()) { replyForm send comment reply }
   }
 
 // The backend gives only HTML that it made from the Markdown of the comment.
@@ -655,37 +785,115 @@ let private rowEnd
 let private commentText (html: string) = div (class' = "queue-text", innerHTML = html)
 
 [<SolidComponent>]
-let private queueRow (dispatch: Shell.Msg -> unit) (row: Queue.Row) =
-  let comment = row.Comment.Comment
-  let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
+let private writerHead (dispatch: Shell.Msg -> unit) (writer: Api.Writer) =
+  match writer with
+  | Api.Writer.Commenter commenter -> Fragment() { commenterHead dispatch commenter }
+  | Api.Writer.Author ->
+    Fragment() {
+      div (class' = "queue-head") {
+        Parts.avatar "You"
 
-  article (id = comment.Id, class' = "card card-body queue-row") {
-    commenterHead dispatch comment.Commenter
-    p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
-    commentText comment.Content
-    rowEnd dispatch comment.Id choose row.State (Queue.actions comment.Commenter.Status)
+        div (class' = "grow") {
+          p (class' = "strong badge-line") {
+            "You"
+            Parts.badge Parts.Info "Author"
+          }
+        }
+      }
+    }
+
+[<SolidComponent>]
+let private replyContext (topLevel: Api.TopLevel) (opened: unit -> bool) (toggle: unit -> unit) =
+  div (class' = "reply-context") {
+    p (class' = "muted small") { ReplyContext.replyLine topLevel }
+
+    Show(when' = not (opened ())) {
+      button(type' = "button", class' = "reply-excerpt", onClick = fun _ -> toggle ()).attr ("aria-expanded", "false") {
+        topLevel.Excerpt
+      }
+    }
+
+    Show(when' = opened ()) {
+      div (class' = "reply-excerpt is-open") {
+        commentText topLevel.Content
+
+        button(type' = "button", class' = "reply-less", onClick = fun _ -> toggle ()).attr ("aria-expanded", "true") {
+          "Show less"
+        }
+      }
+    }
+
+    For(each = Array.ofList (Option.toList (ReplyContext.rejectedNote topLevel))) {
+      yield fun note _ -> Parts.Alert(tone = Parts.Warn).Has(p () { note })
+    }
   }
 
 [<SolidComponent>]
-let private queue (dispatch: Shell.Msg -> unit) (model: Queue.Model) =
-  match model with
-  | Queue.Waiting ->
-    Fragment() {
+let private queueRow
+  (dispatch: Shell.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (opened: unit -> ReplyContext.Opened)
+  (row: Queue.Row)
+  =
+  let comment = row.Comment.Comment
+  let choose action = dispatch (Shell.Queue(Queue.Chosen(comment.Id, action)))
+  let send = Queue.Reply >> Shell.Queue >> dispatch
+  let toggle () = dispatch (Shell.Queue(Queue.TopLevelToggled comment.Id))
+
+  article (id = comment.Id, class' = "card card-body queue-row") {
+    writerHead dispatch comment.Writer
+    p (class' = "muted small") { $"On {row.Comment.PostTitle}" }
+
+    For(each = Array.ofList (Option.toList comment.TopLevel)) {
+      yield fun topLevel _ -> replyContext topLevel (fun () -> (opened ()).Contains comment.Id) toggle
+    }
+
+    commentText comment.Content
+    rowEnd dispatch comment choose row.State (Queue.writerActions comment.Writer) send reply (fun () -> ReplyContext.topLevelApproval comment)
+  }
+
+let private queueRows (model: Queue.Model) =
+  match model.Comments with
+  | Queue.Loaded rows -> rows
+  | Queue.Waiting
+  | Queue.NotLoaded _ -> []
+
+let private queueReason (model: Queue.Model) =
+  match model.Comments with
+  | Queue.NotLoaded reason -> Some reason
+  | Queue.Waiting
+  | Queue.Loaded _ -> None
+
+/// The queue stays outside the page, so a typed letter in a reply does not replace the reply form.
+[<SolidComponent>]
+let private queue (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let page () = (model ()).Queue
+  let rows () = queueRows (page ())
+  let reply () = (page ()).Reply
+  let opened () = (page ()).Opened
+
+  Fragment() {
+    Show(when' = ((page ()).Comments = Queue.Waiting)) {
       div (class' = "card card-body", ariaBusy = true) {
         Parts.skeleton "40%"
         Parts.skeleton "80%"
       }
     }
-  | Queue.Loaded [] ->
-    Fragment() {
+
+    Show(when' = ((page ()).Comments = Queue.Loaded [])) {
       Parts.emptyState Icon.Inbox "The moderation queue is empty." (p () { "New comments show up here for review." })
     }
-  | Queue.Loaded rows ->
-    Fragment() {
-      div (class' = "queue") { For(each = Array.ofList rows) { yield fun row _ -> queueRow dispatch row } }
+
+    Show(when' = not (List.isEmpty (rows ()))) {
+      div (class' = "queue") { For(each = Array.ofList (rows ())) { yield fun row _ -> queueRow dispatch reply opened row } }
     }
-  | Queue.NotLoaded reason ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the moderation queue.").Has(p () { reason }) }
+
+    Show(when' = (queueReason (page ())).IsSome) {
+      Parts
+        .Alert(tone = Parts.Bad, title = "Couldn't load the moderation queue.")
+        .Has(p () { queueReason (page ()) |> Option.defaultValue "" })
+    }
+  }
 
 let private approvalTone (approval: Api.CommentApproval) =
   match approval with
@@ -694,48 +902,97 @@ let private approvalTone (approval: Api.CommentApproval) =
   | Api.CommentApproval.Rejected -> Parts.Bad
 
 [<SolidComponent>]
-let private postCommentRow (dispatch: Shell.Msg -> unit) (row: PostComments.Row) =
+let private postCommentRow
+  (dispatch: Shell.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (page: unit -> PostComments.Model)
+  (row: PostComments.Row)
+  =
   let comment = row.Comment
   let choose action = dispatch (Shell.PostComments(PostComments.Chosen(comment.Id, action)))
+  let send = PostComments.Reply >> Shell.PostComments >> dispatch
+  let topLevel () = PostComments.topLevel comment (page ())
+  let topLevelHidden () =
+    comment.ReplyTo |> Option.exists (fun topLevelId -> PostComments.replies topLevelId (page ()) |> List.isEmpty)
 
   article (id = comment.Id, class' = "card card-body queue-row") {
     div (class' = "row-top") {
-      commenterHead dispatch comment.Commenter
+      writerHead dispatch comment.Writer
       Parts.badge (approvalTone comment.Status) (PostComments.approvalText comment.Status)
     }
 
+    Show(when' = (topLevelHidden () && (topLevel ()).IsSome)) {
+      p (class' = "muted small") { topLevel () |> Option.map ReplyContext.replyLine |> Option.defaultValue "" }
+    }
+
     commentText comment.Content
-    rowEnd dispatch comment.Id choose row.State (PostComments.actions comment.Status)
+    rowEnd dispatch comment choose row.State (PostComments.actions comment.Status) send reply (fun () -> PostComments.topLevelApproval comment (page ()))
   }
 
 [<SolidComponent>]
-let private postCommentList (dispatch: Shell.Msg -> unit) (model: PostComments.Model) =
-  match model.Comments, PostComments.shown model with
-  | PostComments.Waiting, _ ->
-    Fragment() {
+let private postThread
+  (dispatch: Shell.Msg -> unit)
+  (reply: unit -> AuthorReply.Form option)
+  (page: unit -> PostComments.Model)
+  (head: PostComments.Row)
+  =
+  let replies () = PostComments.replies head.Comment.Id (page ())
+
+  div (class' = "thread") {
+    postCommentRow dispatch reply page head
+
+    Show(when' = not (List.isEmpty (replies ()))) {
+      div (class' = "thread-replies") {
+        For(each = Array.ofList (replies ())) { yield fun row _ -> postCommentRow dispatch reply page row }
+      }
+    }
+  }
+
+let private postCommentsReason (model: PostComments.Model) =
+  match model.Comments with
+  | PostComments.NotLoaded reason -> Some reason
+  | PostComments.Waiting
+  | PostComments.Loaded _ -> None
+
+/// The list stays outside the page, so a typed letter in a reply does not replace the reply form.
+[<SolidComponent>]
+let private postComments (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Model) =
+  let page () =
+    let current = model ()
+
+    match current.PostComments, current.Router.Route with
+    | Some page, _ -> page
+    | None, PostComments slug -> PostComments.init slug
+    | None, _ -> PostComments.init ""
+
+  let rows () = PostComments.shown (page ())
+  let heads () = PostComments.heads (page ())
+  let reply () = (page ()).Reply
+  let filter = PostComments.Filtered >> Shell.PostComments >> dispatch
+
+  Fragment() {
+    div (class' = "filter-bar") { Parts.tabs "Approval" PostComments.filters (fun () -> (page ()).Filter) filter }
+
+    Show(when' = ((page ()).Comments = PostComments.Waiting)) {
       div (class' = "card card-body", ariaBusy = true) {
         Parts.skeleton "40%"
         Parts.skeleton "80%"
       }
     }
-  | PostComments.Loaded _, [] ->
-    Fragment() {
-      Parts.emptyState Icon.Inbox (PostComments.emptyText model.Filter) (p () { "Comments on this post show up here." })
-    }
-  | PostComments.Loaded _, rows ->
-    Fragment() {
-      div (class' = "queue") { For(each = Array.ofList rows) { yield fun row _ -> postCommentRow dispatch row } }
-    }
-  | PostComments.NotLoaded reason, _ ->
-    Fragment() { Parts.Alert(tone = Parts.Bad, title = "Couldn't load the comments.").Has(p () { reason }) }
 
-[<SolidComponent>]
-let private postComments (dispatch: Shell.Msg -> unit) (model: PostComments.Model) =
-  let filter = PostComments.Filtered >> Shell.PostComments >> dispatch
+    Show(when' = (PostComments.isLoaded (page ()) && List.isEmpty (rows ()))) {
+      Parts.emptyState Icon.Inbox (PostComments.emptyText (page ()).Filter) (p () { "Comments on this post show up here." })
+    }
 
-  Fragment() {
-    div (class' = "filter-bar") { Parts.tabs "Approval" PostComments.filters (fun () -> model.Filter) filter }
-    postCommentList dispatch model
+    Show(when' = not (List.isEmpty (rows ()))) {
+      div (class' = "queue") { For(each = Array.ofList (heads ())) { yield fun head _ -> postThread dispatch reply page head } }
+    }
+
+    Show(when' = (postCommentsReason (page ())).IsSome) {
+      Parts
+        .Alert(tone = Parts.Bad, title = "Couldn't load the comments.")
+        .Has(p () { postCommentsReason (page ()) |> Option.defaultValue "" })
+    }
   }
 
 [<SolidComponent>]
@@ -803,8 +1060,9 @@ let private commenterAction (dispatch: Shell.Msg -> unit) (sending: bool) (actio
     .Has(Fragment() { Commenter.label action })
 
 [<SolidComponent>]
-let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedComment) =
+let private commenterComment (dispatch: Shell.Msg -> unit) (opened: ReplyContext.Opened) (comment: Api.PostedComment) =
   let route = Shell.Router >> dispatch
+  let toggle () = dispatch (Shell.Commenter(Commenter.TopLevelToggled comment.Comment.Id))
 
   article (id = comment.Comment.Id, class' = "card card-body queue-row") {
     div (class' = "row-top") {
@@ -815,6 +1073,10 @@ let private commenterComment (dispatch: Shell.Msg -> unit) (comment: Api.PostedC
       }
 
       Parts.badge (approvalTone comment.Comment.Status) (PostComments.approvalText comment.Comment.Status)
+    }
+
+    For(each = Array.ofList (Option.toList comment.Comment.TopLevel)) {
+      yield fun topLevel _ -> replyContext topLevel (fun () -> opened.Contains comment.Comment.Id) toggle
     }
 
     commentText comment.Comment.Content
@@ -864,7 +1126,7 @@ let private commenterPage (dispatch: Shell.Msg -> unit) (model: Commenter.Model)
         h2 () { "Comments" }
 
         Show(when' = List.isEmpty page.Comments) { p (class' = "muted") { "No comments yet." } }
-        For(each = Array.ofList page.Comments) { yield fun comment _ -> commenterComment dispatch comment }
+        For(each = Array.ofList page.Comments) { yield fun comment _ -> commenterComment dispatch model.Opened comment }
       }
     }
   | Commenter.NotLoaded reason ->
@@ -1414,9 +1676,8 @@ let private content (dispatch: Shell.Msg -> unit) (model: Shell.Model) =
         }
       }
     }
-  | ModerationQueue -> Fragment() { queue dispatch model.Queue }
-  | PostComments slug ->
-    Fragment() { postComments dispatch (model.PostComments |> Option.defaultValue (PostComments.init slug)) }
+  | ModerationQueue
+  | PostComments _ -> Fragment() { "" }
   | Posts filter -> Fragment() { posts dispatch model.Posts filter }
   | Commenters -> Fragment() { commenters dispatch model.Commenters }
   | Commenter commenterId ->
@@ -1456,9 +1717,7 @@ let private deleteDialog (dispatch: Shell.Msg -> unit) (model: unit -> Shell.Mod
     (fun () -> (Shell.deleteChosen (model ())).IsSome)
     close
     "Delete this comment?"
-    (p () {
-      "This permanently deletes the comment and its history. To hide it from readers but keep it, reject it instead."
-    })
+    (p () { Queue.deleteText (Shell.deleteReplyCount (model ()) |> Option.defaultValue 0) })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
@@ -1474,9 +1733,7 @@ let private deleteCommenterDialog (dispatch: Shell.Msg -> unit) (model: unit -> 
     (fun () -> (Shell.deleteCommenterChosen (model ())).IsSome)
     close
     "Delete this commenter?"
-    (p () {
-      "This permanently deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead."
-    })
+    (p () { Commenter.deleteText (Shell.deleteCommenterOtherReplies (model ()) |> Option.defaultValue 0) })
     (Fragment() {
       Parts.Button(onClick = fun _ -> close ()).Has(Fragment() { "Cancel" })
       Parts.Button(kind = Parts.Danger, onClick = fun _ -> confirm ()).Has(Fragment() { "Delete" })
@@ -1502,6 +1759,11 @@ let private deleteSubscriptionDialog (dispatch: Shell.Msg -> unit) (model: unit 
 
 [<Emit "document.getElementById($0)?.scrollIntoView({ block: 'center' })">]
 let private scrollToId (id: string) : unit = jsNative
+
+let private isPostComments (route: Route) =
+  match route with
+  | PostComments _ -> true
+  | _ -> false
 
 [<SolidComponent>]
 let view (signIn: SignIn) (push: Push) =
@@ -1645,6 +1907,8 @@ let view (signIn: SignIn) (push: Push) =
           // The search input stays outside the page, so a typed letter does not replace the input.
           Show(when' = Route.isSubscriptions (current ())) { subscriptionsToolbar dispatch model }
 
+          Show(when' = (current () = ModerationQueue)) { queue dispatch model }
+          Show(when' = isPostComments (current ())) { postComments dispatch model }
           content dispatch (model ())
         }
       }

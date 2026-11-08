@@ -23,11 +23,16 @@ let private posted (approval : CommentApproval) (title : string) (name : string)
       commentId
       createdDate
       {| Approval = approval.ToString(); CreatedDate = createdDate |}
-      {| ValidationId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
-         EmailAddress = "commenter@example.com"
-         Name = Some name
-         CreatedDate = "2026-01-01T00:00:00.0000000Z"
-         Status = "new" |}
+      None
+      (Commenter.create
+        "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+        "commenter@example.com"
+        (Some name)
+        "2026-01-01T00:00:00.0000000Z"
+        "new"
+       |> Fixtures.ok
+       |> CommentWriter.Commenter)
+      None
       content
     |> Fixtures.ok
 
@@ -54,7 +59,7 @@ let private third = device "https://push.example.com/send/three"
 let private dependencyError : DependencyError =
   { Dependency = Dependency.WebPush; Type = Unknown (exn "The push service answered 500") }
 
-type private Fake(comment : PostedComment option, devices : RegisteredDevice list, answers : Map<DeviceId, Result<PushOutcome, DependencyError>>) =
+type private Fake(comment : PostedComment option, others : PostedComment list, devices : RegisteredDevice list, answers : Map<DeviceId, Result<PushOutcome, DependencyError>>) =
   let sent = ResizeArray<RegisteredDevice * byte array>()
   let recorded = ResizeArray<RegisteredDevice>()
   let deleted = ResizeArray<RegisteredDevice>()
@@ -63,8 +68,13 @@ type private Fake(comment : PostedComment option, devices : RegisteredDevice lis
   member _.Recorded = List.ofSeq recorded
   member _.Deleted = List.ofSeq deleted
 
+  new (comment, devices, answers) = Fake(comment, [], devices, answers)
+
   interface NotifyNewComment.Dependencies with
-    member _.GetPostedComment _ = CancellableTaskResult.singleton comment
+    member _.GetPostedComment post id =
+      if string id = commentId then comment else others |> List.tryFind (fun other -> other.Comment.Id = id)
+      |> Option.filter (fun posted -> posted.Post = post)
+      |> CancellableTaskResult.singleton
     member _.CountNewComments () = CancellableTaskResult.singleton 3
     member _.GetDevicesOfAuthor () = CancellableTaskResult.singleton devices
     member _.SendPush device payload =
@@ -81,9 +91,11 @@ type private Fake(comment : PostedComment option, devices : RegisteredDevice lis
       deleted.Add device
       CancellableTaskResult.singleton ()
 
-let private notify (fake : Fake) =
-  let dto : NotifyNewComment.Dto = { CommentId = commentId }
+let private notifyOn (post : string) (fake : Fake) =
+  let dto : NotifyNewComment.Dto = { Post = post; CommentId = commentId }
   (NotifyNewComment.withDependencies fake dto CancellationToken.None).Result
+
+let private notify = notifyOn "a-post"
 
 let private waiting = posted CommentApproval.New "A post" "Ada" "The text."
 
@@ -134,9 +146,8 @@ let private handlerTests =
       Expect.equal ((field json "case").GetString()) "awaits-moderation" "Expected the case"
       Expect.equal ((field json "commentId").GetString()) commentId "Expected the comment ID"
       Expect.equal ((field json "slug").GetString()) "a-post" "Expected the slug"
-      Expect.equal ((field json "postTitle").GetString()) "A post" "Expected the post title"
-      Expect.equal ((field json "commenter").GetString()) "Ada" "Expected the commenter name"
-      Expect.equal ((field json "text").GetString()) "The text." "Expected the text"
+      Expect.equal ((field json "title").GetString()) "New comment on A post" "Expected the title"
+      Expect.equal ((field json "body").GetString()) "Ada: The text." "Expected the commenter name and the text"
       Expect.equal ((field json "newCount").GetInt32()) 3 "Expected the count"
     }
 
@@ -163,6 +174,14 @@ let private handlerTests =
       | Ok (NotifyNewComment.Event.Skipped _) -> Expect.isEmpty fake.Sent "Expected no push"
       | other -> failtestf "Expected Skipped, got %A" other
     }
+
+    test "the read of the comment is in the partition of the post of the message" {
+      let fake = Fake(Some waiting, [ first ], Map.empty)
+
+      match notifyOn "another-post" fake with
+      | Ok (NotifyNewComment.Event.Skipped _) -> Expect.isEmpty fake.Sent "Expected no push"
+      | other -> failtestf "Expected Skipped, got %A" other
+    }
   ]
 
 let private payloadTests =
@@ -175,7 +194,7 @@ let private payloadTests =
       for text in [ control; astral ] do
         let comment = posted CommentApproval.New text text text
 
-        match NewCommentPayload.ofComment 999999 comment with
+        match NewCommentPayload.ofComment 999999 None comment with
         | Some payload ->
           let bytes = NewCommentPayload.toBytes payload
           Expect.isLessThan bytes.Length 4096 "Expected a payload below 4 KB"
@@ -186,8 +205,8 @@ let private payloadTests =
     test "the text is the first 120 characters" {
       let comment = posted CommentApproval.New "A post" "Ada" (String('x', 300))
 
-      match NewCommentPayload.ofComment 1 comment with
-      | Some payload -> Expect.equal payload.Text.Length 120 "Expected 120 characters"
+      match NewCommentPayload.ofComment 1 None comment with
+      | Some payload -> Expect.equal payload.Body $"Ada: {String('x', 120)}" "Expected 120 characters"
       | None -> failtest "Expected a payload"
     }
 
@@ -195,8 +214,8 @@ let private payloadTests =
       let source = "A **great** post.\n\nSee [the docs](https://learn.microsoft.com/) and `List.map`:\n\n- one\n- two"
       let comment = posted CommentApproval.New "A post" "Ada" source
 
-      match NewCommentPayload.ofComment 1 comment with
-      | Some payload -> Expect.equal payload.Text "A great post. See the docs and List.map: one two" "Expected the plain text"
+      match NewCommentPayload.ofComment 1 None comment with
+      | Some payload -> Expect.equal payload.Body "Ada: A great post. See the docs and List.map: one two" "Expected the plain text"
       | None -> failtest "Expected a payload"
     }
 
@@ -205,19 +224,78 @@ let private payloadTests =
       let comment = posted CommentApproval.New "A post" "Ada" source
       let expected = (String.replicate 100 "ab ").Substring(0, 120)
 
-      match NewCommentPayload.ofComment 1 comment with
-      | Some payload -> Expect.equal payload.Text expected "Expected 120 characters of the plain text"
+      match NewCommentPayload.ofComment 1 None comment with
+      | Some payload -> Expect.equal payload.Body $"Ada: {expected}" "Expected 120 characters of the plain text"
       | None -> failtest "Expected a payload"
+    }
+
+    test "a comment of the author gets no payload" {
+      let posted = posted CommentApproval.Approved "A post" "Ada" "Hi"
+      let comment = { posted with Comment = { posted.Comment with Writer = CommentWriter.Author } }
+
+      Expect.isNone (NewCommentPayload.ofComment 1 None comment) "Expected no payload"
     }
 
     test "a comment with no plain text gets the no-text mark" {
       let comment = posted CommentApproval.New "A post" "Ada" "![](https://x.com/a.png)"
 
-      match NewCommentPayload.ofComment 1 comment with
-      | Some payload -> Expect.equal payload.Text "(no text)" "Expected the no-text mark"
+      match NewCommentPayload.ofComment 1 None comment with
+      | Some payload -> Expect.equal payload.Body "Ada: (no text)" "Expected the no-text mark"
       | None -> failtest "Expected a payload"
     }
   ]
 
+let private parentId = "5a0e2c1d-8b3f-4e6a-9c7d-1f2e3d4c5b6a"
+
+let private topLevel (name : string) =
+  let comment = posted CommentApproval.Approved "A post" name "The question."
+  { comment with Comment = { comment.Comment with Id = CommentId.create parentId |> Fixtures.ok } }
+
+let private reply (approval : CommentApproval) (name : string) (content : string) =
+  let comment = posted approval "A post" name content
+  { comment with Comment = { comment.Comment with Parent = Some (CommentId.create parentId |> Fixtures.ok) } }
+
+let private replyTests =
+  testList "a reply" [
+    test "the notification of a reply names the writer and the top-level commenter, and the body is the plain text" {
+      let fake = Fake(Some (reply CommentApproval.New "Ben" "**Use** `List.map`."), [ topLevel "Ada" ], [ first ], Map.empty)
+
+      match notify fake with
+      | Ok (NotifyNewComment.Event.Notified _) ->
+        use json = JsonDocument.Parse(snd fake.Sent.Head)
+        Expect.equal ((field json "title").GetString()) "Ben replied to Ada" "Expected the reply title"
+        Expect.equal ((field json "body").GetString()) "Use List.map." "Expected only the plain text of the reply"
+        Expect.equal ((field json "case").GetString()) "awaits-moderation" "Expected the case of a new reply"
+      | other -> failtestf "Expected Notified, got %A" other
+    }
+
+    test "the body of a reply is the first 120 characters of the plain text" {
+      match NewCommentPayload.ofComment 1 (Some (topLevel "Ada").Comment) (reply CommentApproval.New "Ben" (String('x', 300))) with
+      | Some payload -> Expect.equal payload.Body (String('x', 120)) "Expected 120 characters"
+      | None -> failtest "Expected a payload"
+    }
+
+    test "a reply whose top-level comment is gone still sends a notification" {
+      let fake = Fake(Some (reply CommentApproval.Approved "Ben" "Hi"), [], [ first ], Map.empty)
+
+      match notify fake with
+      | Ok (NotifyNewComment.Event.Notified _) ->
+        use json = JsonDocument.Parse(snd fake.Sent.Head)
+        Expect.equal ((field json "title").GetString()) "Ben replied to a comment" "Expected the title with no name"
+      | other -> failtestf "Expected Notified, got %A" other
+    }
+
+    test "the largest reply payload stays below 4 KB" {
+      let control = String('\u0001', 5000)
+      let astral = String.replicate 5000 "\U0001F600"
+
+      for text in [ control; astral ] do
+        match NewCommentPayload.ofComment 999999 (Some (topLevel text).Comment) (reply CommentApproval.New text text) with
+        | Some payload ->
+          Expect.isLessThanOrEqual (NewCommentPayload.toBytes payload).Length NewCommentPayload.maxOctets "Expected a payload that the sender takes"
+        | None -> failtest "Expected a payload"
+    }
+  ]
+
 [<Tests>]
-let tests = testList "NewComment" [ handlerTests; payloadTests ]
+let tests = testList "NewComment" [ handlerTests; payloadTests; replyTests ]

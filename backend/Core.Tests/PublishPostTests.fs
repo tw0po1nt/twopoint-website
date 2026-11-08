@@ -317,29 +317,34 @@ let private commentOnPostsOf (fake : FakeStore) (clock : DateTime) =
             |> ok)
           |> CancellableTaskResult.singleton
         member _.GetUtcNow () = clock
+        member _.GetPostedComment _ _ = CancellableTaskResult.singleton None
         member _.Stage = TwoPoint.Site.Render.Stage.Production
         member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some commenter)
-        member _.CreateComment _ commenter newComment approval =
+        member _.NewCommentId () = CommentId.ofGuid (Guid "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40")
+        member _.CreateComment _ _ commenter newComment _ approval _ =
           let posted =
             Comment.create
               "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40"
               "2026-03-02T00:00:00.0000000Z"
               {| Approval = approval.ToString(); CreatedDate = "2026-03-02T00:00:00.0000000Z" |}
-              {| ValidationId = commenterId
-                 EmailAddress = "commenter@example.com"
-                 Name = Some "Commenter"
-                 CreatedDate = "2026-01-01T00:00:00.0000000Z"
-                 Status = "new" |}
+              None
+              (CommentWriter.Commenter commenter)
+              None
               "A comment"
             |> ok
 
-          CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
-        member _.QueueNewCommentNotice _ = CancellableTaskResult.singleton () }
+          CancellableTaskResult.singleton { posted with Content = newComment.Content }
+        member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
+        member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
+        member _.QueueNewCommentNotice _ _ = CancellableTaskResult.singleton ()
+        member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton () }
 
   let dto =
     { NewComment.Dto.Post = NewComment.Post "my-draft"
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
-      NewComment.Dto.Comment = NewComment.Comment "A comment" }
+      NewComment.Dto.Comment = NewComment.Comment "A comment"
+      NewComment.Dto.ReplyTo = None
+      NewComment.Dto.ReplyEmails = NewComment.ReplyEmails false }
 
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
 

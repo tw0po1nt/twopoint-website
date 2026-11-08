@@ -18,11 +18,16 @@ let private commentWith (content : string) (id : string) (createdDate : string) 
     id
     createdDate
     {| Approval = approval.ToString(); CreatedDate = createdDate |}
-    {| ValidationId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
-       EmailAddress = "commenter@example.com"
-       Name = Some "Commenter"
-       CreatedDate = "2026-01-01T00:00:00.0000000Z"
-       Status = "new" |}
+    None
+    (Commenter.create
+      "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+      "commenter@example.com"
+      (Some "Commenter")
+      "2026-01-01T00:00:00.0000000Z"
+      "new"
+     |> ok
+     |> CommentWriter.Commenter)
+    None
     content
   |> ok
 
@@ -41,14 +46,16 @@ type private FakeApprovalDependencies(existing : Comment option) =
   member _.Updates = List.ofSeq updates
 
   interface UpdateCommentApproval.Dependencies with
-    member _.GetCommentById _ = CancellableTaskResult.singleton existing
+    member _.GetComment _ _ = CancellableTaskResult.singleton existing
     member _.UpdateCommentApproval comment approval =
       updates.Add approval
       CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
 
 let private update (dependencies : FakeApprovalDependencies) (approval : CommentApproval) =
   let dto =
-    { CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId firstId
+    { CommentApprovalUpdate.Dto.Post = CommentApprovalUpdate.Post (olderPost.Id.ToString())
+      CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId firstId
       CommentApprovalUpdate.Dto.Approval = CommentApprovalUpdate.Approval (approval.ToString()) }
   (UpdateCommentApproval.withDependencies dependencies dto CancellationToken.None).Result
 
@@ -61,8 +68,8 @@ let private approvalTests =
       match update dependencies CommentApproval.Approved with
       | Ok (UpdateCommentApproval.Event.Updated updated) ->
         Expect.equal updated.Status.Approval CommentApproval.Approved "Expected an approved comment"
-        Expect.equal updated.Commenter existing.Commenter "Expected the same commenter"
-        Expect.equal updated.Commenter.Status CommenterStatus.New "Expected a new commenter"
+        Expect.equal updated.Writer existing.Writer "Expected the same commenter"
+        Expect.equal (Comment.commenter updated |> Option.map _.Status) (Some CommenterStatus.New) "Expected a new commenter"
       | other -> failtestf "Expected Updated, got %A" other
     }
 
@@ -130,7 +137,12 @@ let private queuedWith (content : string) (post : Post) (createdDate : string) =
 let private queued = queuedWith "A comment"
 
 let private rendered (posted : PostedComment) =
-  RenderedPostedComment.ofPostedComment TwoPoint.Site.Render.Stage.Production posted
+  { AdminPostedComment.Post = posted.Post
+    PostTitle = posted.PostTitle
+    Comment =
+      { Comment = RenderedComment.ofComment TwoPoint.Site.Render.Stage.Production posted.Comment
+        TopLevel = None
+        ReplyCount = 0 } }
 
 let private queueTests =
   testList "GetModerationQueue" [
@@ -144,7 +156,19 @@ let private queueTests =
         (GetModerationQueue.withDependencies dependencies () CancellationToken.None).Result
         (Ok ([ oldest; middle; newest ] |> List.map rendered))
         "Expected the oldest comment first"
-      Expect.equal dependencies.Requests [ [ CommentApproval.New ] ] "Expected only the new comments"
+      Expect.equal dependencies.Requests [ CommentApproval.all ] "Expected each comment, for the top-level comments"
+    }
+
+    test "the queue leaves out each approved and rejected comment" {
+      let queuedComment = queued olderPost "2026-02-01T00:00:00.0000000Z"
+      let approved = { queuedComment with Comment = comment (Guid.NewGuid().ToString()) "2026-02-02T00:00:00.0000000Z" CommentApproval.Approved }
+      let rejected = { queuedComment with Comment = comment (Guid.NewGuid().ToString()) "2026-02-03T00:00:00.0000000Z" CommentApproval.Rejected }
+      let dependencies = FakeQueueDependencies [ approved; queuedComment; rejected ]
+
+      Expect.equal
+        (GetModerationQueue.withDependencies dependencies () CancellationToken.None).Result
+        (Ok [ rendered queuedComment ])
+        "Expected only the new comment"
     }
 
     test "the queue gives the rendered HTML" {
@@ -153,8 +177,8 @@ let private queueTests =
 
       match (GetModerationQueue.withDependencies dependencies () CancellationToken.None).Result with
       | Ok [ queued ] ->
-        Expect.equal queued.Comment.Html markdownHtml "Expected the HTML of the source"
-        Expect.equal queued.Comment.Comment posted.Comment "Expected the stored comment"
+        Expect.equal queued.Comment.Comment.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal queued.Comment.Comment.Comment posted.Comment "Expected the stored comment"
       | other -> failtestf "Expected one comment, got %A" other
     }
   ]
@@ -177,7 +201,7 @@ let private postCommentsTests =
       let dependencies = FakePostCommentsDependencies (olderPost, [ newest; oldest; middle ])
 
       Expect.equal
-        (getCommentsForPost dependencies |> Result.map (Option.map (List.map _.Comment)))
+        (getCommentsForPost dependencies |> Result.map (Option.map (List.map _.Comment.Comment)))
         (Ok (Some [ oldest; middle; newest ]))
         "Expected the oldest comment first"
     }
@@ -188,8 +212,8 @@ let private postCommentsTests =
 
       match getCommentsForPost dependencies with
       | Ok (Some [ rendered ]) ->
-        Expect.equal rendered.Html markdownHtml "Expected the HTML of the source"
-        Expect.equal rendered.Comment posted "Expected the stored comment"
+        Expect.equal rendered.Comment.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal rendered.Comment.Comment posted "Expected the stored comment"
       | other -> failtestf "Expected one comment, got %A" other
     }
   ]
@@ -202,7 +226,7 @@ let private commenter (status : CommenterStatus) =
 
 type private FakePostCommentDependencies(existing : Commenter, queueFails : bool) =
   let created = ResizeArray<CommentApproval>()
-  let queued = ResizeArray<CommentId>()
+  let queued = ResizeArray<TwoPoint.Core.Posts.Slug * CommentId>()
 
   new (existing : Commenter) = FakePostCommentDependencies(existing, false)
 
@@ -212,25 +236,32 @@ type private FakePostCommentDependencies(existing : Commenter, queueFails : bool
   interface PostComment.Dependencies with
     member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some olderPost)
     member _.GetUtcNow () = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+    member _.GetPostedComment _ _ = CancellableTaskResult.singleton None
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
-    member _.CreateComment _ commenter newComment approval =
+    member _.NewCommentId () = CommentId.ofGuid (Guid firstId)
+    member _.CreateComment _ _ commenter newComment _ approval _ =
       created.Add approval
       let posted = comment firstId "2026-02-01T00:00:00.0000000Z" approval
-      CancellableTaskResult.singleton { posted with Commenter = commenter; Content = newComment.Content }
+      CancellableTaskResult.singleton { posted with Writer = CommentWriter.Commenter commenter; Content = newComment.Content }
     member _.Stage = TwoPoint.Site.Render.Stage.Production
-    member _.QueueNewCommentNotice commentId =
-      queued.Add commentId
+    member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
+    member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
+    member _.QueueNewCommentNotice post commentId =
+      queued.Add (post, commentId)
 
       if queueFails then
         CancellableTaskResult.error { Dependency = Dependency.ServiceBus; Type = Unknown (exn "The queue is down") }
       else
         CancellableTaskResult.singleton ()
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
 
 let private postCommentWith (content : string) (dependencies : FakePostCommentDependencies) =
   let dto =
     { NewComment.Dto.Post = NewComment.Post (olderPost.Id.ToString())
       NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
-      NewComment.Dto.Comment = NewComment.Comment content }
+      NewComment.Dto.Comment = NewComment.Comment content
+      NewComment.Dto.ReplyTo = None
+      NewComment.Dto.ReplyEmails = NewComment.ReplyEmails false }
   (PostComment.withDependencies dependencies dto CancellationToken.None).Result
 
 let private postComment = postCommentWith "A comment"
@@ -264,7 +295,7 @@ let private postCommentTests =
 
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
-        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected the posted comment on the queue"
+        Expect.equal dependencies.Queued [ olderPost.Id, posted.Comment.Id ] "Expected the posted comment and its post on the queue"
       | other -> failtestf "Expected Posted, got %A" other
     }
 
@@ -274,7 +305,7 @@ let private postCommentTests =
       match postComment dependencies with
       | Ok (PostComment.Event.Posted (_, posted)) ->
         Expect.equal dependencies.Created [ CommentApproval.New ] "Expected the comment in the store"
-        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected one try to queue"
+        Expect.equal dependencies.Queued [ olderPost.Id, posted.Comment.Id ] "Expected one try to queue"
       | other -> failtestf "Expected Posted, got %A" other
     }
 
@@ -372,9 +403,11 @@ let private previewCommentTests =
 type private FakeValidationDependencies(existing : Commenter option) =
   let created = ResizeArray<EmailAddress>()
   let sent = ResizeArray<Commenter>()
+  let redirects = ResizeArray<Uri>()
 
   member _.Created = List.ofSeq created
   member _.Sent = List.ofSeq sent
+  member _.Redirects = List.ofSeq redirects
 
   interface ValidateCommenter.Dependencies with
     member _.GetCommenterByEmailAddress _ = CancellableTaskResult.singleton existing
@@ -382,16 +415,19 @@ type private FakeValidationDependencies(existing : Commenter option) =
     member _.CreateCommenter emailAddress _ _ =
       created.Add emailAddress
       CancellableTaskResult.singleton (commenter CommenterStatus.New)
-    member _.SendCommenterValidationEmail commenter _ =
+    member _.SendCommenterValidationEmail commenter redirectUri =
       sent.Add commenter
+      redirects.Add redirectUri
       CancellableTaskResult.singleton "operation"
 
-let private validateCommenter (dependencies : FakeValidationDependencies) =
+let private validateCommenterTo (redirectUri : string) (dependencies : FakeValidationDependencies) =
   let dto =
     { CommenterValidation.Dto.EmailAddress = CommenterValidation.EmailAddress "commenter@example.com"
       CommenterValidation.Dto.Name = Some (CommenterValidation.Name "Commenter")
-      CommenterValidation.Dto.RedirectUri = CommenterValidation.RedirectUri "https://twopoint.dev/posts/older-post" }
+      CommenterValidation.Dto.RedirectUri = CommenterValidation.RedirectUri redirectUri }
   (ValidateCommenter.withDependencies dependencies dto CancellationToken.None).Result
+
+let private validateCommenter = validateCommenterTo "https://twopoint.dev/posts/older-post"
 
 let private validationTests =
   testList "ValidateCommenter" [
@@ -412,6 +448,26 @@ let private validationTests =
       | Ok (ValidateCommenter.Event.Validated _) ->
         Expect.equal dependencies.Sent [ commenter CommenterStatus.New ] "Expected one verification email"
       | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "the verify flow accepts the redirect URI of a reply, with the ID of its top-level comment, and passes it on unchanged" {
+      let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
+      let redirectUri =
+        "https://twopoint.dev/posts/older-post/?email=commenter%40example.com&name=Commenter&comment=Me%20too"
+        + "&replyTo=2c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f42#comments"
+
+      match validateCommenterTo redirectUri dependencies with
+      | Ok (ValidateCommenter.Event.Validated _) ->
+        Expect.equal (dependencies.Redirects |> List.map _.AbsoluteUri) [ redirectUri ] "Expected the redirect URI with the thread"
+      | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "the verify flow refuses a redirect URI on another host, also with the ID of a top-level comment" {
+      let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
+
+      match validateCommenterTo "https://example.com/posts/older-post/?replyTo=2c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f42" dependencies with
+      | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> Expect.isEmpty dependencies.Sent "Expected no verification email"
+      | other -> failtestf "Expected InvalidRedirect, got %A" other
     }
   ]
 
@@ -545,7 +601,9 @@ let private otherCommenterId = "8e1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e22"
 
 let private commentOf (validationId : string) (id : string) (createdDate : string) =
   let posted = comment id createdDate CommentApproval.Approved
-  { posted with Commenter = { posted.Commenter with ValidationId = CommenterValidationId.create validationId |> ok } }
+  let commenter = Comment.commenter posted |> Option.get
+  { posted with
+      Writer = CommentWriter.Commenter { commenter with ValidationId = CommenterValidationId.create validationId |> ok } }
 
 type private FakeCommenterStore(commenters : Commenter list, comments : Comment list, postedAfterFirstRead : Comment list) =
   let commenters = ResizeArray commenters
@@ -562,16 +620,20 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
   interface DeleteCommenter.Dependencies with
     member _.GetCommenterByValidationId validationId =
       commenters |> Seq.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
-    member _.GetCommentsOfCommenter commenter =
+    member _.GetPostedCommentsOfCommenter commenter =
       let read =
         comments
-        |> Seq.filter (fun comment -> comment.Commenter.ValidationId = commenter.ValidationId)
+        |> Seq.filter (fun comment ->
+          Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId))
+        |> Seq.map (postedOn olderPost)
         |> List.ofSeq
       comments.AddRange postedAfterFirstRead
       postedAfterFirstRead.Clear()
       CancellableTaskResult.singleton read
-    member _.DeleteComment comment =
-      comments.RemoveAll(fun stored -> stored.Id = comment.Id) |> ignore
+    member _.GetRepliesOf topLevels =
+      repliesIn (comments |> Seq.map (postedOn olderPost)) topLevels |> CancellableTaskResult.singleton
+    member _.DeleteComment post comment =
+      comments.RemoveAll(fun stored -> post = olderPost.Id && stored.Id = comment.Id) |> ignore
       CancellableTaskResult.singleton ()
     member _.DeleteCommenter commenter =
       commenters.RemoveAll(fun stored -> stored.ValidationId = commenter.ValidationId) |> ignore
@@ -610,7 +672,7 @@ let private deleteTests =
       let store = FakeCommenterStore ([ commenter CommenterStatus.Banned ], commentsOfCommenter @ [ otherComment ])
 
       match deleteCommenter store with
-      | Ok (DeleteCommenter.Event.Deleted deleted) ->
+      | Ok (DeleteCommenter.Event.Deleted (deleted, _)) ->
         Expect.equal deleted.ValidationId (commenter CommenterStatus.Banned).ValidationId "Expected the deleted commenter"
         Expect.isEmpty store.Commenters "Expected no commenter in the store"
         Expect.equal store.Comments [ otherComment ] "Expected only the comment of another commenter"
@@ -655,6 +717,8 @@ type private FakeCommenterDependencies(existing : Commenter option, comments : P
   interface GetCommenter.Dependencies with
     member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton existing
     member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
+    member _.GetComment _ _ = CancellableTaskResult.singleton None
+    member _.GetRepliesOf _ = CancellableTaskResult.singleton []
     member _.Stage = TwoPoint.Site.Render.Stage.Production
 
 let private getCommenter (dependencies : FakeCommenterDependencies) =
@@ -679,7 +743,7 @@ let private commenterQueryTests =
 
       Expect.equal
         (getCommenter (FakeCommenterDependencies (Some (commenter CommenterStatus.Trusted), [ newest; oldest ])))
-        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] |> List.map rendered }))
+        (Ok (Some { Commenter = commenter CommenterStatus.Trusted; Comments = [ oldest; newest ] |> List.map rendered; OtherReplies = 0 }))
         "Expected the oldest comment first"
     }
 
@@ -688,8 +752,8 @@ let private commenterQueryTests =
 
       match getCommenter (FakeCommenterDependencies (Some (commenter CommenterStatus.Trusted), [ posted ])) with
       | Ok (Some { Comments = [ shown ] }) ->
-        Expect.equal shown.Comment.Html markdownHtml "Expected the HTML of the source"
-        Expect.equal shown.Comment.Comment posted.Comment "Expected the stored comment"
+        Expect.equal shown.Comment.Comment.Html markdownHtml "Expected the HTML of the source"
+        Expect.equal shown.Comment.Comment.Comment posted.Comment "Expected the stored comment"
       | other -> failtestf "Expected one comment, got %A" other
     }
 

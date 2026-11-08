@@ -4,6 +4,7 @@ open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -129,7 +130,7 @@ type PublishChanges(
           let postStore = PostStore(postStoreClient, logger, texts)
 
           let postDependencies =
-            PostDependencies(config.ValidRedirectUris |> List.map _.Uri, emailClient, config.Azure.EmailSender, tableServiceClient, logger)
+            PostDependencies(config.ValidRedirectUris |> List.map _.Uri, emailClient, config.Azure.EmailSender, tableServiceClient, SystemDependencies.live, logger)
 
           let rebuilder = SiteRebuilder(config, credential, environment, httpClientFactory, logger, tableServiceClient)
           let gate = PublishGateStore(config, images, parseCache, postStore)

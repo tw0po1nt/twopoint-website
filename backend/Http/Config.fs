@@ -19,6 +19,10 @@ type AzureConfig =
 type ValidRedirectUri =
   { Uri : Uri }
 
+/// `SiteUri` is the root URL of the site that each reply email links to.
+type ReplyEmailConfig =
+  { SiteUri : Uri }
+
 type WelcomeConfig =
   { Enabled : bool
     NewsletterContainerUri : Uri
@@ -49,6 +53,7 @@ type Config =
     WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
     Welcome : WelcomeConfig option
+    ReplyEmail : ReplyEmailConfig option
     Deploy : DeployConfig option
     Stage : TwoPoint.Site.Render.Stage }
 
@@ -115,6 +120,11 @@ module Config =
             UnsubscribeUri = unsubscribeUri }
       }
 
+      let! replyEmail = Bind.optSection "ReplyEmail" <| bind {
+        let! siteUri = Bind.valueAt "SiteUri" (Bind.uri UriKind.Absolute)
+        return { SiteUri = siteUri }
+      }
+
       let! deploy = Bind.optSection "Deploy" <| bind {
         let! productionRepo = Bind.valueAt "ProductionRepo" Bind.repo
         let! stagingRepo = Bind.valueAt "StagingRepo" Bind.repo
@@ -135,6 +145,7 @@ module Config =
           WebPush = webPush
           ValidRedirectUris = validRedirectUris
           Welcome = welcome
+          ReplyEmail = replyEmail
           Deploy = deploy
           Stage =
             if TwoPoint.Site.Render.Azurite.isUrl azure.PostStoreUri

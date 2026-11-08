@@ -1,9 +1,10 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -23,12 +24,30 @@ type AdminCommenterDto =
     Status : string
     CreatedDate : DateTime }
 
+/// `Excerpt` is the start of the plain text, and `Content` is the full HTML.
+type AdminTopLevelDto =
+  { Id : string
+    Commenter : AdminCommenterDto option
+    Writer : string
+    Status : string
+    Excerpt : string
+    Content : string
+    GetsReplyEmails : bool }
+
 type AdminCommentDto =
   { Id : string
     CreatedDate : DateTime
-    Commenter : AdminCommenterDto
+    Commenter : AdminCommenterDto option
     Status : string
-    Content : string }
+    Content : string
+    /// The ID of the top-level comment of a reply.
+    ReplyTo : string option
+    /// `commenter` or `author`. A comment from the author has no commenter.
+    Writer : string
+    TopLevel : AdminTopLevelDto option
+    /// The number of replies that a delete of the comment removes with it.
+    ReplyCount : int
+    GetsReplyEmails : bool }
 
 [<AutoOpen>]
 module CommentTypesExt =
@@ -37,17 +56,45 @@ module CommentTypesExt =
     member this.ToDto() =
       { AdminCommenterDto.Id = this.ValidationId.ToString()
         Email = this.EmailAddress.ToString()
-        Name = this.Name |> Option.map _.ToString() |> Option.defaultValue "Anonymous"
+        Name = Commenter.displayName this
         Status = this.Status.ToString()
         CreatedDate = this.CreatedDate }
+
+  let private writerName (writer : CommentWriter) =
+    match writer with
+    | CommentWriter.Commenter _ -> "commenter"
+    | CommentWriter.Author -> "author"
 
   type RenderedComment with
     member this.ToAdminDto() =
       { AdminCommentDto.Id = this.Comment.Id.ToString()
         CreatedDate = this.Comment.CreatedDate
-        Commenter = this.Comment.Commenter.ToDto()
+        Commenter = this.Comment |> Comment.commenter |> Option.map _.ToDto()
         Status = this.Comment.Status.Approval.ToString()
-        Content = this.Html }
+        Content = this.Html
+        ReplyTo = this.Comment.Parent |> Option.map string
+        Writer = writerName this.Comment.Writer
+        TopLevel = None
+        ReplyCount = 0
+        GetsReplyEmails = ReplyEmailRule.getsReplyEmails this.Comment }
+
+  type TopLevelComment with
+    member this.ToDto() =
+      let comment = this.Comment.Comment
+
+      { AdminTopLevelDto.Id = comment.Id.ToString()
+        Commenter = comment |> Comment.commenter |> Option.map _.ToDto()
+        Writer = writerName comment.Writer
+        Status = comment.Status.Approval.ToString()
+        Excerpt = this.Excerpt
+        Content = this.Comment.Html
+        GetsReplyEmails = ReplyEmailRule.getsReplyEmails comment }
+
+  type AdminComment with
+    member this.ToDto() =
+      { this.Comment.ToAdminDto() with
+          TopLevel = this.TopLevel |> Option.map _.ToDto()
+          ReplyCount = this.ReplyCount }
 
 type AdminGetCommentsForPost (
   config: Config,
@@ -80,6 +127,7 @@ type AdminGetCommentsForPost (
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let getCommentsForPost = TwoPoint.Core.Posts.Queries.GetCommentsForPost.withDependencies {
@@ -95,7 +143,7 @@ type AdminGetCommentsForPost (
         let apiResponse, statusCode =
           match commentsResult with
           | Ok (Some comments) ->
-            { Success = true; Message = None; Data = comments |> List.map _.ToAdminDto() |> Some }, HttpStatusCode.OK
+            { Success = true; Message = None; Data = comments |> List.map _.ToDto() |> Some }, HttpStatusCode.OK
           | Ok None ->
             { Success = false; Message = Some $"Post ''{slug}'' not found"; Data = None }, HttpStatusCode.NotFound
           | Error queryError when queryError.IsValidation ->

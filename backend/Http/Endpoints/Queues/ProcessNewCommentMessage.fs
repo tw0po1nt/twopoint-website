@@ -6,6 +6,7 @@ open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Notifications
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http
 open TwoPoint.Http.Endpoints
 
@@ -40,11 +41,16 @@ type ProcessNewCommentMessage(
         "Unable to process '{queue}' message. Failed to deserialize message from JSON",
         NewCommentQueue.Name
       )
+    | commentJson when isNull commentJson.Post ->
+      // A message from before `Post` has no partition for the read.
+      logger.LogError("Unable to process '{queue}' message of comment '{commentId}': no post", NewCommentQueue.Name, commentJson.CommentId)
+      failwith $"The '{NewCommentQueue.Name}' message of comment '{commentJson.CommentId}' has no post"
     | commentJson ->
       logger.LogInformation(
-        "Processing '{queue}' message of comment '{commentId}'",
+        "Processing '{queue}' message of comment '{commentId}' on post '{slug}'",
         NewCommentQueue.Name,
-        commentJson.CommentId
+        commentJson.CommentId,
+        commentJson.Post
       )
 
       let postDependencies = PostDependencies(
@@ -52,13 +58,14 @@ type ProcessNewCommentMessage(
         emailClient,
         config.Azure.EmailSender,
         tableServiceClient,
+        SystemDependencies.live,
         logger
       )
-      let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
-      let pushDependencies = PushDependencies(pushSetup, tableServiceClient, logger)
+      let deviceDependencies = DeviceDependencies(tableServiceClient, SystemDependencies.live, logger)
+      let pushDependencies = PushDependencies(pushSetup, tableServiceClient, SystemDependencies.live, logger)
 
       let notifyNewComment = NotifyNewComment.withDependencies { new NotifyNewComment.Dependencies with
-        member _.GetPostedComment commentId = postDependencies.GetPostedCommentById commentId
+        member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
         member _.CountNewComments () = postDependencies.CountNewComments()
         member _.GetDevicesOfAuthor () = deviceDependencies.GetDevicesOfUser Access.authorUserId
         member _.SendPush device payload = pushDependencies.SendPush device payload
@@ -66,7 +73,7 @@ type ProcessNewCommentMessage(
         member _.DeleteDevice device = deviceDependencies.DeleteDevice device
       }
 
-      match! ct |> notifyNewComment { NotifyNewComment.Dto.CommentId = commentJson.CommentId } with
+      match! ct |> notifyNewComment { NotifyNewComment.Dto.Post = commentJson.Post; CommentId = commentJson.CommentId } with
       | Ok (NotifyNewComment.Event.Notified notified) ->
         logger.LogInformation(
           "Notified the author of comment '{commentId}': {sent} sent, {removed} removed",

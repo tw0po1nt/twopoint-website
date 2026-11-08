@@ -21,9 +21,8 @@ type NewCommentPayload =
   { Case : NewCommentCase
     CommentId : string
     Slug : string
-    PostTitle : string
-    Commenter : string
-    Text : string
+    Title : string
+    Body : string
     NewCount : int }
 
 [<RequireQualifiedAccess>]
@@ -35,7 +34,7 @@ module NewCommentPayload =
   // JSON escapes a character outside the BMP as 12 octets, so these three limits keep the payload below `maxOctets`.
   let maxTitleLength = 100
   let maxCommenterLength = 60
-  /// The worker shows the first 120 characters of the plain text of the comment.
+  /// The notification shows the first 120 characters of the plain text of the comment.
   let maxTextLength = 120
 
   let private truncate (length : int) (text : string) =
@@ -49,22 +48,40 @@ module NewCommentPayload =
     | AwaitsModeration -> "awaits-moderation"
     | Approved -> "approved"
 
-  let ofComment (newCount : int) (posted : PostedComment) : NewCommentPayload option =
+  let private nameOf (commenter : Commenter) =
+    commenter.Name
+    |> Option.map NonEmptyString.value
+    |> Option.defaultValue (string commenter.EmailAddress)
+    |> truncate maxCommenterLength
+
+  /// `topLevel` is None for a top-level comment, and for a reply whose top-level comment is gone.
+  let ofComment (newCount : int) (topLevel : Comment option) (posted : PostedComment) : NewCommentPayload option =
     let comment = posted.Comment
-    let commenter =
-      comment.Commenter.Name
-      |> Option.map NonEmptyString.value
-      |> Option.defaultValue (string comment.Commenter.EmailAddress)
 
     let payload case =
-      Some
+      comment
+      |> Comment.commenter
+      |> Option.map (fun commenter ->
+        let name = nameOf commenter
+        let text = comment.Content |> NonEmptyString.value |> TwoPoint.Site.Render.CommentBody.plainText |> textOf |> truncate maxTextLength
+        let postTitle = posted.PostTitle |> NonEmptyString.value |> truncate maxTitleLength
+
+        let title, body =
+          match comment.Parent with
+          | Some _ ->
+            let topLevelName = topLevel |> Option.bind Comment.commenter |> Option.map nameOf |> Option.defaultValue "a comment"
+            $"{name} replied to {topLevelName}", text
+          | None ->
+            match case with
+            | AwaitsModeration -> $"New comment on {postTitle}", $"{name}: {text}"
+            | Approved -> $"Comment posted on {postTitle}", $"{name}: {text}"
+
         { Case = case
           CommentId = string comment.Id
           Slug = Slug.value posted.Post
-          PostTitle = posted.PostTitle |> NonEmptyString.value |> truncate maxTitleLength
-          Commenter = commenter |> truncate maxCommenterLength
-          Text = comment.Content |> NonEmptyString.value |> TwoPoint.Site.Render.CommentBody.plainText |> textOf |> truncate maxTextLength
-          NewCount = newCount }
+          Title = title
+          Body = body
+          NewCount = newCount })
 
     match comment.Status.Approval with
     | CommentApproval.New -> payload AwaitsModeration
@@ -79,9 +96,8 @@ module NewCommentPayload =
       {| ``case`` = caseName payload.Case
          commentId = payload.CommentId
          slug = payload.Slug
-         postTitle = payload.PostTitle
-         commenter = payload.Commenter
-         text = payload.Text
+         title = payload.Title
+         body = payload.Body
          newCount = payload.NewCount |},
       options
     )
@@ -89,7 +105,9 @@ module NewCommentPayload =
 [<RequireQualifiedAccess>]
 module NotifyNewComment =
 
-  type Dto = { CommentId : string }
+  type Dto =
+    { Post : string
+      CommentId : string }
 
   type Error = unit
 
@@ -100,7 +118,7 @@ module NotifyNewComment =
   type Action = Dto -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetPostedComment: CommentId -> DependencyResult<PostedComment option>
+    abstract member GetPostedComment: post: Slug -> commentId: CommentId -> DependencyResult<PostedComment option>
     abstract member CountNewComments: unit -> DependencyResult<int>
     abstract member GetDevicesOfAuthor: unit -> DependencyResult<RegisteredDevice list>
     abstract member SendPush: RegisteredDevice -> payload: byte array -> DependencyResult<PushOutcome>
@@ -109,22 +127,32 @@ module NotifyNewComment =
 
   let withDependencies (dependencies : Dependencies) : Action =
     fun dto -> cancellableTaskResult {
-      let! commentId =
-        CommentId.create dto.CommentId
+      let! post, commentId =
+        validation {
+          let! post = Slug.create dto.Post
+          and! commentId = CommentId.create dto.CommentId
+          return post, commentId
+        }
         |> Result.mapError ActionError<Error>.Validation
 
       let! posted =
-        dependencies.GetPostedComment commentId
+        dependencies.GetPostedComment post commentId
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
       match posted with
       | None -> return Skipped commentId
-      | Some posted ->
+      | Some (posted : PostedComment) ->
         let! newCount =
           dependencies.CountNewComments()
           |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-        match NewCommentPayload.ofComment newCount posted with
+        let! topLevel =
+          posted.Comment.Parent
+          |> Option.traverseCancellableTaskResult (dependencies.GetPostedComment posted.Post)
+          |> CancellableTaskResult.map (Option.flatten >> Option.map (fun (topLevel : PostedComment) -> topLevel.Comment))
+          |> CancellableTaskResult.mapError ActionError<Error>.Dependency
+
+        match NewCommentPayload.ofComment newCount topLevel posted with
         | None -> return Skipped commentId
         | Some payload ->
           let! devices =

@@ -38,8 +38,8 @@ const buttons = (id) => [...row(id).querySelectorAll('.actions button')].map((it
 const navCount = () => count('nav.side-nav a[href="/comments"]');
 
 test('a row of a new commenter offers Approve and trust, and a row of a trusted commenter does not', () => {
-  assert.deepEqual(buttons('c-1'), ['Approve', 'Approve and trust', 'Reject', 'Delete']);
-  assert.deepEqual(buttons('c-2'), ['Approve', 'Reject', 'Delete']);
+  assert.deepEqual(buttons('c-1'), ['Approve', 'Approve and trust', 'Reject', 'Delete', 'Reply and approve']);
+  assert.deepEqual(buttons('c-2'), ['Approve', 'Reject', 'Delete', 'Reply and approve']);
 });
 
 test('Approve and trust trusts the commenter, then approves the comment and removes the row', async () => {
@@ -53,7 +53,7 @@ test('Approve and trust trusts the commenter, then approves the comment and remo
   assert.equal(row('c-1'), null);
   assert.equal(navCount(), '4');
   assert.match(row('c-4').textContent, /Trusted/);
-  assert.deepEqual(buttons('c-4'), ['Approve', 'Reject', 'Delete']);
+  assert.deepEqual(buttons('c-4'), ['Approve', 'Reject', 'Delete', 'Reply and approve']);
 });
 
 test('a refused trust sends no approval, keeps the row, and shows the reason', async () => {
@@ -75,6 +75,6 @@ test('a failed approval after the trust shows the trust and the reason, and keep
   ]);
   assert.match(row('c-5').querySelector('.alert').textContent, /Couldn't approve the comment\. Comment is approved/);
   assert.match(row('c-5').textContent, /Trusted/);
-  assert.deepEqual(buttons('c-5'), ['Approve', 'Reject', 'Delete']);
+  assert.deepEqual(buttons('c-5'), ['Approve', 'Reject', 'Delete', 'Reply and approve']);
   assert.equal(navCount(), '4');
 });

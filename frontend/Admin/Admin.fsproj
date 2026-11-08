@@ -21,6 +21,8 @@
     <Compile Include="Upload.fs" />
     <Compile Include="Session.fs" />
     <Compile Include="Rebuild.fs" />
+    <Compile Include="AuthorReply.fs" />
+    <Compile Include="ReplyContext.fs" />
     <Compile Include="Queue.fs" />
     <Compile Include="Deploy.fs" />
     <Compile Include="SiteDeploy.fs" />

@@ -14,9 +14,16 @@ series with `series: <slug>`. A copy of the 10 posts and the 2 series records at
 Git is the test fixture in `frontend/Generator.Tests/posts/`. `dotnet test` reads the fixture and
 never reads the post store.
 
+`frontend/Widgets/` and `frontend/Admin/` each pin a Node major version in `.node-version`. On an
+older Node, `engines` in `package.json` and `engine-strict` in `.npmrc` stop `npm ci`. The scripts
+`prebuild`, `prewatch`, and `pretest` run `frontend/check-node.mjs`, which stops `npm run build`,
+`npm run watch`, and `npm test`. Run `nvm use` in the package to select the pinned Node. A change
+of the pin needs the same change to `engines.node`, or the check fails.
+
 To build the site, first run `npm ci` and `npm run build` in `frontend/Widgets/`. That build
 compiles the widgets with Fable and writes `frontend/Widgets/dist/`. `npm test` in
-`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. Then run
+`frontend/Widgets/` then runs each widget entry of `dist/` in happy-dom. It also checks the Node
+pin of each Fable package. Then run
 `dotnet run --project frontend/Generator -- pull --account <name>`. The command downloads each blob
 in `published` and `series` into `frontend/content/posts/`, which Git ignores. It uses
 `DefaultAzureCredential`, so on the local stage it uses your `az login`. The account name is in the
@@ -114,10 +121,69 @@ count comes from the queue that the admin loads at the start. Each count opens i
 filter. The filter of the post list and of the Subscriptions page is part of the route and of the
 URL, for example `/posts?filter=drafts`. "All" has no query string.
 
+`Admin-Posts-Comments-Reply` (`POST internal/posts/{slug}/comments/{commentId}/replies`) writes a
+reply from the author. The rule is the pure function `AuthorReplyRule.place`. A reply to a rejected
+comment gets `409`. A reply on a reply row goes to the top-level comment of the thread. When the
+comment is new, the action approves it before the reply, and also its top-level comment if that
+comment is new. The reply is approved, has no commenter, and sends no Web Push. The queue and the
+comments of a post show the reply form under the row.
+
+The queue, the comments of a post, and the commenter page give the top-level comment of each reply,
+with its ID, writer, approval, HTML, and a plain-text excerpt of 200 characters. The rule is the
+pure function `AdminComment.ofComments`. A reply row in the queue and on the commenter page shows
+"Reply to <name>" and the excerpt, and the excerpt opens the HTML. The comments of a post show
+each thread, with the replies indented under the top-level comment. Each comment count includes
+the replies.
+
+Each top-level comment in these answers gives `getsReplyEmails`. The flag is true when the
+commenter gets reply emails now: a consent, no stop, and no ban. The rule is the pure function
+`ReplyEmailRule.getsReplyEmails`. The top-level comment of a reply gives the flag too. When the
+flag of the top-level comment is true, the author reply form shows "<name> gets an email with
+this reply."
+
+`Admin-Posts-Comments-Delete` and `Admin-Commenters-Delete` follow the pure function
+`CommentDeleteRule`. A delete of a top-level comment removes its thread, also a reply from the
+author. A delete of a commenter removes each comment of the commenter and each thread that a comment
+of the commenter starts. A reply of the commenter in another thread goes alone. The replies go
+before the top-level comment, so a second try after a failure finds each thread that stays. After
+the top-level comment goes, each delete reads its replies again and deletes each reply that a
+reader posts during the delete. A second try after a failure does not find that reply. Each admin
+comment gives `replyCount`, and the commenter page gives `otherReplies`. The confirm dialog of each
+delete shows that number.
+
+The page form of the Comments widget has the checkbox "email me when someone replies". The reply
+form has no checkbox. A checked `replyEmails` on `POST blog/posts/{slug}/comments` stores the
+reply-email consent on the top-level comment, with its date and a stop token. The backend also
+writes a row from the token to the post slug and the comment ID in the table `replyEmailStops`.
+A request with `replyTo` and `replyEmails` gets `400`. A comment with no consent sends no reply
+email.
+
+The stop page `/comments/stop/?token=<token>` has the `stop-reply-emails` widget. The widget reads
+the state of the token with `GET blog/reply-emails/{token}`: `active` with the post title,
+`stopped`, or `unknown`. A deleted comment or a token that is not a GUID is `unknown`. Only the
+button `[stop reply emails]` sends `POST blog/reply-emails/{token}/stop`, so a mail scanner that
+opens the link stops nothing. The stop writes the stop date on the consent of that one comment. A
+second stop answers `stopped` and writes nothing. The rule is the pure module
+`ReplyEmailStopRule`. The widget build names each entry with the kebab case of its file name, so
+`Entries/StopReplyEmails.fs` is the entry `stop-reply-emails`.
+
 `Blog-Posts-PostComment` puts each new comment on the Service Bus queue `new_comment`. The function
 `Queues-ProcessNewCommentMessage` sends a Web Push to each registered device. The worker `sw.js`
 builds the notification and sets the app badge. Run `scripts/setup-new-comment-queue.sh` before a
 deploy to create the queue.
+
+Each first approval of a reply puts the slug and the reply ID on the Service Bus queue
+`reply_email`: a reply that a trusted commenter or the author posts, and a change of a reply from
+new to approved. A change from rejected to approved puts nothing on the queue. The rule is the pure
+function `ReplyEmailRule.isFirstApproval`. The function `Queues-ProcessReplyEmailMessage` applies
+the gate `ReplyEmailRule.check` again, also for a ban of the recipient, and sends the reply email
+through ACS. The pure function `ReplyEmailContent.compose` makes the subject, the HTML, and the
+plain text. The function writes `ReplyEmailSentDate` on the reply after ACS accepts the email, and
+it skips a reply that has that date, so a retry sends no second email. A message that fails each
+retry goes to the dead-letter queue. The setting `ReplyEmail:SiteUri` is the root URL of the site
+that each email links to. On the local stage it is `http://localhost:4321/`. Run
+`scripts/setup-reply-email-queue.sh` before a deploy. It creates the queue and sets
+`ReplyEmail:SiteUri` on the Function App.
 
 The backend reads the post store for the post list. The setting `Azure:PostStoreUri` names the
 account. On the local stage it is the Azurite URL. `scripts/setup-post-store-access.sh` gives the
@@ -168,9 +234,9 @@ link. This rule is the backstop for a harness that adds the link in spite of tha
 
 - Prose: `docs/standards/technical-prose.md`. Apply the `simplified-technical-english` skill to
   all prose. `.banned-patterns` contains the forbidden forms. `scripts/check-banned-patterns.sh`
-  reads Markdown files, and the comments and strings of F# files. The check skips the posts
-  of the test fixture in `frontend/Generator.Tests/posts/`. The hook also
-  checks the text of `git commit` and of `gh` issue and PR commands.
+  reads Markdown files, and the comments and strings of F# and JavaScript files. The check skips
+  the posts of the test fixture in `frontend/Generator.Tests/posts/`. The hook also checks the text
+  of `git commit` and of `gh` issue and PR commands.
   `.github/workflows/pr-text.yml` checks the title, the body, and the commits of each PR.
 - UI copy: `docs/standards/ui-copy.md`. UI copy is each string that a person sees in the admin,
   on the site, in an email, or in a push notification. It follows that document, and the STE

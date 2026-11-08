@@ -15,13 +15,11 @@ open Microsoft.Extensions.Logging
 
 open System
 
-type PushDependencies(
+type PushDependencies internal (
   setup : WebPushSetup,
-  tableServiceClient : TableServiceClient,
-  logger : ILogger
+  commsDb : ICommsDb,
+  system : ISystemDependencies
 ) =
-
-  let commsDb = CommsDb.live tableServiceClient logger
 
   /// A push service keeps a message for this long when the device is offline.
   let timeToLive = TimeSpan.FromDays 1.
@@ -32,9 +30,9 @@ type PushDependencies(
 
   let record (device : RegisteredDevice) (operationId : string) : DependencyResult<unit> = cancellableTaskResult {
     let push =
-      { DbPush.Id = Guid.NewGuid().ToString()
+      { DbPush.Id = system.NewGuid().ToString()
         OperationId = operationId
-        CreatedDate = DateTime.UtcNow
+        CreatedDate = system.GetUtcNow()
         Recipient = device.Id.ToString() }
 
     let! (_ : DbPush) = commsDb.CreatePush push
@@ -59,3 +57,6 @@ type PushDependencies(
 
   member _.RecordRunPush (device : RegisteredDevice) (run : SiteRun) =
     record device $"site-run:{DeployRows.runPartition run.Repo}:{run.Number.Value}:{run.Attempt.Value}"
+
+  new(setup : WebPushSetup, tableServiceClient : TableServiceClient, system : ISystemDependencies, logger : ILogger) =
+    PushDependencies(setup, CommsDb.live tableServiceClient logger, system)

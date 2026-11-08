@@ -24,6 +24,8 @@
     <Compile Include="Notifications\DevicePush.fs" />
     <Compile Include="Deploys\DeployState.fs" />
     <Compile Include="Posts\PostTypes.fs" />
+    <Compile Include="Posts\CommentThreads.fs" />
+    <Compile Include="Posts\ReplyEmails.fs" />
     <Compile Include="Deploys\DeployTypes.fs" />
     <Compile Include="Deploys\DeployRule.fs" />
     <Compile Include="Posts\DeliveryGate.fs" />
@@ -35,6 +37,7 @@
     <Compile Include="Posts\AssetActions.fs" />
     <Compile Include="Posts\PostQueries.fs" />
     <Compile Include="Posts\PostPreview.fs" />
+    <Compile Include="Posts\ReplyEmailStops.fs" />
     <Compile Include="Notifications\NewCommentActions.fs" />
     <Compile Include="Subscriptions\SubscriptionTypes.fs" />
     <Compile Include="Subscriptions\SubscriptionActions.fs" />

@@ -1,10 +1,11 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -47,18 +48,27 @@ type DeleteComment(
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let deleteComment = DeleteComment.withDependencies {
           new DeleteComment.Dependencies with
           
-          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
-          member _.DeleteComment comment = postDependencies.DeleteComment comment
+          member _.GetPostedComment post commentId = postDependencies.GetPostedComment post commentId
+          member _.GetRepliesOf topLevels = postDependencies.GetRepliesOf topLevels
+          member _.DeleteComment post comment = postDependencies.DeleteComment post comment
         }
 
-        let deletion = { CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
+        let deletion =
+          { CommentDeletion.Dto.Post = CommentDeletion.Post slug
+            CommentDeletion.Dto.CommentId = CommentDeletion.CommentId commentId }
 
         let! deletionResult = ct |> deleteComment deletion
+
+        match deletionResult with
+        | Ok (DeleteComment.Event.Deleted (deletedId, others)) ->
+          logger.LogInformation("Deleted comment '{commentId}' with {others} replies", deletedId.ToString(), others)
+        | Error _ -> ()
         let apiResponse, statusCode =
           deletionResult
           |> ActionResult.toApiResponse

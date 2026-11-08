@@ -1,10 +1,11 @@
 namespace TwoPoint.Dependencies.Posts
 
-open TwoPoint.Dependencies.Comms
 open TwoPoint.Core.Posts
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Shared
 open TwoPoint.Core.Util
+open TwoPoint.Dependencies.Comms
+open TwoPoint.Dependencies.Util
 
 open Azure.Communication.Email
 open Azure.Data.Tables
@@ -19,38 +20,42 @@ open System.Web
 type EmailAddress = TwoPoint.Core.Shared.EmailAddress
 type EmailMessage = TwoPoint.Dependencies.Comms.EmailMessage
 
-type PostDependencies(
+type PostDependencies internal (
   validRedirectUris : Uri list,
-  emailClient : EmailClient,
-  emailSender : EmailAddress,
-  tableServiceClient : TableServiceClient,
+  postDb : IPostDb,
+  commsService : ICommsService,
+  system : ISystemDependencies,
   logger : ILogger
 ) =
 
-  let statsForApproval = function
-    | "new" ->
-      { New = 1u; Approved = 0u; Rejected = 0u }
-    | "approved" ->
-      { New = 0u; Approved = 1u; Rejected = 0u }
-    | "rejected" ->
-      { New = 0u; Approved = 0u; Rejected = 1u }
-    | _ -> PostCommentStats.Zero
-
-  let postDb = PostDb.live tableServiceClient logger
-  let commsService = CommsService.live emailClient tableServiceClient logger emailSender
+  let statsOf (dbComments : (DbComment * DbCommentWriter * DbCommentStatus) list) =
+    dbComments
+    |> List.choose (fun (comment, writer, status) ->
+      match comment.ToComment(status, writer) with
+      | Ok comment -> Some comment
+      | Error errors ->
+        logger.LogWarning(
+          "Comment '{commentId}' is not valid ({errors}). The comment counts leave it out.",
+          comment.Id,
+          String.Join("; ", errors)
+        )
+        None)
+    |> PostCommentStats.OfComments
 
   let source = Dependency.Database
 
+  let newId () = system.NewGuid().ToString()
+
   let allApprovals = CommentApproval.all |> List.map _.ToString()
 
-  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommenter * DbCommentStatus) list, DependencyError>) =
+  let postedComments (readComments : CancellableTaskResult<(DbComment * DbCommentWriter * DbCommentStatus) list, DependencyError>) =
     cancellableTaskResult {
       let! dbPosts, dbComments = CancellableTaskResult.parallelZip (postDb.GetAllPosts()) readComments
       return!
         dbComments
-        |> List.traverseValidationA (fun (comment: DbComment, commenter, status) ->
+        |> List.traverseValidationA (fun (comment: DbComment, writer, status) ->
           let post = dbPosts |> List.tryFind (fun (post: DbPost) -> post.Slug = comment.PostId)
-          comment.ToPostedComment(post, status, commenter))
+          comment.ToPostedComment(post, status, writer))
         |> DependencyError.ofValidation source
     }
 
@@ -67,13 +72,7 @@ type PostDependencies(
     return!
       ([], dbPostsAndComments)
       ||> TaskSeq.fold (fun s (post, comments) ->
-        let stats =
-          ({ New = 0u; Approved = 0u; Rejected = 0u }, comments)
-          ||> List.fold (fun stats (_, _, status: DbCommentStatus) ->
-            let updates = statsForApproval status.Approval
-            stats + updates
-          )
-        post.ToPost(stats)
+        post.ToPost(statsOf comments)
         |> Result.toOption
         |> Option.map (fun p -> p.Info :: s)
         |> Option.defaultValue s
@@ -87,16 +86,9 @@ type PostDependencies(
       |> Option.traverseCancellableTaskResult (postDb.GetCommentsForPost allApprovals)
       |> CancellableTaskResult.map (Option.defaultValue [])
 
-    let commentStats =
-      ({ New = 0u; Approved = 0u; Rejected = 0u }, dbComments)
-      ||> List.fold (fun stats (_, _, status: DbCommentStatus) ->
-        let updates = statsForApproval status.Approval
-        stats + updates
-      )
-
     return!
       dbPost
-      |> Option.traverseResult (fun (dbo: DbPost) -> dbo.ToPost(commentStats))
+      |> Option.traverseResult (fun (dbo: DbPost) -> dbo.ToPost(statsOf dbComments))
       |> DependencyError.ofValidation source
   }
 
@@ -149,10 +141,10 @@ type PostDependencies(
 
   member _.CreateCommenter emailAddress name status = cancellableTaskResult {
     let newCommenter =
-      { ValidationId = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { ValidationId = newId ()
         DbCommenter.EmailAddress = emailAddress |> EmailAddress.value
         Name = name |> Option.map NonEmptyString.value
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
+        CreatedDate = system.GetUtcNow()
         Status = status.ToString().ToLower() } 
 
     let! (dbCommenter: DbCommenter) = postDb.CreateCommenter newCommenter
@@ -194,8 +186,21 @@ type PostDependencies(
     return!
       dbComments
       |> List.traverseValidationA (
-        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
+        fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer)
       )
+      |> DependencyError.ofValidation source
+  }
+
+  /// Each reply under one of the top-level comments, with each approval.
+  member _.GetRepliesOf (topLevels : PostedComment list) = cancellableTaskResult {
+    let! dbComments =
+      topLevels
+      |> List.map (fun (topLevel : PostedComment) -> Slug.value topLevel.Post, string topLevel.Comment.Id)
+      |> postDb.GetRepliesOf allApprovals
+
+    return!
+      dbComments
+      |> List.traverseValidationA (fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer))
       |> DependencyError.ofValidation source
   }
 
@@ -208,7 +213,7 @@ type PostDependencies(
     return!
       dbComments
       |> List.traverseValidationA (
-        fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter)
+        fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer)
       )
       |> DependencyError.ofValidation source
   }
@@ -218,46 +223,113 @@ type PostDependencies(
 
   member _.DeleteCommenter (commenter : Commenter) = commenter.ValidationId.ToString() |> postDb.DeleteCommenter
 
-  member _.GetCommentById commentId = cancellableTaskResult {
-    let! dbComment = postDb.GetCommentById (commentId.ToString())
+  member _.GetComment (post : Slug) (commentId : CommentId) = cancellableTaskResult {
+    let! dbComment = postDb.GetComment (Slug.value post) (commentId.ToString())
 
     return!
       dbComment
-      |> Option.traverseValidation (fun (comment: DbComment, commenter, status) -> comment.ToComment(status, commenter))
+      |> Option.traverseValidation (fun (comment: DbComment, writer, status) -> comment.ToComment(status, writer))
       |> DependencyError.ofValidation source
   }
 
-  member _.CreateComment (post : Post) (commenter : Commenter) (newComment : NewComment) (approval : CommentApproval) = cancellableTaskResult {
+  member _.CreateComment
+    (id : CommentId)
+    (post : Post)
+    (commenter : Commenter)
+    (newComment : NewComment)
+    (topLevel : Comment option)
+    (approval : CommentApproval)
+    (replyEmails : ReplyEmailConsent option)
+    = cancellableTaskResult {
     let newDbComment =
-      { DbComment.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
-        PostId = post.Id |> Slug.value
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
-        Content = newComment.Content |> NonEmptyString.value
-        CommenterId = commenter.ValidationId.ToString() }
+      DbComment.OfCommenter(
+        string id,
+        system.GetUtcNow(),
+        post.Id,
+        commenter,
+        newComment.Content,
+        topLevel,
+        replyEmails
+      )
     let newDbStatus =
-      { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { DbCommentStatus.Id = newId ()
         CommentId = newDbComment.Id
         CreatedDate = newDbComment.CreatedDate
         Approval = approval.ToString().ToLower() }
 
-    let! (dbComment: DbComment, dbCommenter, dbCommentStatus) =
+    let! (dbComment: DbComment, dbWriter, dbCommentStatus) =
       postDb.CreateComment newDbComment newDbStatus
 
     return!
-      dbComment.ToComment(dbCommentStatus, dbCommenter)
+      dbComment.ToComment(dbCommentStatus, dbWriter)
       |> DependencyError.ofValidation source
   }
 
-  member _.GetPostedCommentById (commentId : CommentId) = cancellableTaskResult {
-    let! dbComment = postDb.GetCommentById (commentId.ToString())
+  member _.CreateReplyEmailStop (stop : ReplyEmailStop) =
+    postDb.CreateReplyEmailStop (DbReplyEmailStop.OfStop stop) |> CancellableTaskResult.ignore
+
+  member _.GetReplyEmailStop (token : ReplyEmailStopToken) = cancellableTaskResult {
+    let! (stop : DbReplyEmailStop option) = postDb.GetReplyEmailStop (token.ToString())
+
+    return!
+      stop
+      |> Option.traverseValidation _.ToStop()
+      |> DependencyError.ofValidation source
+  }
+
+  member _.UpdateReplyEmailConsent (post : Slug) (comment : CommentId) (consent : ReplyEmailConsent) =
+    postDb.UpdateReplyEmailConsent (Slug.value post) (comment.ToString()) consent
+
+  member _.GetReplyEmailRecord (post : Slug) (reply : CommentId) =
+    postDb.GetReplyEmailSentDate (Slug.value post) (reply.ToString())
+    |> CancellableTaskResult.map (function
+      | Some sentDate -> ReplyEmailRecord.Sent sentDate
+      | None -> ReplyEmailRecord.NotSent)
+
+  member _.RecordReplyEmailSent (post : Slug) (reply : CommentId) (sentDate : DateTime) =
+    postDb.RecordReplyEmailSent (Slug.value post) (reply.ToString()) sentDate
+
+  member _.SendReplyEmail (recipient : EmailAddress) (content : ReplyEmailContent) = cancellableTaskResult {
+    let! (message : EmailMessage) =
+      EmailMessage.createWithPlainText content.Subject content.Html content.Text recipient
+      |> DependencyError.ofValidation Dependency.Communications
+
+    return! commsService.SendEmail message |> CancellableTaskResult.ignore
+  }
+
+  member _.CreateAuthorReply (post : Slug) (topLevel : Comment) (content : NonEmptyString) (approval : CommentApproval) = cancellableTaskResult {
+    let newDbComment =
+      DbComment.OfAuthorReply(
+        newId (),
+        system.GetUtcNow(),
+        post,
+        content,
+        topLevel
+      )
+    let newDbStatus =
+      { DbCommentStatus.Id = newId ()
+        CommentId = newDbComment.Id
+        CreatedDate = newDbComment.CreatedDate
+        Approval = approval.ToString().ToLower() }
+
+    let! (dbComment: DbComment, dbWriter, dbCommentStatus) =
+      postDb.CreateComment newDbComment newDbStatus
+
+    return!
+      dbComment.ToComment(dbCommentStatus, dbWriter)
+      |> DependencyError.ofValidation source
+  }
+
+  member _.GetPostedComment (post : Slug) (commentId : CommentId) = cancellableTaskResult {
+    let! dbComment = postDb.GetComment (Slug.value post) (commentId.ToString())
 
     match dbComment with
     | None -> return None
-    | Some (comment : DbComment, commenter, status) ->
+    | Some (comment : DbComment, writer, status) ->
       let! dbPost = postDb.GetPostBySlug comment.PostId
 
       return!
-        comment.ToPostedComment(dbPost, status, commenter)
+        comment.ToPostedComment(dbPost, status, writer)
         |> Result.map Some
         |> DependencyError.ofValidation source
   }
@@ -267,9 +339,9 @@ type PostDependencies(
 
   member _.UpdateCommentApproval (comment : Comment) approval = cancellableTaskResult {
     let newStatus =
-      { DbCommentStatus.Id = Guid.NewGuid().ToString() // todo: model as ISystemDependencies
+      { DbCommentStatus.Id = newId ()
         CommentId = comment.Id.ToString()
-        CreatedDate = DateTime.UtcNow // todo: model as ISystemDependencies
+        CreatedDate = system.GetUtcNow()
         Approval = approval.ToString().ToLower() }
 
     let! (dbCommentStatus: DbCommentStatus) = postDb.UpdateCommentStatus newStatus
@@ -277,6 +349,22 @@ type PostDependencies(
     return { comment with Status = status }
   }
 
-  member _.DeleteComment (comment : Comment) = comment.Id.ToString() |> postDb.DeleteComment
+  member _.DeleteComment (post : Slug) (comment : Comment) = postDb.DeleteComment (Slug.value post) (comment.Id.ToString())
 
   member _.GetValidRedirectUris () = CancellableTaskResult.singleton validRedirectUris
+
+  new(
+    validRedirectUris : Uri list,
+    emailClient : EmailClient,
+    emailSender : EmailAddress,
+    tableServiceClient : TableServiceClient,
+    system : ISystemDependencies,
+    logger : ILogger
+  ) =
+    PostDependencies(
+      validRedirectUris,
+      PostDb.live tableServiceClient logger,
+      CommsService.live emailClient tableServiceClient system logger emailSender,
+      system,
+      logger
+    )

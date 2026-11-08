@@ -3,6 +3,7 @@ namespace TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Core.Notifications.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Notifications
+open TwoPoint.Dependencies.Util
 open TwoPoint.Http.Endpoints
 
 open Azure.Data.Tables
@@ -37,7 +38,7 @@ type DeletePushDevice(
         let response = req.CreateResponse HttpStatusCode.OK
 
         // Dependencies
-        let deviceDependencies = DeviceDependencies(tableServiceClient, logger)
+        let deviceDependencies = DeviceDependencies(tableServiceClient, SystemDependencies.live, logger)
         let removeDevice = RemovePushDevice.withDependencies {
           new RemovePushDevice.Dependencies with
 

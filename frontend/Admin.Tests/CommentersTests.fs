@@ -21,9 +21,13 @@ let private posted id (commenter: Api.Commenter) approval : Api.PostedComment =
     Comment =
       { Id = id
         CreatedDate = "2026-02-01T00:00:00Z"
-        Commenter = commenter
+        Writer = Api.Writer.Commenter commenter
         Status = approval
-        Content = "A comment" } }
+        Content = "A comment"
+        ReplyTo = None
+        TopLevel = None
+        ReplyCount = 0
+        GetsReplyEmails = false } }
 
 let private waiting = posted "waiting" ada Api.CommentApproval.New
 let private approved = posted "approved" ada Api.CommentApproval.Approved
@@ -44,10 +48,20 @@ let private send msg model = Shell.update (Shell.Commenter msg) model
 
 let private opened () =
   let model, _ = start "/commenters/ada"
-  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [ waiting; approved ] })) model
+  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [ waiting; approved ]; OtherReplies = 0 })) model
   model
 
 let private page (model: Shell.Model) = model.Commenter |> Option.get
+
+/// The count and the text of the delete dialog of a commenter with `otherReplies` replies from others in their threads.
+let private deleteDialogWith (otherReplies: int) =
+  let model, _ = start "/commenters/ada"
+
+  let model, _ =
+    send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [ waiting; approved ]; OtherReplies = otherReplies })) model
+
+  let model, _ = Shell.update (Shell.Opened Shell.DeleteCommenterDialog) model
+  Shell.deleteCommenterOtherReplies model, Shell.deleteCommenterOtherReplies model |> Option.map Commenter.deleteText
 
 let private loaded (model: Shell.Model) =
   match (page model).Page with
@@ -118,7 +132,7 @@ let private pageTests =
 
     test "an answer for another commenter changes nothing" {
       let model, _ = start "/commenters/grace"
-      let next, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = [] })) model
+      let next, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = []; OtherReplies = 0 })) model
       Expect.equal next model "The page still waits for its own commenter"
     }
 
@@ -178,6 +192,27 @@ let private pageTests =
       Expect.equal page.Commenter.Status Api.New "The status stays"
     }
 
+    test "the delete dialog gives the number of replies from others that go with the commenter" {
+      Expect.equal
+        (deleteDialogWith 2)
+        (Some 2,
+         Some
+           "This deletes the commenter, all their comments, and 2 other replies in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone.")
+        "Two replies"
+
+      Expect.equal
+        (deleteDialogWith 1 |> snd)
+        (Some
+          "This deletes the commenter, all their comments, and 1 other reply in their threads. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone.")
+        "One reply"
+
+      Expect.equal
+        (deleteDialogWith 0 |> snd)
+        (Some
+          "This deletes the commenter and all their comments. They can verify their email again later as a new commenter. To stop them from commenting, ban them instead. This can't be undone.")
+        "No reply"
+    }
+
     test "a delete with no confirmation sends nothing" {
       let _, effect = send (Commenter.Chosen Commenter.Delete) (opened ())
       Expect.isNone effect "No call"
@@ -214,5 +249,68 @@ let private pageTests =
     }
   ]
 
+let private replyTo (topLevelId: string) approval (comment: Api.PostedComment) =
+  { comment with
+      Comment.ReplyTo = Some topLevelId
+      Comment.TopLevel =
+        Some
+          { Id = topLevelId
+            Writer = Api.Writer.Commenter grace
+            Status = approval
+            Excerpt = "Why does List.map keep the order?"
+            Content = "<p>Why does <code>List.map</code> keep the order?</p>"
+            GetsReplyEmails = false } }
+
+let private withReplies (comments: Api.PostedComment list) =
+  let model, _ = start "/commenters/ada"
+  let model, _ = send (Commenter.Answered("ada", Ok { Commenter = ada; Comments = comments; OtherReplies = 0 })) model
+  model
+
+let private topLevelOf (commentId: string) (model: Shell.Model) =
+  (fst (loaded model)).Comments
+  |> List.find (fun comment -> comment.Comment.Id = commentId)
+  |> _.Comment.TopLevel
+
+let private contextTests =
+  testList "the reply context on the commenter page" [
+    test "the page stays a flat list, and each reply names its top-level comment and shows its excerpt" {
+      let model = withReplies [ waiting |> replyTo "graces-comment" Api.CommentApproval.Approved; approved ]
+      Expect.equal ((fst (loaded model)).Comments |> List.map _.Comment.Id) [ "waiting"; "approved" ] "The flat list"
+
+      let context = topLevelOf "waiting" model |> Option.get
+      Expect.equal (ReplyContext.replyLine context) "Reply to grace" "The reply line"
+      Expect.equal context.Excerpt "Why does List.map keep the order?" "The excerpt"
+      Expect.isNone (topLevelOf "approved" model) "A top-level comment has no reply line"
+    }
+
+    test "the excerpt opens the full text of the top-level comment, and a second click closes it" {
+      let model = withReplies [ waiting |> replyTo "graces-comment" Api.CommentApproval.Approved ]
+      let model, effect = send (Commenter.TopLevelToggled "waiting") model
+      Expect.isNone effect "No call"
+      Expect.equal (page model).Opened (set [ "waiting" ]) "The full text"
+      Expect.equal (topLevelOf "waiting" model |> Option.map _.Content) (Some "<p>Why does <code>List.map</code> keep the order?</p>") "The full HTML"
+
+      let model, _ = send (Commenter.TopLevelToggled "waiting") model
+      Expect.isEmpty (page model).Opened "The excerpt again"
+    }
+
+    test "a reply under a rejected top-level comment tells the author that readers won't see it" {
+      let model = withReplies [ waiting |> replyTo "graces-comment" Api.CommentApproval.Rejected ]
+
+      Expect.equal
+        (topLevelOf "waiting" model |> Option.bind ReplyContext.rejectedNote)
+        (Some "Readers won't see this reply, because grace's comment is rejected.")
+        "The note"
+    }
+
+    test "a ban rejects the new top-level comment of the commenter, and each reply under it gets the note" {
+      let ownReply = approved |> replyTo "waiting" Api.CommentApproval.New
+      let model = withReplies [ waiting; ownReply ]
+      let model, _ = send (Commenter.Chosen Commenter.Ban) model
+      let model, _ = send (Commenter.Done("ada", Commenter.Ban, Ok())) model
+      Expect.equal (topLevelOf "approved" model |> Option.map _.Status) (Some Api.CommentApproval.Rejected) "The reply knows of the reject"
+    }
+  ]
+
 [<Tests>]
-let tests = testList "Commenters" [ listTests; pageTests ]
+let tests = testList "Commenters" [ listTests; pageTests; contextTests ]

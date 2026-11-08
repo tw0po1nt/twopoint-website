@@ -109,7 +109,7 @@ module Vapid =
   let authorization (keys : VapidKeys) (audience : string) (now : DateTimeOffset) =
     AuthenticationHeaderValue("vapid", $"t={jwt keys audience now}, k={Base64Url.encode keys.PublicKey}")
 
-type WebPushSender(httpClient : HttpClient, vapid : VapidKeys, logger : ILogger) =
+type WebPushSender(httpClient : HttpClient, vapid : VapidKeys, system : ISystemDependencies, logger : ILogger) =
 
   member _.Send (subscription : PushSubscription) (payload : byte array) (ttl : TimeSpan) : DependencyResult<PushResult> =
     runDependencyWithLogging Dependency.WebPush logger $"{nameof WebPushSender}.Send"
@@ -117,7 +117,7 @@ type WebPushSender(httpClient : HttpClient, vapid : VapidKeys, logger : ILogger)
       let! ct = CancellableTask.getCancellationToken()
       let audience = subscription.Endpoint.GetLeftPart UriPartial.Authority
       let request = new HttpRequestMessage(HttpMethod.Post, subscription.Endpoint)
-      request.Headers.Authorization <- Vapid.authorization vapid audience DateTimeOffset.UtcNow
+      request.Headers.Authorization <- Vapid.authorization vapid audience (DateTimeOffset(system.GetUtcNow()))
       request.Headers.Add("TTL", string (int ttl.TotalSeconds))
       request.Content <- new ByteArrayContent(WebPushEncryption.encrypt subscription.P256dh subscription.Auth payload)
       request.Content.Headers.ContentEncoding.Add "aes128gcm"

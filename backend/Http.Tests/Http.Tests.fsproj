@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <Compile Include="RemovalMappingTests.fs" />
+    <Compile Include="PostCommentMappingTests.fs" />
+    <Compile Include="AuthorReplyMappingTests.fs" />
+    <Compile Include="ReplyEmailStopMappingTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

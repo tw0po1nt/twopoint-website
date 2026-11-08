@@ -10,9 +10,15 @@ type SubscribeProps =
 type CommentsProps =
   { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
     Api: string
-    Slug: string }
+    Slug: string
+    /// The `author` of the post front matter, for a reply from the author.
+    Author: string }
 
 type UnsubscribeProps =
+  { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
+    Api: string }
+
+type StopReplyEmailsProps =
   { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
     Api: string }
 
@@ -25,16 +31,18 @@ type Widget =
   | Subscribe of SubscribeProps
   | Comments of CommentsProps
   | Unsubscribe of UnsubscribeProps
+  | StopReplyEmails of StopReplyEmailsProps
   | Pdf of PdfProps
 
 /// The name of each case of `Widget`.
-let names = [ "subscribe"; "comments"; "unsubscribe"; "pdf" ]
+let names = [ "subscribe"; "comments"; "unsubscribe"; "stop-reply-emails"; "pdf" ]
 
 let name (widget: Widget) =
   match widget with
   | Widget.Subscribe _ -> "subscribe"
   | Widget.Comments _ -> "comments"
   | Widget.Unsubscribe _ -> "unsubscribe"
+  | Widget.StopReplyEmails _ -> "stop-reply-emails"
   | Widget.Pdf _ -> "pdf"
 
 let toAttributes (widget: Widget) : (string * string) list =
@@ -44,7 +52,9 @@ let toAttributes (widget: Widget) : (string * string) list =
     | Widget.Comments props ->
       "data-api", props.Api
       "data-slug", props.Slug
+      "data-author", props.Author
     | Widget.Unsubscribe props -> "data-api", props.Api
+    | Widget.StopReplyEmails props -> "data-api", props.Api
     | Widget.Pdf props -> "data-file", props.File ]
 
 let private find (attributes: (string * string) list) (key: string) =
@@ -70,6 +80,12 @@ let private slug (widget: string) (value: string) =
   else
     Error $"The 'data-slug' of the {widget} mount is '{value}'. Give a post slug of lowercase letters, digits, and '-'."
 
+let private author (widget: string) (value: string) =
+  if value.Trim() <> "" then
+    Ok value
+  else
+    Error $"The 'data-author' of the {widget} mount is empty. Give the author name of the post."
+
 let private pdfFile (widget: string) (value: string) =
   let path = value.Split([| '?'; '#' |])[0]
 
@@ -90,11 +106,18 @@ let parse (attributes: (string * string) list) : Result<Widget, string> =
     |> Result.bind (fun api ->
       required attributes "comments" "data-slug"
       |> Result.bind (slug "comments")
-      |> Result.map (fun slug -> Widget.Comments { Api = api; Slug = slug }))
+      |> Result.bind (fun slug ->
+        required attributes "comments" "data-author"
+        |> Result.bind (author "comments")
+        |> Result.map (fun author -> Widget.Comments { Api = api; Slug = slug; Author = author })))
   | Some "unsubscribe" ->
     required attributes "unsubscribe" "data-api"
     |> Result.bind (api "unsubscribe")
     |> Result.map (fun api -> Widget.Unsubscribe { Api = api })
+  | Some "stop-reply-emails" ->
+    required attributes "stop-reply-emails" "data-api"
+    |> Result.bind (api "stop-reply-emails")
+    |> Result.map (fun api -> Widget.StopReplyEmails { Api = api })
   | Some "pdf" ->
     required attributes "pdf" "data-file"
     |> Result.bind (pdfFile "pdf")

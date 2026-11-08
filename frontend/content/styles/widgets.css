@@ -112,9 +112,87 @@
   display: none;
 }
 
-.comment {
+.comment-thread {
   padding: 10px 0;
   border-bottom: 1px dashed var(--line);
+}
+
+.comment-replies {
+  margin: 8px 0 0 1ch;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--line);
+}
+
+.comment-replies > li {
+  padding: 6px 0 6px 1.5ch;
+}
+
+/* The 2px line covers the 1px line of the thread. */
+.comment-replies > .comment.is-author {
+  margin-left: -1px;
+  border-left: 2px solid var(--accent-2);
+}
+
+.comment-badge {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.comment-earlier button,
+.comment-thread-end > button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 12px var(--mono);
+  color: var(--accent);
+}
+
+.comment-earlier button:focus-visible,
+.comment-thread-end > button:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* The indent puts the text at the text of the replies. */
+.comment-thread > .comment-status,
+.comment-thread-end {
+  margin: 6px 0 0;
+  padding-left: calc(2.5ch + 1px);
+}
+
+.comment-reply-form {
+  padding: 10px 0 4px;
+  border-top: 1px dashed var(--line);
+}
+
+.comment-actions {
+  display: flex;
+  gap: 2ch;
+  margin: 0;
+}
+
+/* The widget removes the class after the 2s of the animation. */
+.comment.is-marked {
+  animation: comment-mark 2s ease-out;
+}
+
+@keyframes comment-mark {
+  from {
+    background: var(--bg-2);
+  }
+
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comment.is-marked {
+    animation: none;
+    background: var(--bg-2);
+  }
 }
 
 .comment-meta,
@@ -231,6 +309,19 @@
 
 .comment-field input:focus {
   border-bottom-color: var(--accent);
+}
+
+.comment-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.comment-check input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .comment-editor {
@@ -380,7 +471,8 @@
   color: var(--muted);
 }
 
-.unsubscribe {
+.unsubscribe,
+.stop-reply-emails {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -389,27 +481,52 @@
 .unsubscribe-status,
 .unsubscribe-note,
 .unsubscribe-fallback,
-.unsubscribe-help {
+.unsubscribe-help,
+.stop-reply-emails-status,
+.stop-reply-emails-error,
+.stop-reply-emails-fallback,
+.stop-reply-emails-help {
   margin: 0;
   font: 14px/1.5 var(--mono);
 }
 
-.unsubscribe-status.is-failed {
+.unsubscribe-status.is-failed,
+.stop-reply-emails-status.is-failed,
+.stop-reply-emails-error {
   color: var(--accent);
 }
 
-.unsubscribe-status.is-done {
+.unsubscribe-status.is-done,
+.stop-reply-emails-status.is-done {
   color: var(--accent-2);
 }
 
 .unsubscribe-note,
 .unsubscribe-fallback,
-.unsubscribe-help {
+.unsubscribe-help,
+.stop-reply-emails-fallback,
+.stop-reply-emails-help {
   color: var(--muted);
 }
 
-.unsubscribe-help {
+.unsubscribe-help,
+.stop-reply-emails-help {
   margin-top: 24px;
+}
+
+.stop-reply-emails button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 14px var(--mono);
+  color: var(--accent);
+}
+
+.stop-reply-emails button:disabled {
+  cursor: default;
+  color: var(--muted);
 }
 
 .pdf,

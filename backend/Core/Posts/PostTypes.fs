@@ -65,6 +65,9 @@ module Commenter =
         Status = status }
   }
 
+  let displayName (commenter : Commenter) =
+    commenter.Name |> Option.map NonEmptyString.value |> Option.defaultValue "Anonymous"
+
 
 type CommentId =
   private | CommentId of Guid
@@ -79,6 +82,8 @@ module CommentId =
       Guid.TryParseOption
       $"'{nameof CommentId}' must be a valid guid"
       CommentId
+
+  let ofGuid (guid : Guid) = CommentId guid
 
 
 type CommentApproval =
@@ -115,12 +120,53 @@ module CommentStatus =
   }
 
 
+/// The author has no commenter record.
+[<RequireQualifiedAccess>]
+type CommentWriter =
+  | Commenter of Commenter
+  | Author
+
+module CommentWriter =
+  let commenter writer =
+    match writer with
+    | CommentWriter.Commenter commenter -> Some commenter
+    | CommentWriter.Author -> None
+
+
+/// The stop link of each reply email of one comment contains this token.
+type ReplyEmailStopToken =
+  private | ReplyEmailStopToken of Guid
+
+  override this.ToString() =
+    let (ReplyEmailStopToken token) = this
+    token.ToString()
+
+module ReplyEmailStopToken =
+  let create =
+    Constrained.String.tryParse
+      Guid.TryParseOption
+      $"'{nameof ReplyEmailStopToken}' must be a valid guid"
+      ReplyEmailStopToken
+
+  let ofGuid (guid : Guid) = ReplyEmailStopToken guid
+
+
+/// A stop date ends the reply emails of the comment.
+type ReplyEmailConsent =
+  { ConsentDate : DateTime
+    StopToken : ReplyEmailStopToken
+    StopDate : DateTime option }
+
+
+/// The parent of a reply is its top-level comment. Only a top-level comment has a reply-email consent.
 type Comment =
   { Id : CommentId
     CreatedDate : DateTime
     Status : CommentStatus
-    Commenter : Commenter
-    Content : NonEmptyString }
+    Parent : CommentId option
+    Writer : CommentWriter
+    Content : NonEmptyString
+    ReplyEmails : ReplyEmailConsent option }
 
 module Comment =
   let create
@@ -131,24 +177,27 @@ module Comment =
          CreatedDate : string
       |}
     )
-    (commenter:
-      {| ValidationId : string
-         EmailAddress : string
-         Name : string option
-         CreatedDate : string
-         Status : string
-      |}
-    )
+    (parent : string option)
+    (writer : CommentWriter)
+    (replyEmails : ReplyEmailConsent option)
     content =
       validation {
         let! id = CommentId.create id
         let! createdDate = DateTime.TryValidateUtc(createdDate, (nameof createdDate))
         let! status = CommentStatus.create status.Approval status.CreatedDate
-        let! commenter =
-          Commenter.create commenter.ValidationId commenter.EmailAddress commenter.Name commenter.CreatedDate commenter.Status
+        let! parent = parent |> Option.traverseResult CommentId.create
         let! content = NonEmptyString.create (Some (nameof content)) content
-        return { Id = id; CreatedDate = createdDate; Status = status; Commenter = commenter; Content = content }
+        return
+          { Id = id
+            CreatedDate = createdDate
+            Status = status
+            Parent = parent
+            Writer = writer
+            Content = content
+            ReplyEmails = replyEmails }
       }
+
+  let commenter (comment : Comment) = CommentWriter.commenter comment.Writer
 
 
 type RenderedComment =
@@ -183,6 +232,13 @@ module Slug =
     let create = Types.unsafeCreate create
 
 
+/// The stop page finds the comment of a stop token with this record.
+type ReplyEmailStop =
+  { Token : ReplyEmailStopToken
+    Post : Slug
+    Comment : CommentId }
+
+
 type PostCommentStats =
   { New : uint
     Approved : uint
@@ -194,6 +250,15 @@ type PostCommentStats =
 
   static member (+) (a: PostCommentStats, b: PostCommentStats) =
     { New = a.New + b.New; Approved = a.Approved + b.Approved; Rejected = a.Rejected + b.Rejected }
+
+  /// A reply counts as a comment.
+  static member OfComments (comments : Comment list) =
+    (PostCommentStats.Zero, comments)
+    ||> List.fold (fun stats comment ->
+      match comment.Status.Approval with
+      | CommentApproval.New -> { stats with New = stats.New + 1u }
+      | CommentApproval.Approved -> { stats with Approved = stats.Approved + 1u }
+      | CommentApproval.Rejected -> { stats with Rejected = stats.Rejected + 1u })
 
 type PostInfo =
   { Slug : Slug
@@ -316,26 +381,6 @@ type PostedComment =
   { Post : Slug
     PostTitle : NonEmptyString
     Comment : Comment }
-
-type RenderedPostedComment =
-  { Post : Slug
-    PostTitle : NonEmptyString
-    Comment : RenderedComment }
-
-module RenderedPostedComment =
-  let ofPostedComment (stage : TwoPoint.Site.Render.Stage) (posted : PostedComment) =
-    { Post = posted.Post
-      PostTitle = posted.PostTitle
-      Comment = RenderedComment.ofComment stage posted.Comment }
-
-  let ofPostedCommentsByDate (stage : TwoPoint.Site.Render.Stage) (comments : PostedComment list) =
-    comments
-    |> List.sortBy _.Comment.CreatedDate
-    |> List.map (ofPostedComment stage)
-
-type CommenterComments =
-  { Commenter : Commenter
-    Comments : RenderedPostedComment list }
 
 type Post =
   { Id: Slug

@@ -2,6 +2,7 @@ module TwoPoint.Dependencies.Tests.GitHubDispatchTests
 
 open TwoPoint.Core.Deploys
 open TwoPoint.Dependencies.Deploys
+open TwoPoint.Dependencies.Util
 
 open Azure.Security.KeyVault.Keys
 open Azure.Security.KeyVault.Keys.Cryptography
@@ -46,7 +47,7 @@ let private repo = { Owner = "tw0po1nt"; Name = "twopoint-website" }
 let private app = { ClientId = "Iv23client"; SigningKey = Uri "https://vault/keys/app" }
 
 let private dispatch (github : FakeGitHub) =
-  let dispatch = GitHubDispatch(new HttpClient(github), FakeSigner(), app, NullLogger.Instance)
+  let dispatch = GitHubDispatch(new HttpClient(github), FakeSigner(), app, SystemDependencies.live, NullLogger.Instance)
   (dispatch.Dispatch repo CancellationToken.None).Result
 
 let private dispatched =

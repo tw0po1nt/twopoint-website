@@ -1,13 +1,15 @@
 namespace TwoPoint.Http.Endpoints.Admin
 
-open TwoPoint.Http
-open TwoPoint.Http.Endpoints
 open TwoPoint.Core.Posts.Actions
 open TwoPoint.Core.Util
 open TwoPoint.Dependencies.Posts
+open TwoPoint.Dependencies.Util
+open TwoPoint.Http
+open TwoPoint.Http.Endpoints
 
 open Azure.Communication.Email
 open Azure.Data.Tables
+open Azure.Messaging.ServiceBus
 open IcedTasks
 open Microsoft.Azure.Functions.Worker
 open Microsoft.Azure.Functions.Worker.Http
@@ -23,6 +25,7 @@ type UpdateCommentApproval(
   config: Config,
   emailClient: EmailClient,
   logger: ILogger<UpdateCommentApproval>,
+  serviceBus: ServiceBusClient,
   tableServiceClient: TableServiceClient
 ) =
 
@@ -52,17 +55,20 @@ type UpdateCommentApproval(
           emailClient,
           config.Azure.EmailSender,
           tableServiceClient,
+          SystemDependencies.live,
           logger
         )
         let updateCommentApproval = UpdateCommentApproval.withDependencies {
           new UpdateCommentApproval.Dependencies with
           
-          member _.GetCommentById commentId = postDependencies.GetCommentById commentId
+          member _.GetComment post commentId = postDependencies.GetComment post commentId
           member _.UpdateCommentApproval comment approval = postDependencies.UpdateCommentApproval comment approval
+          member _.QueueReplyEmail post reply = ReplyEmailQueueClient.enqueue serviceBus logger op post reply
         }
 
         let approvalUpdate =
-          { CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId commentId
+          { CommentApprovalUpdate.Dto.Post = CommentApprovalUpdate.Post slug
+            CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId commentId
             CommentApprovalUpdate.Dto.Approval =
               json.Approval
               |> Option.map CommentApprovalUpdate.Approval

@@ -1,0 +1,796 @@
+module TwoPoint.Core.Tests.ReplyTests
+
+open TwoPoint.Core.Posts
+open TwoPoint.Core.Posts.Actions
+open TwoPoint.Core.Posts.Queries
+open TwoPoint.Core.Shared
+open TwoPoint.Core.Tests.Fixtures
+open TwoPoint.Core.Util
+
+open Expecto
+open FsToolkit.ErrorHandling
+
+open System
+open System.Threading
+
+let private now = DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+let private upcomingPost = post "upcoming-post" "2026-04-01T00:00:00.0000000Z"
+
+let private topLevelId = "0b6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f40"
+let private replyId = "5a0e2c1d-8b3f-4e6a-9c7d-1f2e3d4c5b6a"
+let private otherReplyId = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b"
+let private authorReplyId = "3c2b1a0f-9e8d-4c7b-8a6f-5e4d3c2b1a0f"
+let private commenterId = "7d1f0c55-3c1b-4a43-9a0e-2b5f6f0d8e21"
+
+let private commenter (name : string) (status : CommenterStatus) =
+  Commenter.create commenterId "commenter@example.com" (Some name) "2026-01-01T00:00:00.0000000Z" (status.ToString())
+  |> ok
+
+let private commentWith (id : string) (parent : string option) (writer : CommentWriter) (approval : CommentApproval) (createdDate : string) =
+  Comment.create id createdDate {| Approval = approval.ToString(); CreatedDate = createdDate |} parent writer None "A comment"
+  |> ok
+
+let private fromAda = CommentWriter.Commenter (commenter "Ada" CommenterStatus.Trusted)
+let private fromBen = CommentWriter.Commenter (commenter "Ben" CommenterStatus.Trusted)
+
+let private topLevel (approval : CommentApproval) =
+  commentWith topLevelId None fromAda approval "2026-02-01T00:00:00.0000000Z"
+
+let private replyOf (approval : CommentApproval) =
+  commentWith replyId (Some topLevelId) fromBen approval "2026-02-02T00:00:00.0000000Z"
+
+type private FakePostReply(post : Post, existing : Commenter, stored : PostedComment list) =
+  let created = ResizeArray<Comment option * CommentApproval>()
+  let queued = ResizeArray<CommentId>()
+
+  member _.Created = List.ofSeq created
+  member _.Queued = List.ofSeq queued
+
+  interface PostComment.Dependencies with
+    member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
+    member _.GetUtcNow () = now
+    member _.GetPostedComment post id =
+      stored |> List.tryFind (fun comment -> comment.Post = post && comment.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some existing)
+    member _.NewCommentId () = CommentId.ofGuid (Guid otherReplyId)
+    member _.CreateComment _ _ commenter newComment topLevel approval _ =
+      created.Add(topLevel, approval)
+
+      Comment.create
+        otherReplyId
+        "2026-03-01T00:00:00.0000000Z"
+        {| Approval = approval.ToString(); CreatedDate = "2026-03-01T00:00:00.0000000Z" |}
+        (topLevel |> Option.map (_.Id >> string))
+        (CommentWriter.Commenter commenter)
+        None
+        (newComment.Content.ToString())
+      |> ok
+      |> CancellableTaskResult.singleton
+    member _.NewReplyEmailStopToken () = ReplyEmailStopToken.ofGuid Guid.Empty
+    member _.CreateReplyEmailStop _ = CancellableTaskResult.singleton ()
+    member _.QueueNewCommentNotice _ commentId =
+      queued.Add commentId
+      CancellableTaskResult.singleton ()
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private postReplyWith (content : string) (replyTo : string) (dependencies : FakePostReply) =
+  let dto =
+    { NewComment.Dto.Post = NewComment.Post (olderPost.Id.ToString())
+      NewComment.Dto.ValidationId = NewComment.ValidationId commenterId
+      NewComment.Dto.Comment = NewComment.Comment content
+      NewComment.Dto.ReplyTo = Some (NewComment.ReplyTo replyTo)
+      NewComment.Dto.ReplyEmails = NewComment.ReplyEmails false }
+  (PostComment.withDependencies dependencies dto CancellationToken.None).Result
+
+let private postReply = postReplyWith "A reply" topLevelId
+
+let private replyCheckTests =
+  testList "the reply check" [
+    let refusals =
+      [ "a reply to a reply", olderPost, replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Approved) ], ReplyRefusal.ReplyToReply
+        "a reply to a new comment", olderPost, topLevelId, [ postedOn olderPost (topLevel CommentApproval.New) ], ReplyRefusal.ReplyToNew
+        "a reply to a rejected comment", olderPost, topLevelId, [ postedOn olderPost (topLevel CommentApproval.Rejected) ], ReplyRefusal.ReplyToRejected
+        "a reply to a missing comment", olderPost, topLevelId, [], ReplyRefusal.ReplyToMissing
+        "a reply to a comment on another post", olderPost, topLevelId, [ postedOn latestPost (topLevel CommentApproval.Approved) ], ReplyRefusal.ReplyToMissing
+        "an upcoming post", upcomingPost, topLevelId, [ postedOn upcomingPost (topLevel CommentApproval.Approved) ], ReplyRefusal.PostUpcoming ]
+
+    for name, post, replyTo, stored, reason in refusals do
+      test $"{name} refuses the reply with its reason, and the blog stores nothing and notifies no one" {
+        let dependencies = FakePostReply(post, commenter "Ben" CommenterStatus.Trusted, stored)
+
+        Expect.equal (postReplyWith "A reply" replyTo dependencies) (Error (Logic (PostComment.ReplyRefused reason))) "Expected the reason"
+        Expect.isEmpty dependencies.Created "Expected no comment in the store"
+        Expect.isEmpty dependencies.Queued "Expected no message on the queue"
+      }
+
+    test "an approved top-level comment of the same post takes a reply" {
+      let dependencies = FakePostReply(olderPost, commenter "Ben" CommenterStatus.Trusted, [ postedOn olderPost (topLevel CommentApproval.Approved) ])
+
+      match postReply dependencies with
+      | Ok (PostComment.Event.Posted (_, posted)) ->
+        Expect.equal (posted.Comment.Parent |> Option.map string) (Some topLevelId) "Expected the top-level comment as the parent"
+        Expect.equal (dependencies.Created |> List.map (fst >> Option.map (_.Id >> string))) [ Some topLevelId ] "Expected the top-level comment in the store"
+        Expect.equal dependencies.Queued [ posted.Comment.Id ] "Expected the reply on the new_comment queue"
+      | other -> failtestf "Expected Posted, got %A" other
+    }
+
+    test "a reply to an ID that is not a GUID is refused" {
+      let dependencies = FakePostReply(olderPost, commenter "Ben" CommenterStatus.Trusted, [])
+
+      match postReplyWith "A reply" "not-a-guid" dependencies with
+      | Error (ActionError.Validation _) -> Expect.isEmpty dependencies.Created "Expected no comment in the store"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+
+    test "a reply of 1,001 characters is refused, and the blog stores nothing" {
+      let dependencies = FakePostReply(olderPost, commenter "Ben" CommenterStatus.Trusted, [ postedOn olderPost (topLevel CommentApproval.Approved) ])
+
+      match postReplyWith (String('x', NewComment.maxLength + 1)) topLevelId dependencies with
+      | Error (ActionError.Validation errors) ->
+        Expect.equal errors [ $"content must be between 1 and {NewComment.maxLength} characters long" ] "Expected the length message"
+        Expect.isEmpty dependencies.Created "Expected no comment in the store"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+  ]
+
+let private approvalTests =
+  testList "the approval of a reply" [
+    for status, approval in [ CommenterStatus.New, CommentApproval.New; CommenterStatus.Trusted, CommentApproval.Approved ] do
+      test $"a reply of a {status} commenter is {approval}" {
+        let dependencies = FakePostReply(olderPost, commenter "Ben" status, [ postedOn olderPost (topLevel CommentApproval.Approved) ])
+
+        match postReply dependencies with
+        | Ok (PostComment.Event.Posted (_, posted)) ->
+          Expect.equal posted.Comment.Status.Approval approval "Expected the approval of the commenter status"
+          Expect.equal (dependencies.Created |> List.map snd) [ approval ] "Expected one reply in the store"
+        | other -> failtestf "Expected Posted, got %A" other
+      }
+
+    test "the blog keeps no reply from a banned commenter" {
+      let dependencies = FakePostReply(olderPost, commenter "Ben" CommenterStatus.Banned, [ postedOn olderPost (topLevel CommentApproval.Approved) ])
+
+      match postReply dependencies with
+      | Error (Logic (PostComment.Banned _)) ->
+        Expect.isEmpty dependencies.Created "Expected no reply in the store"
+        Expect.isEmpty dependencies.Queued "Expected no message on the queue"
+      | other -> failtestf "Expected Banned, got %A" other
+    }
+  ]
+
+type private FakeThreads(post : Post, initial : Comment list) =
+  let mutable comments = initial
+  let updates = ResizeArray<CommentId * CommentApproval>()
+
+  member _.Updates = List.ofSeq updates
+  member _.Comments = comments
+
+  interface UpdateCommentApproval.Dependencies with
+    member _.GetComment slug id =
+      comments |> List.tryFind (fun comment -> slug = post.Id && comment.Id = id) |> CancellableTaskResult.singleton
+    member _.UpdateCommentApproval comment approval =
+      updates.Add(comment.Id, approval)
+      let updated = { comment with Status = { comment.Status with Approval = approval } }
+      comments <- comments |> List.map (fun existing -> if existing.Id = comment.Id then updated else existing)
+      CancellableTaskResult.singleton updated
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
+
+  interface GetCommentsForPost.Dependencies with
+    member _.GetPostBySlug _ = CancellableTaskResult.singleton (Some post)
+    member _.GetCommentsForPost approvals _ =
+      comments |> List.filter (fun comment -> approvals |> List.contains comment.Status.Approval) |> CancellableTaskResult.singleton
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private setApproval (threads : FakeThreads) (id : string) (approval : CommentApproval) =
+  let dto =
+    { CommentApprovalUpdate.Dto.Post = CommentApprovalUpdate.Post (olderPost.Id.ToString())
+      CommentApprovalUpdate.Dto.CommentId = CommentApprovalUpdate.CommentId id
+      CommentApprovalUpdate.Dto.Approval = CommentApprovalUpdate.Approval (approval.ToString()) }
+  (UpdateCommentApproval.withDependencies threads dto CancellationToken.None).Result |> ok |> ignore
+
+let private publicComments (threads : FakeThreads) =
+  (GetPublicComments.withDependencies threads (olderPost.Id.ToString()) CancellationToken.None).Result |> ok |> Option.get
+
+let private visibleIds (threads : FakeThreads) = publicComments threads |> List.map _.Id
+
+let private visibilityTests =
+  testList "visibility" [
+    test "a reject of a top-level comment hides its replies and changes no reply, and a new approval shows the thread again" {
+      let threads = FakeThreads(olderPost, [ topLevel CommentApproval.Approved; replyOf CommentApproval.Approved ])
+      Expect.equal (visibleIds threads) [ topLevelId; replyId ] "Expected the thread"
+
+      setApproval threads topLevelId CommentApproval.Rejected
+      Expect.isEmpty (visibleIds threads) "Expected no reply of a rejected top-level comment"
+      Expect.equal (threads.Updates |> List.map (fst >> string)) [ topLevelId ] "Expected a change only to the top-level comment"
+      Expect.equal
+        (threads.Comments |> List.find (fun comment -> string comment.Id = replyId)).Status.Approval
+        CommentApproval.Approved
+        "Expected the reply to stay approved"
+
+      setApproval threads topLevelId CommentApproval.Approved
+      Expect.equal (visibleIds threads) [ topLevelId; replyId ] "Expected the thread as before"
+    }
+
+    test "a reply that is not approved is not visible" {
+      for approval in [ CommentApproval.New; CommentApproval.Rejected ] do
+        let threads = FakeThreads(olderPost, [ topLevel CommentApproval.Approved; replyOf approval ])
+        Expect.equal (visibleIds threads) [ topLevelId ] $"Expected no {approval} reply"
+    }
+
+    test "a reply of a new top-level comment is not visible" {
+      let threads = FakeThreads(olderPost, [ topLevel CommentApproval.New; replyOf CommentApproval.Approved ])
+      Expect.isEmpty (visibleIds threads) "Expected no reply of a new top-level comment"
+    }
+  ]
+
+let private answerTests =
+  testList "the public comments answer" [
+    test "each comment gives replyTo and writer, and a reply from the author has no commenter name" {
+      let authorReply = commentWith authorReplyId (Some topLevelId) CommentWriter.Author CommentApproval.Approved "2026-02-03T00:00:00.0000000Z"
+      let threads = FakeThreads(olderPost, [ authorReply; replyOf CommentApproval.Approved; topLevel CommentApproval.Approved ])
+
+      Expect.equal
+        (publicComments threads |> List.map (fun comment -> comment.Id, comment.ReplyTo, comment.Writer, comment.Commenter))
+        [ topLevelId, None, "commenter", "Ada"
+          replyId, Some topLevelId, "commenter", "Ben"
+          authorReplyId, Some topLevelId, "author", "" ]
+        "Expected the threads oldest first, with the parent and the writer of each comment"
+    }
+  ]
+
+/// Each call that changes the store, in order. An author reply has no other effect, so a notification would show here.
+type private AuthorReplyEffect =
+  | Approved of CommentId
+  | CreatedReply of topLevel : CommentId * approval : CommentApproval
+
+type private FakeAuthorReply(stored : PostedComment list) =
+  let effects = ResizeArray<AuthorReplyEffect>()
+
+  member _.Effects = List.ofSeq effects
+
+  interface ReplyAsAuthor.Dependencies with
+    member _.GetPostedComment post id =
+      stored |> List.tryFind (fun comment -> comment.Post = post && comment.Comment.Id = id) |> CancellableTaskResult.singleton
+    member _.UpdateCommentApproval comment approval =
+      effects.Add(Approved comment.Id)
+      CancellableTaskResult.singleton { comment with Status = { comment.Status with Approval = approval } }
+    member _.CreateAuthorReply _ topLevel content approval =
+      effects.Add(CreatedReply(topLevel.Id, approval))
+
+      Comment.create
+        authorReplyId
+        "2026-03-01T00:00:00.0000000Z"
+        {| Approval = approval.ToString(); CreatedDate = "2026-03-01T00:00:00.0000000Z" |}
+        (Some (string topLevel.Id))
+        CommentWriter.Author
+        None
+        (content.ToString())
+      |> ok
+      |> CancellableTaskResult.singleton
+    member _.QueueReplyEmail _ _ = CancellableTaskResult.singleton ()
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private replyAsAuthor (replyTo : string) (dependencies : FakeAuthorReply) =
+  let dto = { AuthorReply.Dto.Post = olderPost.Id.ToString(); AuthorReply.Dto.ReplyTo = replyTo; AuthorReply.Dto.Content = "An answer" }
+  (ReplyAsAuthor.withDependencies dependencies dto CancellationToken.None).Result
+
+let private commentId (id : string) = CommentId.create id |> ok
+
+let private authorReplyTests =
+  testList "an author reply" [
+    test "an author reply to a new reply approves the reply and its new top-level comment" {
+      let dependencies =
+        FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New); postedOn olderPost (replyOf CommentApproval.New) ]
+
+      match replyAsAuthor replyId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId; replyId ] "Expected both comments in the answer"
+        Expect.isTrue (approved |> List.forall (fun comment -> comment.Status.Approval = CommentApproval.Approved)) "Expected approved comments"
+        Expect.equal
+          dependencies.Effects
+          [ Approved (commentId topLevelId); Approved (commentId replyId); CreatedReply (commentId topLevelId, CommentApproval.Approved) ]
+          "Expected the approvals before the reply"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply on a reply row goes to the top-level comment" {
+      let dependencies =
+        FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Approved) ]
+
+      match replyAsAuthor replyId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (reply, approved)) ->
+        Expect.equal (reply.Comment.Parent |> Option.map string) (Some topLevelId) "Expected the top-level comment as the parent"
+        Expect.isEmpty approved "Expected no approval of an approved comment"
+        Expect.equal dependencies.Effects [ CreatedReply (commentId topLevelId, CommentApproval.Approved) ] "Expected only the reply"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply to an approved reply approves its new top-level comment" {
+      let dependencies =
+        FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New); postedOn olderPost (replyOf CommentApproval.Approved) ]
+
+      match replyAsAuthor replyId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId ] "Expected the top-level comment"
+        Expect.equal
+          dependencies.Effects
+          [ Approved (commentId topLevelId); CreatedReply (commentId topLevelId, CommentApproval.Approved) ]
+          "Expected the approval before the reply"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply to a new top-level comment approves it" {
+      let dependencies = FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.New) ]
+
+      match replyAsAuthor topLevelId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (_, approved)) ->
+        Expect.equal (approved |> List.map (_.Id >> string)) [ topLevelId ] "Expected the top-level comment"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    for name, replyTo, stored in
+      [ "a rejected top-level comment", topLevelId, [ postedOn olderPost (topLevel CommentApproval.Rejected) ]
+        "a rejected reply", replyId, [ postedOn olderPost (topLevel CommentApproval.Approved); postedOn olderPost (replyOf CommentApproval.Rejected) ]
+        "a new reply under a rejected top-level comment", replyId, [ postedOn olderPost (topLevel CommentApproval.Rejected); postedOn olderPost (replyOf CommentApproval.New) ]
+        "an approved reply under a rejected top-level comment", replyId, [ postedOn olderPost (topLevel CommentApproval.Rejected); postedOn olderPost (replyOf CommentApproval.Approved) ] ] do
+      test $"an author reply to {name} is refused, and the blog stores nothing" {
+        let dependencies = FakeAuthorReply stored
+
+        Expect.equal
+          (replyAsAuthor replyTo dependencies)
+          (Error (Logic (ReplyAsAuthor.Refused AuthorReplyRefusal.ReplyToRejected)))
+          "Expected the refusal"
+        Expect.isEmpty dependencies.Effects "Expected no change"
+      }
+
+    for name, stored in
+      [ "a missing comment", []
+        "a comment on another post", [ postedOn latestPost (topLevel CommentApproval.Approved) ] ] do
+      test $"an author reply to {name} is refused as missing" {
+        let dependencies = FakeAuthorReply stored
+
+        Expect.equal
+          (replyAsAuthor topLevelId dependencies)
+          (Error (Logic (ReplyAsAuthor.Refused AuthorReplyRefusal.ReplyToMissing)))
+          "Expected the refusal"
+        Expect.isEmpty dependencies.Effects "Expected no change"
+      }
+
+    test "an author reply is approved, has no commenter, and sends no notification" {
+      let dependencies = FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.Approved) ]
+
+      match replyAsAuthor topLevelId dependencies with
+      | Ok (ReplyAsAuthor.Event.Replied (reply, _)) ->
+        Expect.equal reply.Comment.Status.Approval CommentApproval.Approved "Expected an approved reply"
+        Expect.equal reply.Comment.Writer CommentWriter.Author "Expected the author as the writer"
+        Expect.isNone (Comment.commenter reply.Comment) "Expected no commenter"
+        Expect.equal dependencies.Effects [ CreatedReply (commentId topLevelId, CommentApproval.Approved) ] "Expected no other effect"
+      | other -> failtestf "Expected Replied, got %A" other
+    }
+
+    test "an author reply of 1,001 characters is refused" {
+      let dependencies = FakeAuthorReply [ postedOn olderPost (topLevel CommentApproval.Approved) ]
+      let dto = { AuthorReply.Dto.Post = olderPost.Id.ToString(); AuthorReply.Dto.ReplyTo = topLevelId; AuthorReply.Dto.Content = String('x', NewComment.maxLength + 1) }
+
+      match (ReplyAsAuthor.withDependencies dependencies dto CancellationToken.None).Result with
+      | Error (ActionError.Validation _) -> Expect.isEmpty dependencies.Effects "Expected no change"
+      | other -> failtestf "Expected a validation error, got %A" other
+    }
+  ]
+
+let private adminCommentsOf (threads : FakeThreads) =
+  (GetCommentsForPost.withDependencies threads [] (olderPost.Id.ToString()) CancellationToken.None).Result |> ok |> Option.get
+
+let private longText = String.replicate 30 "word *one* "
+
+let private withContent (content : string) (comment : Comment) =
+  { comment with Content = NonEmptyString.create None content |> ok }
+
+type private FakeQueue(comments : PostedComment list) =
+  interface GetModerationQueue.Dependencies with
+    member _.GetCommentsOnAllPosts approvals =
+      comments |> List.filter (fun posted -> approvals |> List.contains posted.Comment.Status.Approval) |> CancellableTaskResult.singleton
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+type private FakeCommenterPage(comments : PostedComment list, others : PostedComment list) =
+  let reads = ResizeArray<CommentId>()
+
+  member _.Reads = List.ofSeq reads
+
+  interface GetCommenter.Dependencies with
+    member _.GetCommenterByValidationId _ = CancellableTaskResult.singleton (Some (commenter "Ben" CommenterStatus.Trusted))
+    member _.GetCommentsOfCommenter _ = CancellableTaskResult.singleton comments
+    member _.GetComment post id =
+      reads.Add id
+      others
+      |> List.tryFind (fun other -> other.Post = post && other.Comment.Id = id)
+      |> Option.map _.Comment
+      |> CancellableTaskResult.singleton
+    member _.GetRepliesOf topLevels = repliesIn others topLevels |> CancellableTaskResult.singleton
+    member _.Stage = TwoPoint.Site.Render.Stage.Production
+
+let private topLevelOf (comment : AdminComment) =
+  comment.TopLevel
+  |> Option.map (fun topLevel ->
+    string topLevel.Comment.Comment.Id,
+    topLevel.Comment.Comment |> Comment.commenter |> Option.bind _.Name |> Option.map string,
+    topLevel.Comment.Comment.Status.Approval)
+
+let private adminAnswerTests =
+  testList "the admin answers" [
+    test "the comments of a post give the top-level comment of each reply, and none for a top-level comment" {
+      let threads = FakeThreads(olderPost, [ topLevel CommentApproval.Rejected; replyOf CommentApproval.New ])
+
+      Expect.equal
+        (adminCommentsOf threads |> List.map topLevelOf)
+        [ None; Some (topLevelId, Some "Ada", CommentApproval.Rejected) ]
+        "Expected the ID, the name, and the approval of the top-level comment on the reply"
+    }
+
+    test "the top-level comment of a reply gives a plain-text excerpt of 200 characters and the full HTML" {
+      let threads = FakeThreads(olderPost, [ topLevel CommentApproval.Approved |> withContent longText; replyOf CommentApproval.New ])
+
+      match adminCommentsOf threads with
+      | [ _; { TopLevel = Some topLevel } ] ->
+        Expect.equal topLevel.Excerpt ((String.replicate 30 "word one ").Substring(0, AdminComment.excerptLength)) "Expected the start of the plain text"
+        Expect.stringContains topLevel.Comment.Html "<em>one</em>" "Expected the full HTML"
+      | other -> failtestf "Expected a top-level comment and a reply, got %A" other
+    }
+
+    test "the queue gives the top-level comment of a new reply, also when the top-level comment is not in the queue" {
+      let queue = FakeQueue [ topLevel CommentApproval.Approved |> postedOn olderPost; replyOf CommentApproval.New |> postedOn olderPost ]
+
+      match (GetModerationQueue.withDependencies queue () CancellationToken.None).Result with
+      | Ok [ reply ] ->
+        Expect.equal (string reply.Comment.Comment.Comment.Id) replyId "Expected only the new reply"
+        Expect.equal (topLevelOf reply.Comment) (Some (topLevelId, Some "Ada", CommentApproval.Approved)) "Expected the top-level comment"
+      | other -> failtestf "Expected one reply, got %A" other
+    }
+
+    test "the commenter page reads each top-level comment of another commenter once, and gives it on each reply" {
+      let secondReply = commentWith otherReplyId (Some topLevelId) fromBen CommentApproval.Approved "2026-02-03T00:00:00.0000000Z"
+      let page = FakeCommenterPage([ replyOf CommentApproval.New |> postedOn olderPost; secondReply |> postedOn olderPost ], [ topLevel CommentApproval.Approved |> postedOn olderPost ])
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal
+          (commenterPage.Comments |> List.map (_.Comment >> topLevelOf))
+          [ Some (topLevelId, Some "Ada", CommentApproval.Approved); Some (topLevelId, Some "Ada", CommentApproval.Approved) ]
+          "Expected the top-level comment on each reply"
+        Expect.equal (page.Reads |> List.map string) [ topLevelId ] "Expected one read"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+
+    test "the commenter page reads no top-level comment that is on the page" {
+      let ownTopLevel = commentWith topLevelId None fromBen CommentApproval.Approved "2026-02-01T00:00:00.0000000Z"
+      let page = FakeCommenterPage([ ownTopLevel |> postedOn olderPost; replyOf CommentApproval.New |> postedOn olderPost ], [])
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal
+          (commenterPage.Comments |> List.map (_.Comment >> topLevelOf))
+          [ None; Some (topLevelId, Some "Ben", CommentApproval.Approved) ]
+          "Expected the own top-level comment on the reply"
+        Expect.isEmpty page.Reads "Expected no read"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+
+    test "a reply whose top-level comment is gone has no top-level comment" {
+      let page = FakeCommenterPage([ replyOf CommentApproval.New |> postedOn olderPost ], [])
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some { Comments = [ reply ] }) -> Expect.isNone reply.Comment.TopLevel "Expected no top-level comment"
+      | other -> failtestf "Expected one reply, got %A" other
+    }
+  ]
+
+let private countTests =
+  testList "the comment counts" [
+    test "the counts of a post include each reply" {
+      let rejectedReply = commentWith otherReplyId (Some topLevelId) fromBen CommentApproval.Rejected "2026-02-03T00:00:00.0000000Z"
+      let authorReply = commentWith authorReplyId (Some topLevelId) CommentWriter.Author CommentApproval.Approved "2026-02-04T00:00:00.0000000Z"
+
+      Expect.equal
+        (PostCommentStats.OfComments [ topLevel CommentApproval.Approved; replyOf CommentApproval.New; rejectedReply; authorReply ])
+        { New = 1u; Approved = 2u; Rejected = 1u }
+        "Expected the top-level comment and each reply"
+    }
+
+    test "the queue, and so the count of the dashboard, includes each new reply" {
+      let queue =
+        FakeQueue
+          [ topLevel CommentApproval.New |> postedOn olderPost
+            replyOf CommentApproval.New |> postedOn olderPost
+            commentWith authorReplyId (Some topLevelId) CommentWriter.Author CommentApproval.Approved "2026-02-04T00:00:00.0000000Z" |> postedOn olderPost ]
+
+      Expect.equal
+        ((GetModerationQueue.withDependencies queue () CancellationToken.None).Result |> Result.map (List.map (_.Comment.Comment.Comment.Id >> string)))
+        (Ok [ topLevelId; replyId ])
+        "Expected the new top-level comment and the new reply"
+    }
+  ]
+
+// Two threads on one post: Ada starts the first and replies in the second, which Ben starts.
+let private adaId = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+let private benId = "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e"
+let private namedCommenter (validationId : string) (name : string) =
+  Commenter.create validationId $"{name.ToLowerInvariant()}@example.com" (Some name) "2026-01-01T00:00:00.0000000Z" "trusted" |> ok
+let private ada = namedCommenter adaId "Ada"
+let private ben = namedCommenter benId "Ben"
+
+let private threadComment (number : int) (parent : int option) (writer : CommentWriter) =
+  let idOf (number : int) = sprintf "00000000-0000-4000-8000-%012d" number
+  commentWith (idOf number) (parent |> Option.map idOf) writer CommentApproval.Approved $"2026-02-{number:D2}T00:00:00.0000000Z"
+
+let private adaThread = threadComment 1 None (CommentWriter.Commenter ada)
+let private benInAdaThread = threadComment 2 (Some 1) (CommentWriter.Commenter ben)
+let private authorInAdaThread = threadComment 3 (Some 1) CommentWriter.Author
+let private adaInAdaThread = threadComment 4 (Some 1) (CommentWriter.Commenter ada)
+let private benThread = threadComment 5 None (CommentWriter.Commenter ben)
+let private adaInBenThread = threadComment 6 (Some 5) (CommentWriter.Commenter ada)
+let private benInBenThread = threadComment 7 (Some 5) (CommentWriter.Commenter ben)
+
+let private bothThreads =
+  [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; benThread; adaInBenThread; benInBenThread ]
+
+let private adaOnLatest = threadComment 10 None (CommentWriter.Commenter ada)
+let private benInAdaOnLatest = threadComment 11 (Some 10) (CommentWriter.Commenter ben)
+
+let private threadsOnTwoPosts =
+  (bothThreads |> List.map (postedOn olderPost)) @ ([ adaOnLatest; benInAdaOnLatest ] |> List.map (postedOn latestPost))
+
+let private writtenBy (commenter : Commenter) (comment : Comment) =
+  Comment.commenter comment |> Option.exists (fun writer -> writer.ValidationId = commenter.ValidationId)
+
+type private FakeCommentStore(commenters : Commenter list, comments : PostedComment list) =
+  let mutable commenters = commenters
+  let mutable comments = comments
+  let deleted = ResizeArray<CommentId>()
+  let mutable postedAfterRepliesRead : PostedComment option = None
+
+  new(commenters, comments : Comment list) = FakeCommentStore(commenters, comments |> List.map (postedOn olderPost))
+
+  member _.Comments = comments |> List.map _.Comment
+  member _.Commenters = commenters
+  member _.Deleted = List.ofSeq deleted
+
+  /// The store adds `reply` after the next read of the replies, as a reader who posts during a delete.
+  member _.PostAfterRepliesRead (reply : Comment) = postedAfterRepliesRead <- Some (postedOn olderPost reply)
+
+  member _.RepliesOf (topLevels : PostedComment list) =
+    let replies = repliesIn comments topLevels
+    postedAfterRepliesRead |> Option.iter (fun reply -> comments <- comments @ [ reply ])
+    postedAfterRepliesRead <- None
+    CancellableTaskResult.singleton replies
+
+  /// A delete finds the comment only in the partition of its post.
+  member _.DeleteComment (post : TwoPoint.Core.Posts.Slug) (comment : Comment) =
+    if comments |> List.exists (fun stored -> stored.Post = post && stored.Comment.Id = comment.Id) then
+      deleted.Add comment.Id
+      comments <- comments |> List.filter (fun stored -> stored.Comment.Id <> comment.Id)
+    CancellableTaskResult.singleton ()
+
+  interface DeleteComment.Dependencies with
+    member _.GetPostedComment post id =
+      comments |> List.tryFind (fun stored -> stored.Post = post && stored.Comment.Id = id) |> CancellableTaskResult.singleton
+    member this.GetRepliesOf topLevels = this.RepliesOf topLevels
+    member this.DeleteComment post comment = this.DeleteComment post comment
+
+  interface DeleteCommenter.Dependencies with
+    member _.GetCommenterByValidationId validationId =
+      commenters |> List.tryFind (fun commenter -> commenter.ValidationId = validationId) |> CancellableTaskResult.singleton
+    member _.GetPostedCommentsOfCommenter commenter =
+      comments |> List.filter (_.Comment >> writtenBy commenter) |> CancellableTaskResult.singleton
+    member this.GetRepliesOf topLevels = this.RepliesOf topLevels
+    member this.DeleteComment post comment = this.DeleteComment post comment
+    member _.DeleteCommenter commenter =
+      commenters <- commenters |> List.filter (fun stored -> stored.ValidationId <> commenter.ValidationId)
+      CancellableTaskResult.singleton ()
+
+let private deleteCommentOn (store : FakeCommentStore) (post : Post) (comment : Comment) =
+  let dto =
+    { CommentDeletion.Dto.Post = CommentDeletion.Post (post.Id.ToString())
+      CommentDeletion.Dto.CommentId = CommentDeletion.CommentId (string comment.Id) }
+  (DeleteComment.withDependencies store dto CancellationToken.None).Result
+
+let private deleteCommentOf (store : FakeCommentStore) (comment : Comment) = deleteCommentOn store olderPost comment
+
+let private deleteCommenterOf (store : FakeCommentStore) (commenter : Commenter) =
+  let dto = { CommenterDeletion.Dto.ValidationId = CommenterDeletion.ValidationId (string commenter.ValidationId) }
+  (DeleteCommenter.withDependencies store dto CancellationToken.None).Result
+
+let private ids (comments : Comment list) = comments |> List.map (_.Id >> string)
+
+let private deleteTests =
+  testList "the deletes" [
+    test "a thread delete removes the top-level comment and each reply, also a reply from the author, with the count" {
+      let removal = CommentDeleteRule.thread bothThreads adaThread
+
+      Expect.equal
+        (ids removal.Comments)
+        (ids [ benInAdaThread; authorInAdaThread; adaInAdaThread; adaThread ])
+        "Expected each reply of the thread, then the top-level comment"
+      Expect.equal removal.Others 3 "Expected the number of replies"
+    }
+
+    test "a delete of a reply removes only that reply" {
+      let removal = CommentDeleteRule.thread bothThreads adaInBenThread
+
+      Expect.equal (ids removal.Comments) (ids [ adaInBenThread ]) "Expected only the reply"
+      Expect.equal removal.Others 0 "Expected no other comment"
+    }
+
+    test "a commenter delete removes the threads of the commenter and the replies of the commenter in other threads" {
+      let own = bothThreads |> List.filter (writtenBy ada)
+      let removal = CommentDeleteRule.commenter own bothThreads
+
+      Expect.equal
+        (ids removal.Comments |> Set.ofList)
+        (ids [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; adaInBenThread ] |> Set.ofList)
+        "Expected the thread of Ada and the reply of Ada in the thread of Ben"
+      Expect.equal (ids removal.Comments |> List.last) (string adaThread.Id) "Expected the top-level comment after the replies"
+      Expect.equal removal.Others 2 "Expected the replies from Ben and from the author"
+    }
+
+    test "a commenter delete on two posts gives each comment with its post, each reply before the top-level comments" {
+      let own = threadsOnTwoPosts |> List.filter (_.Comment >> writtenBy ada)
+      let removal = CommentDeleteRule.commenterOnPosts own (threadsOnTwoPosts |> List.map _.Comment)
+      let onPost (post : Post) (comments : Comment list) = comments |> List.map (fun comment -> post.Id, string comment.Id)
+
+      Expect.equal
+        (removal.Comments |> List.map (fun posted -> posted.Post, string posted.Comment.Id) |> Set.ofList)
+        (onPost olderPost [ adaThread; benInAdaThread; authorInAdaThread; adaInAdaThread; adaInBenThread ]
+         @ onPost latestPost [ adaOnLatest; benInAdaOnLatest ]
+         |> Set.ofList)
+        "Expected each comment with the post of its thread"
+      Expect.equal
+        (removal.Comments |> List.map _.Comment |> List.skipWhile _.Parent.IsSome |> List.forall _.Parent.IsNone)
+        true
+        "Expected each reply before the top-level comments"
+      Expect.equal removal.Others 3 "Expected the replies from Ben and from the author on both posts"
+    }
+
+    test "the delete of a top-level comment removes its thread, and keeps the other threads" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+
+      match deleteCommentOf store adaThread with
+      | Ok (DeleteComment.Event.Deleted (deletedId, others)) ->
+        Expect.equal deletedId adaThread.Id "Expected the deleted comment"
+        Expect.equal others 3 "Expected the number of replies"
+        Expect.equal (ids store.Comments) (ids [ benThread; adaInBenThread; benInBenThread ]) "Expected only the thread of Ben"
+        Expect.equal (store.Deleted |> List.last) adaThread.Id "Expected the top-level comment last"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a reply keeps its thread" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+
+      match deleteCommentOf store adaInBenThread with
+      | Ok (DeleteComment.Event.Deleted (_, others)) ->
+        Expect.equal others 0 "Expected no other comment"
+        Expect.equal store.Comments (bothThreads |> List.filter (fun comment -> comment.Id <> adaInBenThread.Id)) "Expected each other comment"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a commenter removes their threads and their replies in other threads, and keeps the other threads" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+
+      match deleteCommenterOf store ada with
+      | Ok (DeleteCommenter.Event.Deleted (deleted, others)) ->
+        Expect.equal deleted.ValidationId ada.ValidationId "Expected the deleted commenter"
+        Expect.equal others 2 "Expected the replies from Ben and from the author"
+        Expect.equal (ids store.Comments) (ids [ benThread; benInBenThread ]) "Expected the thread of Ben without the reply of Ada"
+        Expect.equal store.Commenters [ ben ] "Expected only Ben"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a top-level comment removes a reply that a reader posts during the delete" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+      let lateReply = threadComment 8 (Some 1) (CommentWriter.Commenter ben)
+      store.PostAfterRepliesRead lateReply
+
+      match deleteCommentOf store adaThread with
+      | Ok (DeleteComment.Event.Deleted (_, others)) ->
+        Expect.equal others 3 "Expected the number of replies of the first read"
+        Expect.equal (ids store.Comments) (ids [ benThread; adaInBenThread; benInBenThread ]) "Expected only the thread of Ben"
+        Expect.contains store.Deleted lateReply.Id "Expected the late reply in the deletes"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a commenter removes a reply from another writer that a reader posts in their thread during the delete" {
+      let store = FakeCommentStore([ ada; ben ], bothThreads)
+      let lateReply = threadComment 8 (Some 1) (CommentWriter.Commenter ben)
+      store.PostAfterRepliesRead lateReply
+
+      match deleteCommenterOf store ada with
+      | Ok (DeleteCommenter.Event.Deleted (_, others)) ->
+        Expect.equal others 2 "Expected the replies from Ben and from the author of the first read"
+        Expect.equal (ids store.Comments) (ids [ benThread; benInBenThread ]) "Expected the thread of Ben without the reply of Ada"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a top-level comment on another post removes the replies on that post" {
+      let store = FakeCommentStore([ ada; ben ], threadsOnTwoPosts)
+
+      match deleteCommentOn store latestPost adaOnLatest with
+      | Ok (DeleteComment.Event.Deleted (_, others)) ->
+        Expect.equal others 1 "Expected the reply from Ben"
+        Expect.equal (ids store.Comments) (ids bothThreads) "Expected only the threads on the older post"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the delete of a comment with the slug of another post finds no comment and deletes nothing" {
+      let store = FakeCommentStore([ ada; ben ], threadsOnTwoPosts)
+
+      match deleteCommentOn store olderPost adaOnLatest with
+      | Error (ActionError.Logic (DeleteComment.Error.CommentNotFound _)) ->
+        Expect.equal (ids store.Comments) (threadsOnTwoPosts |> List.map _.Comment |> ids) "Expected each comment to stay"
+      | other -> failtestf "Expected CommentNotFound, got %A" other
+    }
+
+    test "the delete of a commenter with threads on two posts removes the replies on each post" {
+      let store = FakeCommentStore([ ada; ben ], threadsOnTwoPosts)
+
+      match deleteCommenterOf store ada with
+      | Ok (DeleteCommenter.Event.Deleted (_, others)) ->
+        Expect.equal others 3 "Expected the replies from Ben and from the author on both posts"
+        Expect.equal (ids store.Comments) (ids [ benThread; benInBenThread ]) "Expected the thread of Ben without the reply of Ada"
+      | other -> failtestf "Expected Deleted, got %A" other
+    }
+
+    test "the admin answers give the number of replies that go with each comment" {
+      let threads = FakeThreads(olderPost, bothThreads)
+
+      Expect.equal
+        (adminCommentsOf threads |> List.map (fun comment -> string comment.Comment.Comment.Id, comment.ReplyCount))
+        (bothThreads |> List.map (fun comment -> string comment.Id, if comment = adaThread then 3 elif comment = benThread then 2 else 0))
+        "Expected the replies of each top-level comment, and none for a reply"
+    }
+
+    test "the commenter page gives the number of replies from other writers that go with the commenter" {
+      let page =
+        FakeCommenterPage(
+          bothThreads |> List.filter (writtenBy ada) |> List.map (postedOn olderPost),
+          bothThreads |> List.filter (writtenBy ada >> not) |> List.map (postedOn olderPost)
+        )
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal commenterPage.OtherReplies 2 "Expected the replies from Ben and from the author"
+        Expect.equal
+          (commenterPage.Comments |> List.map (fun posted -> posted.Comment.ReplyCount))
+          [ 3; 0; 0 ]
+          "Expected each reply of the thread of Ada on its top-level comment"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+
+    test "the commenter page with threads on two posts gives the replies on each post" {
+      let page =
+        FakeCommenterPage(
+          threadsOnTwoPosts |> List.filter (_.Comment >> writtenBy ada),
+          threadsOnTwoPosts |> List.filter (_.Comment >> writtenBy ada >> not)
+        )
+
+      match (GetCommenter.withDependencies page commenterId CancellationToken.None).Result with
+      | Ok (Some commenterPage) ->
+        Expect.equal commenterPage.OtherReplies 3 "Expected the replies from Ben and from the author on both posts"
+        Expect.equal
+          (commenterPage.Comments |> List.map (fun posted -> posted.Comment.ReplyCount))
+          [ 3; 0; 0; 1 ]
+          "Expected each reply on the top-level comment of its post"
+      | other -> failtestf "Expected the commenter page, got %A" other
+    }
+  ]
+
+[<Tests>]
+let tests =
+  testList "Replies" [
+    replyCheckTests
+    approvalTests
+    visibilityTests
+    answerTests
+    authorReplyTests
+    adminAnswerTests
+    countTests
+    deleteTests
+  ]

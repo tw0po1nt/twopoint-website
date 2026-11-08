@@ -103,6 +103,6 @@ test('the light starts at the tap, and after a key it starts at the focused link
   document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
   document.querySelector('a[href="/posts/first"]').focus();
   follow('First');
-  assert.deepEqual(lamp(), ['90px', '70px'], 'The focused link, not the old tap');
+  assert.deepEqual(lamp(), ['90px', '70px'], 'The lamp follows the focused link');
   await settle();
 });

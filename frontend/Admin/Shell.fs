@@ -1,16 +1,24 @@
 [<RequireQualifiedAccess>]
 module TwoPoint.Admin.Shell
 
+/// The page of a reply form. Its answers go back to that page.
+[<RequireQualifiedAccess>]
+type ReplyPage =
+  | OnQueue
+  | OnPostComments
+
 /// Each API call of the admin. A call needs a token.
 type Call =
   | LoadDashboard
   | LoadPosts
   | PollPosts of generation: int
   | LoadQueue
-  | TrustCommenter of comment: Api.PostedComment
+  | TrustCommenter of comment: Api.PostedComment * commenter: Api.Commenter
   | Moderate of comment: Api.PostedComment * Queue.Action
   | LoadPostComments of slug: string
   | ModeratePostComment of slug: string * comment: Api.Comment * Queue.Action
+  | PreviewReply of ReplyPage * commentId: string * TwoPoint.Site.Widgets.Comments.PreviewRequest
+  | PostReply of ReplyPage * slug: string * commentId: string * content: string
   | LoadCommenters
   | LoadCommenter of commenterId: string
   | ChangeCommenter of commenterId: string * Commenter.Action
@@ -191,10 +199,12 @@ let private withBadge (before: Queue.Model) (after: Queue.Model) (model, effect)
 let private syncQueue (msg: PostComments.Msg) (queue: Queue.Model) =
   match msg with
   | PostComments.Done(commentId, action, Ok()) -> fst (Queue.update (Queue.Done(commentId, action, Ok())) queue)
+  | PostComments.Reply(AuthorReply.Answered(_, Ok answer)) -> Queue.approvedElsewhere answer.Approved queue
   | PostComments.Answered _
   | PostComments.Filtered _
   | PostComments.Chosen _
-  | PostComments.Done(_, _, Error _) -> queue
+  | PostComments.Done(_, _, Error _)
+  | PostComments.Reply _ -> queue
 
 /// The browser sends the Esc key to the page and to the open dialog. Only the top layer must act on it.
 let private layerOpenOverEditor (model: Model) =
@@ -434,14 +444,18 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     match msg with
     | Queue.Answered(Error Api.Refused)
     | Queue.Trusted(_, Error Api.Refused)
-    | Queue.Done(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | Queue.Done(_, _, Error Api.Refused)
+    | Queue.Reply(AuthorReply.Answered(_, Error Api.Refused)) -> update (Session Session.AccountRefused) next
     | _ ->
       let effect =
         effect
         |> Option.map (fun effect ->
           match effect with
-          | Queue.Trust comment -> Send [ TrustCommenter comment ]
-          | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ])
+          | Queue.Trust(comment, commenter) -> Send [ TrustCommenter(comment, commenter) ]
+          | Queue.Moderate(comment, action) -> Send [ Moderate(comment, action) ]
+          | Queue.PreviewReply(commentId, request) -> Send [ PreviewReply(ReplyPage.OnQueue, commentId, request) ]
+          | Queue.PostReply(comment, content) ->
+            Send [ PostReply(ReplyPage.OnQueue, comment.PostSlug, comment.Comment.Id, content) ])
 
       withBadge model.Queue queue (next, effect)
   | PostComments(PostComments.Chosen(commentId, Queue.Delete)) when model.Overlay <> Some(DeleteDialog commentId) ->
@@ -465,11 +479,18 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
 
     match msg with
     | PostComments.Answered(_, Error Api.Refused)
-    | PostComments.Done(_, _, Error Api.Refused) -> update (Session Session.AccountRefused) next
+    | PostComments.Done(_, _, Error Api.Refused)
+    | PostComments.Reply(AuthorReply.Answered(_, Error Api.Refused)) -> update (Session Session.AccountRefused) next
     | _ ->
       let effect =
         effect
-        |> Option.map (fun (PostComments.Moderate(slug, comment, action)) -> Send [ ModeratePostComment(slug, comment, action) ])
+        |> Option.map (fun effect ->
+          match effect with
+          | PostComments.Moderate(slug, comment, action) -> Send [ ModeratePostComment(slug, comment, action) ]
+          | PostComments.PreviewReply(commentId, request) ->
+            Send [ PreviewReply(ReplyPage.OnPostComments, commentId, request) ]
+          | PostComments.PostReply(slug, commentId, content) ->
+            Send [ PostReply(ReplyPage.OnPostComments, slug, commentId, content) ])
 
       withBadge model.Queue next.Queue (next, effect)
   | Commenters msg ->
@@ -507,6 +528,7 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
     | Commenter.Done(_, _, Ok()) -> next, Some(Send [ LoadQueue ])
     | Commenter.Answered _
     | Commenter.Chosen _
+    | Commenter.TopLevelToggled _
     | Commenter.Done(_, _, Error _) ->
       next,
       effect
@@ -596,16 +618,16 @@ let rec update (msg: Msg) (model: Model) : Model * Effect option =
   | Closed overlay when model.Overlay = Some overlay -> { model with Overlay = None }, None
   | Closed _ -> model, None
 
-/// None when that page has no such comment.
-let deleteChosen (model: Model) =
+/// The comment of the delete dialog, with the message of its delete. None when that page has no such comment.
+let private deleteTarget (model: Model) =
   match model.Overlay, model.Router.Route with
   | Some(DeleteDialog commentId), Route.ModerationQueue ->
     Queue.tryFind commentId model.Queue
-    |> Option.map (fun _ -> Queue(Queue.Chosen(commentId, Queue.Delete)))
+    |> Option.map (fun row -> row.Comment.Comment, Queue(Queue.Chosen(commentId, Queue.Delete)))
   | Some(DeleteDialog commentId), Route.PostComments _ ->
     model.PostComments
     |> Option.bind (PostComments.tryFind commentId)
-    |> Option.map (fun _ -> PostComments(PostComments.Chosen(commentId, Queue.Delete)))
+    |> Option.map (fun row -> row.Comment, PostComments(PostComments.Chosen(commentId, Queue.Delete)))
   | Some(DeleteDialog _), _
   | Some DeleteCommenterDialog, _
   | Some DeleteSubscriptionDialog, _
@@ -613,6 +635,13 @@ let deleteChosen (model: Model) =
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
+
+/// None when that page has no such comment.
+let deleteChosen (model: Model) = deleteTarget model |> Option.map snd
+
+/// The number of replies that go with the comment of the delete dialog.
+let deleteReplyCount (model: Model) =
+  deleteTarget model |> Option.map (fun (comment, _) -> comment.ReplyCount)
 
 let deleteCommenterChosen (model: Model) =
   match model.Overlay, model.Router.Route with
@@ -627,6 +656,10 @@ let deleteCommenterChosen (model: Model) =
   | Some MoreSheet, _
   | Some SignOutDialog, _
   | None, _ -> None
+
+/// The number of replies from other writers that go with the commenter of the delete dialog.
+let deleteCommenterOtherReplies (model: Model) =
+  deleteCommenterChosen model |> Option.bind (fun _ -> model.Commenter |> Option.bind Commenter.tryOtherReplies)
 
 let deleteSubscriptionChosen (model: Model) =
   match model.Overlay, model.Router.Route, model.Subscriptions.Sheet with
