@@ -1,8 +1,11 @@
 namespace TwoPoint.Dependencies.Posts
 
 module internal PostEmails =
-  
-  let verifyEmail (uri: System.Uri) name = "Verify your email address", $$"""
+
+  /// The comment form takes any address and any name, so the email contains no text from the form.
+  let verifyEmail (redirectUri: System.Uri) =
+    let uri = System.Net.WebUtility.HtmlEncode redirectUri.AbsoluteUri
+    "Verify your email address", $$"""
 <!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
 <head>
@@ -78,7 +81,7 @@ module internal PostEmails =
                   </a>
                   <div role="separator" style="line-height: 24px">&zwj;</div>
                   <h1 style="margin: 0 0 24px; font-size: 24px; line-height: 32px; font-weight: 600; color: #0f172a">
-                    Hey {{name}}!
+                    Hey there!
                   </h1>
                   <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px; color: #475569">
                     Thanks for your comment! In order to proceed with posting it, please verify your email address:

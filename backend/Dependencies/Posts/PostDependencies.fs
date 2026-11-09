@@ -158,11 +158,7 @@ type PostDependencies internal (
     builder.Query <- query.ToString()
     let redirectUri = builder.Uri;
 
-    let subject, message =
-      commenter.Name
-      |> Option.map _.ToString()
-      |> Option.defaultValue "there"
-      |> PostEmails.verifyEmail redirectUri
+    let subject, message = PostEmails.verifyEmail redirectUri
     let recipient = commenter.EmailAddress.ToString()
 
     let! (message: EmailMessage) =
