@@ -152,7 +152,8 @@ _Avoid_: Unsent post, pending delivery
 
 **Commenter**:
 A person who verified an email address to comment on posts. A commenter is new, trusted, or
-banned. A delete removes the commenter, each comment of the commenter, and each thread that a
+banned. Each request to verify sends a verification email, but a request in the hour after the
+last verification email of that address sends no email. A delete removes the commenter, each comment of the commenter, and each thread that a
 comment of the commenter starts. The email address can then verify again, and it becomes a new
 commenter.
 _Avoid_: User, reader

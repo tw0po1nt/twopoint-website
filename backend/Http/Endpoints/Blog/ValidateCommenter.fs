@@ -53,8 +53,10 @@ type ValidateCommenter (
       
       member this.GetCommenterByEmailAddress emailAddress = postDependencies.GetCommenterByEmailAddress emailAddress
       member this.GetValidRedirectUris () = postDependencies.GetValidRedirectUris()
+      member this.GetUtcNow () = SystemDependencies.live.GetUtcNow()
       member this.CreateCommenter emailAddress name status = postDependencies.CreateCommenter emailAddress name status
       member this.SendCommenterValidationEmail commenter redirectUri = postDependencies.SendCommenterValidationEmail commenter redirectUri
+      member this.RecordValidationEmailSent commenter sentDate = postDependencies.RecordValidationEmailSent commenter sentDate
     }
 
     let commenterValidation =
@@ -71,7 +73,9 @@ type ValidateCommenter (
     let! validateCommenterResult = ct |> validateCommenter commenterValidation
     let apiResponse, statusCode =
       match validateCommenterResult with
-      | Ok _ | Error (Logic (ValidateCommenter.Error.Banned _)) ->
+      | Ok _
+      | Error (Logic (ValidateCommenter.Error.Banned _))
+      | Error (Logic ValidateCommenter.Error.ValidationEmailRecent) ->
         { Success = true; Message = None; Data = None }, HttpStatusCode.OK
       | Error (Logic (ValidateCommenter.Error.InvalidRedirect uri)) ->
         { Success = false; Message = Some $"Redirect uri '{uri}' is invalid"; Data = None }, HttpStatusCode.BadRequest

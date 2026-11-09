@@ -43,10 +43,11 @@ email to
 ## Comments
 
 When you comment, the site stores a commenter record. The record contains your email address, your name if you give one,
-the date of your first comment, and a moderation status.
+the date of your first comment, the date of the last validation email, and a moderation status.
 
 Your name shows publicly with each of your comments. Your email address stays private. The site sends a validation
-email to your address before it accepts comments from you.
+email to your address before it accepts comments from you. The site sends at most one validation email to an address
+in each hour.
 
 The comment form has the checkbox "email me when someone replies". The checkbox is not checked when the form opens. If
 you check it, the site sends you a reply email when someone else posts an approved reply to that comment.

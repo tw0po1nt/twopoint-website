@@ -164,6 +164,10 @@ reader posts during the delete. A second try after a failure does not find that 
 comment gives `replyCount`, and the commenter page gives `otherReplies`. The confirm dialog of each
 delete shows that number.
 
+`Blog-ValidateCommenter` (`POST blog/commenters`) sends the validation email of a commenter. A request
+in the hour after the last validation email of that address sends no email and gets the same answer.
+The rule is `ValidateCommenter.Logic.decide`, and the commenter row stores `ValidationEmailSentDate`.
+
 The page form of the Comments widget has the checkbox "email me when someone replies". The reply
 form has no checkbox. A checked `replyEmails` on `POST blog/posts/{slug}/comments` stores the
 reply-email consent on the top-level comment, with its date and a stop token. The backend also

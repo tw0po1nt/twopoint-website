@@ -24,7 +24,8 @@ let private dbCommenter =
     EmailAddress = "ada@example.com"
     Name = Some "Ada"
     CreatedDate = earlier
-    Status = "trusted" }
+    Status = "trusted"
+    ValidationEmailSentDate = None }
 
 let private commenter = dbCommenter.ToCommenter() |> ok
 
@@ -61,6 +62,7 @@ type private RecordingPostDb() =
     member _.GetCommenterByEmailAddress _ = notUsed ()
     member _.GetCommenterByValidationId _ = notUsed ()
     member _.CreateCommenter _ = notUsed ()
+    member _.UpdateCommenterValidationEmailSentDate _ _ = notUsed ()
     member _.UpdateCommenterStatus _ _ = notUsed ()
     member _.DeleteCommenter _ = notUsed ()
     member _.GetCommentsForPost _ _ = notUsed ()
