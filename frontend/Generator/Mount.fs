@@ -31,6 +31,11 @@ let stopReplyEmails (config: StageConfig) =
     (Contract.Widget.StopReplyEmails { Api = apiOrigin config })
     (p (class' = "stop-reply-emails-fallback") { "The stop link needs JavaScript." })
 
+let confirmSubscription (config: StageConfig) =
+  view
+    (Contract.Widget.ConfirmSubscription { Api = apiOrigin config })
+    (p (class' = "confirm-subscription-fallback") { "The confirm link needs JavaScript." })
+
 let subscribe (config: StageConfig) =
   view
     (Contract.Widget.Subscribe { Api = apiOrigin config })

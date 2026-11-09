@@ -13,6 +13,7 @@ type PostFilter =
 type SubscriptionFilter =
   | All
   | Active
+  | Pending
   | Inactive
 
 type Route =
@@ -44,13 +45,14 @@ module PostFilter =
 [<RequireQualifiedAccess>]
 module SubscriptionFilter =
 
-  let all = [ SubscriptionFilter.All; SubscriptionFilter.Active; SubscriptionFilter.Inactive ]
+  let all = [ SubscriptionFilter.All; SubscriptionFilter.Active; SubscriptionFilter.Pending; SubscriptionFilter.Inactive ]
 
   /// "All" has no query string.
   let value (filter: SubscriptionFilter) =
     match filter with
     | SubscriptionFilter.All -> None
     | SubscriptionFilter.Active -> Some "active"
+    | SubscriptionFilter.Pending -> Some "pending"
     | SubscriptionFilter.Inactive -> Some "inactive"
 
 [<RequireQualifiedAccess>]

@@ -41,6 +41,8 @@ module RenderMap =
     | SitePage.Unsubscribe -> UnsubscribePage.robots, (fun () -> UnsubscribePage.render config assets widgets posts)
     | SitePage.StopReplyEmails ->
       StopReplyEmailsPage.robots, (fun () -> StopReplyEmailsPage.render config assets widgets posts)
+    | SitePage.ConfirmSubscription ->
+      ConfirmSubscriptionPage.robots, (fun () -> ConfirmSubscriptionPage.render config assets widgets posts)
     | SitePage.About -> AboutPage.robots, (fun () -> AboutPage.render config assets widgets posts)
     | SitePage.Privacy -> PrivacyPage.robots, (fun () -> PrivacyPage.render config assets widgets posts content.Privacy)
     | SitePage.NotFound -> NotFoundPage.robots, (fun () -> NotFoundPage.render config assets widgets posts)

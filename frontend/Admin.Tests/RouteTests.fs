@@ -18,6 +18,7 @@ let private routes =
     Series, "/series"
     Subscriptions SubscriptionFilter.All, "/subscriptions"
     Subscriptions SubscriptionFilter.Active, "/subscriptions?filter=active"
+    Subscriptions SubscriptionFilter.Pending, "/subscriptions?filter=pending"
     Subscriptions SubscriptionFilter.Inactive, "/subscriptions?filter=inactive"
     Settings, "/settings" ]
 

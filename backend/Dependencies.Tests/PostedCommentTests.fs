@@ -23,7 +23,8 @@ let private commenter =
     EmailAddress = "ada@example.com"
     Name = Some "Ada"
     CreatedDate = date
-    Status = "new" }
+    Status = "new"
+    ValidationEmailSentDate = None }
 
 let private status =
   { DbCommentStatus.Id = "2b3c4d5e-6f7a-4b2c-9d3e-4f5a6b7c8d9e"

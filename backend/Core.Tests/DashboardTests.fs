@@ -90,9 +90,20 @@ let tests =
       Expect.equal counts.DeliveriesToStart 0 "No migrated post"
     }
 
-    test "a subscription that is not canceled is active" {
-      let counts = audience [ reader (daysAgo 90.0) Active; reader (daysAgo 2.0) Active; reader (daysAgo 90.0) (Canceled(daysAgo 5.0)) ]
+    test "only a confirmed subscription that is not canceled is active" {
+      let counts =
+        audience
+          [ reader (daysAgo 90.0) Active
+            reader (daysAgo 2.0) Active
+            reader (daysAgo 90.0) (Canceled(daysAgo 5.0))
+            reader (daysAgo 1.0) (SubscriptionStatus.Pending(daysAgo 1.0)) ]
+
       Expect.equal counts.ActiveSubscriptions 2 "The two active subscriptions"
+    }
+
+    test "a pending subscription is not new" {
+      let counts = audience [ reader (daysAgo 1.0) (SubscriptionStatus.Pending(daysAgo 1.0)); reader (daysAgo 2.0) Active ]
+      Expect.equal counts.NewSubscriptions 1 "Only the confirmed subscription"
     }
 
     test "a subscription made in the last 30 days is new, also when it is canceled" {

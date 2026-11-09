@@ -23,6 +23,10 @@ type ValidRedirectUri =
 type ReplyEmailConfig =
   { SiteUri : Uri }
 
+/// `ConfirmUri` is the URL of the confirm page of the site, which each confirmation email links to.
+type SubscriptionConfig =
+  { ConfirmUri : Uri }
+
 type WelcomeConfig =
   { Enabled : bool
     NewsletterContainerUri : Uri
@@ -52,6 +56,7 @@ type Config =
   { Azure : AzureConfig
     WebPush : WebPushConfig option
     ValidRedirectUris : ValidRedirectUri list
+    Subscription : SubscriptionConfig option
     Welcome : WelcomeConfig option
     ReplyEmail : ReplyEmailConfig option
     Deploy : DeployConfig option
@@ -110,6 +115,11 @@ module Config =
 
       let! validRedirectUris = Bind.section "ValidRedirectUris" (Bind.list bindValidRedirectUri)
 
+      let! subscription = Bind.optSection "Subscription" <| bind {
+        let! confirmUri = Bind.valueAt "ConfirmUri" (Bind.uri UriKind.Absolute)
+        return { ConfirmUri = confirmUri }
+      }
+
       let! welcome = Bind.optSection "Welcome" <| bind {
         let! enabled = Bind.optValueAt "Enabled" Bind.bool
         let! newsletterContainerUri = Bind.valueAt "NewsletterContainerUri" (Bind.uri UriKind.Absolute)
@@ -144,6 +154,7 @@ module Config =
         { Azure = azure
           WebPush = webPush
           ValidRedirectUris = validRedirectUris
+          Subscription = subscription
           Welcome = welcome
           ReplyEmail = replyEmail
           Deploy = deploy

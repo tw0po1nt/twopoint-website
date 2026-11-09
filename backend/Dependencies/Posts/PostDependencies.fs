@@ -126,9 +126,17 @@ type PostDependencies internal (
 
     return!
       dbCommenter
-      |> Option.traverseResult (fun (dbo: DbCommenter) -> dbo.ToCommenter())
+      |> Option.traverseResult (fun (dbo: DbCommenter) ->
+        dbo.ToCommenter()
+        |> Validation.map (fun commenter ->
+          { ValidateCommenter.KnownCommenter.Commenter = commenter
+            ValidateCommenter.KnownCommenter.ValidationEmailSentDate = dbo.ValidationEmailSentDate }))
       |> DependencyError.ofValidation source
   }
+
+  member _.RecordValidationEmailSent (commenter : Commenter) sentDate =
+    postDb.UpdateCommenterValidationEmailSentDate (commenter.ValidationId.ToString()) sentDate
+    |> CancellableTaskResult.ignore
 
   member _.GetCommenterByValidationId validationId = cancellableTaskResult {
     let! dbCommenter = postDb.GetCommenterByValidationId (validationId.ToString())
@@ -145,7 +153,8 @@ type PostDependencies internal (
         DbCommenter.EmailAddress = emailAddress |> EmailAddress.value
         Name = name |> Option.map NonEmptyString.value
         CreatedDate = system.GetUtcNow()
-        Status = status.ToString().ToLower() } 
+        Status = status.ToString().ToLower()
+        ValidationEmailSentDate = None }
 
     let! (dbCommenter: DbCommenter) = postDb.CreateCommenter newCommenter
     return! dbCommenter.ToCommenter() |> DependencyError.ofValidation source
@@ -158,11 +167,7 @@ type PostDependencies internal (
     builder.Query <- query.ToString()
     let redirectUri = builder.Uri;
 
-    let subject, message =
-      commenter.Name
-      |> Option.map _.ToString()
-      |> Option.defaultValue "there"
-      |> PostEmails.verifyEmail redirectUri
+    let subject, message = PostEmails.verifyEmail redirectUri
     let recipient = commenter.EmailAddress.ToString()
 
     let! (message: EmailMessage) =

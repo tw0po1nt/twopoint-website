@@ -312,11 +312,18 @@ module CommenterValidation =
 [<RequireQualifiedAccess>]
 module ValidateCommenter =
 
+  // Input
+
+  type KnownCommenter =
+    { Commenter : Commenter
+      ValidationEmailSentDate : DateTime option }
+
   // Output
 
   type Error =
     | Banned of Commenter
     | InvalidRedirect of Uri
+    | ValidationEmailRecent
   type Success = Validated of commenter: Commenter option * validation: CommenterValidation
   type Decision = Decision<Success, Error>
   type Event = Validated of Commenter
@@ -324,28 +331,40 @@ module ValidateCommenter =
   // Logic
 
   type Logic =
-    Commenter option
+    DateTime
+      -> KnownCommenter option
       -> Uri list
       -> CommenterValidation
       -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
+    let resendAfter = TimeSpan.FromHours 1.0
+
     let decide : Logic =
-      fun existingCommenter validRedirectUris commenterValidation -> result {
+      fun utcNow known validRedirectUris commenterValidation -> result {
+        let existingCommenter = known |> Option.map _.Commenter
+
         do! result {
           match existingCommenter with
           | Some commenter ->
-            return! commenter.Status.IsBanned |> Result.requireFalse (Error.Banned existingCommenter.Value)
+            return! commenter.Status.IsBanned |> Result.requireFalse (Error.Banned commenter)
           | None ->
             return ()
         }
 
         do!
           validRedirectUris
-          |> List.tryFind (fun uri -> uri.Host = commenterValidation.RedirectUri.Host)
+          |> List.tryFind (fun uri ->
+            Uri.Compare(uri, commenterValidation.RedirectUri, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) = 0)
           |> Result.requireSome (InvalidRedirect commenterValidation.RedirectUri)
           |> Result.ignore
+
+        do!
+          known
+          |> Option.bind _.ValidationEmailSentDate
+          |> Option.exists (fun sentDate -> utcNow - sentDate < resendAfter)
+          |> Result.requireFalse ValidationEmailRecent
 
         return Success.Validated (existingCommenter, commenterValidation)
       }
@@ -357,8 +376,9 @@ module ValidateCommenter =
       -> CancellableTask<ActionResult<Event, Error>>
 
   type Dependencies =
-    abstract member GetCommenterByEmailAddress: emailAddress: EmailAddress -> DependencyResult<Commenter option>
+    abstract member GetCommenterByEmailAddress: emailAddress: EmailAddress -> DependencyResult<KnownCommenter option>
     abstract member GetValidRedirectUris: unit -> DependencyResult<Uri list>
+    abstract member GetUtcNow: unit -> DateTime
     abstract member CreateCommenter:
       emailAddress: EmailAddress
         -> name: NonEmptyString option
@@ -368,9 +388,10 @@ module ValidateCommenter =
       commenter: Commenter
         -> redirectUri: Uri
         -> DependencyResult<OperationId>
+    abstract member RecordValidationEmailSent: commenter: Commenter -> sentDate: DateTime -> DependencyResult<unit>
  
   let withDependencies (dependencies : Dependencies) : Action =
-    let handleCommenterValidated (Success.Validated (commenter, commenterValidation)) : DependencyResult<Commenter> =
+    let handleCommenterValidated sentDate (Success.Validated (commenter, commenterValidation)) : DependencyResult<Commenter> =
       cancellableTaskResult {
         let! (commenter: Commenter) = cancellableTaskResult {
           match commenter with
@@ -382,6 +403,8 @@ module ValidateCommenter =
           dependencies.SendCommenterValidationEmail commenter commenterValidation.RedirectUri
           |> CancellableTaskResult.ignore
 
+        do! dependencies.RecordValidationEmailSent commenter sentDate
+
         return commenter
       }
 
@@ -391,7 +414,7 @@ module ValidateCommenter =
         |> CommenterValidation.create
         |> Result.mapError ActionError<Error>.Validation
 
-      let! existingCommenter =
+      let! known =
         dependencies.GetCommenterByEmailAddress commenterValidation.EmailAddress
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
@@ -399,11 +422,12 @@ module ValidateCommenter =
         dependencies.GetValidRedirectUris()
         |> CancellableTaskResult.mapError ActionError<Error>.Dependency
 
-      let decision = Logic.decide existingCommenter validRedirectUris commenterValidation
+      let utcNow = dependencies.GetUtcNow()
+      let decision = Logic.decide utcNow known validRedirectUris commenterValidation
 
       return!
         decision
-        |> Result.traverseCancellableTask handleCommenterValidated
+        |> Result.traverseCancellableTask (handleCommenterValidated utcNow)
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult Event.Validated)
           (Logic >> ActionResult.failure)

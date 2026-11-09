@@ -50,7 +50,7 @@ type CancelSubscription (
           member _.GetSubscriptionByEmail email = subscriptionDependencies.GetSubscriptionByEmail email
           member _.GetSubscriptionById id = subscriptionDependencies.GetSubscriptionById id
           member _.GetUtcNow () = DateTime.UtcNow
-          member _.DeactivateSubscription subscription = subscriptionDependencies.UpdateSubscriptionActivation subscription
+          member _.DeactivateSubscription subscription = subscriptionDependencies.UpdateSubscriptionStatus subscription
         }
 
         let cancellation =

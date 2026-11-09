@@ -59,7 +59,7 @@ type Unsubscribe (
       member _.GetUtcNow () =
         DateTime.UtcNow
       member _.DeactivateSubscription subscription = 
-        subscriptionDependencies.UpdateSubscriptionActivation subscription
+        subscriptionDependencies.UpdateSubscriptionStatus subscription
     }
 
     let! cancelSubscriptionResult = ct |> cancelSubscription subscriptionCancellation 

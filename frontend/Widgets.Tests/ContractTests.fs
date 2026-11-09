@@ -14,10 +14,12 @@ let private unsubscribe = Contract.Widget.Unsubscribe { Api = "https://api.examp
 
 let private stopReplyEmails = Contract.Widget.StopReplyEmails { Api = "https://api.example" }
 
+let private confirmSubscription = Contract.Widget.ConfirmSubscription { Api = "https://api.example" }
+
 let private pdf = Contract.Widget.Pdf { File = "https://files.example/talks/slides.pdf" }
 
 /// One value of each case of `Contract.Widget`.
-let private widgets = [ subscribe; comments; unsubscribe; stopReplyEmails; pdf ]
+let private widgets = [ subscribe; comments; unsubscribe; stopReplyEmails; confirmSubscription; pdf ]
 
 [<Tests>]
 let tests =
@@ -52,6 +54,11 @@ let tests =
         "The StopReplyEmails mount has its name and the API origin"
 
       Expect.equal
+        (Contract.toAttributes confirmSubscription)
+        [ "data-widget", "confirm-subscription"; "data-api", "https://api.example" ]
+        "The ConfirmSubscription mount has its name and the API origin"
+
+      Expect.equal
         (Contract.toAttributes pdf)
         [ "data-widget", "pdf"; "data-file", "https://files.example/talks/slides.pdf" ]
         "The Pdf mount has its name and the file"
@@ -74,7 +81,7 @@ let tests =
 
       Expect.equal
         (Contract.parse [ "data-widget", "search" ])
-        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe, stop-reply-emails, pdf.")
+        (Error "The widget 'search' is unknown. Use one of these names: subscribe, comments, unsubscribe, stop-reply-emails, confirm-subscription, pdf.")
         "An unknown name"
     }
 
@@ -143,6 +150,18 @@ let tests =
         (Contract.parse [ "data-widget", "unsubscribe"; "data-api", "https://api.example/" ])
         (Error "The 'data-api' of the unsubscribe mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
         "A '/' at the end"
+    }
+
+    test "a ConfirmSubscription mount with no API origin or a bad one gives an error" {
+      Expect.equal
+        (Contract.parse [ "data-widget", "confirm-subscription" ])
+        (Error "The confirm-subscription mount has no 'data-api' attribute.")
+        "No API origin"
+
+      Expect.equal
+        (Contract.parse [ "data-widget", "confirm-subscription"; "data-api", "https://api.example/" ])
+        (Error "The 'data-api' of the confirm-subscription mount is 'https://api.example/'. Give an http or https origin with no '/' at the end.")
+        "A bad API origin"
     }
 
     test "a StopReplyEmails mount with no API origin or a bad one gives an error" {

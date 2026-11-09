@@ -26,8 +26,12 @@ module TableEntityExtensions =
       |> Validation.requireSome $"{entity}.{key} is required, but was missing from TableEntity with PartitionKey: '{this.PartitionKey}'"
 
 [<RequireQualifiedAccess>]
+module DbDate =
+  let text (date : System.DateTime) = date.ToString("o", System.Globalization.CultureInfo.InvariantCulture)
+
+[<RequireQualifiedAccess>]
 module Db =
-  
+
   open TwoPoint.Dependencies.Util
   open TwoPoint.Core.Util
   
@@ -240,6 +244,25 @@ module Db =
         return! onError "Unable to fetch newly created entity" |> Error
     }
     
+  /// <summary>
+  /// Replace an entity in an Azure Table only while its ETag is <paramref name="ifMatch"/>
+  /// </summary>
+  /// <returns><c>ConditionFailed</c> when the entity changed or is gone</returns>
+  let replaceIfMatch tableServiceClient (logger : ILogger) db table (entity : TableEntity) (ifMatch : string) =
+    runQuery logger $"{db}.{table}.replaceIfMatch"
+    <| cancellableTaskResult {
+      let! ct = CancellableTask.getCancellationToken()
+      let! tableClient = getTable tableServiceClient table
+
+      try
+        let! response = tableClient.UpdateEntityAsync(entity, ETag ifMatch, TableUpdateMode.Replace, cancellationToken = ct)
+        return TwoPoint.Core.Posts.Written (response.Headers.ETag |> Option.ofNullable |> Option.map string |> Option.defaultValue "")
+      with
+        | :? RequestFailedException as ex when
+            ex.Status = int HttpStatusCode.PreconditionFailed || ex.Status = int HttpStatusCode.NotFound ->
+          return TwoPoint.Core.Posts.ConditionFailed
+    }
+
   /// <summary>
   /// Update an entity in an Azure Table
   /// </summary>

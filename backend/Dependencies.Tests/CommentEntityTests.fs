@@ -20,7 +20,8 @@ let private commenter =
     EmailAddress = "ada@example.com"
     Name = Some "Ada"
     CreatedDate = date
-    Status = "new" }
+    Status = "new"
+    ValidationEmailSentDate = None }
 
 let private status =
   { DbCommentStatus.Id = "2b3c4d5e-6f7a-4b2c-9d3e-4f5a6b7c8d9e"
@@ -269,5 +270,29 @@ let tests =
           ReplyEmails = None }
 
       Expect.equal (comment.ToEntity() |> DbComment.FromEntity) (Ok comment) "Expected the same comment"
+    }
+  ]
+
+[<Tests>]
+let commenterTests =
+  testList "DbCommenter" [
+    test "a commenter with the date of a validation email reads back with the same date" {
+      let sent = { commenter with ValidationEmailSentDate = Some (date.AddHours 2.0) }
+
+      Expect.equal (sent.ToEntity() |> DbCommenter.FromEntity) (Ok sent) "Expected the same commenter"
+    }
+
+    test "a row from before the resend rule reads with no date" {
+      let entity = commenter.ToEntity()
+      entity.Remove "ValidationEmailSentDate" |> ignore
+
+      Expect.equal (DbCommenter.FromEntity entity) (Ok commenter) "Expected no date"
+    }
+
+    test "a row with a bad date of a validation email is refused" {
+      let entity = commenter.ToEntity()
+      entity["ValidationEmailSentDate"] <- "yesterday"
+
+      Expect.isError (DbCommenter.FromEntity entity) "Expected a refusal"
     }
   ]

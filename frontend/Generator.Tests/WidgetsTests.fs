@@ -19,6 +19,7 @@ let private manifest =
   """{
   "entries": {
     "comments": { "file": "comments-E.js", "imports": [ "chunk-B.js" ] },
+    "confirm-subscription": { "file": "confirm-subscription-J.js", "imports": [ "chunk-B.js" ] },
     "pdf": { "file": "pdf-G.js", "imports": [ "chunk-B.js" ] },
     "stop-reply-emails": { "file": "stop-reply-emails-I.js", "imports": [ "chunk-B.js" ] },
     "subscribe": { "file": "subscribe-A.js", "imports": [ "chunk-B.js" ] },
@@ -32,6 +33,7 @@ let private files =
   Map
     [ "manifest.json", bytes manifest
       "comments-E.js", bytes "export{};"
+      "confirm-subscription-J.js", bytes "export{};"
       "pdf-G.js", bytes "export{};"
       "pdf.worker-H.js", bytes "export{};"
       "stop-reply-emails-I.js", bytes "export{};"
@@ -52,6 +54,7 @@ let tests =
         { Entries =
             Map
               [ "comments", { File = "comments-E.js"; Imports = [ "chunk-B.js" ] }
+                "confirm-subscription", { File = "confirm-subscription-J.js"; Imports = [ "chunk-B.js" ] }
                 "pdf", { File = "pdf-G.js"; Imports = [ "chunk-B.js" ] }
                 "stop-reply-emails", { File = "stop-reply-emails-I.js"; Imports = [ "chunk-B.js" ] }
                 "subscribe", { File = "subscribe-A.js"; Imports = [ "chunk-B.js" ] }
@@ -102,6 +105,7 @@ let tests =
           "frontend/Widgets/dist/manifest.json has no entry for the widget 'comments'."
           "frontend/Widgets/dist/manifest.json has no entry for the widget 'unsubscribe'."
           "frontend/Widgets/dist/manifest.json has no entry for the widget 'stop-reply-emails'."
+          "frontend/Widgets/dist/manifest.json has no entry for the widget 'confirm-subscription'."
           "frontend/Widgets/dist/manifest.json has no entry for the widget 'pdf'." ]
         "The error names each widget"
     }
@@ -111,6 +115,7 @@ let tests =
         """{
   "entries": {
     "comments": { "file": "comments-E.js", "imports": [] },
+    "confirm-subscription": { "file": "confirm-subscription-J.js", "imports": [] },
     "pdf": { "file": "pdf-G.js", "imports": [] },
     "stop-reply-emails": { "file": "stop-reply-emails-I.js", "imports": [] },
     "subscribe": { "file": "subscribe-A.js", "imports": [] },
@@ -147,6 +152,7 @@ let tests =
         (created.Files |> Map.keys |> List.ofSeq)
         [ "_/widgets/chunk-B.js"
           "_/widgets/comments-E.js"
+          "_/widgets/confirm-subscription-J.js"
           "_/widgets/pdf-G.js"
           "_/widgets/pdf.worker-H.js"
           "_/widgets/stop-reply-emails-I.js"

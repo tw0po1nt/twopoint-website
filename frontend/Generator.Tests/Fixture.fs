@@ -28,6 +28,7 @@ let private widgetManifest =
   """{
   "entries": {
     "comments": { "file": "comments-TEST.js", "imports": [ "chunk-TEST.js" ] },
+    "confirm-subscription": { "file": "confirm-subscription-TEST.js", "imports": [ "chunk-TEST.js" ] },
     "pdf": { "file": "pdf-TEST.js", "imports": [ "chunk-TEST.js" ] },
     "stop-reply-emails": { "file": "stop-reply-emails-TEST.js", "imports": [ "chunk-TEST.js" ] },
     "subscribe": { "file": "subscribe-TEST.js", "imports": [ "chunk-TEST.js" ] },
@@ -41,6 +42,7 @@ let widgetFiles =
   Map
     [ "manifest.json", Encoding.UTF8.GetBytes widgetManifest
       "comments-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"
+      "confirm-subscription-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"
       "pdf-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"
       "pdf.worker-TEST.js", Encoding.UTF8.GetBytes "export{};"
       "stop-reply-emails-TEST.js", Encoding.UTF8.GetBytes "import\"./chunk-TEST.js\";"

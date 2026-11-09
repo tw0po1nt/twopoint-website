@@ -100,19 +100,25 @@ _Avoid_: Release, go live
 ### Subscriptions
 
 **Subscription**:
-The record of one email address that gets posts by email. A subscription is active or inactive. An
-inactive subscription has the canceled date of its last cancellation, and a reactivation clears that
-date.
+The record of one email address that gets posts by email. A subscription is pending, active, or
+canceled. A pending subscription has the date of its last confirmation email and gets no post. A
+canceled subscription has the date of its last cancellation.
 _Avoid_: Subscriber, member, signup
 
+**Confirmation**:
+The step that makes a pending subscription active. Each subscribe request for a new or a canceled
+subscription sends a confirmation email, with a link to the confirm page. The reader clicks the button
+on that page. A second request in the hour after a confirmation email sends no email.
+_Avoid_: Double opt-in, verification
+
 **Reactivation**:
-A subscribe request for an email address that has an inactive subscription. The subscription becomes
-active again.
+A subscribe request for an email address that has a canceled subscription. The subscription becomes
+pending again, and it becomes active after a confirmation.
 _Avoid_: Resubscription
 
 **Cancellation**:
-A request that makes an active subscription inactive. The reader sends it from the unsubscribe link, or
-the author sends it from the admin.
+A request that makes a pending or an active subscription canceled. The reader sends it from the
+unsubscribe link, or the author sends it from the admin.
 _Avoid_: Deactivation, unsubscription
 
 **Delivery**:
@@ -120,7 +126,7 @@ One email that the blog sends to a subscription. Each delivery has a type and re
 _Avoid_: Subscription notification, send
 
 **Welcome**:
-A delivery that the blog sends after a new subscription or a reactivation. It contains the newsletter of
+A delivery that the blog sends after the confirmation of a subscription. It contains the newsletter of
 the newest post with a publish date in the past and a deployed latest change. Between a publish and its
 deploy, a new subscription gets the previous post.
 _Avoid_: Welcome notification, greeting
@@ -146,9 +152,10 @@ _Avoid_: Unsent post, pending delivery
 
 **Commenter**:
 A person who verified an email address to comment on posts. A commenter is new, trusted, or
-banned. A delete removes the commenter, each comment of the commenter, and each thread that a
-comment of the commenter starts. The email address can then verify again, and it becomes a new
-commenter.
+banned. Each request to verify sends a validation email. A request in the hour after the last
+validation email of that address sends no email. A delete removes the commenter, each comment of
+the commenter, and each thread that a comment of the commenter starts. The email address can then
+verify again, and it becomes a new commenter.
 _Avoid_: User, reader
 
 **Comment**:
