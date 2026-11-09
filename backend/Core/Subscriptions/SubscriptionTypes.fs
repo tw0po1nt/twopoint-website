@@ -21,6 +21,8 @@ module SubscriptionId =
 
   let createMaybe = Types.createMaybe create
 
+  let ofGuid (guid : Guid) = SubscriptionId guid
+
   let value (SubscriptionId sid) = sid
 
 
@@ -53,7 +55,9 @@ type SubscriptionDelivery =
     Type : SubscriptionDeliveryType
     Post : Slug }
 
+/// `Pending` gets no post until the subscriber confirms with the link of the confirmation email.
 type SubscriptionStatus =
+  | Pending of requestedDate : DateTime
   | Active
   | Canceled of DateTime
 
@@ -69,12 +73,22 @@ module Subscription =
   let cancel (canceledDateUtc : DateTime) (subscription : Subscription) =
     { subscription with Status = Canceled canceledDateUtc }
 
-  let reactivate (subscription : Subscription) =
+  let request (requestedDate : DateTime) (subscription : Subscription) =
+    { subscription with Status = Pending requestedDate }
+
+  let confirm (subscription : Subscription) =
     { subscription with Status = Active }
 
   let isActive (subscription : Subscription) =
     match subscription.Status with
     | Active -> true
+    | Pending _
+    | Canceled _ -> false
+
+  let isPending (subscription : Subscription) =
+    match subscription.Status with
+    | Pending _ -> true
+    | Active
     | Canceled _ -> false
 
 type DeliveredPost =

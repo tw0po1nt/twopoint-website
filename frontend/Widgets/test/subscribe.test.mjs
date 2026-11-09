@@ -93,7 +93,7 @@ test('a subscription that goes through shows the result and empties the form', a
   await settle();
   assert.equal(calls.length, 3, 'A third request');
   assert.equal(status().className, 'subscribe-status is-subscribed');
-  assert.match(status().textContent, /You're subscribed/);
+  assert.match(status().textContent, /Check your inbox and confirm your subscription/);
   assert.equal(email().value, '', 'The email input is empty');
   assert.equal(name().value, '', 'The name input is empty');
 });

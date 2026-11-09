@@ -1,6 +1,7 @@
 module TwoPoint.Core.Tests.SubscriptionTests
 
 open TwoPoint.Core.Posts
+open TwoPoint.Core.Shared
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Subscriptions.Queries
@@ -35,24 +36,23 @@ let private cancel (dependencies : FakeCancelDependencies) =
         Some (SubscriptionCancellation.SubscriptionId (subscriptionId.ToString())) }
   (CancelSubscription.withDependencies dependencies dto CancellationToken.None).Result
 
-type private FakeReactivateDependencies(existing : Subscription option) =
+type private FakeConfirmDependencies(existing : Subscription option) =
   let saved = ResizeArray<Subscription>()
+  let reads = ResizeArray<SubscriptionId>()
 
   member _.Saved = List.ofSeq saved
+  member _.Reads = List.ofSeq reads
 
-  interface CreateSubscription.Dependencies with
-    member _.GetSubscriptionByEmail _ = CancellableTaskResult.singleton existing
-    member _.GetUtcNow () = utcNow
-    member _.CreateSubscription _ _ = failwith "Expected no new subscription"
-    member _.ActivateSubscription subscription =
+  interface ConfirmSubscription.Dependencies with
+    member _.GetSubscriptionById id =
+      reads.Add id
+      CancellableTaskResult.singleton existing
+    member _.UpdateSubscriptionStatus subscription =
       saved.Add subscription
       CancellableTaskResult.singleton subscription
 
-let private subscribe (dependencies : FakeReactivateDependencies) =
-  let dto =
-    { NewSubscription.Dto.EmailAddress = NewSubscription.EmailAddress "reader@example.com"
-      NewSubscription.Dto.Name = None }
-  (CreateSubscription.withDependencies dependencies dto CancellationToken.None).Result
+let private confirm (dependencies : FakeConfirmDependencies) (text : string) =
+  (ConfirmSubscription.withDependencies dependencies text CancellationToken.None).Result
 
 type private FakeDeleteDependencies(existing : Subscription option, deliveries : SubscriptionDelivery list) =
   let log = ResizeArray<string>()
@@ -133,14 +133,77 @@ let private actionTests =
       | other -> failtestf "Expected a validation error, got %A" other
     }
 
-    test "a reactivation makes the subscription active and clears the canceled date" {
-      let dependencies = FakeReactivateDependencies (Some (subscription canceledStatus))
+    test "a cancellation of a pending subscription cancels it, so its confirm link stops working" {
+      let dependencies = FakeCancelDependencies (Some (subscription (SubscriptionStatus.Pending (utcNow.AddDays(-1.0)))))
 
-      match subscribe dependencies with
-      | Ok (CreateSubscription.Event.Reactivated reactivated) ->
-        Expect.equal reactivated.Status Active "Expected an active subscription"
-        Expect.equal dependencies.Saved [ reactivated ] "Expected one save"
-      | other -> failtestf "Expected a reactivation, got %A" other
+      match cancel dependencies with
+      | Ok (CancelSubscription.Event.Cancelled canceled) ->
+        Expect.equal canceled.Status (Canceled utcNow) "Expected the date of the cancellation"
+        Expect.equal dependencies.Saved [ canceled ] "Expected one save"
+      | other -> failtestf "Expected a cancellation, got %A" other
+    }
+
+    test "a confirmation makes a pending subscription active" {
+      let pending = subscription (SubscriptionStatus.Pending (utcNow.AddDays(-1.0)))
+      let dependencies = FakeConfirmDependencies (Some pending)
+
+      match confirm dependencies (subscriptionId.ToString()) with
+      | Ok (ConfirmSubscription.Event.Activated confirmed) ->
+        Expect.equal confirmed { pending with Status = Active } "Expected an active subscription"
+        Expect.equal dependencies.Saved [ confirmed ] "Expected one save"
+      | other -> failtestf "Expected an activation, got %A" other
+    }
+
+    test "a second confirmation answers confirmed and saves nothing" {
+      let dependencies = FakeConfirmDependencies (Some (subscription Active))
+
+      match confirm dependencies (subscriptionId.ToString()) with
+      | Ok (ConfirmSubscription.Event.NoChange SubscriptionConfirmState.Confirmed) ->
+        Expect.isEmpty dependencies.Saved "Expected no save"
+      | other -> failtestf "Expected confirmed, got %A" other
+    }
+
+    test "a confirmation of a canceled or unknown subscription answers unknown and saves nothing" {
+      for existing in [ Some (subscription canceledStatus); None ] do
+        let dependencies = FakeConfirmDependencies existing
+
+        match confirm dependencies (subscriptionId.ToString()) with
+        | Ok (ConfirmSubscription.Event.NoChange SubscriptionConfirmState.Unknown) ->
+          Expect.isEmpty dependencies.Saved $"Expected no save for %A{existing}"
+        | other -> failtestf "Expected unknown for %A, got %A" existing other
+    }
+
+    test "a confirmation with an ID that is not a GUID answers unknown and reads nothing" {
+      let dependencies = FakeConfirmDependencies (Some (subscription (SubscriptionStatus.Pending utcNow)))
+
+      match confirm dependencies "not-a-guid" with
+      | Ok (ConfirmSubscription.Event.NoChange SubscriptionConfirmState.Unknown) ->
+        Expect.isEmpty dependencies.Reads "Expected no read"
+        Expect.isEmpty dependencies.Saved "Expected no save"
+      | other -> failtestf "Expected unknown, got %A" other
+    }
+  ]
+
+let private confirmEmailTests =
+  let page = Uri "https://twopoint.dev/subscribe/confirm/"
+  let pending = { subscription (SubscriptionStatus.Pending utcNow) with Name = NonEmptyString.create None "<a href=\"https://spam.example\">win</a>" |> ok |> Some }
+  let content = ConfirmEmail.compose page utcNow pending
+  let url = $"https://twopoint.dev/subscribe/confirm/?subscriptionId={subscriptionId}"
+
+  testList "ConfirmEmail.compose" [
+    test "the email links to the confirm page with the subscription ID" {
+      Expect.stringContains content.Html $"href=\"{url}\"" "Expected the link in the HTML"
+      Expect.stringContains content.Text url "Expected the link in the plain text"
+    }
+
+    test "the email contains no text from the form, so a name from a script does not reach the inbox" {
+      for part in [ content.Subject; content.Html; content.Text ] do
+        Expect.isFalse (part.Contains "spam.example") "Expected no name"
+        Expect.isFalse (part.Contains "reader@example.com") "Expected no address"
+    }
+
+    test "the subject names the subscription" {
+      Expect.equal content.Subject "Confirm your TwoPoint subscription" "Expected the subject"
     }
   ]
 
@@ -211,5 +274,6 @@ let private queryTests =
 let tests =
   testList "Subscriptions" [
     actionTests
+    confirmEmailTests
     queryTests
   ]

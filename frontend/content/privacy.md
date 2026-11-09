@@ -3,7 +3,7 @@ title: Privacy policy
 description: The data that TwoPoint collects, why it collects the data, and how long it keeps the data.
 ---
 
-_Last updated: November 7, 2026_
+_Last updated: November 8, 2026_
 
 This page tells you what data twopoint.dev collects, why it collects the data, and how long it keeps the data.
 
@@ -32,10 +32,12 @@ You can block Pulse with a content blocker in your browser. The site works the s
 When you subscribe, the site stores your email address. If you give a name, the site stores your name too. The site
 uses this data only to send the newsletter.
 
-Azure Communication Services sends the welcome email and each newsletter. Each email has an unsubscribe link. When you
-unsubscribe, the site makes your subscription inactive and sends you no more email.
+Azure Communication Services sends a confirmation email to the address. The site sends the welcome email and each
+newsletter only after you confirm with the link in that email. The welcome email and each newsletter have an
+unsubscribe link. When you unsubscribe, the site makes your subscription inactive and sends you no more email.
 
-The site keeps an inactive subscription until you ask for deletion. To delete your subscription, send an email to
+The site keeps an unconfirmed or inactive subscription until you ask for deletion. To delete your subscription, send an
+email to
 [matt@twopoint.dev](mailto:matt@twopoint.dev).
 
 ## Comments

@@ -9,6 +9,7 @@ const subscription = (id, name, isActive, createdDate) => ({
   name,
   createdDate,
   isActive,
+  isPending: false,
   canceledDate: isActive ? null : '2026-02-03T04:05:06Z',
 });
 
@@ -82,7 +83,7 @@ test('the list shows each subscription with its status, and the counts of the au
   assert.match(document.getElementById('grace').textContent, /grace@example\.com/);
   assert.match(document.getElementById('grace').textContent, /Inactive/);
   assert.match(document.getElementById('alan').textContent, /No name/);
-  assert.match(document.querySelector('main .toolbar').textContent, /2 active, 1 inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /2 active, 0 pending, 1 inactive/);
 });
 
 test('the filter shows only the active or the inactive subscriptions, with no API call', async () => {
@@ -93,7 +94,7 @@ test('the filter shows only the active or the inactive subscriptions, with no AP
   tab('Active').click();
   await settle();
   assert.deepEqual(rows(), ['ada', 'alan']);
-  assert.match(document.querySelector('main .toolbar').textContent, /2 active, 1 inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /2 active, 0 pending, 1 inactive/);
   assert.equal(reads.filter((path) => path === 'internal/subscriptions').length, 1);
 
   tab('All').click();
@@ -193,7 +194,7 @@ test('Cancel subscription cancels an active subscription, sets the canceled date
   assert.match(sheet().textContent, /Canceled/);
   assert.match(sheet().textContent, /2026-03-01/);
   assert.match(document.getElementById('ada').textContent, /Inactive/);
-  assert.match(document.querySelector('main .toolbar').textContent, /1 active, 2 inactive/);
+  assert.match(document.querySelector('main .toolbar').textContent, /1 active, 0 pending, 2 inactive/);
   assert.deepEqual(
     [...sheet().querySelectorAll('.actions button')].map((item) => item.textContent.trim()),
     ['Delete'],

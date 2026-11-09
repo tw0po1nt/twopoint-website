@@ -46,30 +46,38 @@ module NewSubscription =
 module CreateSubscription =
 
   // Output
-  type Error = AlreadyActive of Subscription
+  type Error =
+    | AlreadyActive of Subscription
+    | ConfirmationRecent of Subscription
   type Success =
     | New of NewSubscription
-    | Reactivate of Subscription
+    | Request of Subscription
   type Decision = Decision<Success, Error>
   type Event =
     | Created of Subscription
-    | Reactivated of Subscription
+    | Requested of Subscription
 
   // Logic
 
   type Logic =
-    Subscription option
+    DateTime
+      -> Subscription option
       -> NewSubscription
       -> Decision
 
   [<RequireQualifiedAccess>]
   module Logic =
+    /// The form takes any address, so this limit keeps a script from sending a stream of confirmation emails to one address.
+    let resendAfter = TimeSpan.FromHours 1.0
+
     let decide : Logic =
-      fun existingSubscription newSubscription ->
+      fun utcNow existingSubscription newSubscription ->
         match existingSubscription with
         | None -> Ok (New newSubscription)
-        | Some existing when Subscription.isActive existing -> Error (AlreadyActive existing)
-        | Some existing -> Ok (Reactivate existing)
+        | Some ({ Status = Active } as existing) -> Error (AlreadyActive existing)
+        | Some ({ Status = Pending requestedDate } as existing) when utcNow - requestedDate < resendAfter ->
+          Error (ConfirmationRecent existing)
+        | Some ({ Status = (Pending _ | Canceled _) } as existing) -> Ok (Request existing)
 
   // Action
 
@@ -78,16 +86,37 @@ module CreateSubscription =
   type Dependencies =
     abstract member GetSubscriptionByEmail: EmailAddress -> DependencyResult<Subscription option>
     abstract member GetUtcNow: unit -> DateTime
-    abstract member CreateSubscription: 
-      newSubscription: NewSubscription 
-        -> createdDateUtc: DateTime
-        -> DependencyResult<Subscription>
-    abstract member ActivateSubscription: Subscription -> DependencyResult<Subscription>
+    abstract member NewSubscriptionId: unit -> SubscriptionId
+    abstract member SendConfirmation: Subscription -> DependencyResult<unit>
+    abstract member CreateSubscription: Subscription -> DependencyResult<Subscription>
+    abstract member UpdateSubscriptionStatus: Subscription -> DependencyResult<Subscription>
 
   let withDependencies (dependencies : Dependencies) : Action =
+
+    // The row goes after the send. A failed send then leaves no request date, so the subscriber can try again at once.
+    let handle (utcNow : DateTime) (success : Success) : DependencyResult<Event> =
+      cancellableTaskResult {
+        match success with
+        | New newSubscription ->
+          let subscription =
+            { Id = dependencies.NewSubscriptionId()
+              CreatedDate = utcNow
+              EmailAddress = newSubscription.EmailAddress
+              Name = newSubscription.Name
+              Status = Pending utcNow }
+          do! dependencies.SendConfirmation subscription
+          let! created = dependencies.CreateSubscription subscription
+          return Event.Created created
+        | Request existing ->
+          let requested = Subscription.request utcNow existing
+          do! dependencies.SendConfirmation requested
+          let! updated = dependencies.UpdateSubscriptionStatus requested
+          return Event.Requested updated
+      }
+
     fun newSubscription -> cancellableTaskResult {
-      let! newSubscription = 
-        newSubscription 
+      let! newSubscription =
+        newSubscription
         |> NewSubscription.create
         |> Result.mapError ActionError<Error>.Validation
 
@@ -97,19 +126,73 @@ module CreateSubscription =
 
       let utcNow = dependencies.GetUtcNow()
 
-      let decision = Logic.decide existingSubscription newSubscription
-
       return!
-        decision
-        |> Result.traverseCancellableTask (function
-          | New newSubscription ->
-            dependencies.CreateSubscription newSubscription utcNow |> CancellableTaskResult.map Event.Created
-          | Reactivate existing ->
-            dependencies.ActivateSubscription (Subscription.reactivate existing) |> CancellableTaskResult.map Event.Reactivated
-        )
+        Logic.decide utcNow existingSubscription newSubscription
+        |> Result.traverseCancellableTask (handle utcNow)
         |> CancellableTaskResult.foldResult
           (DependencyResult.toActionResult id)
           (Logic >> ActionResult.failure)
+    }
+
+// ========================================================================================
+// Confirm subscription
+// ========================================================================================
+
+/// The answer to the confirm page. `Unknown` is also the answer for a canceled subscription, because its link
+/// must not start the emails again.
+[<RequireQualifiedAccess>]
+type SubscriptionConfirmState =
+  | Confirmed
+  | Unknown
+
+[<RequireQualifiedAccess>]
+type SubscriptionConfirmDecision =
+  | Activate of Subscription
+  | NoWrite of SubscriptionConfirmState
+
+[<RequireQualifiedAccess>]
+module SubscriptionConfirmRule =
+
+  let confirm (found : Subscription option) : SubscriptionConfirmDecision =
+    match found with
+    | Some ({ Status = Pending _ } as pending) -> SubscriptionConfirmDecision.Activate (Subscription.confirm pending)
+    | Some { Status = Active } -> SubscriptionConfirmDecision.NoWrite SubscriptionConfirmState.Confirmed
+    | Some { Status = Canceled _ }
+    | None -> SubscriptionConfirmDecision.NoWrite SubscriptionConfirmState.Unknown
+
+[<RequireQualifiedAccess>]
+module ConfirmSubscription =
+
+  /// `Activated` is the only event that makes the subscription active, so only it gets the welcome.
+  type Event =
+    | Activated of Subscription
+    | NoChange of SubscriptionConfirmState
+
+  type Action = string -> CancellableTask<Result<Event, DependencyError>>
+
+  type Dependencies =
+    abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
+    abstract member UpdateSubscriptionStatus: Subscription -> DependencyResult<Subscription>
+
+  module Event =
+    let state (event : Event) =
+      match event with
+      | Activated _ -> SubscriptionConfirmState.Confirmed
+      | NoChange state -> state
+
+  /// The text of the ID comes from the confirm link, so an ID that is not a GUID finds nothing.
+  let withDependencies (dependencies : Dependencies) : Action =
+    fun text -> cancellableTaskResult {
+      let! found =
+        match SubscriptionId.create text with
+        | Error _ -> CancellableTaskResult.singleton None
+        | Ok subscriptionId -> dependencies.GetSubscriptionById subscriptionId
+
+      match SubscriptionConfirmRule.confirm found with
+      | SubscriptionConfirmDecision.Activate confirmed ->
+        let! updated = dependencies.UpdateSubscriptionStatus confirmed
+        return Activated updated
+      | SubscriptionConfirmDecision.NoWrite state -> return NoChange state
     }
 
 // ========================================================================================
@@ -173,7 +256,10 @@ module CancelSubscription =
         existingSubscription
         |> Result.requireSome (SubscriptionNotFound cancellation)
         |> Result.map (fun subscription ->
-          if Subscription.isActive subscription then Success.Cancelled subscription else Success.AlreadyCanceled subscription)
+          match subscription.Status with
+          | Active
+          | Pending _ -> Success.Cancelled subscription
+          | Canceled _ -> Success.AlreadyCanceled subscription)
    
   // Action
 

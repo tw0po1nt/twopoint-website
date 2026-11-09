@@ -29,6 +29,7 @@
     <Compile Include="SubscribePageTests.fs" />
     <Compile Include="UnsubscribePageTests.fs" />
     <Compile Include="StopReplyEmailsPageTests.fs" />
+    <Compile Include="ConfirmSubscriptionPageTests.fs" />
     <Compile Include="HomePageTests.fs" />
     <Compile Include="ListPageTests.fs" />
     <Compile Include="AboutPageTests.fs" />

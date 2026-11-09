@@ -41,13 +41,16 @@ module GetDashboard =
         PendingEdits = posts |> count _.HasPendingEdit
         DeliveriesToStart = posts |> count _.DeliveryToStart
         ActiveSubscriptions = subscriptions |> count Subscription.isActive
-        NewSubscriptions = subscriptions |> count (fun subscription -> subscription.CreatedDate >= since)
+        NewSubscriptions =
+          subscriptions
+          |> count (fun subscription -> not (Subscription.isPending subscription) && subscription.CreatedDate >= since)
         CanceledSubscriptions =
           subscriptions
           |> count (fun subscription ->
             match subscription.Status with
             | Canceled date -> date >= since
-            | Active -> false) }
+            | Active
+            | Pending _ -> false) }
 
   let withDependencies (posts : GetAllPosts.Dependencies) (subscriptions : GetAllSubscriptions.Dependencies) : Query =
     fun () -> cancellableTaskResult {

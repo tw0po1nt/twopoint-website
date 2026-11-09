@@ -172,6 +172,8 @@ type Subscription =
     Name: string option
     CreatedDate: string
     IsActive: bool
+    /// A pending subscription gets no post until the subscriber confirms it.
+    IsPending: bool
     CanceledDate: string option }
 
 [<RequireQualifiedAccess>]

@@ -23,6 +23,7 @@ type SubscriptionDto =
     Name : string
     CreatedDate : DateTime
     IsActive : bool
+    IsPending : bool
     CanceledDate : Nullable<DateTime> }
 
 [<AutoOpen>]
@@ -35,9 +36,11 @@ module SubscriptionExt =
         Name = this.Name |> Option.map _.ToString() |> Option.toObj
         CreatedDate = this.CreatedDate
         IsActive = Subscription.isActive this
+        IsPending = Subscription.isPending this
         CanceledDate =
           match this.Status with
-          | Active -> Nullable()
+          | Active
+          | Pending _ -> Nullable()
           | Canceled date -> Nullable date }
 
 module GetAllSubscriptionsQuery = TwoPoint.Core.Subscriptions.Queries.GetAllSubscriptions

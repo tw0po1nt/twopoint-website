@@ -10,7 +10,13 @@ let private subscription id name isActive : Api.Subscription =
     Name = name
     CreatedDate = "2026-01-02T03:04:05Z"
     IsActive = isActive
+    IsPending = false
     CanceledDate = if isActive then None else Some "2026-02-03T04:05:06Z" }
+
+let private pending id : Api.Subscription =
+  { subscription id None false with
+      IsPending = true
+      CanceledDate = None }
 
 let private ada = subscription "ada" (Some "Ada Lovelace") true
 let private grace = subscription "grace" (Some "Grace Hopper") false
@@ -24,7 +30,7 @@ let private delivery id deliveryType : Api.Delivery =
     PostSlug = "first"
     PostTitle = "First" }
 
-let private counts active inactive : Subscriptions.Counts = { Active = active; Inactive = inactive }
+let private counts active inactive : Subscriptions.Counts = { Active = active; Pending = 0; Inactive = inactive }
 
 let private sheet id deliveries : Subscriptions.Sheet =
   { Id = id
@@ -86,6 +92,24 @@ let private tests' =
         let model, effect = filterTo filter model
         Expect.equal effect (Some(Shell.Navigate(Router.PushUrl(Route.path (Subscriptions filter)), []))) "The filter calls no API"
         Expect.equal (shown model) expected $"Only {filter}"
+    }
+
+    test "a pending subscription has its own status, filter, and count, and is not inactive" {
+      let bot = pending "bot"
+      let model, _ = start "/subscriptions"
+      let model, _ = Shell.update (Shell.Subscriptions(Subscriptions.Answered(Ok [ ada; grace; bot ]))) model
+
+      Expect.equal (Subscriptions.statusText bot) "Pending" "The status"
+      Expect.equal (Subscriptions.counts model.Subscriptions) (Some { Active = 1; Pending = 1; Inactive = 1 }) "One of each"
+
+      for filter, expected in
+        [ SubscriptionFilter.Pending, [ "bot" ]
+          SubscriptionFilter.Inactive, [ "grace" ]
+          SubscriptionFilter.Active, [ "ada" ] ] do
+        let model, _ = filterTo filter model
+        Expect.equal (shown model) expected $"Only {filter}"
+
+      Expect.equal (Subscriptions.emptyText SubscriptionFilter.Pending "") "No pending subscriptions." "No pending"
     }
 
     test "the search finds the email address, and ignores the case" {
@@ -261,6 +285,7 @@ let private actionTests =
     test "an active subscription can be canceled or deleted, and an inactive subscription only deleted" {
       Expect.equal (Subscriptions.actions ada) [ Subscriptions.Cancel; Subscriptions.Delete ] "Active"
       Expect.equal (Subscriptions.actions grace) [ Subscriptions.Delete ] "Inactive"
+      Expect.equal (Subscriptions.actions (pending "bot")) [ Subscriptions.Delete ] "Pending"
     }
 
     test "a cancel sends the call and marks the sheet as sending" {

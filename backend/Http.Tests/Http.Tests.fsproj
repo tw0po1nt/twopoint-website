@@ -12,6 +12,7 @@
     <Compile Include="PostCommentMappingTests.fs" />
     <Compile Include="AuthorReplyMappingTests.fs" />
     <Compile Include="ReplyEmailStopMappingTests.fs" />
+    <Compile Include="SubscriptionMappingTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

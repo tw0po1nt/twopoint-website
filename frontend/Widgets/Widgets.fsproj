@@ -25,6 +25,8 @@
     <Compile Include="UnsubscribeView.fs" />
     <Compile Include="StopReplyEmails.fs" />
     <Compile Include="StopReplyEmailsView.fs" />
+    <Compile Include="ConfirmSubscription.fs" />
+    <Compile Include="ConfirmSubscriptionView.fs" />
     <Compile Include="PdfJs.fs" />
     <Compile Include="Pdf.fs" />
     <Compile Include="PdfView.fs" />
@@ -32,6 +34,7 @@
     <Compile Include="Entries/Comments.fs" />
     <Compile Include="Entries/Unsubscribe.fs" />
     <Compile Include="Entries/StopReplyEmails.fs" />
+    <Compile Include="Entries/ConfirmSubscription.fs" />
     <Compile Include="Entries/Pdf.fs" />
   </ItemGroup>
 
