@@ -67,7 +67,6 @@ module CreateSubscription =
 
   [<RequireQualifiedAccess>]
   module Logic =
-    /// The form takes any address, so this limit keeps a script from sending a stream of confirmation emails to one address.
     let resendAfter = TimeSpan.FromHours 1.0
 
     let decide : Logic =
@@ -147,23 +146,23 @@ type SubscriptionConfirmState =
 
 [<RequireQualifiedAccess>]
 type SubscriptionConfirmDecision =
-  | Activate of Subscription
+  | Activate of confirmed : Subscription * ifMatch : string
   | NoWrite of SubscriptionConfirmState
 
 [<RequireQualifiedAccess>]
 module SubscriptionConfirmRule =
 
-  let confirm (found : Subscription option) : SubscriptionConfirmDecision =
+  let confirm (found : StoredSubscription option) : SubscriptionConfirmDecision =
     match found with
-    | Some ({ Status = Pending _ } as pending) -> SubscriptionConfirmDecision.Activate (Subscription.confirm pending)
-    | Some { Status = Active } -> SubscriptionConfirmDecision.NoWrite SubscriptionConfirmState.Confirmed
-    | Some { Status = Canceled _ }
+    | Some ({ Subscription = { Status = Pending _ } as pending } as stored) ->
+      SubscriptionConfirmDecision.Activate (Subscription.confirm pending, stored.ETag)
+    | Some { Subscription = { Status = Active } } -> SubscriptionConfirmDecision.NoWrite SubscriptionConfirmState.Confirmed
+    | Some { Subscription = { Status = Canceled _ } }
     | None -> SubscriptionConfirmDecision.NoWrite SubscriptionConfirmState.Unknown
 
 [<RequireQualifiedAccess>]
 module ConfirmSubscription =
 
-  /// `Activated` is the only event that makes the subscription active, so only it gets the welcome.
   type Event =
     | Activated of Subscription
     | NoChange of SubscriptionConfirmState
@@ -171,8 +170,8 @@ module ConfirmSubscription =
   type Action = string -> CancellableTask<Result<Event, DependencyError>>
 
   type Dependencies =
-    abstract member GetSubscriptionById: SubscriptionId -> DependencyResult<Subscription option>
-    abstract member UpdateSubscriptionStatus: Subscription -> DependencyResult<Subscription>
+    abstract member GetStoredSubscription: SubscriptionId -> DependencyResult<StoredSubscription option>
+    abstract member ReplaceSubscription: subscription: Subscription -> ifMatch: string -> DependencyResult<WriteOutcome>
 
   module Event =
     let state (event : Event) =
@@ -180,20 +179,29 @@ module ConfirmSubscription =
       | Activated _ -> SubscriptionConfirmState.Confirmed
       | NoChange state -> state
 
-  /// The text of the ID comes from the confirm link, so an ID that is not a GUID finds nothing.
-  let withDependencies (dependencies : Dependencies) : Action =
-    fun text -> cancellableTaskResult {
-      let! found =
-        match SubscriptionId.create text with
-        | Error _ -> CancellableTaskResult.singleton None
-        | Ok subscriptionId -> dependencies.GetSubscriptionById subscriptionId
+  let attempts = 3
 
-      match SubscriptionConfirmRule.confirm found with
-      | SubscriptionConfirmDecision.Activate confirmed ->
-        let! updated = dependencies.UpdateSubscriptionStatus confirmed
-        return Activated updated
+  let withDependencies (dependencies : Dependencies) : Action =
+    let rec confirmFrom subscriptionId remaining = cancellableTaskResult {
+      let! stored = dependencies.GetStoredSubscription subscriptionId
+
+      match SubscriptionConfirmRule.confirm stored with
       | SubscriptionConfirmDecision.NoWrite state -> return NoChange state
+      | SubscriptionConfirmDecision.Activate (confirmed, ifMatch) ->
+        match! dependencies.ReplaceSubscription confirmed ifMatch with
+        | Written _ -> return Activated confirmed
+        | ConditionFailed when remaining > 1 -> return! confirmFrom subscriptionId (remaining - 1)
+        | ConditionFailed ->
+          return!
+            { Dependency = Dependency.Database
+              Type = DependencyErrorType.Unknown (exn $"The subscription '{subscriptionId}' changed at each confirm") }
+            |> Result.Error
     }
+
+    fun text ->
+      match SubscriptionId.create text with
+      | Error _ -> CancellableTaskResult.singleton (NoChange SubscriptionConfirmState.Unknown)
+      | Ok subscriptionId -> confirmFrom subscriptionId attempts
 
 // ========================================================================================
 // Cancel subscription 

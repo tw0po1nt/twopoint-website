@@ -64,7 +64,10 @@ let filters =
 
 /// The author cannot reactivate a subscription, so a canceled subscription has only the delete.
 let actions (subscription: Api.Subscription) =
-  if subscription.IsActive then [ Cancel; Delete ] else [ Delete ]
+  match subscription.Status with
+  | Api.SubscriptionStatus.Active
+  | Api.SubscriptionStatus.Pending -> [ Cancel; Delete ]
+  | Api.SubscriptionStatus.Canceled -> [ Delete ]
 
 let label (action: Action) =
   match action with
@@ -166,9 +169,9 @@ let private matches (search: string) (subscription: Api.Subscription) =
 let private inFilter (filter: SubscriptionFilter) (subscription: Api.Subscription) =
   match filter with
   | SubscriptionFilter.All -> true
-  | SubscriptionFilter.Active -> subscription.IsActive
-  | SubscriptionFilter.Pending -> subscription.IsPending
-  | SubscriptionFilter.Inactive -> not subscription.IsActive && not subscription.IsPending
+  | SubscriptionFilter.Active -> subscription.Status = Api.SubscriptionStatus.Active
+  | SubscriptionFilter.Pending -> subscription.Status = Api.SubscriptionStatus.Pending
+  | SubscriptionFilter.Inactive -> subscription.Status = Api.SubscriptionStatus.Canceled
 
 let shown (filter: SubscriptionFilter) (model: Model) =
   let search = model.Search.Trim()
@@ -183,14 +186,13 @@ let shown (filter: SubscriptionFilter) (model: Model) =
 let counts (model: Model) =
   match model.Subscriptions with
   | Loaded subscriptions ->
-    let count predicate = subscriptions |> List.filter predicate |> List.length
-    let active = count _.IsActive
-    let pending = count _.IsPending
+    let count status =
+      subscriptions |> List.filter (fun subscription -> subscription.Status = status) |> List.length
 
     Some
-      { Active = active
-        Pending = pending
-        Inactive = List.length subscriptions - active - pending }
+      { Active = count Api.SubscriptionStatus.Active
+        Pending = count Api.SubscriptionStatus.Pending
+        Inactive = count Api.SubscriptionStatus.Canceled }
   | Waiting
   | NotLoaded _ -> None
 
@@ -208,9 +210,10 @@ let emptyText (filter: SubscriptionFilter) (search: string) =
   | _ -> "No subscriptions match your search."
 
 let statusText (subscription: Api.Subscription) =
-  if subscription.IsActive then "Active"
-  elif subscription.IsPending then "Pending"
-  else "Inactive"
+  match subscription.Status with
+  | Api.SubscriptionStatus.Active -> "Active"
+  | Api.SubscriptionStatus.Pending -> "Pending"
+  | Api.SubscriptionStatus.Canceled -> "Inactive"
 
 let deliveryText (deliveryType: Api.DeliveryType) =
   match deliveryType with

@@ -531,6 +531,15 @@ let private validationTests =
       | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> Expect.isEmpty dependencies.Sent "Expected no verification email"
       | other -> failtestf "Expected InvalidRedirect, got %A" other
     }
+
+    test "the verify flow refuses a redirect URI on the same host with another scheme or port" {
+      for redirectUri in [ "http://twopoint.dev/posts/older-post/"; "https://twopoint.dev:8443/posts/older-post/" ] do
+        let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
+
+        match validateCommenterTo redirectUri dependencies with
+        | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> Expect.isEmpty dependencies.Sent "Expected no verification email"
+        | other -> failtestf "Expected InvalidRedirect for %s, got %A" redirectUri other
+    }
   ]
 
 type private FakeStatusDependencies(existing : Commenter option, comments : Comment list) =

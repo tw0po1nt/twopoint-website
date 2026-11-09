@@ -21,6 +21,21 @@ type CommenterValidationJson =
     Name : string option
     RedirectUri : string option }
 
+module ValidateCommenterMapping =
+
+  let answer (result : ActionResult<ValidateCommenter.Event, ValidateCommenter.Error>) : ApiResponse<unit> * HttpStatusCode =
+    match result with
+    | Ok _
+    | Error (Logic (ValidateCommenter.Error.Banned _))
+    | Error (Logic ValidateCommenter.Error.ValidationEmailRecent) ->
+      { Success = true; Message = None; Data = None }, HttpStatusCode.OK
+    | Error (Logic (ValidateCommenter.Error.InvalidRedirect uri)) ->
+      { Success = false; Message = Some $"Redirect uri '{uri}' is invalid"; Data = None }, HttpStatusCode.BadRequest
+    | Error actionError when actionError.IsValidation ->
+      { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
+    | Error actionError ->
+      { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+
 type ValidateCommenter (
   config: Config,
   emailClient: EmailClient,
@@ -71,18 +86,7 @@ type ValidateCommenter (
           |> Option.defaultValue (CommenterValidation.RedirectUri "") }
 
     let! validateCommenterResult = ct |> validateCommenter commenterValidation
-    let apiResponse, statusCode =
-      match validateCommenterResult with
-      | Ok _
-      | Error (Logic (ValidateCommenter.Error.Banned _))
-      | Error (Logic ValidateCommenter.Error.ValidationEmailRecent) ->
-        { Success = true; Message = None; Data = None }, HttpStatusCode.OK
-      | Error (Logic (ValidateCommenter.Error.InvalidRedirect uri)) ->
-        { Success = false; Message = Some $"Redirect uri '{uri}' is invalid"; Data = None }, HttpStatusCode.BadRequest
-      | Error actionError when actionError.IsValidation ->
-        { Success = false;  Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.BadRequest
-      | Error actionError ->
-        { Success = false; Message = Some (actionError.ToString()); Data = None }, HttpStatusCode.InternalServerError
+    let apiResponse, statusCode = ValidateCommenterMapping.answer validateCommenterResult
 
     response.StatusCode <- statusCode
     do! response.WriteAsJsonAsync(apiResponse, ct)

@@ -37,8 +37,7 @@ newsletter only after you confirm with the link in that email. The welcome email
 unsubscribe link. When you unsubscribe, the site makes your subscription inactive and sends you no more email.
 
 The site keeps an unconfirmed or inactive subscription until you ask for deletion. To delete your subscription, send an
-email to
-[matt@twopoint.dev](mailto:matt@twopoint.dev).
+email to [matt@twopoint.dev](mailto:matt@twopoint.dev).
 
 ## Comments
 

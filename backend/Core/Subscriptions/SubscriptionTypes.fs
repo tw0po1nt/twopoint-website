@@ -91,6 +91,8 @@ module Subscription =
     | Active
     | Canceled _ -> false
 
+type StoredSubscription = { Subscription : Subscription; ETag : string }
+
 type DeliveredPost =
   { Delivery : SubscriptionDelivery
     PostTitle : NonEmptyString option }

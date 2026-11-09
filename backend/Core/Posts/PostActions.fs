@@ -339,7 +339,6 @@ module ValidateCommenter =
 
   [<RequireQualifiedAccess>]
   module Logic =
-    /// A script can request many validation emails for one address. A request in this period after the last email sends nothing.
     let resendAfter = TimeSpan.FromHours 1.0
 
     let decide : Logic =
@@ -356,7 +355,8 @@ module ValidateCommenter =
 
         do!
           validRedirectUris
-          |> List.tryFind (fun uri -> uri.Host = commenterValidation.RedirectUri.Host)
+          |> List.tryFind (fun uri ->
+            Uri.Compare(uri, commenterValidation.RedirectUri, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) = 0)
           |> Result.requireSome (InvalidRedirect commenterValidation.RedirectUri)
           |> Result.ignore
 

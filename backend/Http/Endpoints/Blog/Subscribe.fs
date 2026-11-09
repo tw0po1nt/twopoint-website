@@ -51,6 +51,12 @@ module SubscriptionConfirmMapping =
     | SubscriptionConfirmState.Confirmed -> { State = "confirmed" }
     | SubscriptionConfirmState.Unknown -> { State = "unknown" }
 
+  let welcomeFor (welcomeEnabled : bool) (result : Result<ConfirmSubscription.Event, DependencyError>) : Subscription option =
+    match result with
+    | Ok (ConfirmSubscription.Event.Activated subscription) when welcomeEnabled -> Some subscription
+    | Ok _
+    | Error _ -> None
+
   let answer (result : Result<ConfirmSubscription.Event, DependencyError>) : ApiResponse<SubscriptionConfirmJson> * HttpStatusCode =
     match result with
     | Ok event -> { Success = true; Message = None; Data = Some (toJson (ConfirmSubscription.Event.state event)) }, HttpStatusCode.OK
@@ -160,15 +166,17 @@ type ConfirmSubscriptionEndpoint (
     let subscriptionDependencies = SubscriptionDependencies(tableServiceClient, SystemDependencies.live, logger)
 
     let confirm = ConfirmSubscription.withDependencies { new ConfirmSubscription.Dependencies with
-      member _.GetSubscriptionById id = subscriptionDependencies.GetSubscriptionById id
-      member _.UpdateSubscriptionStatus subscription = subscriptionDependencies.UpdateSubscriptionStatus subscription
+      member _.GetStoredSubscription id = subscriptionDependencies.GetStoredSubscription id
+      member _.ReplaceSubscription subscription ifMatch = subscriptionDependencies.ReplaceSubscription subscription ifMatch
     }
 
     let! result = ct |> confirm subscriptionId
 
+    match SubscriptionConfirmMapping.welcomeFor (config.Welcome |> Option.exists _.Enabled) result with
+    | Some subscription -> do! WelcomeQueueing.enqueue serviceBus logger subscription ct
+    | None -> ()
+
     match result with
-    | Ok (ConfirmSubscription.Event.Activated subscription) when config.Welcome |> Option.exists _.Enabled ->
-      do! WelcomeQueueing.enqueue serviceBus logger subscription ct
     | Ok _ -> ()
     | Error error -> logger.LogError("Unable to confirm subscription: {error}", error.DebugMessage)
 

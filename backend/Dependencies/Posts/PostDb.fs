@@ -120,10 +120,8 @@ type internal DbCommenter =
     entity["Name"] <- this.Name |> Option.toObj
     entity["Status"] <- this.Status
     entity["ValidationEmailSentDate"] <-
-      this.ValidationEmailSentDate |> Option.map DbCommenter.FormatDate |> Option.toObj
+      this.ValidationEmailSentDate |> Option.map DbDate.text |> Option.toObj
     entity
-
-  static member FormatDate (date : DateTime) = date.ToString("o", CultureInfo.InvariantCulture)
 
   /// Each update of a commenter row writes only the columns of that update, so the missing date leaves the stored date.
   static member FromCommenter (commenter : Commenter) =
@@ -670,7 +668,7 @@ module internal PostDb =
       member _.UpdateCommenterValidationEmailSentDate validationId sentDate =
         TableEntity(validationId, validationId) |> update commentersTable PostDbError.validation DbCommenter.FromEntity
         <| fun entity ->
-          entity["ValidationEmailSentDate"] <- DbCommenter.FormatDate sentDate
+          entity["ValidationEmailSentDate"] <- DbDate.text sentDate
           entity
 
       member _.UpdateCommenterStatus commenter status =

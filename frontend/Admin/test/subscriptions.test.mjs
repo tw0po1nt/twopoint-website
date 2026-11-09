@@ -8,8 +8,7 @@ const subscription = (id, name, isActive, createdDate) => ({
   email: `${id}@example.com`,
   name,
   createdDate,
-  isActive,
-  isPending: false,
+  status: isActive ? 'active' : 'canceled',
   canceledDate: isActive ? null : '2026-02-03T04:05:06Z',
 });
 
@@ -35,7 +34,7 @@ const respond = (url, init = {}) => {
     return answer(200, {
       success: true,
       message: null,
-      data: { ...subscriptions[0], isActive: false, canceledDate: '2026-03-01T12:00:00Z' },
+      data: { ...subscriptions[0], status: 'canceled', canceledDate: '2026-03-01T12:00:00Z' },
     });
   }
 

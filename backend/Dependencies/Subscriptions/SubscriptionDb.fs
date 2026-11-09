@@ -39,8 +39,6 @@ type internal DbSubscription =
     Name : string option
     Status : SubscriptionStatus }
 
-  static member private DateText (date : DateTime) = date.ToString("o", CultureInfo.InvariantCulture)
-
   static member private RequireDate entityName key (entity : TableEntity) =
     key
     |> entity.RequireString entityName
@@ -77,19 +75,19 @@ type internal DbSubscription =
 
   member this.PendingDate =
     match this.Status with
-    | Pending date -> Some (DbSubscription.DateText date)
+    | Pending date -> Some (DbDate.text date)
     | Active
     | Canceled _ -> None
 
   member this.CanceledDate =
     match this.Status with
-    | Canceled date -> Some (DbSubscription.DateText date)
+    | Canceled date -> Some (DbDate.text date)
     | Active
     | Pending _ -> None
 
   member this.ToEntity() =
     let entity = TableEntity(partitionKey = this.SubscriptionId, rowKey = this.SubscriptionId)
-    entity["CreatedDate"] <- DbSubscription.DateText this.CreatedDate
+    entity["CreatedDate"] <- DbDate.text this.CreatedDate
     entity["EmailAddress"] <- this.EmailAddress
     entity["Name"] <- this.Name |> Option.toObj
     entity["IsActive"] <- this.IsActive
@@ -203,6 +201,10 @@ type internal ISubscriptionDb =
   abstract member GetAllSubscriptions: unit -> CancellableTaskResult<DbSubscription list, DependencyError>
   abstract member GetSubscriptionByEmail: email: string -> CancellableTaskResult<DbSubscription option, DependencyError>
   abstract member GetSubscriptionById: id: string -> CancellableTaskResult<DbSubscription option, DependencyError>
+  abstract member GetStoredSubscriptionById:
+    id: string -> CancellableTaskResult<(DbSubscription * string) option, DependencyError>
+  abstract member ReplaceSubscription:
+    subscription: DbSubscription -> ifMatch: string -> CancellableTaskResult<WriteOutcome, DependencyError>
   abstract member CreateSubscription: subscription: DbSubscription -> CancellableTaskResult<DbSubscription, DependencyError>
   abstract member UpdateSubscriptionStatus:
     subscription: DbSubscription
@@ -267,7 +269,15 @@ module internal SubscriptionDb =
         eq "EmailAddress" emailAddress |> trySingleQuery subscriptionsTable DbSubscription.FromEntity None
 
       member _.GetSubscriptionById id =
-        id |> trySingle subscriptionsTable DbSubscription.FromEntity (Some id) 
+        id |> trySingle subscriptionsTable DbSubscription.FromEntity (Some id)
+
+      member _.GetStoredSubscriptionById id =
+        let withETag (entity : TableEntity) =
+          DbSubscription.FromEntity entity |> Validation.map (fun subscription -> subscription, entity.ETag.ToString())
+        id |> trySingle subscriptionsTable withETag (Some id)
+
+      member _.ReplaceSubscription subscription ifMatch =
+        Db.replaceIfMatch tableServiceClient logger db subscriptionsTable (subscription.ToEntity()) ifMatch
 
       member _.CreateSubscription subscription =
         subscription.ToEntity() |> add subscriptionsTable SubscriptionDbError.validation DbSubscription.FromEntity

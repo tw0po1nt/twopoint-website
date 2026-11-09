@@ -1226,9 +1226,10 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter: Po
   }
 
 let private subscriptionTone (subscription: Api.Subscription) =
-  if subscription.IsActive then Parts.Good
-  elif subscription.IsPending then Parts.Warn
-  else Parts.Plain
+  match subscription.Status with
+  | Api.SubscriptionStatus.Active -> Parts.Good
+  | Api.SubscriptionStatus.Pending -> Parts.Warn
+  | Api.SubscriptionStatus.Canceled -> Parts.Plain
 
 let private countsText (model: Subscriptions.Model) =
   match Subscriptions.counts model with

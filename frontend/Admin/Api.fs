@@ -166,14 +166,19 @@ type Approval =
   | Approved
   | Rejected
 
+/// A pending subscription gets no post until the subscriber confirms it.
+[<RequireQualifiedAccess>]
+type SubscriptionStatus =
+  | Active
+  | Pending
+  | Canceled
+
 type Subscription =
   { Id: string
     Email: string
     Name: string option
     CreatedDate: string
-    IsActive: bool
-    /// A pending subscription gets no post until the subscriber confirms it.
-    IsPending: bool
+    Status: SubscriptionStatus
     CanceledDate: string option }
 
 [<RequireQualifiedAccess>]
@@ -479,6 +484,15 @@ let private deliveryType: Decoder<DeliveryType> =
     | "newpost" -> Decode.succeed DeliveryType.NewPost
     | _ -> Decode.fail $"The delivery type '{name}' is not known.")
 
+let private subscriptionStatus: Decoder<SubscriptionStatus> =
+  Decode.string
+  |> Decode.andThen (fun name ->
+    match name with
+    | "active" -> Decode.succeed SubscriptionStatus.Active
+    | "pending" -> Decode.succeed SubscriptionStatus.Pending
+    | "canceled" -> Decode.succeed SubscriptionStatus.Canceled
+    | _ -> Decode.fail $"The subscription status '{name}' is not known.")
+
 let private severityName (severity: Severity) =
   match severity with
   | Severity.Error -> "error"
@@ -578,6 +592,7 @@ let private coders =
   |> Extra.withCustom (commentApprovalName >> Encode.string) commentApproval
   |> Extra.withCustom (fun (_: Comment) -> failwith "The admin sends no comment.") comment
   |> Extra.withCustom (deliveryTypeName >> Encode.string) deliveryType
+  |> Extra.withCustom (fun (_: SubscriptionStatus) -> failwith "The admin sends no subscription status.") subscriptionStatus
   |> Extra.withCustom (severityName >> Encode.string) severity
   |> Extra.withCustom (fun (_: Problem) -> failwith "The admin sends no problem.") problem
   |> Extra.withCustom (fun (_: Check) -> failwith "The admin sends no check.") check

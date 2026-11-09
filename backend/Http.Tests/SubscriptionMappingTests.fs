@@ -4,6 +4,7 @@ open TwoPoint.Core.Shared
 open TwoPoint.Core.Subscriptions
 open TwoPoint.Core.Subscriptions.Actions
 open TwoPoint.Core.Util
+open TwoPoint.Http.Endpoints.Admin
 open TwoPoint.Http.Endpoints.Blog
 
 open Expecto
@@ -55,6 +56,41 @@ let tests =
         let response, status = SubscriptionConfirmMapping.answer (Ok event)
         Expect.equal status HttpStatusCode.OK $"The status of %A{event}"
         Expect.equal response.Data (Some { State = state }) $"The state of %A{event}"
+    }
+
+    test "the admin answer gives one status for each subscription, and a date only for a canceled one" {
+      let canceledDate = DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc)
+      let answers =
+        [ subscription Active, "active", Nullable()
+          pending, "pending", Nullable()
+          subscription (Canceled canceledDate), "canceled", Nullable canceledDate ]
+
+      for subscription, status, date in answers do
+        let dto = subscription.ToDto()
+        Expect.equal (dto.Status, dto.CanceledDate) (status, date) $"The status of %A{subscription.Status}"
+    }
+
+    test "only a confirm that activates the subscription queues a welcome, and only when the welcome is on" {
+      let active = subscription Active
+      let cases =
+        [ true, Ok (ConfirmSubscription.Event.Activated active), Some active
+          false, Ok (ConfirmSubscription.Event.Activated active), None
+          true, Ok (ConfirmSubscription.Event.NoChange SubscriptionConfirmState.Confirmed), None
+          true, Ok (ConfirmSubscription.Event.NoChange SubscriptionConfirmState.Unknown), None
+          true, Error tableDown, None ]
+
+      for welcomeEnabled, result, expected in cases do
+        Expect.equal (SubscriptionConfirmMapping.welcomeFor welcomeEnabled result) expected $"The welcome of %A{result}, on: {welcomeEnabled}"
+    }
+
+    test "a commenter validation in the hour after the last email gets the same 200 as a sent email" {
+      let response, status = ValidateCommenterMapping.answer (Error (Logic TwoPoint.Core.Posts.Actions.ValidateCommenter.ValidationEmailRecent))
+      Expect.equal status HttpStatusCode.OK "Expected 200"
+      Expect.equal response { Success = true; Message = None; Data = None } "Expected the answer of a sent email"
+
+      let _, invalid =
+        ValidateCommenterMapping.answer (Error (Logic (TwoPoint.Core.Posts.Actions.ValidateCommenter.InvalidRedirect (Uri "https://example.com/"))))
+      Expect.equal invalid HttpStatusCode.BadRequest "Expected 400 for a redirect on another origin"
     }
 
     test "a failed confirm gets 500 with its message and no data" {

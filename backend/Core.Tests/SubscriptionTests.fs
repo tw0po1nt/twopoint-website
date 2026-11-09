@@ -36,20 +36,29 @@ let private cancel (dependencies : FakeCancelDependencies) =
         Some (SubscriptionCancellation.SubscriptionId (subscriptionId.ToString())) }
   (CancelSubscription.withDependencies dependencies dto CancellationToken.None).Result
 
-type private FakeConfirmDependencies(existing : Subscription option) =
-  let saved = ResizeArray<Subscription>()
+/// Each read gives the next row of `rows`. A write succeeds only after the read of the last row, with its ETag.
+type private FakeConfirmDependencies(rows : Subscription option list) =
+  let saved = ResizeArray<Subscription * string>()
   let reads = ResizeArray<SubscriptionId>()
+  let read index = rows |> List.item (min index (rows.Length - 1)) |> Option.map (fun row -> { Subscription = row; ETag = $"etag-{index}" })
 
-  member _.Saved = List.ofSeq saved
+  new(existing : Subscription option) = FakeConfirmDependencies [ existing ]
+
+  member _.Saved = saved |> Seq.map fst |> List.ofSeq
+  member _.SavedETags = saved |> Seq.map snd |> List.ofSeq
   member _.Reads = List.ofSeq reads
 
   interface ConfirmSubscription.Dependencies with
-    member _.GetSubscriptionById id =
+    member _.GetStoredSubscription id =
       reads.Add id
-      CancellableTaskResult.singleton existing
-    member _.UpdateSubscriptionStatus subscription =
-      saved.Add subscription
-      CancellableTaskResult.singleton subscription
+      CancellableTaskResult.singleton (read (reads.Count - 1))
+    member _.ReplaceSubscription subscription ifMatch =
+      let latest = reads.Count - 1
+      if latest >= rows.Length - 1 && ifMatch = $"etag-{latest}" then
+        saved.Add((subscription, ifMatch))
+        CancellableTaskResult.singleton (Written $"etag-{latest}-written")
+      else
+        CancellableTaskResult.singleton ConditionFailed
 
 let private confirm (dependencies : FakeConfirmDependencies) (text : string) =
   (ConfirmSubscription.withDependencies dependencies text CancellationToken.None).Result
@@ -151,7 +160,42 @@ let private actionTests =
       | Ok (ConfirmSubscription.Event.Activated confirmed) ->
         Expect.equal confirmed { pending with Status = Active } "Expected an active subscription"
         Expect.equal dependencies.Saved [ confirmed ] "Expected one save"
+        Expect.equal dependencies.SavedETags [ "etag-0" ] "Expected the write with the ETag of the read"
       | other -> failtestf "Expected an activation, got %A" other
+    }
+
+    test "a confirmation that another confirmation passes after the read answers confirmed and saves nothing" {
+      let pending = subscription (SubscriptionStatus.Pending (utcNow.AddDays(-1.0)))
+      let dependencies = FakeConfirmDependencies [ Some pending; Some { pending with Status = Active } ]
+
+      match confirm dependencies (subscriptionId.ToString()) with
+      | Ok (ConfirmSubscription.Event.NoChange SubscriptionConfirmState.Confirmed) ->
+        Expect.isEmpty dependencies.Saved "Expected no save, so no second welcome"
+        Expect.equal dependencies.Reads.Length 2 "Expected a second read after the failed write"
+      | other -> failtestf "Expected confirmed, got %A" other
+    }
+
+    test "a confirmation of a row that changes after the read and stays pending reads again and activates it" {
+      let pending = subscription (SubscriptionStatus.Pending (utcNow.AddDays(-1.0)))
+      let resent = subscription (SubscriptionStatus.Pending utcNow)
+      let dependencies = FakeConfirmDependencies [ Some pending; Some resent ]
+
+      match confirm dependencies (subscriptionId.ToString()) with
+      | Ok (ConfirmSubscription.Event.Activated confirmed) ->
+        Expect.equal confirmed { resent with Status = Active } "Expected the row of the second read, active"
+        Expect.equal dependencies.SavedETags [ "etag-1" ] "Expected the write with the ETag of the second read"
+      | other -> failtestf "Expected an activation, got %A" other
+    }
+
+    test "a confirmation stops with an error when the row changes after each read" {
+      let pending = subscription (SubscriptionStatus.Pending utcNow)
+      let dependencies = FakeConfirmDependencies (List.replicate (ConfirmSubscription.attempts + 1) (Some pending))
+
+      match confirm dependencies (subscriptionId.ToString()) with
+      | Error _ ->
+        Expect.isEmpty dependencies.Saved "Expected no save"
+        Expect.equal dependencies.Reads.Length ConfirmSubscription.attempts "Expected one read for each attempt"
+      | other -> failtestf "Expected an error, got %A" other
     }
 
     test "a second confirmation answers confirmed and saves nothing" {

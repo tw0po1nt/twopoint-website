@@ -118,7 +118,8 @@ contains no text from the form. Its link opens the confirm page `/subscribe/conf
 which has the `confirm-subscription` widget. Only the button `[confirm subscription]` sends
 `POST blog/subscriptions/{subscriptionId}/confirm`, so a mail scanner that opens the link confirms
 nothing. The confirm makes the subscription active and queues the welcome. The rule is the pure module
-`SubscriptionConfirmRule`. A pending subscription gets no post, and the dashboard counts only a
+`SubscriptionConfirmRule`. The confirm writes the row with the ETag of its read, so two confirms at the
+same time queue one welcome. A pending subscription gets no post, and the dashboard counts only a
 confirmed subscription. `CreateSubscription.Logic.decide` sends a second confirmation email to a pending
 subscription only one hour or more after the last one. A cancel also cancels a pending subscription. The
 setting `Subscription:ConfirmUri` is the URL of the confirm page. On the local stage it is
@@ -167,6 +168,9 @@ delete shows that number.
 `Blog-ValidateCommenter` (`POST blog/commenters`) sends the validation email of a commenter. A request
 in the hour after the last validation email of that address sends no email and gets the same answer.
 The rule is `ValidateCommenter.Logic.decide`, and the commenter row stores `ValidationEmailSentDate`.
+The redirect URI must have the scheme, the host, and the port of a URI in `ValidRedirectUris`. The query
+of the redirect URI contains the text of the comment form, so the email has the link only in the button
+and shows no URL.
 
 The page form of the Comments widget has the checkbox "email me when someone replies". The reply
 form has no checkbox. A checked `replyEmails` on `POST blog/posts/{slug}/comments` stores the

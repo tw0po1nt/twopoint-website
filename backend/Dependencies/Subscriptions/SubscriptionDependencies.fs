@@ -51,6 +51,19 @@ type SubscriptionDependencies(
       |> DependencyError.ofValidation source
   }
 
+  member _.GetStoredSubscription id = cancellableTaskResult {
+    let! stored = subscriptionDb.GetStoredSubscriptionById (id.ToString())
+
+    return!
+      stored
+      |> Option.traverseResult (fun ((dbo : DbSubscription), eTag) ->
+        dbo.ToSubscription() |> Result.map (fun subscription -> { Subscription = subscription; ETag = eTag }))
+      |> DependencyError.ofValidation source
+  }
+
+  member _.ReplaceSubscription (subscription : Subscription) ifMatch =
+    subscriptionDb.ReplaceSubscription (DbSubscription.FromSubscription subscription) ifMatch
+
   member _.NewSubscriptionId () = system.NewGuid() |> SubscriptionId.ofGuid
 
   member _.CreateSubscription (subscription : Subscription) = cancellableTaskResult {
@@ -102,7 +115,6 @@ type SubscriptionDependencies(
   }
 
 
-/// `page` is the URL of the confirm page of the site.
 type ConfirmationDependencies(
   emailClient : Azure.Communication.Email.EmailClient,
   emailSender : EmailAddress,

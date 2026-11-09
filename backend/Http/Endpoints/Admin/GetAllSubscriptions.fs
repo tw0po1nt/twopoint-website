@@ -22,8 +22,8 @@ type SubscriptionDto =
     Email : string
     Name : string
     CreatedDate : DateTime
-    IsActive : bool
-    IsPending : bool
+    /// `active`, `pending`, or `canceled`
+    Status : string
     CanceledDate : Nullable<DateTime> }
 
 [<AutoOpen>]
@@ -35,8 +35,11 @@ module SubscriptionExt =
         Email = this.EmailAddress.ToString()
         Name = this.Name |> Option.map _.ToString() |> Option.toObj
         CreatedDate = this.CreatedDate
-        IsActive = Subscription.isActive this
-        IsPending = Subscription.isPending this
+        Status =
+          match this.Status with
+          | Active -> "active"
+          | Pending _ -> "pending"
+          | Canceled _ -> "canceled"
         CanceledDate =
           match this.Status with
           | Active

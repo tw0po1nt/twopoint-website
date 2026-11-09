@@ -8,11 +8,9 @@ type ConfirmEmailContent =
     Html : string
     Text : string }
 
-/// The form takes any address and any name, so the email contains no text from the form.
 [<RequireQualifiedAccess>]
 module ConfirmEmail =
 
-  /// `page` is the URL of the confirm page of the site.
   let confirmUrl (page : Uri) (subscription : Subscription) = Uri(page, $"?subscriptionId={subscription.Id}")
 
   let subject = "Confirm your TwoPoint subscription"
