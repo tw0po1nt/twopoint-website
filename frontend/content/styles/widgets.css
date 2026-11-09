@@ -472,7 +472,8 @@
 }
 
 .unsubscribe,
-.stop-reply-emails {
+.stop-reply-emails,
+.confirm-subscription {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -485,19 +486,27 @@
 .stop-reply-emails-status,
 .stop-reply-emails-error,
 .stop-reply-emails-fallback,
-.stop-reply-emails-help {
+.stop-reply-emails-help,
+.confirm-subscription-status,
+.confirm-subscription-error,
+.confirm-subscription-note,
+.confirm-subscription-fallback,
+.confirm-subscription-help {
   margin: 0;
   font: 14px/1.5 var(--mono);
 }
 
 .unsubscribe-status.is-failed,
 .stop-reply-emails-status.is-failed,
-.stop-reply-emails-error {
+.stop-reply-emails-error,
+.confirm-subscription-status.is-failed,
+.confirm-subscription-error {
   color: var(--accent);
 }
 
 .unsubscribe-status.is-done,
-.stop-reply-emails-status.is-done {
+.stop-reply-emails-status.is-done,
+.confirm-subscription-status.is-done {
   color: var(--accent-2);
 }
 
@@ -505,16 +514,21 @@
 .unsubscribe-fallback,
 .unsubscribe-help,
 .stop-reply-emails-fallback,
-.stop-reply-emails-help {
+.stop-reply-emails-help,
+.confirm-subscription-note,
+.confirm-subscription-fallback,
+.confirm-subscription-help {
   color: var(--muted);
 }
 
 .unsubscribe-help,
-.stop-reply-emails-help {
+.stop-reply-emails-help,
+.confirm-subscription-help {
   margin-top: 24px;
 }
 
-.stop-reply-emails button {
+.stop-reply-emails button,
+.confirm-subscription button {
   align-self: flex-start;
   padding: 0;
   border: 0;
@@ -524,7 +538,8 @@
   color: var(--accent);
 }
 
-.stop-reply-emails button:disabled {
+.stop-reply-emails button:disabled,
+.confirm-subscription button:disabled {
   cursor: default;
   color: var(--muted);
 }

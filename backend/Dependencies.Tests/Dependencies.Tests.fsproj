@@ -19,6 +19,7 @@
     <Compile Include="PushTests.fs" />
     <Compile Include="DeviceDbTests.fs" />
     <Compile Include="SubscriptionDbTests.fs" />
+    <Compile Include="PostEmailsTests.fs" />
     <Compile Include="PostedCommentTests.fs" />
     <Compile Include="CommentEntityTests.fs" />
     <Compile Include="DbTests.fs" />

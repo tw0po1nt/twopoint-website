@@ -400,18 +400,29 @@ let private previewCommentTests =
     }
   ]
 
-type private FakeValidationDependencies(existing : Commenter option) =
+let private validationNow = DateTime(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc)
+
+let private known (commenter : Commenter) (sentDate : DateTime option) =
+  { ValidateCommenter.KnownCommenter.Commenter = commenter
+    ValidateCommenter.KnownCommenter.ValidationEmailSentDate = sentDate }
+
+type private FakeValidationDependencies(existing : ValidateCommenter.KnownCommenter option) =
   let created = ResizeArray<EmailAddress>()
   let sent = ResizeArray<Commenter>()
   let redirects = ResizeArray<Uri>()
+  let recorded = ResizeArray<Commenter * DateTime>()
+
+  new(existing : Commenter option) = FakeValidationDependencies(existing |> Option.map (fun commenter -> known commenter None))
 
   member _.Created = List.ofSeq created
   member _.Sent = List.ofSeq sent
   member _.Redirects = List.ofSeq redirects
+  member _.Recorded = List.ofSeq recorded
 
   interface ValidateCommenter.Dependencies with
     member _.GetCommenterByEmailAddress _ = CancellableTaskResult.singleton existing
     member _.GetValidRedirectUris () = CancellableTaskResult.singleton [ Uri "https://twopoint.dev" ]
+    member _.GetUtcNow () = validationNow
     member _.CreateCommenter emailAddress _ _ =
       created.Add emailAddress
       CancellableTaskResult.singleton (commenter CommenterStatus.New)
@@ -419,6 +430,9 @@ type private FakeValidationDependencies(existing : Commenter option) =
       sent.Add commenter
       redirects.Add redirectUri
       CancellableTaskResult.singleton "operation"
+    member _.RecordValidationEmailSent commenter sentDate =
+      recorded.Add((commenter, sentDate))
+      CancellableTaskResult.singleton ()
 
 let private validateCommenterTo (redirectUri : string) (dependencies : FakeValidationDependencies) =
   let dto =
@@ -441,13 +455,61 @@ let private validationTests =
       | other -> failtestf "Expected Banned, got %A" other
     }
 
-    test "a new commenter gets a verification email" {
+    test "a new commenter gets a verification email, and the action records its date" {
       let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
 
       match validateCommenter dependencies with
       | Ok (ValidateCommenter.Event.Validated _) ->
         Expect.equal dependencies.Sent [ commenter CommenterStatus.New ] "Expected one verification email"
+        Expect.equal dependencies.Recorded [ commenter CommenterStatus.New, validationNow ] "Expected the date of the email"
       | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "an unknown address gets a new commenter, a verification email, and the date of the email" {
+      let dependencies = FakeValidationDependencies (None : ValidateCommenter.KnownCommenter option)
+
+      match validateCommenter dependencies with
+      | Ok (ValidateCommenter.Event.Validated _) ->
+        Expect.equal (dependencies.Created |> List.map string) [ "commenter@example.com" ] "Expected a new commenter"
+        Expect.equal dependencies.Sent [ commenter CommenterStatus.New ] "Expected one verification email"
+        Expect.equal dependencies.Recorded [ commenter CommenterStatus.New, validationNow ] "Expected the date of the email"
+      | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "a second request in the hour after a verification email sends no email" {
+      let dependencies =
+        FakeValidationDependencies (Some (known (commenter CommenterStatus.New) (Some (validationNow.AddMinutes(-59.0)))))
+
+      match validateCommenter dependencies with
+      | Error (Logic ValidateCommenter.ValidationEmailRecent) ->
+        Expect.isEmpty dependencies.Sent "Expected no verification email"
+        Expect.isEmpty dependencies.Recorded "Expected no new date"
+      | other -> failtestf "Expected ValidationEmailRecent, got %A" other
+    }
+
+    test "a request one hour after a verification email sends a new email" {
+      let dependencies =
+        FakeValidationDependencies (Some (known (commenter CommenterStatus.Trusted) (Some (validationNow.AddHours(-1.0)))))
+
+      match validateCommenter dependencies with
+      | Ok (ValidateCommenter.Event.Validated _) ->
+        Expect.equal dependencies.Sent [ commenter CommenterStatus.Trusted ] "Expected one verification email"
+        Expect.equal dependencies.Recorded [ commenter CommenterStatus.Trusted, validationNow ] "Expected the new date"
+      | other -> failtestf "Expected Validated, got %A" other
+    }
+
+    test "the resend rule comes after the ban and the redirect check" {
+      let recent = Some (validationNow.AddMinutes(-1.0))
+      let banned = FakeValidationDependencies (Some (known (commenter CommenterStatus.Banned) recent))
+      let badRedirect = FakeValidationDependencies (Some (known (commenter CommenterStatus.New) recent))
+
+      match validateCommenter banned with
+      | Error (Logic (ValidateCommenter.Banned _)) -> ()
+      | other -> failtestf "Expected Banned, got %A" other
+
+      match validateCommenterTo "https://example.com/posts/older-post" badRedirect with
+      | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> ()
+      | other -> failtestf "Expected InvalidRedirect, got %A" other
     }
 
     test "the verify flow accepts the redirect URI of a reply, with the ID of its top-level comment, and passes it on unchanged" {
@@ -468,6 +530,15 @@ let private validationTests =
       match validateCommenterTo "https://example.com/posts/older-post/?replyTo=2c6c1f0e-2f0a-4c8e-9a51-6d7c2b1e3f42" dependencies with
       | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> Expect.isEmpty dependencies.Sent "Expected no verification email"
       | other -> failtestf "Expected InvalidRedirect, got %A" other
+    }
+
+    test "the verify flow refuses a redirect URI on the same host with another scheme or port" {
+      for redirectUri in [ "http://twopoint.dev/posts/older-post/"; "https://twopoint.dev:8443/posts/older-post/" ] do
+        let dependencies = FakeValidationDependencies (Some (commenter CommenterStatus.New))
+
+        match validateCommenterTo redirectUri dependencies with
+        | Error (Logic (ValidateCommenter.InvalidRedirect _)) -> Expect.isEmpty dependencies.Sent "Expected no verification email"
+        | other -> failtestf "Expected InvalidRedirect for %s, got %A" redirectUri other
     }
   ]
 
@@ -641,8 +712,13 @@ type private FakeCommenterStore(commenters : Commenter list, comments : Comment 
 
   interface ValidateCommenter.Dependencies with
     member _.GetCommenterByEmailAddress emailAddress =
-      commenters |> Seq.tryFind (fun commenter -> commenter.EmailAddress = emailAddress) |> CancellableTaskResult.singleton
+      commenters
+      |> Seq.tryFind (fun commenter -> commenter.EmailAddress = emailAddress)
+      |> Option.map (fun commenter -> known commenter None)
+      |> CancellableTaskResult.singleton
     member _.GetValidRedirectUris () = CancellableTaskResult.singleton [ Uri "https://twopoint.dev" ]
+    member _.GetUtcNow () = validationNow
+    member _.RecordValidationEmailSent _ _ = CancellableTaskResult.singleton ()
     member _.CreateCommenter emailAddress name status =
       let created =
         Commenter.create otherCommenterId (emailAddress.ToString()) (name |> Option.map _.ToString()) "2026-03-01T00:00:00.0000000Z" (status.ToString())

@@ -14,6 +14,7 @@ let widgetClasses =
         "comment-thread-end"; "comment-reply-form"; "comment-actions"
         "unsubscribe"; "unsubscribe-status"; "unsubscribe-note"
         "stop-reply-emails"; "stop-reply-emails-status"; "stop-reply-emails-error"
+        "confirm-subscription"; "confirm-subscription-status"; "confirm-subscription-error"; "confirm-subscription-note"
         "pdf-viewer"; "pdf-frame"; "pdf-page"; "pdf-nav"; "pdf-count"; "pdf-status"
         "textLayer"; "markedContent"; "annotationLayer"; "linkAnnotation" ]
 

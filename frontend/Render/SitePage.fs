@@ -20,6 +20,7 @@ type SitePage =
   | Subscribe
   | Unsubscribe
   | StopReplyEmails
+  | ConfirmSubscription
   | About
   | Privacy
   | NotFound
@@ -89,6 +90,7 @@ module SitePage =
       SitePage.Subscribe
       SitePage.Unsubscribe
       SitePage.StopReplyEmails
+      SitePage.ConfirmSubscription
       SitePage.About
       SitePage.Privacy
       SitePage.NotFound
@@ -102,6 +104,7 @@ module SitePage =
     | SitePage.Subscribe -> "/subscribe/"
     | SitePage.Unsubscribe -> "/unsubscribe/"
     | SitePage.StopReplyEmails -> "/comments/stop/"
+    | SitePage.ConfirmSubscription -> "/subscribe/confirm/"
     | SitePage.About -> "/about/"
     | SitePage.Privacy -> Privacy.urlPath
     | SitePage.NotFound -> "/404.html"

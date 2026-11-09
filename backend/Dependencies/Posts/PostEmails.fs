@@ -1,8 +1,11 @@
 namespace TwoPoint.Dependencies.Posts
 
 module internal PostEmails =
-  
-  let verifyEmail (uri: System.Uri) name = "Verify your email address", $$"""
+
+  /// The query of the link contains the text of the comment form, so the link is only in the href.
+  let verifyEmail (redirectUri: System.Uri) =
+    let uri = System.Net.WebUtility.HtmlEncode redirectUri.AbsoluteUri
+    "Verify your email address", $$"""
 <!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
 <head>
@@ -78,7 +81,7 @@ module internal PostEmails =
                   </a>
                   <div role="separator" style="line-height: 24px">&zwj;</div>
                   <h1 style="margin: 0 0 24px; font-size: 24px; line-height: 32px; font-weight: 600; color: #0f172a">
-                    Hey {{name}}!
+                    Hey there!
                   </h1>
                   <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px; color: #475569">
                     Thanks for your comment! In order to proceed with posting it, please verify your email address:
@@ -95,12 +98,6 @@ module internal PostEmails =
                     Thanks,
                     <br>
                     <span style="font-weight: 600">Matt</span>
-                  </p>
-                  <div role="separator" style="height: 1px; line-height: 1px; background-color: #cbd5e1; margin-top: 24px; margin-bottom: 24px">&zwj;</div>
-                  <p class="mso-break-all" style="margin: 0; font-size: 12px; line-height: 20px; color: #475569">
-                    If you're having trouble clicking the "Verify email" button, copy and paste the following URL into
-                    your web browser:
-                    <a href="{{uri}}" style="color: #1e293b; text-decoration: underline">{{uri}}</a>
                   </p>
                 </td>
               </tr>

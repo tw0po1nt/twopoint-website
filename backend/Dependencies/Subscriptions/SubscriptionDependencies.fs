@@ -51,20 +51,29 @@ type SubscriptionDependencies(
       |> DependencyError.ofValidation source
   }
 
-  member _.CreateSubscription (newSubscription : NewSubscription) createdDateUtc = cancellableTaskResult {
-    let newSubscription =
-      { DbSubscription.SubscriptionId = system.NewGuid().ToString()
-        CreatedDate = createdDateUtc 
-        EmailAddress = newSubscription.EmailAddress |> EmailAddress.value
-        Name = newSubscription.Name |> Option.map NonEmptyString.value
-        CanceledDate = None }
-    let! (dbSubscription: DbSubscription) = subscriptionDb.CreateSubscription newSubscription
+  member _.GetStoredSubscription id = cancellableTaskResult {
+    let! stored = subscriptionDb.GetStoredSubscriptionById (id.ToString())
+
+    return!
+      stored
+      |> Option.traverseResult (fun ((dbo : DbSubscription), eTag) ->
+        dbo.ToSubscription() |> Result.map (fun subscription -> { Subscription = subscription; ETag = eTag }))
+      |> DependencyError.ofValidation source
+  }
+
+  member _.ReplaceSubscription (subscription : Subscription) ifMatch =
+    subscriptionDb.ReplaceSubscription (DbSubscription.FromSubscription subscription) ifMatch
+
+  member _.NewSubscriptionId () = system.NewGuid() |> SubscriptionId.ofGuid
+
+  member _.CreateSubscription (subscription : Subscription) = cancellableTaskResult {
+    let! (dbSubscription: DbSubscription) = subscriptionDb.CreateSubscription (DbSubscription.FromSubscription subscription)
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
   }
 
-  member _.UpdateSubscriptionActivation (subscription : Subscription) = cancellableTaskResult {
+  member _.UpdateSubscriptionStatus (subscription : Subscription) = cancellableTaskResult {
     let! (dbSubscription: DbSubscription) =
-      subscriptionDb.UpdateSubscriptionActivation (DbSubscription.FromSubscription subscription)
+      subscriptionDb.UpdateSubscriptionStatus (DbSubscription.FromSubscription subscription)
     return! dbSubscription.ToSubscription() |> DependencyError.ofValidation source
   }
 
@@ -103,4 +112,26 @@ type SubscriptionDependencies(
         OperationId = operationId }
     let! (dbDelivery: DbSubscriptionDelivery) = subscriptionDb.CreateDelivery newDelivery
     return! dbDelivery.ToSubscriptionDelivery() |> DependencyError.ofValidation source
+  }
+
+
+type ConfirmationDependencies(
+  emailClient : Azure.Communication.Email.EmailClient,
+  emailSender : EmailAddress,
+  page : System.Uri,
+  tableServiceClient : TableServiceClient,
+  system : ISystemDependencies,
+  logger : ILogger
+) =
+
+  let commsService = TwoPoint.Dependencies.Comms.CommsService.live emailClient tableServiceClient system logger emailSender
+
+  member _.SendConfirmation (subscription : Subscription) = cancellableTaskResult {
+    let content = ConfirmEmail.compose page (system.GetUtcNow()) subscription
+
+    let! (message : TwoPoint.Dependencies.Comms.EmailMessage) =
+      TwoPoint.Dependencies.Comms.EmailMessage.createWithPlainText content.Subject content.Html content.Text subscription.EmailAddress
+      |> DependencyError.ofValidation Dependency.Communications
+
+    return! commsService.SendEmail message |> CancellableTaskResult.ignore
   }

@@ -14,6 +14,7 @@
     <Compile Include="CommentsTests.fs" />
     <Compile Include="UnsubscribeTests.fs" />
     <Compile Include="StopReplyEmailsTests.fs" />
+    <Compile Include="ConfirmSubscriptionTests.fs" />
     <Compile Include="PdfTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>

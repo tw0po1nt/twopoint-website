@@ -22,6 +22,10 @@ type StopReplyEmailsProps =
   { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
     Api: string }
 
+type ConfirmSubscriptionProps =
+  { /// The origin of the API, with no `/` at the end, for example `http://localhost:7071`.
+    Api: string }
+
 type PdfProps =
   { /// The https URL of the PDF file.
     File: string }
@@ -32,10 +36,11 @@ type Widget =
   | Comments of CommentsProps
   | Unsubscribe of UnsubscribeProps
   | StopReplyEmails of StopReplyEmailsProps
+  | ConfirmSubscription of ConfirmSubscriptionProps
   | Pdf of PdfProps
 
 /// The name of each case of `Widget`.
-let names = [ "subscribe"; "comments"; "unsubscribe"; "stop-reply-emails"; "pdf" ]
+let names = [ "subscribe"; "comments"; "unsubscribe"; "stop-reply-emails"; "confirm-subscription"; "pdf" ]
 
 let name (widget: Widget) =
   match widget with
@@ -43,6 +48,7 @@ let name (widget: Widget) =
   | Widget.Comments _ -> "comments"
   | Widget.Unsubscribe _ -> "unsubscribe"
   | Widget.StopReplyEmails _ -> "stop-reply-emails"
+  | Widget.ConfirmSubscription _ -> "confirm-subscription"
   | Widget.Pdf _ -> "pdf"
 
 let toAttributes (widget: Widget) : (string * string) list =
@@ -55,6 +61,7 @@ let toAttributes (widget: Widget) : (string * string) list =
       "data-author", props.Author
     | Widget.Unsubscribe props -> "data-api", props.Api
     | Widget.StopReplyEmails props -> "data-api", props.Api
+    | Widget.ConfirmSubscription props -> "data-api", props.Api
     | Widget.Pdf props -> "data-file", props.File ]
 
 let private find (attributes: (string * string) list) (key: string) =
@@ -118,6 +125,10 @@ let parse (attributes: (string * string) list) : Result<Widget, string> =
     required attributes "stop-reply-emails" "data-api"
     |> Result.bind (api "stop-reply-emails")
     |> Result.map (fun api -> Widget.StopReplyEmails { Api = api })
+  | Some "confirm-subscription" ->
+    required attributes "confirm-subscription" "data-api"
+    |> Result.bind (api "confirm-subscription")
+    |> Result.map (fun api -> Widget.ConfirmSubscription { Api = api })
   | Some "pdf" ->
     required attributes "pdf" "data-file"
     |> Result.bind (pdfFile "pdf")

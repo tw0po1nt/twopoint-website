@@ -1226,11 +1226,14 @@ let private posts (dispatch: Shell.Msg -> unit) (model: Posts.Model) (filter: Po
   }
 
 let private subscriptionTone (subscription: Api.Subscription) =
-  if subscription.IsActive then Parts.Good else Parts.Plain
+  match subscription.Status with
+  | Api.SubscriptionStatus.Active -> Parts.Good
+  | Api.SubscriptionStatus.Pending -> Parts.Warn
+  | Api.SubscriptionStatus.Canceled -> Parts.Plain
 
 let private countsText (model: Subscriptions.Model) =
   match Subscriptions.counts model with
-  | Some counts -> $"{counts.Active} active, {counts.Inactive} inactive"
+  | Some counts -> $"{counts.Active} active, {counts.Pending} pending, {counts.Inactive} inactive"
   | None -> "Loading…"
 
 [<SolidComponent>]

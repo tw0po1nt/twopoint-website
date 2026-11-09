@@ -76,16 +76,19 @@ type internal DbPost =
 ///    "EmailAddress" : "&lt;email&gt;"
 ///    "CreatedDate": "&lt;date&gt;",
 ///    "Name": "&lt;string&gt;" | null,
-///    "Status": "&lt;new | trusted | banned&gt;"
+///    "Status": "&lt;new | trusted | banned&gt;",
+///    "ValidationEmailSentDate": "&lt;date&gt;" | null
 ///  }
 /// </c>
+/// A row from before the resend rule has no <c>ValidationEmailSentDate</c>.
 /// </remarks>
 type internal DbCommenter =
   { ValidationId : string
     EmailAddress : string
     Name : string option
     CreatedDate : DateTime
-    Status : string }
+    Status : string
+    ValidationEmailSentDate : DateTime option }
   
   static member FromEntity (entity : TableEntity) = validation {
     let entityName = nameof DbCommenter
@@ -96,13 +99,18 @@ type internal DbCommenter =
       |> Validation.bind DateTime.TryValidateUtc
     let name = "Name" |> entity.TryGetString
     let! status = "Status" |> entity.RequireString entityName
+    let! validationEmailSentDate =
+      "ValidationEmailSentDate"
+      |> entity.TryGetString
+      |> Option.traverseValidation DateTime.TryValidateUtc
 
     return
       { ValidationId = entity.RowKey
         EmailAddress = emailAddress
         Name = name
         CreatedDate = createdDate
-        Status = status }
+        Status = status
+        ValidationEmailSentDate = validationEmailSentDate }
   }
   
   member this.ToEntity() =
@@ -111,14 +119,18 @@ type internal DbCommenter =
     entity["CreatedDate"] <- this.CreatedDate.ToString("o", CultureInfo.InvariantCulture)
     entity["Name"] <- this.Name |> Option.toObj
     entity["Status"] <- this.Status
+    entity["ValidationEmailSentDate"] <-
+      this.ValidationEmailSentDate |> Option.map DbDate.text |> Option.toObj
     entity
 
+  /// Each update of a commenter row writes only the columns of that update, so the missing date leaves the stored date.
   static member FromCommenter (commenter : Commenter) =
     { ValidationId = commenter.ValidationId.ToString()
       EmailAddress = commenter.EmailAddress |> EmailAddress.value
       Name = commenter.Name |> Option.map NonEmptyString.value
       CreatedDate = commenter.CreatedDate
-      Status = commenter.Status.ToString().ToLower() }
+      Status = commenter.Status.ToString().ToLower()
+      ValidationEmailSentDate = None }
 
   member this.ToCommenter() =
     Commenter.create
@@ -438,6 +450,8 @@ type internal IPostDb =
   abstract member GetCommenterByEmailAddress: emailAddress: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member GetCommenterByValidationId: validationId: string -> CancellableTaskResult<DbCommenter option, DependencyError>
   abstract member CreateCommenter: commenter: DbCommenter -> CancellableTaskResult<DbCommenter, DependencyError>
+  abstract member UpdateCommenterValidationEmailSentDate:
+    validationId: string -> sentDate: DateTime -> CancellableTaskResult<DbCommenter, DependencyError>
   abstract member UpdateCommenterStatus:
     commenter: DbCommenter
       -> status: string
@@ -651,6 +665,12 @@ module internal PostDb =
       member _.CreateCommenter commenter =
         commenter.ToEntity() |> add commentersTable PostDbError.validation DbCommenter.FromEntity
         
+      member _.UpdateCommenterValidationEmailSentDate validationId sentDate =
+        TableEntity(validationId, validationId) |> update commentersTable PostDbError.validation DbCommenter.FromEntity
+        <| fun entity ->
+          entity["ValidationEmailSentDate"] <- DbDate.text sentDate
+          entity
+
       member _.UpdateCommenterStatus commenter status =
         commenter.ToEntity() |> update commentersTable PostDbError.validation DbCommenter.FromEntity
         <| fun entity ->

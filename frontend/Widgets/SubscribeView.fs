@@ -30,7 +30,7 @@ let private statusClass (model: Subscribe.Model) =
 let private statusText (model: Subscribe.Model) =
   match model.Status with
   | Subscribe.Failed reason -> reason
-  | Subscribe.Subscribed -> "You're subscribed! The next post will land in your inbox."
+  | Subscribe.Subscribed -> "Almost done! Check your inbox and confirm your subscription."
   | Subscribe.Editing
   | Subscribe.Sending -> ""
 
